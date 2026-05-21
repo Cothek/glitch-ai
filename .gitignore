@@ -17,3 +17,6 @@ Thumbs.db
 # Claude Code auto-generated project config
 .claude/
 
+# Auto-generated server password
+.server-password
+
