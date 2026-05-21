@@ -66,4 +66,4 @@ if (-not (Test-Path $HandyBin) -or $Force) {
   Write-Host "[2/2] Handy found" -ForegroundColor DarkGreen
 }
 
-Write-Host "=== Glitch is ready! Run .\launch.bat to start ===" -ForegroundColor Magenta
+Write-Host "=== Glitch is ready! Run .\launch-glitch.bat to start ===" -ForegroundColor Magenta

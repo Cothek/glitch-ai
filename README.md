@@ -12,7 +12,7 @@ Portable AI companion environment — one clone, one launch, Glitch is ready on 
 | `opencode.json` | Config pointing OpenCode at Glitch's CLAUDE.md + experimental settings. |
 | `tui.json` | Terminal UI preferences for OpenCode. |
 | `bootstrap.ps1` | First-run setup — downloads OpenCode and Handy binaries. |
-| `launch.bat` / `launch.ps1` | One-click launchers — starts Handy in background, then opens OpenCode with Glitch loaded. |
+| `launch-glitch.bat` / `launch.ps1` | One-click launchers — starts Handy (voice input) in background, then opens OpenCode with Glitch loaded. |
 
 ## Quick Start
 
@@ -20,16 +20,16 @@ Portable AI companion environment — one clone, one launch, Glitch is ready on 
 git clone --recurse-submodules https://github.com/Cothek/glitch-ai.git
 cd glitch-ai
 .\bootstrap.ps1
-.\launch.bat
+.\launch-glitch.bat
 ```
 
 **First run only:** `bootstrap.ps1` downloads the OpenCode CLI binary and Handy voice engine (if not found). Subsequent runs skip this.
 
 ## How It Works
 
-1. **launch.bat** starts Handy (system tray, push-to-talk via Ctrl+Space)
+1. **launch-glitch.bat** starts Handy (system tray, push-to-talk via Ctrl+Space)
 2. OpenCode opens in the current terminal, loading `glitch-memorycore/CLAUDE.md` as its core instructions
-3. Speak your query — Handy transcribes with Whisper (GPU) and pastes it into OpenCode's prompt
+3. Press **Ctrl+Space** and speak — Handy transcribes with Whisper (GPU) and pastes into OpenCode's prompt
 4. Glitch responds with full memory of who you are and what we've built together
 
 When you close OpenCode, Handy stays running in the tray.
