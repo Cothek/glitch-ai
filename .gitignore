@@ -1,0 +1,19 @@
+# Ignore portable binaries (downloaded by bootstrap)
+opencode/opencode.exe
+handy-voice/Handy/handy.exe
+handy-voice/Handy/uninstall.exe
+handy-voice/Handy/resources/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Claude Code auto-generated project config
+.claude/
+
