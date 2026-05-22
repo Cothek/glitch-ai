@@ -11,9 +11,12 @@ Portable AI companion environment — one clone, one launch, Glitch is ready on 
 | `opencode/` | [OpenCode](https://opencode.ai) — the AI coding agent that runs Glitch. Portable CLI binary. |
 | `opencode.json` | Config pointing OpenCode at Glitch's CLAUDE.md + server + experimental settings. |
 | `tui.json` | Terminal UI preferences for OpenCode. |
-| `bootstrap.ps1` | First-run setup — downloads OpenCode, Handy, and Tailscale. |
+| `bootstrap.ps1` | First-run setup — downloads OpenCode, Handy, and cloudflared. |
 | `launch-glitch.bat` / `launch.ps1` | Launches Handy + OpenCode TUI for local use. |
-| `serve-glitch.bat` / `serve-glitch.ps1` | Launches OpenCode Web server (accessible from phone via Tailscale). |
+| `serve-glitch.bat` / `serve-glitch.ps1` | Launches OpenCode Web server + Cloudflare Tunnel for remote access. |
+| `setup-tunnel.ps1` | One-time Cloudflare Tunnel setup — authenticate, create tunnel, configure DNS. |
+| `restore-server.mjs` | Proxy server that injects session history into the OpenCode Web UI. |
+| `sync-history.ps1` | Syncs OpenCode session history from SQLite to cache file for the proxy. |
 
 ## Quick Start (Local)
 
@@ -24,26 +27,24 @@ cd glitch-ai
 .\launch-glitch.bat
 ```
 
-**First run only:** `bootstrap.ps1` downloads OpenCode, Handy, and installs Tailscale. Subsequent runs skip setup.
+**First run only:** `bootstrap.ps1` downloads OpenCode, Handy, and cloudflared. Subsequent runs skip setup.
 
 ## Access from Anywhere (Phone / Other PC)
 
 ```powershell
-.\serve-glitch.bat
+.\setup-tunnel.ps1    # One-time: authenticate Cloudflare + create tunnel
+.\serve-glitch.bat    # Each session: starts server + tunnel
 ```
 
-This starts OpenCode as a web server on **port 4096** bound to all network interfaces. Access it from any device on your [Tailscale](https://tailscale.com) network using your machine's Tailscale IP:
+This starts OpenCode as a web server on **port 4096** proxied through **Cloudflare Tunnel** on `glitch.cothekdesigns.com`. Access it from anywhere:
 
 ```
-http://100.x.x.x:4096/
+https://glitch.cothekdesigns.com/
 ```
 
-The Tailscale IP is displayed in the terminal when you run `serve-glitch.bat`. Login with username `opencode` and the auto-generated password shown in the terminal. The password is stored in `.server-password` (gitignored) with ACL lockdown — only your Windows user can read it.
+No open ports, no VPN, no firewall rules required. Traffic routes through Cloudflare's edge network to your machine via an encrypted Tunnel connection.
 
-> **First time?** You'll need a firewall rule to allow inbound traffic on port 4096. Run this once in an **admin PowerShell**:
-> ```powershell
-> netsh advfirewall firewall add rule name="Glitch AI - OpenCode Web (TCP 4096)" dir=in action=allow protocol=TCP localport=4096 profile=any
-> ```
+Login with username `opencode` and the auto-generated password shown in the terminal. The password is stored in `.server-password` (gitignored) with ACL lockdown — only your Windows user can read it.
 
 ### Setting a Custom Password
 
@@ -62,16 +63,19 @@ set OPENCODE_SERVER_PASSWORD=your-password
 
 ### Web Mode (`serve-glitch.bat`)
 1. Starts Handy in the background for voice input
-2. Starts OpenCode Web server on port 4096
-3. Access from your phone or any device via Tailscale IP
-4. Same Glitch memory and identity in every session
+2. Syncs recent session history from SQLite to JSON cache
+3. Starts the session history proxy on port 4097
+4. Starts OpenCode Web server on port 4096
+5. Opens Cloudflare Tunnel to `glitch.cothekdesigns.com`
+6. Access from any device: `https://glitch.cothekdesigns.com/`
+7. Same Glitch memory and identity in every session
 
 ## Requirements
 
 - Windows 10 or 11
 - NVIDIA GPU with CUDA (recommended for Handy speed)
 - API key for an LLM provider (configured via OpenCode's `/connect` or env vars)
-- [Tailscale](https://tailscale.com) account (free) — installed automatically by bootstrap
+- [Cloudflare](https://cloudflare.com) account (free) — for Tunnel-based remote access
 
 ## Repository Structure
 
@@ -81,8 +85,12 @@ glitch-ai/                    ← This repo
 ├── handy-voice/              ← Portable voice-to-text binary
 ├── opencode/                 ← Portable OpenCode CLI binary
 ├── launch-glitch.bat         ← ⚡ TUI mode (local terminal)
-├── serve-glitch.bat          ← 🌐 Web server mode (phone access)
+├── serve-glitch.bat          ← 🌐 Web server mode (remote access)
 ├── bootstrap.ps1             ← First-run installer
+├── setup-tunnel.ps1          ← One-time Cloudflare Tunnel setup
+├── restore-server.mjs        ← Session history proxy server
+├── sync-history.ps1          ← Session cache sync script
+├── cloudflared-config.yml    ← Cloudflare Tunnel configuration
 ├── opencode.json             ← Config file
 └── tui.json                  ← Terminal UI config
 ```

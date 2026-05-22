@@ -1,6 +1,7 @@
 $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent $PSCommandPath
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
+$Cloudflared = "$RootDir\cloudflared.exe"
 
 Write-Host ""
 Write-Host "Glitch AI - Server Mode" -ForegroundColor Magenta
@@ -12,27 +13,21 @@ if (-not (Test-Path $OpenCodeBin)) {
   exit 1
 }
 
-# ── Tailscale status (informational) ──
-$tsIp = $null
-$tailscaleCmd = Get-Command "tailscale" -ErrorAction SilentlyContinue
-if ($tailscaleCmd) {
-  $tsStatus = & tailscale status 2>&1 | Out-String
-  if ($tsStatus -match "Logged out|Needs login") {
-    Write-Host "  Tailscale not logged in. Run .\bootstrap.ps1 to authenticate." -ForegroundColor Yellow
+# ─ Cloudflare Tunnel status ──
+$cloudflareOk = $false
+if (Test-Path $Cloudflared) {
+  $tunnelConfig = "$RootDir\cloudflared-config.yml"
+  if (Test-Path $tunnelConfig) {
+    $cloudflareOk = $true
+    Write-Host "  Cloudflare Tunnel: configured (glitch.cothekdesigns.com)" -ForegroundColor Green
   } else {
-    $tsIpLine = ($tsStatus -split "`n" | Where-Object { $_ -match "^\d+\.\d+\.\d+\.\d+" } | Select-Object -First 1)
-    if ($tsIpLine) {
-      $tsIp = ($tsIpLine -split "\s+")[0]
-      Write-Host "  Tailscale IP: $tsIp" -ForegroundColor Green
-      Write-Host "  Web App + History: http://${tsIp}:4097/" -ForegroundColor Green
-      Write-Host "  (Direct: http://${tsIp}:4096/ - no history injection)" -ForegroundColor DarkGray
-    }
+    Write-Host "  Cloudflare Tunnel: not configured. Run setup-tunnel.ps1 first." -ForegroundColor Yellow
   }
 } else {
-  Write-Host "  Tailscale not installed. Run .\bootstrap.ps1 to install." -ForegroundColor Yellow
+  Write-Host "  Cloudflare Tunnel: cloudflared.exe not found" -ForegroundColor Yellow
 }
 
-# ── Sync session history ──
+# ── Sync session history ─
 Write-Host "  Syncing session history..." -ForegroundColor Cyan
 & powershell -ExecutionPolicy Bypass -File "$RootDir\sync-history.ps1" 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
 
@@ -40,6 +35,14 @@ Write-Host "  Syncing session history..." -ForegroundColor Cyan
 Write-Host "  Starting restore server (port 4097)..." -ForegroundColor Cyan
 $restoreProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\restore-server.mjs`"" -PassThru
 Start-Sleep -Seconds 1
+
+# ── Start Cloudflare Tunnel ──
+if ($cloudflareOk) {
+  Write-Host "  Starting Cloudflare Tunnel..." -ForegroundColor Cyan
+  $cloudflaredProcess = Start-Process -NoNewWindow -FilePath $Cloudflared -ArgumentList "tunnel", "--config", "`"$RootDir\cloudflared-config.yml`"", "run" -PassThru
+  Start-Sleep -Seconds 2
+  Write-Host "  Tunnel running: https://glitch.cothekdesigns.com" -ForegroundColor Green
+}
 
 # ── Handy ──
 $HandyBin = "$RootDir\handy-voice\Handy\handy.exe"
@@ -71,14 +74,17 @@ Write-Host "  Server password: $pw" -ForegroundColor Yellow
 Write-Host "  Username: opencode" -ForegroundColor Yellow
 Write-Host ""
 
-# ── Launch OpenCode Web (bind to all interfaces for Tailscale/network access) ──
+# ── Launch OpenCode Web ──
 Push-Location $RootDir
 try {
   & $OpenCodeBin web --port 4096 --hostname 0.0.0.0
 } finally {
   Pop-Location
-  # Clean up restore server when OpenCode exits
+  # Clean up restore server and cloudflared when OpenCode exits
   if ($restoreProcess -and -not $restoreProcess.HasExited) {
     $restoreProcess.Kill()
+  }
+  if ($cloudflaredProcess -and -not $cloudflaredProcess.HasExited) {
+    $cloudflaredProcess.Kill()
   }
 }

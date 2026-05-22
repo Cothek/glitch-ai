@@ -1,0 +1,13 @@
+# Cloudflare Tunnel Configuration
+# Tunnel: glitch-ai (d602618b-0f68-4537-bbad-01577e1a29dc)
+# Credentials: ~/.cloudflared/d602618b-0f68-4537-bbad-01577e1a29dc.json
+
+tunnel: d602618b-0f68-4537-bbad-01577e1a29dc
+
+ingress:
+  # Route glitch.cothekdesigns.com to the restore server (port 4097)
+  - hostname: glitch.cothekdesigns.com
+    service: http://localhost:4097
+  
+  # Catch-all: return 404 for any other hostname
+  - service: http_status:404

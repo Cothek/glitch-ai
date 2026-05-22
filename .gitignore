@@ -1,5 +1,6 @@
 # Ignore portable binaries (downloaded by bootstrap)
 opencode/opencode.exe
+cloudflared.exe
 handy-voice/Handy/handy.exe
 handy-voice/Handy/uninstall.exe
 handy-voice/Handy/resources/

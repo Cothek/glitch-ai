@@ -8,6 +8,7 @@ $OpenCodeDir = "$RootDir\opencode"
 $OpenCodeBin = "$OpenCodeDir\opencode.exe"
 $HandyDir = "$RootDir\handy-voice\Handy"
 $HandyBin = "$HandyDir\handy.exe"
+$CloudflaredBin = "$RootDir\cloudflared.exe"
 
 # ── Detect architecture ──
 $isArm = (Get-CimInstance Win32_Processor).Architecture -eq 5
@@ -60,44 +61,35 @@ if (-not (Test-Path $HandyBin) -or $Force) {
   Write-Host "[2/3] Handy found" -ForegroundColor DarkGreen
 }
 
-# ── Tailscale ──
-$tailscaleCmd = Get-Command "tailscale" -ErrorAction SilentlyContinue
-if (-not $tailscaleCmd -or $Force) {
-  Write-Host "[3/3] Installing Tailscale..." -ForegroundColor Cyan
-  $installerUrl = "https://pkgs.tailscale.com/stable/tailscale-setup-latest.exe"
-  $installerPath = "$env:TEMP\tailscale-setup.exe"
-  Write-Host "  Downloading Tailscale..." -ForegroundColor Yellow
-  Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -UseBasicParsing
-  Write-Host "  Installing (admin required)..." -ForegroundColor Yellow
-  Write-Host "  If a UAC prompt appears, click Yes." -ForegroundColor Yellow
-  Start-Process -FilePath $installerPath -ArgumentList "/S" -Wait
-  Remove-Item $installerPath -Force
-  $tailscaleCmd = Get-Command "tailscale" -ErrorAction SilentlyContinue
-  if (-not $tailscaleCmd) {
-    Write-Host "  Tailscale installed. You may need to log out and back in for PATH to update." -ForegroundColor Yellow
-  }
-  Write-Host "  Tailscale installed!" -ForegroundColor Green
-} else {
-  Write-Host "[3/3] Tailscale found" -ForegroundColor DarkGreen
-}
-
-# ── Check Tailscale auth ──
-$tailscaleCmd = Get-Command "tailscale" -ErrorAction SilentlyContinue
-if ($tailscaleCmd) {
-  $tsStatus = & tailscale status 2>&1 | Out-String
-  if ($tsStatus -match "Logged out|Needs login|not logged in") {
-    Write-Host ""
-    Write-Host "── Tailscale Login Required ──" -ForegroundColor Yellow
-    Write-Host "  Opening browser for Tailscale authentication..." -ForegroundColor Yellow
-    Write-Host "  Log in with your Google/Microsoft/GitHub account (free for personal use)." -ForegroundColor Yellow
-    Start-Process "https://login.tailscale.com/start"
-    & tailscale up
+# ── Cloudflare Tunnel ──
+if (-not (Test-Path $CloudflaredBin) -or $Force) {
+  Write-Host "[3/3] Installing Cloudflare Tunnel..." -ForegroundColor Cyan
+  if ($isArm) {
+    Write-Host "  ARM64 not supported by cloudflared directly. Download manually from:" -ForegroundColor Yellow
+    Write-Host "  https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/" -ForegroundColor Yellow
   } else {
-    Write-Host "  Tailscale: connected" -ForegroundColor DarkGreen
+    $msiUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.msi"
+    $msiPath = "$env:TEMP\cloudflared.msi"
+    Write-Host "  Downloading cloudflared..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
+    Write-Host "  Installing (admin required)..." -ForegroundColor Yellow
+    Start-Process -FilePath "msiexec" -ArgumentList "/i `"$msiPath`" /qn" -Wait
+    Remove-Item $msiPath -Force
+    $installed = Get-Command "cloudflared" -ErrorAction SilentlyContinue
+    if ($installed) {
+      Write-Host "  cloudflared installed!" -ForegroundColor Green
+    } else {
+      Write-Host "  cloudflared install may need PATH refresh." -ForegroundColor Yellow
+    }
   }
+} else {
+  Write-Host "[3/3] cloudflared found" -ForegroundColor DarkGreen
 }
 
 Write-Host ""
 Write-Host "=== Glitch is ready! ===" -ForegroundColor Magenta
 Write-Host "  .\launch-glitch.bat       - TUI mode (with Handy voice)" -ForegroundColor Cyan
-Write-Host "  .\serve-glitch.bat        - Web server mode (access from phone)" -ForegroundColor Cyan
+Write-Host "  .\serve-glitch.bat        - Web server mode (access from anywhere)" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "  For first-time Cloudflare Tunnel setup:" -ForegroundColor Yellow
+Write-Host "  .\setup-tunnel.ps1        - Authenticate + create tunnel + DNS record" -ForegroundColor Yellow

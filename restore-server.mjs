@@ -35,32 +35,31 @@ function buildScripts() {
       const data = JSON.parse(raw)
       if (data.sessions?.length) {
         const dirSessions = data.sessions.filter(s => s.directory === PROJECT_DIR)
-        const sorted = [...(dirSessions.length ? dirSessions : data.sessions)]
-          .sort((a, b) => (b.time_updated || 0) - (a.time_updated || 0))
-        const lastId = sorted[0].session_id
-        const encodedDir = encodeURIComponent(PROJECT_DIR)
+        const recent = [...(dirSessions.length ? dirSessions : data.sessions)]
+          .sort((a, b) => (b.time_updated || 0) - (a.time_updated || 0))[0]
+        const slug = Buffer.from(PROJECT_DIR).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 
         BOOTSTRAP = `
 <script id="glitch-bootstrap">
 ;(function(){
   var DIR = ${JSON.stringify(PROJECT_DIR)};
-  var SID = ${JSON.stringify(lastId)};
+  var SID = ${JSON.stringify(recent.session_id)};
+  var SLUG = ${JSON.stringify(slug)};
 
   var srv = { list: [], projects: { local: [{ worktree: DIR, expanded: true }] }, lastProject: { local: DIR } };
   localStorage.setItem('opencode.global.dat:server', JSON.stringify(srv));
 
-  var escDir = DIR.replace(/\\\\/g, '\\\\\\\\');
-  var lay = { lastProjectSession: {}, activeProject: void 0, activeWorkspace: void 0, workspaceOrder: {}, workspaceName: {}, workspaceBranchName: {}, workspaceExpanded: {}, gettingStartedDismissed: true };
-  lay.lastProjectSession[escDir] = { directory: DIR, id: SID, at: Date.now() };
+  var lay = { lastProjectSession: {}, activeProject: DIR, activeWorkspace: void 0, workspaceOrder: {}, workspaceName: {}, workspaceBranchName: {}, workspaceExpanded: {}, gettingStartedDismissed: true };
+  lay.lastProjectSession[DIR] = { directory: DIR, id: SID, at: Date.now() };
   localStorage.setItem('opencode.global.dat:layout.page', JSON.stringify(lay));
 
   var mdl = { user: [{ modelID: 'deepseek-v4-flash-free', providerID: 'opencode', visibility: 'show' }], recent: [{ modelID: 'deepseek-v4-flash-free', providerID: 'opencode' }], variant: {} };
   localStorage.setItem('opencode.global.dat:model', JSON.stringify(mdl));
 
-  setTimeout(function() {
-    location.href = '/' + ${JSON.stringify(encodedDir)} + '/session/' + SID;
-  }, 100);
   document.getElementById('glitch-bootstrap').remove();
+  setTimeout(function() {
+    location.href = '/' + SLUG + '/session/' + SID;
+  }, 100);
 })();
 </script>`
       }

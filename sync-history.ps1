@@ -8,7 +8,7 @@ if (-not (Test-Path $HistoryDir)) { New-Item -ItemType Directory -Path $HistoryD
 Write-Host "Syncing session history from SQLite DB..." -ForegroundColor Cyan
 
 # Get all sessions
-$sessionsJson = opencode db "SELECT id, title, project_id, time_created, time_updated FROM session ORDER BY time_created" --format json 2>&1
+$sessionsJson = opencode db "SELECT id, title, project_id, directory, time_created, time_updated FROM session ORDER BY time_created" --format json 2>&1
 $sessions = $sessionsJson | ConvertFrom-Json
 
 # Get ALL messages with their data, grouped by session
@@ -65,6 +65,7 @@ foreach ($s in $sessions) {
     session_id = $s.id
     title = $s.title
     project_id = $s.project_id
+    directory = $s.directory
     time_created = $s.time_created
     time_updated = $s.time_updated
     message_count = $msgs.Count
