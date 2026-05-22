@@ -3,7 +3,7 @@ $RootDir = Split-Path -Parent $PSCommandPath
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 
 Write-Host ""
-Write-Host "🧠 Glitch AI - Server Mode" -ForegroundColor Magenta
+Write-Host "Glitch AI - Server Mode" -ForegroundColor Magenta
 Write-Host ""
 
 # ── Check prerequisites ──
@@ -12,24 +12,18 @@ if (-not (Test-Path $OpenCodeBin)) {
   exit 1
 }
 
-# ── Tailscale status & serve setup ──
+# ── Tailscale status (informational) ──
 $tailscaleCmd = Get-Command "tailscale" -ErrorAction SilentlyContinue
 if ($tailscaleCmd) {
   $tsStatus = & tailscale status 2>&1 | Out-String
   if ($tsStatus -match "Logged out|Needs login") {
     Write-Host "  Tailscale not logged in. Run .\bootstrap.ps1 to authenticate." -ForegroundColor Yellow
   } else {
-    # Extract machine hostname from tailscale status
-    $tsHostnameLine = ($tsStatus -split "`n" | Where-Object { $_ -match "^\d+\.\d+\.\d+\.\d+\s+\S+" } | Select-Object -First 1)
-    if ($tsHostnameLine) {
-      $tsHostname = ($tsHostnameLine -split "\s+")[1]
-    }
-    # Set up tailscale serve to forward port 4096 (idempotent, persistent)
-    Write-Host "  Setting up Tailscale Serve..." -ForegroundColor Cyan
-    & tailscale serve --bg --yes --http 80 4096 2>&1 | Out-Null
-    & tailscale serve --bg --yes --https 443 4096 2>&1 | Out-Null
-    if ($tsHostname) {
-      Write-Host "  Access URL: http://$tsHostname/" -ForegroundColor Green
+    $tsIpLine = ($tsStatus -split "`n" | Where-Object { $_ -match "^\d+\.\d+\.\d+\.\d+" } | Select-Object -First 1)
+    if ($tsIpLine) {
+      $tsIp = ($tsIpLine -split "\s+")[0]
+      Write-Host "  Tailscale IP: $tsIp" -ForegroundColor Green
+      Write-Host "  Access URL: http://${tsIp}:4096/" -ForegroundColor Green
     }
   }
 } else {
@@ -57,7 +51,6 @@ if (-not $pw) {
   } else {
     $pw = Get-Content $pwFile -Raw | ForEach-Object { $_.Trim() }
   }
-  # Lock down so only current user can read (idempotent)
   & icacls $pwFile /inheritance:r /grant "${env:USERNAME}:R" 2>&1 | Out-Null
   $env:OPENCODE_SERVER_PASSWORD = $pw
 }
@@ -67,10 +60,10 @@ Write-Host "  Server password: $pw" -ForegroundColor Yellow
 Write-Host "  Username: opencode" -ForegroundColor Yellow
 Write-Host ""
 
-# ── Launch OpenCode Web (bind to localhost only — tailscale serve routes external traffic) ──
+# ── Launch OpenCode Web (bind to all interfaces for Tailscale/network access) ──
 Push-Location $RootDir
 try {
-  & $OpenCodeBin web --port 4096 --hostname 127.0.0.1
+  & $OpenCodeBin web --port 4096 --hostname 0.0.0.0
 } finally {
   Pop-Location
 }
