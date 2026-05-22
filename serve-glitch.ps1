@@ -26,7 +26,8 @@ if ($tailscaleCmd) {
     }
     # Set up tailscale serve to forward port 4096 (idempotent, persistent)
     Write-Host "  Setting up Tailscale Serve..." -ForegroundColor Cyan
-    & tailscale serve --bg --yes 4096 2>&1 | Out-Null
+    & tailscale serve --bg --yes --http 80 4096 2>&1 | Out-Null
+    & tailscale serve --bg --yes --https 443 4096 2>&1 | Out-Null
     if ($tsHostname) {
       Write-Host "  Access URL: http://$tsHostname/" -ForegroundColor Green
     }
