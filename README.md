@@ -38,7 +38,7 @@ This starts OpenCode as a web server on port 4096 and uses [Tailscale Serve](htt
 http://bohemoth/
 ```
 
-No port number needed — Tailscale Serve handles routing automatically. Login with username `opencode` and the auto-generated password shown in the terminal.
+No port number needed — Tailscale Serve handles routing automatically. Login with username `opencode` and the auto-generated password shown in the terminal. The password is stored in `.server-password` (gitignored) with ACL lockdown — only your Windows user can read it.
 
 ### Setting a Custom Password
 

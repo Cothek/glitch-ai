@@ -47,16 +47,18 @@ if (-not $handyProcess -and (Test-Path $HandyBin)) {
   Write-Host "  Handy already running" -ForegroundColor DarkGreen
 }
 
-# ── Password ──
+# ── Password (ACL-locked file, current user only) ──
 $pwFile = "$RootDir\.server-password"
 $pw = $env:OPENCODE_SERVER_PASSWORD
 if (-not $pw) {
-  if (Test-Path $pwFile) {
-    $pw = Get-Content $pwFile -Raw | ForEach-Object { $_.Trim() }
-  } else {
+  if (-not (Test-Path $pwFile)) {
     $pw = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 16 | ForEach-Object { [char]$_ })
     Set-Content -Path $pwFile -Value $pw -NoNewline
+  } else {
+    $pw = Get-Content $pwFile -Raw | ForEach-Object { $_.Trim() }
   }
+  # Lock down so only current user can read (idempotent)
+  & icacls $pwFile /inheritance:r /grant "${env:USERNAME}:R" 2>&1 | Out-Null
   $env:OPENCODE_SERVER_PASSWORD = $pw
 }
 
