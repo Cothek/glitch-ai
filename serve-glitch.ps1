@@ -13,6 +13,7 @@ if (-not (Test-Path $OpenCodeBin)) {
 }
 
 # ── Tailscale status (informational) ──
+$tsIp = $null
 $tailscaleCmd = Get-Command "tailscale" -ErrorAction SilentlyContinue
 if ($tailscaleCmd) {
   $tsStatus = & tailscale status 2>&1 | Out-String
@@ -23,12 +24,22 @@ if ($tailscaleCmd) {
     if ($tsIpLine) {
       $tsIp = ($tsIpLine -split "\s+")[0]
       Write-Host "  Tailscale IP: $tsIp" -ForegroundColor Green
-      Write-Host "  Access URL: http://${tsIp}:4096/" -ForegroundColor Green
+      Write-Host "  Web App + History: http://${tsIp}:4097/" -ForegroundColor Green
+      Write-Host "  (Direct: http://${tsIp}:4096/ - no history injection)" -ForegroundColor DarkGray
     }
   }
 } else {
   Write-Host "  Tailscale not installed. Run .\bootstrap.ps1 to install." -ForegroundColor Yellow
 }
+
+# ── Sync session history ──
+Write-Host "  Syncing session history..." -ForegroundColor Cyan
+& powershell -ExecutionPolicy Bypass -File "$RootDir\sync-history.ps1" 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
+
+# ── Start restore server (port 4097) ──
+Write-Host "  Starting restore server (port 4097)..." -ForegroundColor Cyan
+$restoreProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\restore-server.mjs`"" -PassThru
+Start-Sleep -Seconds 1
 
 # ── Handy ──
 $HandyBin = "$RootDir\handy-voice\Handy\handy.exe"
@@ -66,4 +77,8 @@ try {
   & $OpenCodeBin web --port 4096 --hostname 0.0.0.0
 } finally {
   Pop-Location
+  # Clean up restore server when OpenCode exits
+  if ($restoreProcess -and -not $restoreProcess.HasExited) {
+    $restoreProcess.Kill()
+  }
 }

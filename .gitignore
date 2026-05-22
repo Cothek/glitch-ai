@@ -20,3 +20,6 @@ Thumbs.db
 # Auto-generated server password
 .server-password
 
+# Session history data (persisted locally, not committed)
+.opencode/session-history/
+
