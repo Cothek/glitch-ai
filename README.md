@@ -32,13 +32,13 @@ cd glitch-ai
 .\serve-glitch.bat
 ```
 
-This starts OpenCode as a web server on port 4096. If [Tailscale](https://tailscale.com) is installed, you can access it from any device on your Tailscale network using:
+This starts OpenCode as a web server on port 4096 and uses [Tailscale Serve](https://tailscale.com/kb/1310/serve) to expose it on your tailnet. Access it from any device on your Tailscale network using:
 
 ```
-http://glitch-pc-name:4096
+http://bohemoth/
 ```
 
-Login with username `opencode` and the auto-generated password shown in the terminal.
+No port number needed — Tailscale Serve handles routing automatically. Login with username `opencode` and the auto-generated password shown in the terminal.
 
 ### Setting a Custom Password
 
@@ -46,6 +46,13 @@ Login with username `opencode` and the auto-generated password shown in the term
 set OPENCODE_SERVER_PASSWORD=your-password
 .\serve-glitch.bat
 ```
+
+### How It Works
+
+`serve-glitch.ps1` binds OpenCode to `127.0.0.1:4096` (localhost only) and uses `tailscale serve` to proxy external traffic from your tailnet. This means:
+- No Windows Firewall rules needed
+- No port numbers to remember
+- Works over Tailscale's encrypted network
 
 ## How It Works
 

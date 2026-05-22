@@ -12,18 +12,23 @@ if (-not (Test-Path $OpenCodeBin)) {
   exit 1
 }
 
-# ── Tailscale status ──
+# ── Tailscale status & serve setup ──
 $tailscaleCmd = Get-Command "tailscale" -ErrorAction SilentlyContinue
 if ($tailscaleCmd) {
   $tsStatus = & tailscale status 2>&1 | Out-String
   if ($tsStatus -match "Logged out|Needs login") {
     Write-Host "  Tailscale not logged in. Run .\bootstrap.ps1 to authenticate." -ForegroundColor Yellow
   } else {
-    # Extract Tailscale IP
-    $tsIpLine = ($tsStatus -split "`n" | Where-Object { $_ -match "^\d+\.\d+\.\d+\.\d+" } | Select-Object -First 1)
-    if ($tsIpLine) {
-      $tsIp = ($tsIpLine -split "\s+")[0]
-      Write-Host "  Tailscale IP: $tsIp" -ForegroundColor Green
+    # Extract machine hostname from tailscale status
+    $tsHostnameLine = ($tsStatus -split "`n" | Where-Object { $_ -match "^\d+\.\d+\.\d+\.\d+\s+\S+" } | Select-Object -First 1)
+    if ($tsHostnameLine) {
+      $tsHostname = ($tsHostnameLine -split "\s+")[1]
+    }
+    # Set up tailscale serve to forward port 4096 (idempotent, persistent)
+    Write-Host "  Setting up Tailscale Serve..." -ForegroundColor Cyan
+    & tailscale serve --bg --yes 4096 2>&1 | Out-Null
+    if ($tsHostname) {
+      Write-Host "  Access URL: http://$tsHostname/" -ForegroundColor Green
     }
   }
 } else {
@@ -48,7 +53,6 @@ if (-not $pw) {
   if (Test-Path $pwFile) {
     $pw = Get-Content $pwFile -Raw | ForEach-Object { $_.Trim() }
   } else {
-    # Generate random 16-char password
     $pw = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 16 | ForEach-Object { [char]$_ })
     Set-Content -Path $pwFile -Value $pw -NoNewline
   }
@@ -60,10 +64,10 @@ Write-Host "  Server password: $pw" -ForegroundColor Yellow
 Write-Host "  Username: opencode" -ForegroundColor Yellow
 Write-Host ""
 
-# ── Launch OpenCode Web ──
+# ── Launch OpenCode Web (bind to localhost only — tailscale serve routes external traffic) ──
 Push-Location $RootDir
 try {
-  & $OpenCodeBin web --port 4096
+  & $OpenCodeBin web --port 4096 --hostname 127.0.0.1
 } finally {
   Pop-Location
 }
