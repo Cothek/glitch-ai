@@ -27,10 +27,6 @@ if (Test-Path $Cloudflared) {
   Write-Host "  Cloudflare Tunnel: cloudflared.exe not found" -ForegroundColor Yellow
 }
 
-# ── Sync session history ─
-Write-Host "  Syncing session history..." -ForegroundColor Cyan
-& powershell -ExecutionPolicy Bypass -File "$RootDir\sync-history.ps1" 2>&1 | ForEach-Object { Write-Host "    $_" -ForegroundColor Gray }
-
 # ── Start restore server (port 4097) ──
 Write-Host "  Starting restore server (port 4097)..." -ForegroundColor Cyan
 $restoreProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\restore-server.mjs`"" -PassThru

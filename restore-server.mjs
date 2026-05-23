@@ -1,16 +1,22 @@
 import { createServer } from 'node:http'
 import { request as httpRequest } from 'node:http'
-import { readFileSync, existsSync } from 'node:fs'
+import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execSync } from 'child_process'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const HISTORY_FILE = join(__dirname, '.opencode', 'session-history', 'db.json')
+const CACHE_DIR = join(__dirname, '.opencode', 'session-history')
+const CACHE_FILE = join(CACHE_DIR, 'session-cache.json')
 const PW_FILE = join(__dirname, '.server-password')
 const TARGET_PORT = 4096
 const PROXY_PORT = 4097
 const PROJECT_DIR = 'E:\\Glitch AI\\glitch-ai'
+const REFRESH_INTERVAL = 60000
+const POLL_INTERVAL = 15000
+
+let latestSession = null
+let BOOTSTRAP = ''
+let POLLER = ''
 
 function getPassword() {
   try {
@@ -19,31 +25,16 @@ function getPassword() {
   return null
 }
 
-let BOOTSTRAP = '' // localStorage injection (root page only)
-let POLLER = '' // session poller (all pages)
-let lastSync = 0
-const SYNC_INTERVAL = 60000
-const POLL_INTERVAL = 15000
-
 function buildScripts() {
-  // Build the bootstrap script (root page localStorage injection)
   BOOTSTRAP = ''
   try {
-    if (existsSync(HISTORY_FILE)) {
-      let raw = readFileSync(HISTORY_FILE, 'utf-8')
-      if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1)
-      const data = JSON.parse(raw)
-      if (data.sessions?.length) {
-        const dirSessions = data.sessions.filter(s => s.directory === PROJECT_DIR)
-        const recent = [...(dirSessions.length ? dirSessions : data.sessions)]
-          .sort((a, b) => (b.time_updated || 0) - (a.time_updated || 0))[0]
-        const slug = Buffer.from(PROJECT_DIR).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-
-        BOOTSTRAP = `
+    if (latestSession) {
+      const slug = Buffer.from(PROJECT_DIR).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+      BOOTSTRAP = `
 <script id="glitch-bootstrap">
 ;(function(){
   var DIR = ${JSON.stringify(PROJECT_DIR)};
-  var SID = ${JSON.stringify(recent.session_id)};
+  var SID = ${JSON.stringify(latestSession.id)};
   var SLUG = ${JSON.stringify(slug)};
 
   var srv = { list: [], projects: { local: [{ worktree: DIR, expanded: true }] }, lastProject: { local: DIR } };
@@ -62,11 +53,9 @@ function buildScripts() {
   }, 100);
 })();
 </script>`
-      }
     }
   } catch (e) { console.error('bootstrap error:', e.message) }
 
-  // Build the session poller (injected on all pages)
   const encodedDir = encodeURIComponent(PROJECT_DIR)
   POLLER = `
 <script id="glitch-poller">
@@ -85,10 +74,9 @@ function buildScripts() {
           location.reload();
         }
       })
-      .catch(function() {}); // silent
+      .catch(function() {});
   }
 
-  // Start polling after page settles
   setTimeout(poll, 3000);
   setInterval(poll, ${POLL_INTERVAL});
   document.getElementById('glitch-poller').remove();
@@ -96,24 +84,74 @@ function buildScripts() {
 </script>`
 }
 
-function syncNow() {
+function readCache() {
   try {
-    const script = join(__dirname, 'sync-history.ps1')
-    execSync(`powershell -ExecutionPolicy Bypass -File "${script}"`, { timeout: 30000, windowsHide: true })
-    return true
-  } catch { return false }
+    if (existsSync(CACHE_FILE)) {
+      const data = JSON.parse(readFileSync(CACHE_FILE, 'utf-8'))
+      if (data.latestSession) {
+        latestSession = data.latestSession
+        buildScripts()
+        console.log(`[${new Date().toLocaleTimeString()}] Loaded session from cache: ${latestSession.id}`)
+      }
+    }
+  } catch (e) { console.error('cache read error:', e.message) }
 }
 
-function refreshScripts() {
-  syncNow()
-  buildScripts()
-  console.log(`[${new Date().toLocaleTimeString()}] Scripts rebuilt (bootstrap:${!!BOOTSTRAP}, poller:${!!POLLER})`)
-  lastSync = Date.now()
+function writeCache() {
+  try {
+    if (!existsSync(CACHE_DIR)) {
+      mkdirSync(CACHE_DIR, { recursive: true })
+    }
+    writeFileSync(CACHE_FILE, JSON.stringify({ latestSession }), 'utf-8')
+  } catch (e) { console.error('cache write error:', e.message) }
 }
 
-// Initial sync and periodic refresh
-refreshScripts()
-setInterval(refreshScripts, SYNC_INTERVAL)
+async function refreshSessionData() {
+  try {
+    const password = getPassword()
+    const auth = password ? 'Basic ' + Buffer.from('opencode:' + password).toString('base64') : null
+
+    const sessions = await new Promise((resolve, reject) => {
+      const headers = {}
+      if (auth) headers['Authorization'] = auth
+      const req = httpRequest({
+        hostname: '127.0.0.1',
+        port: TARGET_PORT,
+        path: '/session?directory=' + encodeURIComponent(PROJECT_DIR),
+        method: 'GET',
+        headers
+      }, (res) => {
+        let body = []
+        res.on('data', chunk => body.push(chunk))
+        res.on('end', () => {
+          if (res.statusCode !== 200) {
+            return reject(new Error(`HTTP ${res.statusCode}`))
+          }
+          try {
+            resolve(JSON.parse(Buffer.concat(body).toString()))
+          } catch (e) { reject(e) }
+        })
+      })
+      req.on('error', reject)
+      req.setTimeout(5000, () => { req.destroy(); reject(new Error('timeout')) })
+      req.end()
+    })
+
+    if (sessions && sessions.length > 0) {
+      const sorted = [...sessions].sort((a, b) => (b.time_updated || 0) - (a.time_updated || 0))
+      latestSession = sorted[0]
+    }
+    buildScripts()
+    writeCache()
+    console.log(`[${new Date().toLocaleTimeString()}] Sessions refreshed from API: ${sessions?.length || 0}`)
+  } catch (e) {
+    console.log(`[${new Date().toLocaleTimeString()}] API unavailable: ${e.message}`)
+  }
+}
+
+readCache()
+refreshSessionData()
+setInterval(refreshSessionData, REFRESH_INTERVAL)
 
 const AUTH = (() => {
   const pw = getPassword()
@@ -136,7 +174,6 @@ const server = createServer((clientReq, clientRes) => {
     const ct = proxyRes.headers['content-type'] || ''
     const isHtml = ct.includes('text/html')
 
-    // Strip CSP headers so our inline script can execute
     const responseHeaders = { ...proxyRes.headers }
     for (const h of CSP_HEADERS) {
       delete responseHeaders[h]
@@ -149,11 +186,9 @@ const server = createServer((clientReq, clientRes) => {
         let fullBody = Buffer.concat(body)
         let html = fullBody.toString('utf-8')
         let inject = ''
-        // Bootstrap (localStorage) only on root URL
         if (BOOTSTRAP && (clientReq.url === '/' || clientReq.url === '')) {
           inject += BOOTSTRAP + '\n'
         }
-        // Session poller on all pages
         if (POLLER) {
           inject += POLLER + '\n'
         }

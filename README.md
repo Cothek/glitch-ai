@@ -16,7 +16,6 @@ Portable AI companion environment — one clone, one launch, Glitch is ready on 
 | `serve-glitch.bat` / `serve-glitch.ps1` | Launches OpenCode Web server + Cloudflare Tunnel for remote access. |
 | `setup-tunnel.ps1` | One-time Cloudflare Tunnel setup — authenticate, create tunnel, configure DNS. |
 | `restore-server.mjs` | Proxy server that injects session history into the OpenCode Web UI. |
-| `sync-history.ps1` | Syncs OpenCode session history from SQLite to cache file for the proxy. |
 
 ## Quick Start (Local)
 
@@ -63,8 +62,7 @@ set OPENCODE_SERVER_PASSWORD=your-password
 
 ### Web Mode (`serve-glitch.bat`)
 1. Starts Handy in the background for voice input
-2. Syncs recent session history from SQLite to JSON cache
-3. Starts the session history proxy on port 4097
+2. Starts the session history proxy on port 4097
 4. Starts OpenCode Web server on port 4096
 5. Opens Cloudflare Tunnel to `glitch.cothekdesigns.com`
 6. Access from any device: `https://glitch.cothekdesigns.com/`
@@ -89,7 +87,6 @@ glitch-ai/                    ← This repo
 ├── bootstrap.ps1             ← First-run installer
 ├── setup-tunnel.ps1          ← One-time Cloudflare Tunnel setup
 ├── restore-server.mjs        ← Session history proxy server
-├── sync-history.ps1          ← Session cache sync script
 ├── cloudflared-config.yml    ← Cloudflare Tunnel configuration
 ├── opencode.json             ← Config file
 └── tui.json                  ← Terminal UI config
