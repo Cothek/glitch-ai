@@ -14,6 +14,7 @@ const PROJECT_DIR = 'E:\\Glitch AI\\glitch-ai'
 const REFRESH_INTERVAL = 60000
 const POLL_INTERVAL = 15000
 
+let allSessions = []
 let latestSession = null
 let BOOTSTRAP = ''
 let POLLER = ''
@@ -26,50 +27,127 @@ function getPassword() {
 }
 
 function buildScripts() {
-  BOOTSTRAP = ''
-  try {
-    if (latestSession) {
-      const slug = Buffer.from(PROJECT_DIR).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-      BOOTSTRAP = `
+  const encodedDir = encodeURIComponent(PROJECT_DIR)
+  let slug = ''
+  try { slug = Buffer.from(PROJECT_DIR).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') } catch {}
+
+  const allSessionsJson = JSON.stringify(allSessions.map(function(s) {
+    return { id: s.id, title: s.title, slug: s.slug, agent: s.agent, time: s.time, summary: s.summary, tokens: s.tokens, model: s.model, version: s.version };
+  }));
+
+  BOOTSTRAP = `
 <script id="glitch-bootstrap">
 ;(function(){
   var DIR = ${JSON.stringify(PROJECT_DIR)};
-  var SID = ${JSON.stringify(latestSession.id)};
+  var SID = ${JSON.stringify(latestSession ? latestSession.id : null)};
   var SLUG = ${JSON.stringify(slug)};
+  var ENC_DIR = ${JSON.stringify(encodedDir)};
+  var ALL_SESSIONS = ${allSessionsJson};
 
-  var srv = { list: [], projects: { local: [{ worktree: DIR, expanded: true }] }, lastProject: { local: DIR } };
-  localStorage.setItem('opencode.global.dat:server', JSON.stringify(srv));
+  function restoreProject() {
+    try {
+      var srv = { list: [], projects: { local: [{ worktree: DIR, expanded: true }] }, lastProject: { local: DIR } };
+      localStorage.setItem('opencode.global.dat:server', JSON.stringify(srv));
 
-  var lay = { lastProjectSession: {}, activeProject: DIR, activeWorkspace: void 0, workspaceOrder: {}, workspaceName: {}, workspaceBranchName: {}, workspaceExpanded: {}, gettingStartedDismissed: true };
-  lay.lastProjectSession[DIR] = { directory: DIR, id: SID, at: Date.now() };
-  localStorage.setItem('opencode.global.dat:layout.page', JSON.stringify(lay));
+      var mdl = { user: [{ modelID: 'deepseek-v4-flash-free', providerID: 'opencode', visibility: 'show' }], recent: [{ modelID: 'deepseek-v4-flash-free', providerID: 'opencode' }], variant: {} };
+      localStorage.setItem('opencode.global.dat:model', JSON.stringify(mdl));
+    } catch(e) { console.error('Glitch: restore failed', e); }
+  }
 
-  var mdl = { user: [{ modelID: 'deepseek-v4-flash-free', providerID: 'opencode', visibility: 'show' }], recent: [{ modelID: 'deepseek-v4-flash-free', providerID: 'opencode' }], variant: {} };
-  localStorage.setItem('opencode.global.dat:model', JSON.stringify(mdl));
+  function restoreSession() {
+    if (!SID) return;
+    try {
+      var existing = localStorage.getItem('opencode.global.dat:layout.page');
+      var lay = existing ? JSON.parse(existing) : {};
+      lay.lastProjectSession = lay.lastProjectSession || {};
+      lay.activeProject = DIR;
+      lay.activeWorkspace = void 0;
+      lay.workspaceOrder = lay.workspaceOrder || {};
+      lay.workspaceName = lay.workspaceName || {};
+      lay.workspaceBranchName = lay.workspaceBranchName || {};
+      lay.workspaceExpanded = lay.workspaceExpanded || {};
+      lay.gettingStartedDismissed = true;
+      lay.lastProjectSession[DIR] = { directory: DIR, id: SID, at: Date.now() };
+      lay.projectSessions = lay.projectSessions || {};
+      lay.projectSessions[DIR] = ALL_SESSIONS;
+      localStorage.setItem('opencode.global.dat:layout.page', JSON.stringify(lay));
+      localStorage.setItem('opencode.global.dat:sessions', JSON.stringify({ directory: DIR, sessions: ALL_SESSIONS, at: Date.now() }));
+    } catch(e) { console.error('Glitch: session restore failed', e); }
+  }
+
+  var isRegistered = false;
+  try {
+    var srvRaw = localStorage.getItem('opencode.global.dat:server');
+    if (srvRaw) {
+      var srv = JSON.parse(srvRaw);
+      isRegistered = srv.projects && srv.projects.local && srv.projects.local.some(function(p) { return p.worktree === DIR; });
+    }
+  } catch(e) {}
+
+  if (!isRegistered) {
+    restoreProject();
+    restoreSession();
+  } else {
+    try {
+      var lay = JSON.parse(localStorage.getItem('opencode.global.dat:layout.page') || '{}');
+      lay.projectSessions = lay.projectSessions || {};
+      lay.projectSessions[DIR] = ALL_SESSIONS;
+      localStorage.setItem('opencode.global.dat:layout.page', JSON.stringify(lay));
+      localStorage.setItem('opencode.global.dat:sessions', JSON.stringify({ directory: DIR, sessions: ALL_SESSIONS, at: Date.now() }));
+    } catch(e) { console.error('Glitch: session sync failed', e); }
+  }
+
+  var currentPath = location.pathname;
+  var targetPath = SID ? ('/' + SLUG + '/session/' + SID) : ('/' + SLUG + '/session');
+  if (!isRegistered && SID && currentPath !== targetPath) {
+    setTimeout(function() {
+      location.href = targetPath;
+    }, 100);
+  }
 
   document.getElementById('glitch-bootstrap').remove();
-  setTimeout(function() {
-    location.href = '/' + SLUG + '/session/' + SID;
-  }, 100);
 })();
 </script>`
-    }
-  } catch (e) { console.error('bootstrap error:', e.message) }
 
-  const encodedDir = encodeURIComponent(PROJECT_DIR)
   POLLER = `
 <script id="glitch-poller">
 ;(function(){
+  var DIR = ${JSON.stringify(PROJECT_DIR)};
   var POLL_URL = '/' + ${JSON.stringify(encodedDir)} + '/session/';
   var known = null;
 
+  function ensureProject() {
+    try {
+      var srvRaw = localStorage.getItem('opencode.global.dat:server');
+      if (srvRaw) {
+        var srv = JSON.parse(srvRaw);
+        var found = srv.projects && srv.projects.local && srv.projects.local.some(function(p) { return p.worktree === DIR; });
+        if (found) return;
+      }
+      srvRaw = { list: [], projects: { local: [{ worktree: DIR, expanded: true }] }, lastProject: { local: DIR } };
+      localStorage.setItem('opencode.global.dat:server', JSON.stringify(srvRaw));
+    } catch(e) {}
+  }
+
+  function syncSessionsToLocal(sessions) {
+    try {
+      var lay = JSON.parse(localStorage.getItem('opencode.global.dat:layout.page') || '{}');
+      lay.projectSessions = lay.projectSessions || {};
+      lay.projectSessions[DIR] = sessions;
+      localStorage.setItem('opencode.global.dat:layout.page', JSON.stringify(lay));
+      localStorage.setItem('opencode.global.dat:sessions', JSON.stringify({ directory: DIR, sessions: sessions, at: Date.now() }));
+    } catch(e) { console.error('Glitch: session sync failed', e); }
+  }
+
   function poll() {
+    ensureProject();
     fetch('/session?directory=' + ${JSON.stringify(encodedDir)}, { credentials: 'same-origin' })
       .then(function(r) { return r.json(); })
       .then(function(sessions) {
         var ids = sessions.map(function(s) { return s.id; }).sort().join(',');
-        if (known === null) { known = ids; return; }
+        if (known === null) { known = ids; syncSessionsToLocal(sessions); return; }
         if (ids !== known) {
+          syncSessionsToLocal(sessions);
           console.log('Glitch: sessions changed, reloading');
           location.reload();
         }
@@ -88,10 +166,13 @@ function readCache() {
   try {
     if (existsSync(CACHE_FILE)) {
       const data = JSON.parse(readFileSync(CACHE_FILE, 'utf-8'))
+      if (data.allSessions) {
+        allSessions = data.allSessions
+      }
       if (data.latestSession) {
         latestSession = data.latestSession
         buildScripts()
-        console.log(`[${new Date().toLocaleTimeString()}] Loaded session from cache: ${latestSession.id}`)
+        console.log(`[${new Date().toLocaleTimeString()}] Loaded session from cache: ${latestSession.id} (${allSessions.length} total)`)
       }
     }
   } catch (e) { console.error('cache read error:', e.message) }
@@ -102,7 +183,7 @@ function writeCache() {
     if (!existsSync(CACHE_DIR)) {
       mkdirSync(CACHE_DIR, { recursive: true })
     }
-    writeFileSync(CACHE_FILE, JSON.stringify({ latestSession }), 'utf-8')
+    writeFileSync(CACHE_FILE, JSON.stringify({ allSessions, latestSession }), 'utf-8')
   } catch (e) { console.error('cache write error:', e.message) }
 }
 
@@ -138,8 +219,12 @@ async function refreshSessionData() {
     })
 
     if (sessions && sessions.length > 0) {
+      allSessions = sessions
       const sorted = [...sessions].sort((a, b) => (b.time_updated || 0) - (a.time_updated || 0))
       latestSession = sorted[0]
+    } else if (sessions && sessions.length === 0) {
+      allSessions = []
+      latestSession = null
     }
     buildScripts()
     writeCache()
@@ -150,7 +235,15 @@ async function refreshSessionData() {
 }
 
 readCache()
-refreshSessionData()
+
+async function startupRetry() {
+  await refreshSessionData()
+  if (!latestSession) {
+    setTimeout(startupRetry, 2000)
+  }
+}
+startupRetry()
+
 setInterval(refreshSessionData, REFRESH_INTERVAL)
 
 const AUTH = (() => {
@@ -160,6 +253,13 @@ const AUTH = (() => {
 })()
 
 const CSP_HEADERS = ['content-security-policy', 'content-security-policy-report-only']
+
+process.on('uncaughtException', (err) => {
+  console.error('[CRASH GUARD] Uncaught exception:', err.message)
+})
+process.on('unhandledRejection', (err) => {
+  console.error('[CRASH GUARD] Unhandled rejection:', err.message)
+})
 
 const server = createServer((clientReq, clientRes) => {
   const options = {
@@ -186,7 +286,7 @@ const server = createServer((clientReq, clientRes) => {
         let fullBody = Buffer.concat(body)
         let html = fullBody.toString('utf-8')
         let inject = ''
-        if (BOOTSTRAP && (clientReq.url === '/' || clientReq.url === '')) {
+        if (BOOTSTRAP) {
           inject += BOOTSTRAP + '\n'
         }
         if (POLLER) {
@@ -207,6 +307,7 @@ const server = createServer((clientReq, clientRes) => {
   })
 
   proxyReq.on('error', (err) => {
+    if (clientRes.headersSent) return
     clientRes.writeHead(502, { 'Content-Type': 'text/plain' })
     clientRes.end('Proxy error: ' + err.message)
   })
@@ -214,7 +315,43 @@ const server = createServer((clientReq, clientRes) => {
   clientReq.pipe(proxyReq)
 })
 
-server.listen(PROXY_PORT, '0.0.0.0', () => {
+server.on('upgrade', (req, socket, head) => {
+  const opts = {
+    hostname: '127.0.0.1',
+    port: TARGET_PORT,
+    path: req.url,
+    method: req.method || 'GET',
+    headers: { ...req.headers, 'Authorization': AUTH }
+  }
+
+  const proxyReq = httpRequest(opts)
+  proxyReq.on('upgrade', (proxyRes, proxySocket, proxyHead) => {
+    const headBuf = Object.entries(proxyRes.headers)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join('\r\n')
+    socket.write('HTTP/1.1 101 Switching Protocols\r\n' + headBuf + '\r\n\r\n')
+    if (proxyHead && proxyHead.length) socket.write(proxyHead)
+    if (head && head.length) proxySocket.write(head)
+    proxySocket.pipe(socket).pipe(proxySocket)
+  })
+  proxyReq.on('response', (proxyRes) => {
+    const headBuf = Object.entries(proxyRes.headers)
+      .map(([k, v]) => `${k}: ${v}`)
+      .join('\r\n')
+    socket.write(`HTTP/1.1 ${proxyRes.statusCode} ${proxyRes.statusMessage}\r\n${headBuf}\r\n\r\n`)
+    proxyRes.pipe(socket)
+  })
+  proxyReq.on('error', (err) => {
+    try {
+      socket.write('HTTP/1.1 502 Bad Gateway\r\nContent-Type: text/plain\r\n\r\nProxy error: ' + err.message)
+    } catch {}
+    socket.destroy()
+  })
+  socket.on('error', () => proxyReq.destroy())
+  proxyReq.end()
+})
+
+server.listen(PROXY_PORT, () => {
   console.log(`Glitch Proxy on http://0.0.0.0:${PROXY_PORT} -> 127.0.0.1:${TARGET_PORT}`)
   console.log(`  Visit http://localhost:${PROXY_PORT}/`)
 })
