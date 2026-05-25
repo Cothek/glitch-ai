@@ -7,11 +7,28 @@ Write-Host ""
 Write-Host "Glitch AI - Server Mode" -ForegroundColor Magenta
 Write-Host ""
 
+$TargetPort = 4102
+
 # ── Check prerequisites ──
 if (-not (Test-Path $OpenCodeBin)) {
   Write-Host "OpenCode not found. Run bootstrap.ps1 first." -ForegroundColor Red
   exit 1
 }
+
+# ── Check port availability (zombie socket prevention) ──
+try {
+  $tcp = New-Object System.Net.Sockets.TcpClient
+  $r = $tcp.BeginConnect('127.0.0.1', $TargetPort, $null, $null)
+  $w = $r.AsyncWaitHandle.WaitOne(500)
+  if ($tcp.Connected) {
+    $tcp.Close()
+    Write-Host "  ERROR: Port $TargetPort is in use (likely orphan TCP socket from previous crash)." -ForegroundColor Red
+    Write-Host "  Fix: Run PowerShell as Admin and execute: net stop winnat; net start winnat" -ForegroundColor Yellow
+    exit 1
+  }
+  $tcp.Close()
+} catch {}
+Write-Host "  Port $TargetPort is free" -ForegroundColor Cyan
 
 # ─ Cloudflare Tunnel status ──
 $cloudflareOk = $false
@@ -26,11 +43,6 @@ if (Test-Path $Cloudflared) {
 } else {
   Write-Host "  Cloudflare Tunnel: cloudflared.exe not found" -ForegroundColor Yellow
 }
-
-# ── Start restore server (port 4097) ──
-Write-Host "  Starting restore server (port 4097)..." -ForegroundColor Cyan
-$restoreProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\restore-server.mjs`"" -PassThru
-Start-Sleep -Seconds 1
 
 # ── Start Cloudflare Tunnel ──
 if ($cloudflareOk) {
@@ -68,18 +80,18 @@ if (-not $pw) {
 Write-Host ""
 Write-Host "  Server password: $pw" -ForegroundColor Yellow
 Write-Host "  Username: opencode" -ForegroundColor Yellow
+$authBytes = [System.Text.Encoding]::UTF8.GetBytes("opencode:$pw")
+$authToken = [Convert]::ToBase64String($authBytes)
+Write-Host "  Web access URL: https://glitch.cothekdesigns.com/?auth_token=$authToken" -ForegroundColor Green
 Write-Host ""
 
 # ── Launch OpenCode Web ──
 Push-Location $RootDir
 try {
-  & $OpenCodeBin web --port 4096 --hostname 0.0.0.0
+  & $OpenCodeBin web --port $TargetPort --hostname 0.0.0.0
 } finally {
   Pop-Location
-  # Clean up restore server and cloudflared when OpenCode exits
-  if ($restoreProcess -and -not $restoreProcess.HasExited) {
-    $restoreProcess.Kill()
-  }
+  # Clean up cloudflared when OpenCode exits
   if ($cloudflaredProcess -and -not $cloudflaredProcess.HasExited) {
     $cloudflaredProcess.Kill()
   }

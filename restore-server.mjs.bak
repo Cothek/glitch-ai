@@ -8,8 +8,8 @@ const __dirname = dirname(fileURLToPath(import.meta.url))
 const CACHE_DIR = join(__dirname, '.opencode', 'session-history')
 const CACHE_FILE = join(CACHE_DIR, 'session-cache.json')
 const PW_FILE = join(__dirname, '.server-password')
-const TARGET_PORT = 4096
-const PROXY_PORT = 4097
+const TARGET_PORT = 4100
+const PROXY_PORT = 4101
 const PROJECT_DIR = 'E:\\Glitch AI\\glitch-ai'
 const REFRESH_INTERVAL = 60000
 const POLL_INTERVAL = 15000
@@ -32,134 +32,11 @@ function buildScripts() {
   try { slug = Buffer.from(PROJECT_DIR).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') } catch {}
 
   const allSessionsJson = JSON.stringify(allSessions.map(function(s) {
-    return { id: s.id, title: s.title, slug: s.slug, agent: s.agent, time: s.time, summary: s.summary, tokens: s.tokens, model: s.model, version: s.version };
+    return { id: s.id, title: s.title, slug: s.slug, agent: s.agent, time: s.time, summary: s.summary, tokens: s.tokens, model: s.model, version: s.version, messages: [], tools: [], files: [], commands: [] };
   }));
 
-  BOOTSTRAP = `
-<script id="glitch-bootstrap">
-;(function(){
-  var DIR = ${JSON.stringify(PROJECT_DIR)};
-  var SID = ${JSON.stringify(latestSession ? latestSession.id : null)};
-  var SLUG = ${JSON.stringify(slug)};
-  var ENC_DIR = ${JSON.stringify(encodedDir)};
-  var ALL_SESSIONS = ${allSessionsJson};
-
-  function restoreProject() {
-    try {
-      var srv = { list: [], projects: { local: [{ worktree: DIR, expanded: true }] }, lastProject: { local: DIR } };
-      localStorage.setItem('opencode.global.dat:server', JSON.stringify(srv));
-
-      var mdl = { user: [{ modelID: 'deepseek-v4-flash-free', providerID: 'opencode', visibility: 'show' }], recent: [{ modelID: 'deepseek-v4-flash-free', providerID: 'opencode' }], variant: {} };
-      localStorage.setItem('opencode.global.dat:model', JSON.stringify(mdl));
-    } catch(e) { console.error('Glitch: restore failed', e); }
-  }
-
-  function restoreSession() {
-    if (!SID) return;
-    try {
-      var existing = localStorage.getItem('opencode.global.dat:layout.page');
-      var lay = existing ? JSON.parse(existing) : {};
-      lay.lastProjectSession = lay.lastProjectSession || {};
-      lay.activeProject = DIR;
-      lay.activeWorkspace = void 0;
-      lay.workspaceOrder = lay.workspaceOrder || {};
-      lay.workspaceName = lay.workspaceName || {};
-      lay.workspaceBranchName = lay.workspaceBranchName || {};
-      lay.workspaceExpanded = lay.workspaceExpanded || {};
-      lay.gettingStartedDismissed = true;
-      lay.lastProjectSession[DIR] = { directory: DIR, id: SID, at: Date.now() };
-      lay.projectSessions = lay.projectSessions || {};
-      lay.projectSessions[DIR] = ALL_SESSIONS;
-      localStorage.setItem('opencode.global.dat:layout.page', JSON.stringify(lay));
-      localStorage.setItem('opencode.global.dat:sessions', JSON.stringify({ directory: DIR, sessions: ALL_SESSIONS, at: Date.now() }));
-    } catch(e) { console.error('Glitch: session restore failed', e); }
-  }
-
-  var isRegistered = false;
-  try {
-    var srvRaw = localStorage.getItem('opencode.global.dat:server');
-    if (srvRaw) {
-      var srv = JSON.parse(srvRaw);
-      isRegistered = srv.projects && srv.projects.local && srv.projects.local.some(function(p) { return p.worktree === DIR; });
-    }
-  } catch(e) {}
-
-  if (!isRegistered) {
-    restoreProject();
-    restoreSession();
-  } else {
-    try {
-      var lay = JSON.parse(localStorage.getItem('opencode.global.dat:layout.page') || '{}');
-      lay.projectSessions = lay.projectSessions || {};
-      lay.projectSessions[DIR] = ALL_SESSIONS;
-      localStorage.setItem('opencode.global.dat:layout.page', JSON.stringify(lay));
-      localStorage.setItem('opencode.global.dat:sessions', JSON.stringify({ directory: DIR, sessions: ALL_SESSIONS, at: Date.now() }));
-    } catch(e) { console.error('Glitch: session sync failed', e); }
-  }
-
-  var currentPath = location.pathname;
-  var targetPath = SID ? ('/' + SLUG + '/session/' + SID) : ('/' + SLUG + '/session');
-  if (!isRegistered && SID && currentPath !== targetPath) {
-    setTimeout(function() {
-      location.href = targetPath;
-    }, 100);
-  }
-
-  document.getElementById('glitch-bootstrap').remove();
-})();
-</script>`
-
-  POLLER = `
-<script id="glitch-poller">
-;(function(){
-  var DIR = ${JSON.stringify(PROJECT_DIR)};
-  var POLL_URL = '/' + ${JSON.stringify(encodedDir)} + '/session/';
-  var known = null;
-
-  function ensureProject() {
-    try {
-      var srvRaw = localStorage.getItem('opencode.global.dat:server');
-      if (srvRaw) {
-        var srv = JSON.parse(srvRaw);
-        var found = srv.projects && srv.projects.local && srv.projects.local.some(function(p) { return p.worktree === DIR; });
-        if (found) return;
-      }
-      srvRaw = { list: [], projects: { local: [{ worktree: DIR, expanded: true }] }, lastProject: { local: DIR } };
-      localStorage.setItem('opencode.global.dat:server', JSON.stringify(srvRaw));
-    } catch(e) {}
-  }
-
-  function syncSessionsToLocal(sessions) {
-    try {
-      var lay = JSON.parse(localStorage.getItem('opencode.global.dat:layout.page') || '{}');
-      lay.projectSessions = lay.projectSessions || {};
-      lay.projectSessions[DIR] = sessions;
-      localStorage.setItem('opencode.global.dat:layout.page', JSON.stringify(lay));
-      localStorage.setItem('opencode.global.dat:sessions', JSON.stringify({ directory: DIR, sessions: sessions, at: Date.now() }));
-    } catch(e) { console.error('Glitch: session sync failed', e); }
-  }
-
-  function poll() {
-    ensureProject();
-    fetch('/session?directory=' + ${JSON.stringify(encodedDir)}, { credentials: 'same-origin' })
-      .then(function(r) { return r.json(); })
-      .then(function(sessions) {
-        var ids = sessions.map(function(s) { return s.id; }).sort().join(',');
-        if (known === null) { known = ids; syncSessionsToLocal(sessions); return; }
-        if (ids !== known) {
-          syncSessionsToLocal(sessions);
-          console.log('Glitch: sessions changed, reloading');
-          location.reload();
-        }
-      })
-      .catch(function() {});
-  }
-
-  setTimeout(poll, 3000);
-  setInterval(poll, ${POLL_INTERVAL});
-  document.getElementById('glitch-poller').remove();
-})();
-</script>`
+  BOOTSTRAP = ''
+  POLLER = ''
 }
 
 function readCache() {
@@ -171,8 +48,8 @@ function readCache() {
       }
       if (data.latestSession) {
         latestSession = data.latestSession
-        buildScripts()
-        console.log(`[${new Date().toLocaleTimeString()}] Loaded session from cache: ${latestSession.id} (${allSessions.length} total)`)
+        // Don't build scripts here - only inject via API refresh to avoid stale cache data
+        console.log(`[${new Date().toLocaleTimeString()}] Cache loaded, will sync via API`)
       }
     }
   } catch (e) { console.error('cache read error:', e.message) }
@@ -220,7 +97,7 @@ async function refreshSessionData() {
 
     if (sessions && sessions.length > 0) {
       allSessions = sessions
-      const sorted = [...sessions].sort((a, b) => (b.time_updated || 0) - (a.time_updated || 0))
+      const sorted = [...sessions].sort((a, b) => ((b.time && b.time.updated) || 0) - ((a.time && a.time.updated) || 0))
       latestSession = sorted[0]
     } else if (sessions && sessions.length === 0) {
       allSessions = []
@@ -254,6 +131,12 @@ const AUTH = (() => {
 
 const CSP_HEADERS = ['content-security-policy', 'content-security-policy-report-only']
 
+function addAuthToRequest(options) {
+  // Only add auth if client didn't already send it (prevent token leakage)
+  if (AUTH && !options.headers['Authorization']) options.headers['Authorization'] = AUTH
+  return options
+}
+
 process.on('uncaughtException', (err) => {
   console.error('[CRASH GUARD] Uncaught exception:', err.message)
 })
@@ -262,13 +145,13 @@ process.on('unhandledRejection', (err) => {
 })
 
 const server = createServer((clientReq, clientRes) => {
-  const options = {
+  const options = addAuthToRequest({
     hostname: '127.0.0.1',
     port: TARGET_PORT,
     path: clientReq.url,
     method: clientReq.method,
-    headers: { ...clientReq.headers, 'Authorization': AUTH }
-  }
+    headers: clientReq.headers
+  })
 
   const proxyReq = httpRequest(options, (proxyRes) => {
     const ct = proxyRes.headers['content-type'] || ''
