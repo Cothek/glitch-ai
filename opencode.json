@@ -1,6 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
-  "instructions": ["glitch-memorycore/prompt-rules.md", "glitch-memorycore/CLAUDE.md", "glitch-memorycore/main/current-session.md"],
+  "instructions": ["glitch-memorycore/prompt-rules.md", "glitch-memorycore/CLAUDE.md", "glitch-memorycore/main/current-session.md", "glitch-memorycore/main/main-memory.md", "glitch-memorycore/main/reminders.md", "glitch-memorycore/main/session-dashboard.md"],
   "experimental": {
     "disable_paste_summary": true
   },
