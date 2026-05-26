@@ -71,9 +71,21 @@ if ($needsInstall) {
       New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
       & $7z.Source x "$setupPath" -o"$extractDir" -y 2>&1 | Out-Null
     } else {
-      Write-Host "  Running installer silently..." -ForegroundColor Yellow
+      Write-Host "  Installing silently..." -ForegroundColor Yellow
       $extractDir = "$env:LOCALAPPDATA\Handy_tmp"
-      Start-Process -FilePath $setupPath -ArgumentList "/VERYSILENT /DIR=`"$extractDir`" /SUPPRESSMSGBOXES /NORESTART" -Wait
+      $proc = Start-Process -FilePath $setupPath -ArgumentList "/S", "/D=$extractDir" -Wait -PassThru
+      if ($proc.ExitCode -ne 0) {
+        Write-Host "  Silent install failed. Trying MSI extraction..." -ForegroundColor DarkYellow
+        $msiUrl = "https://github.com/cjpais/Handy/releases/download/v$handyVersion/Handy_${handyVersion}_${handyArch}_en-US.msi"
+        $msiPath = "$env:TEMP\Handy_${handyVersion}_${handyArch}_en-US.msi"
+        Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+        $extractDir = "$env:TEMP\Handy_exe"
+        New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+        Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
+        Write-Host "  Extracting via MSI (admin may be required)..." -ForegroundColor Yellow
+        Start-Process -FilePath "msiexec" -ArgumentList "/a `"$msiPath`" /qn TARGETDIR=`"$extractDir`"" -Wait
+        Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
+      }
     }
     $foundExe = Get-ChildItem -Path $extractDir -Recurse -Filter "handy.exe" | Select-Object -First 1
     if ($foundExe) {
