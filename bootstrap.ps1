@@ -51,36 +51,37 @@ if (-not (Test-Path $HandyBin) -or $Force) {
   if (Test-Path $systemHandy) {
     Write-Host "  Found system install, copying..." -ForegroundColor Yellow
     if (-not (Test-Path $HandyDir)) { New-Item -ItemType Directory -Path $HandyDir -Force }
-    Copy-Item $systemHandy $HandyBin -Force
+    Copy-Item "$env:LOCALAPPDATA\Handy\*" $HandyDir -Recurse -Force
   } else {
     Write-Host "  Downloading Handy v$handyVersion ($handyArch)..." -ForegroundColor Yellow
-    $msiUrl = "https://github.com/cjpais/Handy/releases/download/v$handyVersion/Handy_${handyVersion}_${handyArch}_en-US.msi"
-    $msiPath = "$env:TEMP\Handy_${handyVersion}_${handyArch}_en-US.msi"
-    $extractDir = "$env:TEMP\Handy_exe"
-    Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
-    if (Test-Path $extractDir) { Remove-Item -Path $extractDir -Recurse -Force }
-    New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+    $setupUrl = "https://github.com/cjpais/Handy/releases/download/v$handyVersion/Handy_${handyVersion}_${handyArch}-setup.exe"
+    $setupPath = "$env:TEMP\Handy_setup.exe"
+    $extractDir = "$env:TEMP\Handy_tmp"
+    Invoke-WebRequest -Uri $setupUrl -OutFile $setupPath -UseBasicParsing
     $7z = Get-Command "7z" -ErrorAction SilentlyContinue
     if ($7z) {
       Write-Host "  Extracting with 7-Zip..." -ForegroundColor Yellow
-      & $7z.Source x "$msiPath" -o"$extractDir" -y 2>&1 | Out-Null
+      if (Test-Path $extractDir) { Remove-Item -Path $extractDir -Recurse -Force }
+      New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+      & $7z.Source x "$setupPath" -o"$extractDir" -y 2>&1 | Out-Null
     } else {
-      Write-Host "  Extracting (admin may be required)..." -ForegroundColor Yellow
-      Start-Process -FilePath "msiexec" -ArgumentList "/a `"$msiPath`" /qn TARGETDIR=`"$extractDir`"" -Wait
+      Write-Host "  Running installer silently..." -ForegroundColor Yellow
+      $extractDir = "$env:LOCALAPPDATA\Handy_tmp"
+      Start-Process -FilePath $setupPath -ArgumentList "/VERYSILENT /DIR=`"$extractDir`" /SUPPRESSMSGBOXES /NORESTART" -Wait
     }
     $foundExe = Get-ChildItem -Path $extractDir -Recurse -Filter "handy.exe" | Select-Object -First 1
     if ($foundExe) {
-      if (-not (Test-Path $HandyDir)) { New-Item -ItemType Directory -Path $HandyDir -Force }
-      Copy-Item $foundExe.FullName $HandyBin -Force
+      if (Test-Path $HandyDir) { Remove-Item $HandyDir -Recurse -Force }
+      Copy-Item "$extractDir\*" $HandyDir -Recurse -Force
     } else {
       Write-Host "  Failed to extract Handy. Download manually:" -ForegroundColor Red
       Write-Host "  https://github.com/cjpais/Handy/releases" -ForegroundColor Yellow
     }
-    Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
+    Remove-Item $setupPath -Force -ErrorAction SilentlyContinue
     Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
   }
   if (Test-Path $HandyDir) {
-    Set-Content -Path "$HandyDir\portable" -Value "" -NoNewline
+    Set-Content -Path "$HandyDir\portable" -Value "Handy Portable Mode" -NoNewline
   }
   Write-Host "  Handy ready!" -ForegroundColor Green
 } else {
