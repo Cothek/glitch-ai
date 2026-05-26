@@ -24,6 +24,43 @@
         "websearch": "deny"
       },
       "temperature": 0.2
+    },
+    "coder": {
+      "model": "opencode-go/qwen3.6-plus",
+      "mode": "subagent",
+      "description": "Complex code generation and architecture work ($0.50/$3.00). Use when tasks involve 5+ files, authentication, data flow, API integration, database schemas, or any work requiring strong reasoning. Falls back from @general when free model is insufficient for complex code.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow"
+      },
+      "temperature": 0.2
+    },
+    "general-paid": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "mode": "subagent",
+      "description": "Same as @general but uses paid deepseek-v4-flash ($0.14/$0.28, 1M context). Use ONLY as fallback when @general's free model hits quota limits. NOT for routine use.",
+      "hidden": true,
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow"
+      },
+      "temperature": 0.2
     }
   },
   "attachment": {
