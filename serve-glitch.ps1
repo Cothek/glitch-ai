@@ -63,6 +63,11 @@ if (-not $handyProcess -and (Test-Path $HandyBin)) {
   Write-Host "  Handy already running" -ForegroundColor DarkGreen
 }
 
+# ── Auth Proxy (adds Basic Auth for transparent mobile auth) ──
+Write-Host "  Starting auth proxy (port 4101 → $TargetPort)..." -ForegroundColor Cyan
+$proxyProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\plugins\auth-proxy.mjs`"", "4101", "http://localhost:$TargetPort" -PassThru
+Start-Sleep -Seconds 1
+
 # ── Password (ACL-locked file, current user only) ──
 $pwFile = "$RootDir\.server-password"
 $pw = $env:OPENCODE_SERVER_PASSWORD
@@ -99,5 +104,9 @@ try {
   # Clean up cloudflared when OpenCode exits
   if ($cloudflaredProcess -and -not $cloudflaredProcess.HasExited) {
     $cloudflaredProcess.Kill()
+  }
+  # Clean up auth proxy when OpenCode exits
+  if ($proxyProcess -and -not $proxyProcess.HasExited) {
+    $proxyProcess.Kill()
   }
 }
