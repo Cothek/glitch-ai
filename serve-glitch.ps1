@@ -89,7 +89,7 @@ $authBytes = [System.Text.Encoding]::UTF8.GetBytes("opencode:$pw")
 $authToken = [Convert]::ToBase64String($authBytes)
 
 # Project-pinned URL — actual filesystem path (SPA decodes base64url slug and queries with real path)
-$projectDir = "E:\Glitch AI"
+$projectDir = "E:/Glitch AI"
 $dirBytes = [Text.Encoding]::UTF8.GetBytes($projectDir)
 $dirSlug = [Convert]::ToBase64String($dirBytes).Replace('+', '-').Replace('/', '_').TrimEnd('=')
 Write-Host "  Web access URL: https://glitch.cothekdesigns.com/$dirSlug/?auth_token=$authToken" -ForegroundColor Green
