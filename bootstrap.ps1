@@ -45,7 +45,13 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
 # ── Handy ──
 $handyVersion = "0.8.3"
 $handyArch = if ($isArm) { "arm64" } else { "x64" }
-if (-not (Test-Path $HandyBin) -or $Force) {
+$handySize = 105925408
+$needsInstall = $Force
+if (Test-Path $HandyBin) {
+  $actualSize = (Get-Item $HandyBin).Length
+  if ($actualSize -ne $handySize) { $needsInstall = $true }
+} else { $needsInstall = $true }
+if ($needsInstall) {
   Write-Host "[2/3] Installing Handy..." -ForegroundColor Cyan
   $systemHandy = "$env:LOCALAPPDATA\Handy\handy.exe"
   if (Test-Path $systemHandy) {
@@ -71,8 +77,10 @@ if (-not (Test-Path $HandyBin) -or $Force) {
     }
     $foundExe = Get-ChildItem -Path $extractDir -Recurse -Filter "handy.exe" | Select-Object -First 1
     if ($foundExe) {
+      $src = $foundExe.Directory.FullName
       if (Test-Path $HandyDir) { Remove-Item $HandyDir -Recurse -Force }
-      Copy-Item "$extractDir\*" $HandyDir -Recurse -Force
+      New-Item -ItemType Directory -Path $HandyDir -Force | Out-Null
+      Copy-Item "$src\*" $HandyDir -Recurse -Force
     } else {
       Write-Host "  Failed to extract Handy. Download manually:" -ForegroundColor Red
       Write-Host "  https://github.com/cjpais/Handy/releases" -ForegroundColor Yellow
@@ -80,10 +88,10 @@ if (-not (Test-Path $HandyBin) -or $Force) {
     Remove-Item $setupPath -Force -ErrorAction SilentlyContinue
     Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
   }
-  if (Test-Path $HandyDir) {
+  if ((Test-Path $HandyBin) -and ((Get-Item $HandyBin).Length -eq $handySize)) {
     Set-Content -Path "$HandyDir\portable" -Value "Handy Portable Mode" -NoNewline
+    Write-Host "  Handy ready!" -ForegroundColor Green
   }
-  Write-Host "  Handy ready!" -ForegroundColor Green
 } else {
   Write-Host "[2/3] Handy found" -ForegroundColor DarkGreen
 }
