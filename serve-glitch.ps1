@@ -15,6 +15,9 @@ if (-not (Test-Path $OpenCodeBin)) {
   exit 1
 }
 
+# ── Normalize backslash paths in session DB ──
+& "$RootDir\fix-paths.ps1"
+
 # ── Check port availability (zombie socket prevention) ──
 try {
   $tcp = New-Object System.Net.Sockets.TcpClient
@@ -89,7 +92,7 @@ $authBytes = [System.Text.Encoding]::UTF8.GetBytes("opencode:$pw")
 $authToken = [Convert]::ToBase64String($authBytes)
 
 # Project-pinned URL — actual filesystem path (SPA decodes base64url slug and queries with real path)
-$projectDir = "E:/Glitch AI"
+$projectDir = "E:/Glitch AI/glitch-ai"
 $dirBytes = [Text.Encoding]::UTF8.GetBytes($projectDir)
 $dirSlug = [Convert]::ToBase64String($dirBytes).Replace('+', '-').Replace('/', '_').TrimEnd('=')
 Write-Host "  Web access URL: https://glitch.cothekdesigns.com/$dirSlug/?auth_token=$authToken" -ForegroundColor Green

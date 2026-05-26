@@ -22,6 +22,9 @@ if (Test-Path $HandyBin) {
   }
 }
 
+# ── Normalize backslash paths in session DB ──
+& "$RootDir\fix-paths.ps1"
+
 # ── Start Handy (if not already running) ──
 $handyProcess = Get-Process -Name "handy" -ErrorAction SilentlyContinue
 if (-not $handyProcess) {
