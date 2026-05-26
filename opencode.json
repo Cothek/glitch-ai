@@ -1,13 +1,32 @@
 {
   "$schema": "https://opencode.ai/config.json",
   "instructions": ["glitch-memorycore/prompt-rules.md", "glitch-memorycore/CLAUDE.md", "glitch-memorycore/main/current-session.md", "glitch-memorycore/main/main-memory.md", "glitch-memorycore/main/reminders.md", "glitch-memorycore/main/session-dashboard.md"],
+  "agent": {
+    "vision": {
+      "model": "opencode-go/kimi-k2.5",
+      "mode": "subagent",
+      "description": "Analyzes images, screenshots, and visual output. Use when reviewing UI layouts, checking browser screenshots, debugging visual issues, or any task requiring visual analysis of images. Only use when image input is needed.",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny"
+      },
+      "temperature": 0.2
+    }
+  },
   "experimental": {
     "disable_paste_summary": true
   },
   "server": {
-    "port": 4102,
+    "port": 4100,
     "hostname": "0.0.0.0"
   },
+  "default_agent": "delegator",
   "compaction": {
     "auto": true,
     "tail_turns": 8

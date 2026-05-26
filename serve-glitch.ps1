@@ -7,7 +7,7 @@ Write-Host ""
 Write-Host "Glitch AI - Server Mode" -ForegroundColor Magenta
 Write-Host ""
 
-$TargetPort = 4102
+$TargetPort = 4100
 
 # ── Check prerequisites ──
 if (-not (Test-Path $OpenCodeBin)) {
@@ -82,7 +82,12 @@ Write-Host "  Server password: $pw" -ForegroundColor Yellow
 Write-Host "  Username: opencode" -ForegroundColor Yellow
 $authBytes = [System.Text.Encoding]::UTF8.GetBytes("opencode:$pw")
 $authToken = [Convert]::ToBase64String($authBytes)
-Write-Host "  Web access URL: https://glitch.cothekdesigns.com/?auth_token=$authToken" -ForegroundColor Green
+
+# Project-pinned URL — actual filesystem path (SPA decodes base64url slug and queries with real path)
+$projectDir = "E:\Glitch AI"
+$dirBytes = [Text.Encoding]::UTF8.GetBytes($projectDir)
+$dirSlug = [Convert]::ToBase64String($dirBytes).Replace('+', '-').Replace('/', '_').TrimEnd('=')
+Write-Host "  Web access URL: https://glitch.cothekdesigns.com/$dirSlug/?auth_token=$authToken" -ForegroundColor Green
 Write-Host ""
 
 # ── Launch OpenCode Web ──
