@@ -43,6 +43,8 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
 }
 
 # ── Handy ──
+$handyVersion = "0.8.3"
+$handyArch = if ($isArm) { "arm64" } else { "x64" }
 if (-not (Test-Path $HandyBin) -or $Force) {
   Write-Host "[2/3] Installing Handy..." -ForegroundColor Cyan
   $systemHandy = "$env:LOCALAPPDATA\Handy\handy.exe"
@@ -51,11 +53,35 @@ if (-not (Test-Path $HandyBin) -or $Force) {
     if (-not (Test-Path $HandyDir)) { New-Item -ItemType Directory -Path $HandyDir -Force }
     Copy-Item $systemHandy $HandyBin -Force
   } else {
-    Write-Host "  WARNING: No Handy binary found." -ForegroundColor DarkYellow
-    Write-Host "  Voice input will be disabled. Download Handy and place it at:" -ForegroundColor DarkYellow
-    Write-Host "  $HandyBin" -ForegroundColor DarkYellow
+    Write-Host "  Downloading Handy v$handyVersion ($handyArch)..." -ForegroundColor Yellow
+    $msiUrl = "https://github.com/cjpais/Handy/releases/download/v$handyVersion/Handy_${handyVersion}_${handyArch}_en-US.msi"
+    $msiPath = "$env:TEMP\Handy_${handyVersion}_${handyArch}_en-US.msi"
+    $extractDir = "$env:TEMP\Handy_exe"
+    Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
+    if (Test-Path $extractDir) { Remove-Item -Path $extractDir -Recurse -Force }
+    New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+    $7z = Get-Command "7z" -ErrorAction SilentlyContinue
+    if ($7z) {
+      Write-Host "  Extracting with 7-Zip..." -ForegroundColor Yellow
+      & $7z.Source x "$msiPath" -o"$extractDir" -y 2>&1 | Out-Null
+    } else {
+      Write-Host "  Extracting (admin may be required)..." -ForegroundColor Yellow
+      Start-Process -FilePath "msiexec" -ArgumentList "/a `"$msiPath`" /qn TARGETDIR=`"$extractDir`"" -Wait
+    }
+    $foundExe = Get-ChildItem -Path $extractDir -Recurse -Filter "handy.exe" | Select-Object -First 1
+    if ($foundExe) {
+      if (-not (Test-Path $HandyDir)) { New-Item -ItemType Directory -Path $HandyDir -Force }
+      Copy-Item $foundExe.FullName $HandyBin -Force
+    } else {
+      Write-Host "  Failed to extract Handy. Download manually:" -ForegroundColor Red
+      Write-Host "  https://github.com/cjpais/Handy/releases" -ForegroundColor Yellow
+    }
+    Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
+    Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
   }
-  Set-Content -Path "$HandyDir\portable" -Value "" -NoNewline
+  if (Test-Path $HandyDir) {
+    Set-Content -Path "$HandyDir\portable" -Value "" -NoNewline
+  }
   Write-Host "  Handy ready!" -ForegroundColor Green
 } else {
   Write-Host "[2/3] Handy found" -ForegroundColor DarkGreen

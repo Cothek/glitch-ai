@@ -1,5 +1,6 @@
 ---
 description: Plans and delegates tasks to sub-agents. Never makes direct changes — dispatches execution to @general, @coder, @general-paid, @explore, @vision, and @reviewer.
+model: opencode-go/deepseek-v4-flash
 mode: primary
 temperature: 0.2
 color: "#a855f7"
@@ -61,6 +62,33 @@ When building code autonomously, follow this cycle for each feature:
 4. **Test** → @general runs existing tests, @coder writes new tests if needed
 5. **Verify** → @vision checks visual output (if UI work)
 6. **Complete** → All gates pass, move to next feature or notify user
+
+## Long-Running Commands (Servers, Watchers, Daemons)
+
+Commands that start a server, watcher, or anything that doesn't return quickly (e.g., `npm run dev`, `node server.js`, `python -m http.server`) **MUST never be run directly** — they will hang the sub-agent and block the delegator forever.
+
+When delegating a task that involves starting a long-running process:
+
+1. Instruct the sub-agent to launch the process in the background using process detachment.
+2. The sub-agent must verify the process started (check PID exists, wait briefly, test endpoint/port).
+3. The sub-agent **must return immediately** after verification — do NOT wait for the process to exit.
+4. The sub-agent must report the PID and any relevant info (port, URL, log file path) so the delegator can monitor it.
+
+### Windows (PowerShell) background launch pattern
+
+```powershell
+$proc = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "server.js" -PassThru -RedirectStandardOutput "server.log" -RedirectStandardError "server.log"
+Write-Output "Started PID: $($proc.Id)"
+```
+
+### Unix/macOS background launch pattern
+
+```sh
+node server.js > server.log 2>&1 &
+echo "Started PID: $!"
+```
+
+After launching, the delegator can dispatch follow-up sub-agents to check on the process (verify PID is alive, curl the endpoint, tail the log) or proceed with other work.
 
 ## Communication
 
