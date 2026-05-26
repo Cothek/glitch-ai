@@ -32,10 +32,27 @@ const UPSTREAM_URL = process.argv[3] || 'http://localhost:4100';
 const upstream = new URL(UPSTREAM_URL);
 
 const server = http.createServer((req, res) => {
+  // Strip directory and workspace params from /agent requests
+  // (server bug: workspace crashes, directory filters out custom agents)
+  let targetPath = req.url;
+  if (req.url) {
+    try {
+      const url = new URL(req.url, 'http://localhost');
+      if (url.pathname === '/agent') {
+        url.searchParams.delete('directory');
+        url.searchParams.delete('workspace');
+        targetPath = url.pathname + url.search;
+        if (targetPath !== req.url) {
+          console.log(`  Stripped params from /agent: ${req.url} → ${targetPath}`);
+        }
+      }
+    } catch {}
+  }
+
   const options = {
     hostname: upstream.hostname,
     port: upstream.port || 80,
-    path: req.url,
+    path: targetPath,
     method: req.method,
     headers: {
       // Forward all original headers EXCEPT host and authorization

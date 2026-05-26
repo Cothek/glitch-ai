@@ -24,3 +24,5 @@ Thumbs.db
 # Session history data (persisted locally, not committed)
 .opencode/session-history/
 
+
+tmp/
