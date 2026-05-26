@@ -7,7 +7,7 @@ Write-Host ""
 Write-Host "Glitch AI - Server Mode" -ForegroundColor Magenta
 Write-Host ""
 
-$TargetPort = 4100
+$TargetPort = 4102
 
 # ── Check prerequisites ──
 if (-not (Test-Path $OpenCodeBin)) {
@@ -67,8 +67,8 @@ if (-not $handyProcess -and (Test-Path $HandyBin)) {
 }
 
 # ── Auth Proxy (adds Basic Auth for transparent mobile auth) ──
-Write-Host "  Starting auth proxy (port 4101 → $TargetPort)..." -ForegroundColor Cyan
-$proxyProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\plugins\auth-proxy.mjs`"", "4101", "http://localhost:$TargetPort" -PassThru
+Write-Host "  Starting auth proxy (port 4100 → $TargetPort)..." -ForegroundColor Cyan
+$proxyProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\plugins\auth-proxy.mjs`"", "4100", "http://localhost:$TargetPort" -PassThru
 Start-Sleep -Seconds 1
 
 # ── Password (ACL-locked file, current user only) ──

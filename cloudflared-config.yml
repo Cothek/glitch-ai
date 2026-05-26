@@ -7,7 +7,7 @@ tunnel: d602618b-0f68-4537-bbad-01577e1a29dc
 ingress:
   # Route glitch.cothekdesigns.com directly to opencode (port 4100)
   - hostname: glitch.cothekdesigns.com
-    service: http://localhost:4101
+    service: http://localhost:4100
   
   # Catch-all: return 404 for any other hostname
   - service: http_status:404
