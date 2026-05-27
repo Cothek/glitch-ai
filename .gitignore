@@ -29,3 +29,6 @@ tmp/
 
 # Old binary backups
 *.old
+
+# Glitch Connector — credential vault
+plugins/mcp-server/.env.glitch
