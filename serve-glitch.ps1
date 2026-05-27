@@ -7,8 +7,7 @@ Write-Host ""
 Write-Host "Glitch AI - Server Mode" -ForegroundColor Magenta
 Write-Host ""
 
-$OpenCodePort = 4102
-$WrapperPort = 4103
+$TargetPort = 4102
 
 # ── Check prerequisites ──
 if (-not (Test-Path $OpenCodeBin)) {
@@ -19,35 +18,20 @@ if (-not (Test-Path $OpenCodeBin)) {
 # ── Normalize backslash paths in session DB ──
 & "$RootDir\fix-paths.ps1"
 
-# ── Check port availability for both servers ──
-function Test-PortFree {
-  param($Port)
-  try {
-    $tcp = New-Object System.Net.Sockets.TcpClient
-    $r = $tcp.BeginConnect('127.0.0.1', $Port, $null, $null)
-    $w = $r.AsyncWaitHandle.WaitOne(500)
-    if ($tcp.Connected) {
-      $tcp.Close()
-      return $false
-    }
+# ── Check port availability (zombie socket prevention) ──
+try {
+  $tcp = New-Object System.Net.Sockets.TcpClient
+  $r = $tcp.BeginConnect('127.0.0.1', $TargetPort, $null, $null)
+  $w = $r.AsyncWaitHandle.WaitOne(500)
+  if ($tcp.Connected) {
     $tcp.Close()
-    return $true
-  } catch { return $true }
-}
-
-if (-not (Test-PortFree $OpenCodePort)) {
-  Write-Host "  ERROR: Port $OpenCodePort is in use (OpenCode server)." -ForegroundColor Red
-  Write-Host "  Fix: Run PowerShell as Admin and execute: net stop winnat; net start winnat" -ForegroundColor Yellow
-  exit 1
-}
-Write-Host "  Port $OpenCodePort (OpenCode server) is free" -ForegroundColor Cyan
-
-if (-not (Test-PortFree $WrapperPort)) {
-  Write-Host "  ERROR: Port $WrapperPort is in use (Glitch web wrapper)." -ForegroundColor Red
-  Write-Host "  Fix: Run PowerShell as Admin and execute: net stop winnat; net start winnat" -ForegroundColor Yellow
-  exit 1
-}
-Write-Host "  Port $WrapperPort (Glitch wrapper) is free" -ForegroundColor Cyan
+    Write-Host "  ERROR: Port $TargetPort is in use (likely orphan TCP socket from previous crash)." -ForegroundColor Red
+    Write-Host "  Fix: Run PowerShell as Admin and execute: net stop winnat; net start winnat" -ForegroundColor Yellow
+    exit 1
+  }
+  $tcp.Close()
+} catch {}
+Write-Host "  Port $TargetPort is free" -ForegroundColor Cyan
 
 # ─ Cloudflare Tunnel status ──
 $cloudflareOk = $false
@@ -82,14 +66,9 @@ if (-not $handyProcess -and (Test-Path $HandyBin)) {
   Write-Host "  Handy already running" -ForegroundColor DarkGreen
 }
 
-# ── Start OpenCode Server (background) ──
-Write-Host "  Starting OpenCode server (port $OpenCodePort)..." -ForegroundColor Cyan
-$openCodeProcess = Start-Process -NoNewWindow -FilePath $OpenCodeBin -ArgumentList "web", "--port", "$OpenCodePort", "--hostname", "0.0.0.0" -PassThru
-Start-Sleep -Seconds 3
-
 # ── Auth Proxy (adds Basic Auth for transparent mobile auth) ──
-Write-Host "  Starting auth proxy (port 4100 → $WrapperPort)..." -ForegroundColor Cyan
-$proxyProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\plugins\auth-proxy.mjs`"", "4100", "http://localhost:$WrapperPort" -PassThru
+Write-Host "  Starting auth proxy (port 4100 → $TargetPort)..." -ForegroundColor Cyan
+$proxyProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\plugins\auth-proxy.mjs`"", "4100", "http://localhost:$TargetPort" -PassThru
 Start-Sleep -Seconds 1
 
 # ── Password (ACL-locked file, current user only) ──
@@ -104,6 +83,19 @@ if (-not $pw) {
   }
   & icacls $pwFile /inheritance:r /grant "${env:USERNAME}:R" 2>&1 | Out-Null
   $env:OPENCODE_SERVER_PASSWORD = $pw
+}
+
+# ── ttyd Terminal Server ──
+$ttydB = "$RootDir\ttyd\ttyd.exe"
+if (Test-Path $ttydB) {
+  $tp = 4104
+  Write-Host "  Starting ttyd terminal server (port $tp)..." -ForegroundColor Cyan
+  $ttydProcess = Start-Process -NoNewWindow -FilePath $ttydB -ArgumentList "--port", "$tp", "--credential", "opencode:$pw", "--ping-interval", "10", "$OpenCodeBin" -PassThru
+  Start-Sleep -Seconds 2
+  Write-Host "  Terminal URL: https://glitch.cothekdesigns.com/terminal" -ForegroundColor Green
+}
+else {
+  Write-Host "  ttyd not found - skipping terminal server" -ForegroundColor Yellow
 }
 
 Write-Host ""
@@ -129,23 +121,23 @@ $fixJob = Start-Job -ScriptBlock {
 }
 Write-Host "  Path fixer job running (every 5 min)" -ForegroundColor Cyan
 
-# ── Launch Glitch Web Wrapper ──
+# ── Launch OpenCode Web ──
 Push-Location $RootDir
 try {
-  node opencode-web/server.mjs $WrapperPort
+  & $OpenCodeBin web --port $TargetPort --hostname 0.0.0.0
 } finally {
   Pop-Location
-  # Clean up opencode server process
-  if ($openCodeProcess -and -not $openCodeProcess.HasExited) {
-    $openCodeProcess.Kill()
-  }
-  # Clean up cloudflared when web wrapper exits
+  # Clean up cloudflared when OpenCode exits
   if ($cloudflaredProcess -and -not $cloudflaredProcess.HasExited) {
     $cloudflaredProcess.Kill()
   }
-  # Clean up auth proxy when web wrapper exits
+  # Clean up auth proxy when OpenCode exits
   if ($proxyProcess -and -not $proxyProcess.HasExited) {
     $proxyProcess.Kill()
+  }
+  # Clean up ttyd process
+  if ($ttydProcess -and -not $ttydProcess.HasExited) {
+    $ttydProcess.Kill()
   }
   # Clean up fix-path job
   $fixJob | Stop-Job -PassThru | Remove-Job
