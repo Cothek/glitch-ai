@@ -16,9 +16,18 @@ $archSuffix = if ($isArm) { "arm64" } else { "x64" }
 
 Write-Host "=== Glitch Bootstrap ===" -ForegroundColor Magenta
 
+# ── Git Submodules ──
+Write-Host "[1/5] Initializing git submodules..." -ForegroundColor Cyan
+try {
+  git submodule update --init --recursive 2>&1 | Out-Null
+  Write-Host "  Submodules ready!" -ForegroundColor Green
+} catch {
+  Write-Host "  Skipping submodules (not a git repo or git not available)" -ForegroundColor Yellow
+}
+
 # ── OpenCode ──
 if (-not (Test-Path $OpenCodeBin) -or $Force) {
-  Write-Host "[1/3] Installing OpenCode..." -ForegroundColor Cyan
+  Write-Host "[2/5] Installing OpenCode..." -ForegroundColor Cyan
   $systemOpenCode = "C:\Program Files\nodejs\node_modules\opencode-ai\bin\opencode.exe"
   if (Test-Path $systemOpenCode) {
     Write-Host "  Found system install, copying..." -ForegroundColor Yellow
@@ -39,7 +48,7 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
   }
   Write-Host "  OpenCode ready!" -ForegroundColor Green
 } else {
-  Write-Host "[1/3] OpenCode found" -ForegroundColor DarkGreen
+  Write-Host "[2/5] OpenCode found" -ForegroundColor DarkGreen
 }
 
 # ── Handy ──
@@ -52,7 +61,7 @@ if (Test-Path $HandyBin) {
   if ($actualSize -ne $handySize) { $needsInstall = $true }
 } else { $needsInstall = $true }
 if ($needsInstall) {
-  Write-Host "[2/3] Installing Handy..." -ForegroundColor Cyan
+  Write-Host "[3/5] Installing Handy..." -ForegroundColor Cyan
   $systemHandy = "$env:LOCALAPPDATA\Handy\handy.exe"
   if (Test-Path $systemHandy) {
     Write-Host "  Found system install, copying..." -ForegroundColor Yellow
@@ -105,12 +114,12 @@ if ($needsInstall) {
     Write-Host "  Handy ready!" -ForegroundColor Green
   }
 } else {
-  Write-Host "[2/3] Handy found" -ForegroundColor DarkGreen
+  Write-Host "[3/5] Handy found" -ForegroundColor DarkGreen
 }
 
 # ── Cloudflare Tunnel ──
 if (-not (Test-Path $CloudflaredBin) -or $Force) {
-  Write-Host "[3/3] Installing Cloudflare Tunnel..." -ForegroundColor Cyan
+  Write-Host "[4/5] Installing Cloudflare Tunnel..." -ForegroundColor Cyan
   if ($isArm) {
     Write-Host "  ARM64 not supported by cloudflared directly. Download manually from:" -ForegroundColor Yellow
     Write-Host "  https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/" -ForegroundColor Yellow
@@ -130,7 +139,18 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
     }
   }
 } else {
-  Write-Host "[3/3] cloudflared found" -ForegroundColor DarkGreen
+  Write-Host "[4/5] cloudflared found" -ForegroundColor DarkGreen
+}
+
+# ── MCP Server Dependencies ──
+Write-Host "[5/5] Installing glitch-connector MCP server dependencies..." -ForegroundColor Cyan
+if (Test-Path "$RootDir\plugins\mcp-server\package.json") {
+  Push-Location "$RootDir\plugins\mcp-server"
+  npm install --no-audit --no-fund 2>&1 | Out-Null
+  Pop-Location
+  Write-Host "  glitch-connector ready!" -ForegroundColor Green
+} else {
+  Write-Host "  MCP server not found (skipping)" -ForegroundColor Yellow
 }
 
 Write-Host ""
