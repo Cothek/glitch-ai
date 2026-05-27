@@ -35,3 +35,6 @@ plugins/mcp-server/.env.glitch
 
 # MCP server dependencies
 plugins/mcp-server/node_modules/
+
+# Bootstrap log
+bootstrap.log
