@@ -27,7 +27,7 @@ Write-Host ""
 $failures = @()
 
 # ── Step 1: Git Submodules ──
-Write-Host "[1/5] Initializing git submodules..." -ForegroundColor Cyan
+Write-Host "[1/4] Initializing git submodules..." -ForegroundColor Cyan
 try {
   git submodule update --init --recursive 2>&1 | Out-Null
   Write-Host "  Submodules ready!" -ForegroundColor Green
@@ -67,7 +67,7 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
     $failures += "Step 2: OpenCode -- $_"
   }
 } else {
-  Write-Host "[2/5] OpenCode found" -ForegroundColor DarkGreen
+  Write-Host "[2/4] OpenCode found" -ForegroundColor DarkGreen
 }
 
 # ── Step 3: Handy ──
@@ -80,7 +80,7 @@ if (Test-Path $HandyBin) {
   if ($actualSize -ne $handySize) { $needsInstall = $true }
 } else { $needsInstall = $true }
 if ($needsInstall) {
-  Write-Host "[3/5] Installing Handy..." -ForegroundColor Cyan
+  Write-Host "[3/4] Installing Handy..." -ForegroundColor Cyan
   try {
     $systemHandy = "$env:LOCALAPPDATA\Handy\handy.exe"
     if (Test-Path $systemHandy) {
@@ -138,12 +138,12 @@ if ($needsInstall) {
     $failures += "Step 3: Handy -- $_"
   }
 } else {
-  Write-Host "[3/5] Handy found" -ForegroundColor DarkGreen
+  Write-Host "[3/4] Handy found" -ForegroundColor DarkGreen
 }
 
 # ── Step 4: Cloudflare Tunnel (standalone EXE, no admin needed) ──
 if (-not (Test-Path $CloudflaredBin) -or $Force) {
-  Write-Host "[4/5] Installing Cloudflare Tunnel..." -ForegroundColor Cyan
+  Write-Host "[4/4] Installing Cloudflare Tunnel..." -ForegroundColor Cyan
   try {
     if ($isArm) {
       Write-Host "  ARM64: Download cloudflared manually:" -ForegroundColor Yellow
@@ -160,24 +160,7 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
     $failures += "Step 4: Cloudflare Tunnel -- $_"
   }
 } else {
-  Write-Host "[4/5] cloudflared found" -ForegroundColor DarkGreen
-}
-
-# ── Step 5: MCP Server Dependencies ──
-Write-Host "[5/5] Installing glitch-connector MCP server dependencies..." -ForegroundColor Cyan
-try {
-  if (Test-Path "$RootDir\plugins\mcp-server\package.json") {
-    Write-Host "  Running npm install -- this may take a moment..." -ForegroundColor DarkYellow
-    Push-Location "$RootDir\plugins\mcp-server"
-    npm install --no-audit --no-fund
-    Pop-Location
-    Write-Host "  glitch-connector ready!" -ForegroundColor Green
-  } else {
-    Write-Host "  MCP server not found (skipping)" -ForegroundColor Yellow
-  }
-} catch {
-  Write-Host "  ERROR installing MCP server dependencies: $_" -ForegroundColor Red
-    $failures += "Step 5: MCP Server -- $_"
+  Write-Host "[4/4] cloudflared found" -ForegroundColor DarkGreen
 }
 
 # ── Summary ──
