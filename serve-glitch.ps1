@@ -98,6 +98,16 @@ $dirSlug = [Convert]::ToBase64String($dirBytes).Replace('+', '-').Replace('/', '
 Write-Host "  Web access URL: https://glitch.cothekdesigns.com/$dirSlug/?auth_token=$authToken" -ForegroundColor Green
 Write-Host ""
 
+# ── Periodic path fixer (background job, runs every 5 min) ──
+$fixJob = Start-Job -ScriptBlock {
+  $rootDir = $using:RootDir
+  while ($true) {
+    Start-Sleep -Seconds 300
+    & node "$rootDir\fix-paths.mjs"
+  }
+}
+Write-Host "  Path fixer job running (every 5 min)" -ForegroundColor Cyan
+
 # ── Launch OpenCode Web ──
 Push-Location $RootDir
 try {
@@ -112,4 +122,6 @@ try {
   if ($proxyProcess -and -not $proxyProcess.HasExited) {
     $proxyProcess.Kill()
   }
+  # Clean up fix-path job
+  $fixJob | Stop-Job -PassThru | Remove-Job
 }
