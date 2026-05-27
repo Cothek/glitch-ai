@@ -68,6 +68,12 @@ const server = http.createServer((req, res) => {
   };
 
   const proxyReq = http.request(options, (proxyRes) => {
+    // For API responses, disable caching so sessions always refresh
+    if (req.url.startsWith('/api/') || req.url.startsWith('/session') || req.url.startsWith('/assets/')) {
+      proxyRes.headers['cache-control'] = 'no-cache, no-store, must-revalidate';
+      proxyRes.headers['pragma'] = 'no-cache';
+      proxyRes.headers['expires'] = '0';
+    }
     res.writeHead(proxyRes.statusCode, proxyRes.headers);
     proxyRes.pipe(res);
   });
