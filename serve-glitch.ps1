@@ -7,7 +7,7 @@ Write-Host ""
 Write-Host "Glitch AI - Server Mode" -ForegroundColor Magenta
 Write-Host ""
 
-$TargetPort = 4102
+$TargetPort = 4103
 
 # ── Check prerequisites ──
 if (-not (Test-Path $OpenCodeBin)) {
@@ -108,17 +108,17 @@ $fixJob = Start-Job -ScriptBlock {
 }
 Write-Host "  Path fixer job running (every 5 min)" -ForegroundColor Cyan
 
-# ── Launch OpenCode Web ──
+# ── Launch Glitch Web Wrapper ──
 Push-Location $RootDir
 try {
-  & $OpenCodeBin web --port $TargetPort --hostname 0.0.0.0
+  node opencode-web/server.mjs $TargetPort
 } finally {
   Pop-Location
-  # Clean up cloudflared when OpenCode exits
+  # Clean up cloudflared when web wrapper exits
   if ($cloudflaredProcess -and -not $cloudflaredProcess.HasExited) {
     $cloudflaredProcess.Kill()
   }
-  # Clean up auth proxy when OpenCode exits
+  # Clean up auth proxy when web wrapper exits
   if ($proxyProcess -and -not $proxyProcess.HasExited) {
     $proxyProcess.Kill()
   }
