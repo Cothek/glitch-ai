@@ -10,7 +10,7 @@ $HandyDir = "$RootDir\handy-voice\Handy"
 $HandyBin = "$HandyDir\handy.exe"
 $CloudflaredBin = "$RootDir\cloudflared.exe"
 
-# Don't stop on first error — we handle per-step
+# Don't stop on first error -- we handle per-step
 $ErrorActionPreference = "Continue"
 
 # Redirect all script output to a log file too
@@ -64,7 +64,7 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
   } catch {
     Write-Host "  ERROR installing OpenCode: $_" -ForegroundColor Red
     $stepOk = $false
-    $failures += "Step 2: OpenCode — $_"
+    $failures += "Step 2: OpenCode -- $_"
   }
 } else {
   Write-Host "[2/5] OpenCode found" -ForegroundColor DarkGreen
@@ -135,7 +135,7 @@ if ($needsInstall) {
     }
   } catch {
     Write-Host "  ERROR installing Handy: $_" -ForegroundColor Red
-    $failures += "Step 3: Handy — $_"
+    $failures += "Step 3: Handy -- $_"
   }
 } else {
   Write-Host "[3/5] Handy found" -ForegroundColor DarkGreen
@@ -156,8 +156,8 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
     }
   } catch {
     Write-Host "  ERROR installing cloudflared: $_" -ForegroundColor Red
-    Write-Host "  This is optional — tunnel mode won't be available but local mode works fine." -ForegroundColor Yellow
-    $failures += "Step 4: Cloudflare Tunnel — $_"
+    Write-Host "  This is optional -- tunnel mode won't be available but local mode works fine." -ForegroundColor Yellow
+    $failures += "Step 4: Cloudflare Tunnel -- $_"
   }
 } else {
   Write-Host "[4/5] cloudflared found" -ForegroundColor DarkGreen
@@ -167,7 +167,7 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
 Write-Host "[5/5] Installing glitch-connector MCP server dependencies..." -ForegroundColor Cyan
 try {
   if (Test-Path "$RootDir\plugins\mcp-server\package.json") {
-    Write-Host "  Running npm install — this may take a moment..." -ForegroundColor DarkYellow
+    Write-Host "  Running npm install -- this may take a moment..." -ForegroundColor DarkYellow
     Push-Location "$RootDir\plugins\mcp-server"
     npm install --no-audit --no-fund
     Pop-Location
@@ -177,7 +177,7 @@ try {
   }
 } catch {
   Write-Host "  ERROR installing MCP server dependencies: $_" -ForegroundColor Red
-  $failures += "Step 5: MCP Server — $_"
+    $failures += "Step 5: MCP Server -- $_"
 }
 
 # ── Summary ──
@@ -189,7 +189,7 @@ if ($failures.Count -gt 0) {
   Write-Host "$($failures.Count) step(s) had non-critical errors:" -ForegroundColor Yellow
   $failures | ForEach-Object { Write-Host "  ⚠ $_" -ForegroundColor Yellow }
   Write-Host ""
-  Write-Host "These are optional components — Glitch will still run." -ForegroundColor Yellow
+  Write-Host "These are optional components -- Glitch will still run." -ForegroundColor Yellow
   Write-Host "See bootstrap.log for full details." -ForegroundColor DarkGray
 } else {
   Write-Host "All steps completed successfully!" -ForegroundColor Green
