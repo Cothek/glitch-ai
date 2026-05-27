@@ -5,7 +5,7 @@
 tunnel: d602618b-0f68-4537-bbad-01577e1a29dc
 
 ingress:
-  # Route glitch.cothekdesigns.com directly to opencode (port 4100)
+  # Route glitch.cothekdesigns.com through the auth proxy (handles both SPA and terminal)
   - hostname: glitch.cothekdesigns.com
     service: http://localhost:4100
   

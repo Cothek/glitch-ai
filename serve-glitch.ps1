@@ -93,6 +93,7 @@ if (Test-Path $ttydB) {
   $ttydProcess = Start-Process -NoNewWindow -FilePath $ttydB -ArgumentList "--port", "$tp", "--credential", "opencode:$pw", "--ping-interval", "10", "$OpenCodeBin" -PassThru
   Start-Sleep -Seconds 2
   Write-Host "  Terminal URL: https://glitch.cothekdesigns.com/terminal" -ForegroundColor Green
+  Write-Host "  (routed via Cloudflare tunnel directly, no auth proxy)" -ForegroundColor DarkGray
 }
 else {
   Write-Host "  ttyd not found - skipping terminal server" -ForegroundColor Yellow

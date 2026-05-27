@@ -1,10 +1,10 @@
 /**
  * Auth Proxy — sits between cloudflare tunnel and backend servers.
- * - Routes /terminal/* to ttyd (port 4104) with WebSocket support
- * - Routes everything else to opencode web (port 4102)
- * - Injects Authorization: Basic header for opencode web auth
- * - For ttyd HTML responses, injects <base> tag for correct asset path resolution
- * - Strips directory/workspace params from /agent requests (opencode bug workaround)
+ * - Routes /terminal* to ttyd (port 4104) with path stripping + WebSocket
+ * - Routes everything else to opencode web (port 4102) with Basic Auth
+ * - Injects <base href="/terminal/"> into ttyd HTML so asset paths resolve
+ * - Strips Accept-Encoding for ttyd to avoid gzip mangling during modification
+ * - Strips directory/workspace params from /agent requests (opencode bug)
  */
 
 import http from 'node:http';
@@ -16,7 +16,6 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const rootDir = resolve(__dirname, '..');
 const pwFile = resolve(rootDir, '.server-password');
 
-// Read password
 let password;
 try {
   password = readFileSync(pwFile, 'utf-8').trim();
@@ -28,30 +27,43 @@ const authToken = Buffer.from(`opencode:${password}`).toString('base64');
 
 const PROXY_PORT = parseInt(process.argv[2] || '4101', 10);
 
-const UPSTREAMS = {
-  opencode: { host: '127.0.0.1', port: 4102, prefix: '' },
-  ttyd: { host: '127.0.0.1', port: 4104, prefix: '/terminal' },
-};
+// ── Routing ────────────────────────────────────────────────────────────────
 
-function routeTarget(url) {
+function routeFor(url) {
   if (url.startsWith('/terminal')) {
     return {
-      ...UPSTREAMS.ttyd,
+      host: '127.0.0.1',
+      port: 4104,
       path: url.replace('/terminal', '') || '/',
     };
   }
   return {
-    ...UPSTREAMS.opencode,
+    host: '127.0.0.1',
+    port: 4102,
     path: url,
   };
 }
 
-// ── HTTP Request Handler ──
+function filterHeaders(headers, targetPort) {
+  const result = {};
+  for (const [key, value] of Object.entries(headers)) {
+    const lower = key.toLowerCase();
+    if (lower === 'host') continue;
+    // Strip authorization only for opencode (ttyd has its own auth via --credential)
+    if (targetPort === 4102 && lower === 'authorization') continue;
+    // Strip accept-encoding for ttyd so HTML comes uncompressed for base tag injection
+    if (targetPort === 4104 && lower === 'accept-encoding') continue;
+    result[key] = value;
+  }
+  return result;
+}
+
+// ── HTTP Handler ──────────────────────────────────────────────────────────
 
 const server = http.createServer((req, res) => {
-  const target = routeTarget(req.url);
-
-  // For opencode /agent requests, strip problematic params
+  const target = routeFor(req.url);
+  
+  // For opencode /agent, strip problematic params
   let requestPath = target.path;
   if (target.port === 4102 && req.url.startsWith('/agent')) {
     try {
@@ -60,7 +72,7 @@ const server = http.createServer((req, res) => {
       url.searchParams.delete('workspace');
       requestPath = url.pathname + url.search;
       if (requestPath !== target.path) {
-        console.log(`  Stripped params from /agent: ${target.path} → ${requestPath}`);
+        console.log(`  Stripped params from /agent: ${target.path} -> ${requestPath}`);
       }
     } catch {}
   }
@@ -71,40 +83,37 @@ const server = http.createServer((req, res) => {
     path: requestPath,
     method: req.method,
     headers: {
-      ...(Object.fromEntries(
-        Object.entries(req.headers)
-          .filter(([key]) => {
-            // Strip host from all requests, but only strip authorization for opencode
-            if (key.toLowerCase() === 'host') return false;
-            if (target.port === 4102 && key.toLowerCase() === 'authorization') return false;
-            return true;
-          })
-      )),
+      ...filterHeaders(req.headers, target.port),
       host: `${target.host}:${target.port}`,
     },
   };
 
-  // Only inject Basic auth for opencode (ttyd has its own auth)
+  // Inject Basic auth for opencode
   if (target.port === 4102) {
     options.headers.authorization = `Basic ${authToken}`;
   }
 
   const proxyReq = http.request(options, (proxyRes) => {
     // For opencode API responses, disable caching
-    if (target.port === 4102 && (req.url.startsWith('/api/') || req.url.startsWith('/session/') || req.url.startsWith('/assets/'))) {
+    if (target.port === 4102 && 
+        (req.url.startsWith('/api/') || req.url.startsWith('/session/') || req.url.startsWith('/assets/'))) {
       proxyRes.headers['cache-control'] = 'no-cache, no-store, must-revalidate';
       proxyRes.headers['pragma'] = 'no-cache';
       proxyRes.headers['expires'] = '0';
     }
 
-    // For ttyd HTML responses, inject <base href="/terminal/"> so asset paths resolve correctly
-    if (target.port === 4104 && proxyRes.headers['content-type'] && proxyRes.headers['content-type'].includes('text/html')) {
+    // For ttyd HTML (now uncompressed because we stripped Accept-Encoding),
+    // inject <base href="/terminal/"> so asset paths resolve correctly
+    if (target.port === 4104 && 
+        proxyRes.headers['content-type'] && 
+        proxyRes.headers['content-type'].includes('text/html')) {
+      
       let body = '';
       proxyRes.on('data', (chunk) => { body += chunk.toString(); });
       proxyRes.on('end', () => {
-        // Inject <base> tag into <head>
         body = body.replace('<head>', '<head><base href="/terminal/">');
         proxyRes.headers['content-length'] = Buffer.byteLength(body);
+        delete proxyRes.headers['content-encoding']; // no longer compressed
         res.writeHead(proxyRes.statusCode, proxyRes.headers);
         res.end(body);
       });
@@ -126,12 +135,12 @@ const server = http.createServer((req, res) => {
   req.pipe(proxyReq);
 });
 
-// ── WebSocket Handler ──
+// ── WebSocket Handler ─────────────────────────────────────────────────────
 
 server.on('upgrade', (req, socket, head) => {
-  const target = routeTarget(req.url);
-
-  console.log(`  WebSocket upgrade: ${req.url} → ${target.host}:${target.port}${target.path}`);
+  const target = routeFor(req.url);
+  
+  console.log(`  WebSocket upgrade: ${req.url} -> ${target.host}:${target.port}${target.path}`);
 
   const options = {
     hostname: target.host,
@@ -139,20 +148,11 @@ server.on('upgrade', (req, socket, head) => {
     path: target.path,
     method: 'GET',
     headers: {
-      ...(Object.fromEntries(
-        Object.entries(req.headers)
-          .filter(([key]) => {
-            // Strip host from all requests, but only strip authorization for opencode
-            if (key.toLowerCase() === 'host') return false;
-            if (target.port === 4102 && key.toLowerCase() === 'authorization') return false;
-            return true;
-          })
-      )),
+      ...filterHeaders(req.headers, target.port),
       host: `${target.host}:${target.port}`,
     },
   };
 
-  // Inject Basic auth for opencode WebSocket
   if (target.port === 4102) {
     options.headers.authorization = `Basic ${authToken}`;
   }
@@ -173,9 +173,8 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 server.listen(PROXY_PORT, () => {
-  console.log(`✓ Auth proxy listening on :${PROXY_PORT}`);
-  console.log(`  /terminal/* → ttyd (${UPSTREAMS.ttyd.host}:${UPSTREAMS.ttyd.port})`);
-  console.log(`  /* → opencode web (${UPSTREAMS.opencode.host}:${UPSTREAMS.opencode.port})`);
+  console.log(`  Auth proxy listening on :${PROXY_PORT}`);
+  console.log(`  /terminal* -> ttyd (127.0.0.1:4104) with WebSocket`);
+  console.log(`  /* -> opencode (127.0.0.1:4102) with Basic Auth`);
   console.log(`  Password: ${password}`);
-  console.log(`  Auth token: ${authToken}`);
 });
