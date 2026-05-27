@@ -145,8 +145,9 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
 # ── MCP Server Dependencies ──
 Write-Host "[5/5] Installing glitch-connector MCP server dependencies..." -ForegroundColor Cyan
 if (Test-Path "$RootDir\plugins\mcp-server\package.json") {
+  Write-Host "  Running npm install — this may take a moment..." -ForegroundColor DarkYellow
   Push-Location "$RootDir\plugins\mcp-server"
-  npm install --no-audit --no-fund 2>&1 | Out-Null
+  npm install --no-audit --no-fund
   Pop-Location
   Write-Host "  glitch-connector ready!" -ForegroundColor Green
 } else {
