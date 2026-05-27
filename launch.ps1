@@ -88,13 +88,12 @@ if (Test-Path $mcpServerScript) {
   $mcpNodeModules = "$RootDir\plugins\mcp-server\node_modules\@modelcontextprotocol\sdk"
   if (Test-Path $mcpNodeModules) {
     Write-Host "  Starting glitch-connector..." -ForegroundColor Cyan
-    $mcpLog = "$RootDir\plugins\mcp-server\mcp-server.log"
-    $mcpProc = Start-Process -FilePath "node" -ArgumentList "`"$mcpServerScript`"" -WindowStyle Hidden -PassThru -RedirectStandardOutput $mcpLog -RedirectStandardError $mcpLog
+    $mcpProc = Start-Process -FilePath "node" -ArgumentList "`"$mcpServerScript`"" -WindowStyle Hidden -PassThru
     Start-Sleep -Milliseconds 500
     if (-not $mcpProc.HasExited) {
       Write-Host "  glitch-connector running (PID: $($mcpProc.Id))" -ForegroundColor Green
     } else {
-      Write-Host "  glitch-connector failed to start (see $mcpLog)" -ForegroundColor Yellow
+      Write-Host "  glitch-connector failed to start" -ForegroundColor Yellow
     }
   }
 }
