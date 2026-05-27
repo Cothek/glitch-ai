@@ -396,18 +396,25 @@
   const sidebar = $('#sidebar');
   const overlay = $('#overlay');
 
+  const DIRECTORY = 'E:/Glitch AI/glitch-ai';
+  const DIRECTORY_PARAM = 'directory=' + encodeURIComponent(DIRECTORY);
+
   let activeSessionId = null;
   let isWaiting = false;
-  let sessionCounter = 1;
+  let streamingBubble = null;
+  let streamingText = '';
+  let eventSource = null;
+  let sseReconnectDelay = 1000;
+  const SSE_MAX_RECONNECT = 30000;
 
-  // Auto-resize textarea
+  // ── DOM Events ──────────────────────────────────────────────
+
   messageInput.addEventListener('input', () => {
     messageInput.style.height = 'auto';
     messageInput.style.height = Math.min(messageInput.scrollHeight, 120) + 'px';
     sendBtn.disabled = !messageInput.value.trim() || isWaiting;
   });
 
-  // Enter to send, Shift+Enter for newline
   messageInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -426,18 +433,40 @@
     overlay.classList.remove('visible');
   });
 
+  // ── Helpers ─────────────────────────────────────────────────
+
   function formatTime(dateStr) {
+    if (!dateStr) return '';
     const d = new Date(dateStr);
     return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   }
 
   function scrollToBottom() {
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    requestAnimationFrame(() => {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    });
   }
 
   function showEmpty(show) {
     emptyState.style.display = show ? 'flex' : 'none';
   }
+
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  async function fetchJson(url, options = {}) {
+    const res = await fetch(url, {
+      ...options,
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+    return res.json();
+  }
+
+  // ── Message Rendering ───────────────────────────────────────
 
   function addMessage(role, text, timestamp) {
     showEmpty(false);
@@ -458,13 +487,8 @@
     return msg;
   }
 
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
   function showLoading() {
+    hideLoading();
     const loader = document.createElement('div');
     loader.className = 'loading';
     loader.id = 'loadingIndicator';
@@ -490,27 +514,13 @@
     messageInput.placeholder = loading ? 'Waiting for response...' : 'Type a message...';
   }
 
-  async function fetchJson(url, options = {}) {
-    const res = await fetch(url, {
-      ...options,
-      headers: { 'Content-Type': 'application/json', ...options.headers },
-    });
-    if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
-    return res.json();
-  }
+  // ── Session Management ──────────────────────────────────────
 
   async function loadSessions() {
     try {
-      const sessions = await fetchJson('/api/sessions');
+      const response = await fetchJson('/api/session?' + DIRECTORY_PARAM);
+      const sessions = response.items || response || [];
       renderSessions(sessions);
-
-      if (sessions.length > 0) {
-        const maxNum = sessions.reduce((max, s) => {
-          const match = s.name && s.name.match(/Chat (\d+)/);
-          return match ? Math.max(max, parseInt(match[1])) : max;
-        }, 0);
-        sessionCounter = maxNum + 1;
-      }
 
       if (sessions.length === 0) {
         await createNewSession();
@@ -524,15 +534,15 @@
 
   function renderSessions(sessions) {
     sessionList.innerHTML = '';
-    sessions.sort((a, b) => new Date(b.updated || b.created) - new Date(a.updated || a.created));
+    sessions.sort((a, b) => new Date(b.time_updated) - new Date(a.time_updated));
 
     for (const s of sessions) {
       const item = document.createElement('div');
       item.className = `session-item${s.id === activeSessionId ? ' active' : ''}`;
       item.dataset.sessionId = s.id;
       item.innerHTML = `
-        <span class="session-name">${escapeHtml(s.name || 'Untitled')}</span>
-        <span class="session-count">${s.messageCount || 0}</span>
+        <span class="session-name">${escapeHtml(s.title || 'Untitled')}</span>
+        <span class="session-count">${s.message_count || 0}</span>
       `;
       item.addEventListener('click', () => {
         selectSession(s.id);
@@ -545,23 +555,34 @@
 
   async function selectSession(id) {
     activeSessionId = id;
+    streamingBubble = null;
+    streamingText = '';
     messagesEl.innerHTML = '';
     messagesEl.appendChild(emptyState);
     showEmpty(true);
     chatTitle.textContent = 'Loading...';
 
     try {
-      const messages = await fetchJson(`/api/sessions/${id}/messages`);
-      chatTitle.textContent = 'Glitch Chat';
+      const res = await fetch('/api/session/' + id + '/message?limit=50&order=asc');
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const messages = await res.json();
+      const session = messages.length > 0
+        ? sessionsCache.find(s => s.id === id)
+        : null;
+      chatTitle.textContent = session ? (session.title || 'Glitch Chat') : 'Glitch Chat';
 
       if (messages && messages.length > 0) {
         showEmpty(false);
         for (const msg of messages) {
-          addMessage(msg.role, msg.content, msg.timestamp || msg.created);
+          if (!msg.data || !msg.data.role) continue;
+          const role = msg.data.role;
+          const text = extractMessageText(msg);
+          const time = msg.time_created || msg.time_updated;
+          if (text) addMessage(role, text, time);
         }
       }
 
-      // Update active state in sidebar
       document.querySelectorAll('.session-item').forEach(el => {
         el.classList.toggle('active', el.dataset.sessionId === id);
       });
@@ -571,34 +592,59 @@
     }
   }
 
+  let sessionsCache = [];
+
+  function extractMessageText(msg) {
+    if (!msg || !msg.data) return '';
+    if (msg.data.content) return msg.data.content;
+    if (msg.data.parts && Array.isArray(msg.data.parts)) {
+      const texts = msg.data.parts
+        .filter(p => p && typeof p === 'object' && p.content)
+        .map(p => p.content);
+      if (texts.length) return texts.join('\n');
+    }
+    return '';
+  }
+
   async function createNewSession() {
     try {
-      const session = await fetchJson('/api/sessions', {
+      setLoading(true);
+      const session = await fetchJson('/api/session', {
         method: 'POST',
-        body: JSON.stringify({ name: `Chat ${sessionCounter++}` }),
+        body: JSON.stringify({ directory: DIRECTORY }),
       });
-      renderSessions([...(await fetchJson('/api/sessions'))]);
+      const response = await fetchJson('/api/session?' + DIRECTORY_PARAM);
+      const sessions = response.items || response || [];
+      sessionsCache = sessions;
+      renderSessions(sessions);
       selectSession(session.id);
+      setTimeout(() => loadMessagesForActiveSession(), 300);
+      setLoading(false);
     } catch (err) {
       console.error('Failed to create session:', err);
+      setLoading(false);
       addMessage('error', 'Failed to create new session');
     }
   }
+
+  // ── Sending Messages ────────────────────────────────────────
 
   async function sendMessage() {
     const text = messageInput.value.trim();
     if (!text || isWaiting) return;
 
-    // If no active session, create one first
     if (!activeSessionId) {
       try {
-        const session = await fetchJson('/api/sessions', {
+        const session = await fetchJson('/api/session', {
           method: 'POST',
-          body: JSON.stringify({ name: `Chat ${sessionCounter++}` }),
+          body: JSON.stringify({ directory: DIRECTORY }),
         });
         activeSessionId = session.id;
-        renderSessions([...(await fetchJson('/api/sessions'))]);
-        chatTitle.textContent = session.name || 'Glitch Chat';
+        const response = await fetchJson('/api/session?' + DIRECTORY_PARAM);
+        const sessions = response.items || response || [];
+        sessionsCache = sessions;
+        renderSessions(sessions);
+        chatTitle.textContent = session.title || 'Glitch Chat';
       } catch (err) {
         console.error('Failed to create session:', err);
         addMessage('error', 'Failed to create session');
@@ -612,82 +658,147 @@
     setLoading(true);
     showLoading();
 
-    let assistantBubble = null;
-    let assistantText = '';
+    streamingBubble = null;
+    streamingText = '';
 
     try {
-      const response = await fetch(`/api/sessions/${activeSessionId}/chat`, {
+      await fetch('/tui/submit-prompt', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text }),
+        body: JSON.stringify({ prompt: text }),
       });
-
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (data.error) {
-                hideLoading();
-                addMessage('error', data.error);
-                setLoading(false);
-                return;
-              }
-
-              if (data.text) {
-                if (!assistantBubble) {
-                  hideLoading();
-                  assistantBubble = addMessage('assistant', '');
-                }
-                assistantText += data.text;
-                assistantBubble.querySelector('.message-bubble').textContent = assistantText;
-                scrollToBottom();
-              }
-
-              if (data.done) {
-                setLoading(false);
-                // Refresh session list to update message count
-                loadSessions();
-                return;
-              }
-            } catch (parseErr) {
-              console.warn('Failed to parse SSE event:', parseErr, line);
-            }
-          }
-        }
-      }
-
-      // Stream ended without done event
-      setLoading(false);
+      // Response comes via SSE — no need to wait here
     } catch (err) {
-      console.error('Chat request failed:', err);
+      console.error('Prompt submit failed:', err);
       hideLoading();
-      addMessage('error', `Failed to get response: ${err.message}`);
+      addMessage('error', 'Failed to send message: ' + err.message);
       setLoading(false);
     }
   }
 
-  // Initialize textarea height
+  // ── SSE Streaming ───────────────────────────────────────────
+
+  function connectSSE() {
+    if (eventSource) {
+      eventSource.close();
+    }
+
+    eventSource = new EventSource('/api/event');
+
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        handleSSEEvent(data);
+      } catch (err) {
+        console.warn('Failed to parse SSE event:', err, event.data);
+      }
+    };
+
+    eventSource.onerror = () => {
+      eventSource.close();
+      scheduleSSEReconnect();
+    };
+
+    sseReconnectDelay = 1000;
+  }
+
+  function scheduleSSEReconnect() {
+    setTimeout(() => {
+      connectSSE();
+    }, sseReconnectDelay);
+    sseReconnectDelay = Math.min(sseReconnectDelay * 2, SSE_MAX_RECONNECT);
+  }
+
+  function handleSSEEvent(data) {
+    const type = data.type;
+    const payload = data.payload || {};
+    const sessionId = payload.session_id;
+
+    if (!sessionId) return;
+
+    switch (type) {
+      case 'message.part.delta':
+        handleDelta(sessionId, payload.text || '');
+        break;
+
+      case 'message.updated':
+        handleUpdated(sessionId);
+        break;
+
+      case 'session.updated':
+        handleSessionUpdated();
+        break;
+    }
+  }
+
+  function handleDelta(sessionId, text) {
+    if (sessionId !== activeSessionId) return;
+
+    hideLoading();
+
+    if (!streamingBubble) {
+      streamingBubble = addMessage('assistant', '');
+      streamingText = '';
+    }
+
+    streamingText += text;
+    const bubble = streamingBubble.querySelector('.message-bubble');
+    if (bubble) {
+      bubble.textContent = streamingText;
+    }
+    scrollToBottom();
+  }
+
+  function handleUpdated(sessionId) {
+    if (sessionId !== activeSessionId) return;
+
+    setLoading(false);
+    streamingBubble = null;
+    streamingText = '';
+
+    // Reload messages to get the final persisted version
+    loadMessagesForActiveSession();
+    loadSessions();
+  }
+
+  async function loadMessagesForActiveSession() {
+    if (!activeSessionId) return;
+    try {
+      const res = await fetch('/api/session/' + activeSessionId + '/message?limit=50&order=asc');
+      if (!res.ok) return;
+      const messages = await res.json();
+
+      // Rebuild the message area from server state
+      messagesEl.innerHTML = '';
+      messagesEl.appendChild(emptyState);
+
+      if (messages && messages.length > 0) {
+        showEmpty(false);
+        for (const msg of messages) {
+          if (!msg.data || !msg.data.role) continue;
+          const role = msg.data.role;
+          const text = extractMessageText(msg);
+          const time = msg.time_created || msg.time_updated;
+          if (text) addMessage(role, text, time);
+        }
+      } else {
+        showEmpty(true);
+      }
+    } catch (err) {
+      console.error('Failed to reload messages:', err);
+    }
+  }
+
+  function handleSessionUpdated() {
+    loadSessions();
+  }
+
+  // ── Initialize ──────────────────────────────────────────────
+
   messageInput.style.height = 'auto';
   messageInput.style.height = messageInput.scrollHeight + 'px';
 
-  // Initialize
+  connectSSE();
   loadSessions();
 })();
 </script>

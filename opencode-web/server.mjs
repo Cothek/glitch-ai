@@ -1,19 +1,48 @@
-import http from 'node:http';
+﻿import http from 'node:http';
 import fs from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
-import crypto from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { URL, fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const PORT = parseInt(process.argv[2] || '4103', 10);
+// --- Configuration ---
+const OUR_PORT = parseInt(process.argv[2] || '4103', 10);
+const UPSTREAM_PORT = 4102;
 const PROJECT_DIR = path.resolve(__dirname, '..');
-const SESSIONS_DIR = path.join(__dirname, 'sessions');
-const PUBLIC_DIR = path.join(__dirname, 'public');
+const OPENCODE_HOST = '127.0.0.1';
 const OPENCODE_PATH = path.join(PROJECT_DIR, 'opencode', 'opencode.exe');
+const PUBLIC_DIR = path.join(__dirname, 'public');
 
+// --- Read password ---
+const pwFile = path.resolve(PROJECT_DIR, '.server-password');
+const password = readFileSync(pwFile, 'utf-8').trim();
+const AUTH_TOKEN = Buffer.from(`opencode:${password}`).toString('base64');
+
+// --- Delegator Prompt ---
+const DELEGATOR_PROMPT = `[DELEGATOR SYSTEM OVERRIDE \u2014 IGNORE ALL OTHER AGENT INSTRUCTIONS]
+You are in DELEGATOR mode. Your role is to orchestrate \u2014 plan, coordinate, and consolidate. You never execute work directly.
+
+CORE RULES:
+1. NEVER write, edit, or modify files. NEVER run bash commands. Dispatch execution to sub-agents.
+2. Break user tasks into independent subtasks.
+3. Dispatch each subtask using the Task tool with the appropriate sub-agent.
+4. After sub-agents complete, review their results and present a consolidated summary.
+5. Use todowrite to track subtask progress visibly.
+
+AVAILABLE SUB-AGENTS:
+- @general: For bash commands, file ops, simple edits, most code (1-5 files)
+- @coder: For complex code (5+ files, auth, API, architecture)
+- @general-paid: Fallback when @general hits quota limits
+- @reviewer: For code quality audits and security review
+- @explore: For codebase research and multi-file exploration
+- @vision: For image and screenshot analysis
+
+THE USER'S MESSAGE FOLLOWS:`;
+
+// --- MIME types ---
 const MIME = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'application/javascript',
@@ -21,33 +50,23 @@ const MIME = {
   '.json': 'application/json',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.svg': 'image/svg+xml',
+  '.woff': 'font/woff',
+  '.woff2': 'font/woff2',
+  '.ttf': 'font/ttf',
+  '.eot': 'application/vnd.ms-fontobject',
+  '.otf': 'font/otf',
+};
+
+// --- CORS headers ---
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE, PUT, PATCH',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cache-Control',
+  'Access-Control-Expose-Headers': 'Content-Type, Cache-Control',
 };
 
 // --- Helpers ---
-
-function serveFile(res, filePath) {
-  const ext = path.extname(filePath);
-  const mimeType = MIME[ext] || 'application/octet-stream';
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      res.writeHead(404, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ error: 'Not found' }));
-      return;
-    }
-    res.writeHead(200, { 'Content-Type': mimeType });
-    res.end(data);
-  });
-}
-
-function json(res, data, status = 200) {
-  res.writeHead(status, {
-    'Content-Type': 'application/json',
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  });
-  res.end(JSON.stringify(data));
-}
 
 function readBody(req) {
   return new Promise((resolve, reject) => {
@@ -64,70 +83,96 @@ function readBody(req) {
   });
 }
 
-function loadSession(id) {
-  const filePath = path.join(SESSIONS_DIR, `${id}.json`);
-  if (!fs.existsSync(filePath)) {
-    throw new Error('Session not found');
-  }
-  const raw = fs.readFileSync(filePath, 'utf-8');
-  return JSON.parse(raw);
-}
-
-function saveSession(session) {
-  session.updated = new Date().toISOString();
-  const filePath = path.join(SESSIONS_DIR, `${session.id}.json`);
-  fs.writeFileSync(filePath, JSON.stringify(session, null, 2), 'utf-8');
-}
-
-function listSessions() {
-  if (!fs.existsSync(SESSIONS_DIR)) {
-    fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-    return [];
-  }
-  const files = fs.readdirSync(SESSIONS_DIR).filter((f) => f.endsWith('.json'));
-  const sessions = files.map((f) => {
-    const raw = fs.readFileSync(path.join(SESSIONS_DIR, f), 'utf-8');
-    return JSON.parse(raw);
-  });
-  return sessions.sort((a, b) => new Date(b.updated) - new Date(a.updated));
-}
-
-function createSession(name) {
-  if (!fs.existsSync(SESSIONS_DIR)) {
-    fs.mkdirSync(SESSIONS_DIR, { recursive: true });
-  }
-  const id = crypto.randomUUID();
-  const now = new Date().toISOString();
-  const session = {
-    id,
-    name: name || 'New Session',
-    messages: [],
-    created: now,
-    updated: now,
+function forwardModifiedPost(req, res, targetPath, body) {
+  const bodyStr = JSON.stringify(body);
+  const options = {
+    hostname: OPENCODE_HOST,
+    port: UPSTREAM_PORT,
+    path: targetPath,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(bodyStr),
+      'Host': `${OPENCODE_HOST}:${UPSTREAM_PORT}`,
+      'Authorization': `Basic ${AUTH_TOKEN}`,
+    },
   };
-  saveSession(session);
-  return session;
+
+  const proxyReq = http.request(options, (proxyRes) => {
+    if (targetPath.startsWith('/api/') || targetPath.startsWith('/session/') || targetPath.startsWith('/tui/')) {
+      proxyRes.headers['cache-control'] = 'no-cache, no-store, must-revalidate';
+    }
+    res.writeHead(proxyRes.statusCode, { ...proxyRes.headers, ...CORS_HEADERS });
+    proxyRes.pipe(res);
+  });
+
+  proxyReq.on('error', (err) => {
+    console.error(`Proxy error for POST ${targetPath}:`, err.message);
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'text/plain', ...CORS_HEADERS });
+      res.end('Bad Gateway \u2014 opencode server not running on port ' + UPSTREAM_PORT);
+    }
+  });
+
+  proxyReq.write(bodyStr);
+  proxyReq.end();
 }
 
-function buildPrompt(session, userMessage) {
-  let prompt = '[CONVERSATION HISTORY]\n\n';
-  for (const msg of session.messages) {
-    const role = msg.role === 'user' ? 'User' : 'Assistant';
-    prompt += `${role}: ${msg.content}\n\n`;
-  }
-  prompt += '[CURRENT MESSAGE]\n\n';
-  prompt += `User: ${userMessage}`;
-  return prompt;
+function proxyRequest(req, res, targetPath) {
+  const options = {
+    hostname: OPENCODE_HOST,
+    port: UPSTREAM_PORT,
+    path: targetPath,
+    method: req.method,
+    headers: {
+      ...(Object.fromEntries(
+        Object.entries(req.headers)
+          .filter(([key]) => !['host', 'authorization'].includes(key.toLowerCase()))
+      )),
+      'host': `${OPENCODE_HOST}:${UPSTREAM_PORT}`,
+      'authorization': `Basic ${AUTH_TOKEN}`,
+    },
+  };
+
+  const proxyReq = http.request(options, (proxyRes) => {
+    if (targetPath.startsWith('/api/') || targetPath.startsWith('/session/') || targetPath.startsWith('/tui/')) {
+      proxyRes.headers['cache-control'] = 'no-cache, no-store, must-revalidate';
+    }
+    res.writeHead(proxyRes.statusCode, { ...proxyRes.headers, ...CORS_HEADERS });
+    proxyRes.pipe(res);
+  });
+
+  proxyReq.on('error', (err) => {
+    console.error(`Proxy error for ${req.method} ${targetPath}:`, err.message);
+    if (!res.headersSent) {
+      res.writeHead(502, { 'Content-Type': 'text/plain', ...CORS_HEADERS });
+      res.end('Bad Gateway \u2014 opencode server not running on port ' + UPSTREAM_PORT);
+    }
+  });
+
+  req.pipe(proxyReq);
 }
 
-function runOpencode(prompt) {
-  return spawn(OPENCODE_PATH, ['-p', prompt, '-q', '--output-format', 'text'], {
-    cwd: PROJECT_DIR,
-    stdio: ['ignore', 'pipe', 'pipe'],
+function serveFile(res, filePath) {
+  const ext = path.extname(filePath);
+  const mimeType = MIME[ext] || 'application/octet-stream';
+  fs.readFile(filePath, (err, data) => {
+    if (err) {
+      res.writeHead(404, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+      res.end(JSON.stringify({ error: 'Not found' }));
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': mimeType, ...CORS_HEADERS });
+    res.end(data);
   });
 }
 
-// --- Request Handler ---
+function json(res, data, status = 200) {
+  res.writeHead(status, { 'Content-Type': 'application/json', ...CORS_HEADERS });
+  res.end(JSON.stringify(data));
+}
+
+// --- HTTP Server ---
 
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host}`);
@@ -135,189 +180,128 @@ const server = http.createServer(async (req, res) => {
 
   // CORS preflight
   if (req.method === 'OPTIONS') {
-    res.writeHead(204, {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type',
-    });
+    res.writeHead(204, CORS_HEADERS);
     res.end();
     return;
   }
 
-  // CORS headers on all responses
-  const corsHeaders = {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-  };
-
-  try {
-    // GET / — serve index.html
-    if (req.method === 'GET' && pathname === '/') {
-      serveFile(res, path.join(PUBLIC_DIR, 'index.html'));
-      return;
-    }
-
-    // GET /public/* — serve static files
-    if (req.method === 'GET' && pathname.startsWith('/public/')) {
-      const relativePath = pathname.slice(1); // remove leading /
-      const filePath = path.join(__dirname, relativePath);
-      // Prevent directory traversal
-      if (!filePath.startsWith(__dirname)) {
-        res.writeHead(403, corsHeaders);
-        res.end('Forbidden');
-        return;
-      }
-      serveFile(res, filePath);
-      return;
-    }
-
-    // GET /api/sessions — list sessions
-    if (req.method === 'GET' && pathname === '/api/sessions') {
-      const sessions = listSessions().map((s) => ({
-        id: s.id,
-        name: s.name,
-        messageCount: s.messages.length,
-        created: s.created,
-        updated: s.updated,
-      }));
-      json(res, sessions);
-      return;
-    }
-
-    // POST /api/sessions — create session
-    if (req.method === 'POST' && pathname === '/api/sessions') {
-      const body = await readBody(req);
-      const session = createSession(body.name);
-      json(res, { id: session.id, name: session.name }, 201);
-      return;
-    }
-
-    // GET /api/sessions/:id/messages
-    if (req.method === 'GET' && pathname.match(/^\/api\/sessions\/[^/]+\/messages$/)) {
-      const id = pathname.split('/')[3];
-      const session = loadSession(id);
-      json(res, session.messages);
-      return;
-    }
-
-    // POST /api/sessions/:id/chat — SSE stream
-    if (req.method === 'POST' && pathname.match(/^\/api\/sessions\/[^/]+\/chat$/)) {
-      const id = pathname.split('/')[3];
-      let session;
-      try {
-        session = loadSession(id);
-      } catch {
-        json(res, { error: 'Session not found' }, 404);
-        return;
-      }
-
-      const body = await readBody(req);
-      if (!body.message) {
-        json(res, { error: 'Missing message field' }, 400);
-        return;
-      }
-
-      // Save user message
-      session.messages.push({
-        role: 'user',
-        content: body.message,
-        timestamp: new Date().toISOString(),
-      });
-      saveSession(session);
-
-      // Build prompt and spawn opencode
-      const prompt = buildPrompt(session, body.message);
-      const child = runOpencode(prompt);
-
-      // Set SSE headers
-      res.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        ...corsHeaders,
-      });
-
-      let responseText = '';
-      let sentDone = false;
-      let buffer = '';
-
-      function sendSSE(data) {
-        if (sentDone) return;
-        res.write(`data: ${JSON.stringify(data)}\n\n`);
-      }
-
-      child.stdout.on('data', (chunk) => {
-        buffer += chunk.toString();
-        const lines = buffer.split('\n');
-        // Keep the last incomplete line in the buffer
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.length > 0) {
-            responseText += line + '\n';
-            sendSSE({ text: line + '\n' });
-          }
-        }
-      });
-
-      child.on('close', (code) => {
-        if (sentDone) return;
-
-        // Flush any remaining buffer
-        if (buffer.length > 0) {
-          responseText += buffer + '\n';
-          sendSSE({ text: buffer + '\n' });
-        }
-
-        if (code !== 0 && responseText.length === 0) {
-          sendSSE({ error: `opencode exited with code ${code}` });
-        }
-
-        // Save assistant message
-        if (responseText.length > 0) {
-          session.messages.push({
-            role: 'assistant',
-            content: responseText.trimEnd(),
-            timestamp: new Date().toISOString(),
-          });
-          saveSession(session);
-        }
-
-        sendSSE({ done: true });
-        sentDone = true;
-        res.end();
-      });
-
-      child.on('error', (err) => {
-        if (sentDone) return;
-        sendSSE({ error: err.message });
-        sentDone = true;
-        res.end();
-      });
-
-      // Kill child if client disconnects
-      req.on('close', () => {
-        if (!sentDone) {
-          child.kill();
-        }
-      });
-
-      return;
-    }
-
-    // 404 fallback
-    res.writeHead(404, { 'Content-Type': 'application/json', ...corsHeaders });
-    res.end(JSON.stringify({ error: 'Not found' }));
-  } catch (err) {
-    if (!res.headersSent) {
-      json(res, { error: err.message }, 500);
-    }
+  // GET / \u2192 serve our custom HTML UI
+  if (req.method === 'GET' && pathname === '/') {
+    serveFile(res, path.join(PUBLIC_DIR, 'index.html'));
+    return;
   }
+
+  // GET /public/* \u2192 serve static files
+  if (req.method === 'GET' && pathname.startsWith('/public/')) {
+    const relativePath = pathname.slice(1);
+    const filePath = path.join(__dirname, relativePath);
+    if (!filePath.startsWith(__dirname)) {
+      res.writeHead(403, { 'Content-Type': 'text/plain', ...CORS_HEADERS });
+      res.end('Forbidden');
+      return;
+    }
+    serveFile(res, filePath);
+    return;
+  }
+
+  // POST /api/session — Create Session (via opencode -p hack)
+  if (req.method === 'POST' && pathname === '/api/session') {
+    try {
+      const body = await readBody(req);
+      const directory = body.directory || PROJECT_DIR;
+      console.log('  Creating session via opencode -p...');
+
+      // Spawn opencode -p to create a session in the DB
+      const session = await new Promise((resolve, reject) => {
+        const child = spawn(OPENCODE_PATH, [
+          '-p', 'Start a new conversation.',
+          '-q',
+          '--output-format', 'text',
+        ], {
+          cwd: PROJECT_DIR,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: { ...process.env },
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', (chunk) => { stdout += chunk.toString(); });
+        child.stderr.on('data', (chunk) => { stderr += chunk.toString(); });
+
+        child.on('close', async (code) => {
+          if (code !== 0) {
+            console.error(`opencode -p exited with code ${code}: ${stderr}`);
+          }
+
+          // Wait a moment for the DB to settle, then find the newest session
+          await new Promise(r => setTimeout(r, 1000));
+
+          // List sessions via the opencode server API using http.get
+          const listUrl = `http://${OPENCODE_HOST}:${UPSTREAM_PORT}/api/session?directory=${encodeURIComponent(directory)}`;
+          try {
+            const res = await new Promise((resolve, reject) => {
+              const req = http.get(listUrl, (res) => resolve(res));
+              req.on('error', reject);
+            });
+            if (res.statusCode !== 200) throw new Error(`HTTP ${res.statusCode}`);
+            const data = await new Promise((resolve) => {
+              let body = '';
+              res.on('data', chunk => body += chunk);
+              res.on('end', () => resolve(JSON.parse(body)));
+            });
+            const items = data.items || data;
+            if (Array.isArray(items) && items.length > 0) {
+              // Return the most recently created session
+              const sorted = items.sort((a, b) => new Date(b.time_created) - new Date(a.time_created));
+              resolve(sorted[0]);
+            } else {
+              reject(new Error('No sessions found after creation'));
+            }
+          } catch (err) {
+            reject(new Error(`Failed to list sessions: ${err.message}`));
+          }
+        });
+
+        child.on('error', reject);
+      });
+
+      console.log(`  Session created: ${session.id} - ${session.title || ''}`);
+      json(res, { id: session.id, title: session.title || 'New Session', time_created: session.time_created }, 201);
+    } catch (err) {
+      console.error('Error creating session:', err.message);
+      if (!res.headersSent) {
+        json(res, { error: err.message }, 500);
+      }
+    }
+    return;
+  }
+
+  // POST /tui/submit-prompt \u2192 Send Message (MODIFIED \u2014 inject delegator prompt)
+  if (req.method === 'POST' && pathname === '/tui/submit-prompt') {
+    try {
+      const body = await readBody(req);
+      const messageText = body.prompt || body.text || body.message || '';
+      body.prompt = DELEGATOR_PROMPT + '\n\n' + messageText;
+      console.log('\u270F\uFE0F Modified POST /tui/submit-prompt \u2014 injected delegator prompt');
+      forwardModifiedPost(req, res, '/tui/submit-prompt', body);
+    } catch (err) {
+      console.error('Error modifying /tui/submit-prompt:', err.message);
+      if (!res.headersSent) {
+        res.writeHead(400, { 'Content-Type': 'text/plain', ...CORS_HEADERS });
+        res.end('Bad Request: ' + err.message);
+      }
+    }
+    return;
+  }
+
+  // Default: proxy transparently (includes GET /api/event SSE, GET /api/session/*, etc.)
+  proxyRequest(req, res, req.url);
 });
 
-server.listen(PORT, () => {
-  console.log(`✓ Glitch Web Wrapper running on :${PORT}`);
-  console.log(`  Sessions: ${SESSIONS_DIR}`);
+server.listen(OUR_PORT, () => {
+  console.log(`\u{1F50C} Glitch Smart Reverse Proxy running on :${OUR_PORT}`);
+  console.log(`  Upstream: ${OPENCODE_HOST}:${UPSTREAM_PORT}`);
   console.log(`  Project: ${PROJECT_DIR}`);
+  console.log(`  Public: ${PUBLIC_DIR}`);
 });
