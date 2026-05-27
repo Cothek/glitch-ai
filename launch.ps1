@@ -82,19 +82,16 @@ if (-not $handyProcess) {
   Write-Host "  Handy already running" -ForegroundColor DarkGreen
 }
 
-# ── Start MCP server (background process) ──
-$mcpServerScript = "$RootDir\plugins\mcp-server\index.mjs"
-if (Test-Path $mcpServerScript) {
-  $mcpNodeModules = "$RootDir\plugins\mcp-server\node_modules\@modelcontextprotocol\sdk"
-  if (Test-Path $mcpNodeModules) {
-    Write-Host "  Starting glitch-connector..." -ForegroundColor Cyan
-    $mcpProc = Start-Process -FilePath "node" -ArgumentList "`"$mcpServerScript`"" -WindowStyle Hidden -PassThru
-    Start-Sleep -Milliseconds 500
-    if (-not $mcpProc.HasExited) {
-      Write-Host "  glitch-connector running (PID: $($mcpProc.Id))" -ForegroundColor Green
-    } else {
-      Write-Host "  glitch-connector failed to start" -ForegroundColor Yellow
-    }
+# ── Start API server (background process) ──
+$apiServerScript = "$RootDir\plugins\mcp-server\api-server.mjs"
+if (Test-Path $apiServerScript) {
+  Write-Host "  Starting glitch-connector API..." -ForegroundColor Cyan
+  $apiProc = Start-Process -FilePath "node" -ArgumentList "`"$apiServerScript`"" -WindowStyle Hidden -PassThru
+  Start-Sleep -Milliseconds 500
+  if (-not $apiProc.HasExited) {
+    Write-Host "  glitch-connector running on http://127.0.0.1:4390" -ForegroundColor Green
+  } else {
+    Write-Host "  glitch-connector API failed to start" -ForegroundColor Yellow
   }
 }
 
