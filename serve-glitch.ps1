@@ -85,20 +85,6 @@ if (-not $pw) {
   $env:OPENCODE_SERVER_PASSWORD = $pw
 }
 
-# ── ttyd Terminal Server ──
-$ttydB = "$RootDir\ttyd\ttyd.exe"
-if (Test-Path $ttydB) {
-  $tp = 4104
-  Write-Host "  Starting ttyd terminal server (port $tp)..." -ForegroundColor Cyan
-  $ttydProcess = Start-Process -NoNewWindow -FilePath $ttydB -ArgumentList "--port", "$tp", "--credential", "opencode:$pw", "--ping-interval", "10", "$OpenCodeBin" -PassThru
-  Start-Sleep -Seconds 2
-  Write-Host "  Terminal URL: https://glitch.cothekdesigns.com/terminal" -ForegroundColor Green
-  Write-Host "  (routed via Cloudflare tunnel directly, no auth proxy)" -ForegroundColor DarkGray
-}
-else {
-  Write-Host "  ttyd not found - skipping terminal server" -ForegroundColor Yellow
-}
-
 Write-Host ""
 Write-Host "  Server password: $pw" -ForegroundColor Yellow
 Write-Host "  Username: opencode" -ForegroundColor Yellow
@@ -135,10 +121,6 @@ try {
   # Clean up auth proxy when OpenCode exits
   if ($proxyProcess -and -not $proxyProcess.HasExited) {
     $proxyProcess.Kill()
-  }
-  # Clean up ttyd process
-  if ($ttydProcess -and -not $ttydProcess.HasExited) {
-    $ttydProcess.Kill()
   }
   # Clean up fix-path job
   $fixJob | Stop-Job -PassThru | Remove-Job
