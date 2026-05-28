@@ -15,7 +15,7 @@ Portable AI companion environment — one clone, one launch, Glitch is ready on 
 | `launch-glitch.bat` / `launch.ps1` | Launches Handy + OpenCode TUI for local use. |
 | `serve-glitch.bat` / `serve-glitch.ps1` | Launches OpenCode Web server + Cloudflare Tunnel for remote access. |
 | `setup-tunnel.ps1` | One-time Cloudflare Tunnel setup — authenticate, create tunnel, configure DNS. |
-| `restore-server.mjs` | Proxy server that injects session history into the OpenCode Web UI. |
+| `plugins/auth-proxy.mjs` | Auth proxy — adds Basic Auth for transparent mobile login via Cloudflare Tunnel. |
 
 ## Quick Start (Local)
 
@@ -35,7 +35,7 @@ cd glitch-ai
 .\serve-glitch.bat    # Each session: starts server + tunnel
 ```
 
-This starts OpenCode as a web server on **port 4096** proxied through **Cloudflare Tunnel** on `glitch.cothekdesigns.com`. Access it from anywhere:
+This starts OpenCode as a web server on **port 4102** (proxied through auth proxy on port 4100) via **Cloudflare Tunnel** on `glitch.cothekdesigns.com`. Access it from anywhere:
 
 ```
 https://glitch.cothekdesigns.com/
@@ -62,11 +62,11 @@ set OPENCODE_SERVER_PASSWORD=your-password
 
 ### Web Mode (`serve-glitch.bat`)
 1. Starts Handy in the background for voice input
-2. Starts the session history proxy on port 4097
-4. Starts OpenCode Web server on port 4096
-5. Opens Cloudflare Tunnel to `glitch.cothekdesigns.com`
-6. Access from any device: `https://glitch.cothekdesigns.com/`
-7. Same Glitch memory and identity in every session
+2. Starts auth proxy on port 4100 (adds Basic Auth for transparent login)
+3. Starts OpenCode Web server on port 4102
+4. Opens Cloudflare Tunnel to `glitch.cothekdesigns.com`
+5. Access from any device: `https://glitch.cothekdesigns.com/`
+6. Same Glitch memory and identity in every session
 
 ## Requirements
 
@@ -86,8 +86,10 @@ glitch-ai/                    ← This repo
 ├── serve-glitch.bat          ← 🌐 Web server mode (remote access)
 ├── bootstrap.ps1             ← First-run installer
 ├── setup-tunnel.ps1          ← One-time Cloudflare Tunnel setup
-├── restore-server.mjs        ← Session history proxy server
+├── plugins/auth-proxy.mjs    ← Auth proxy for Cloudflare Tunnel
 ├── cloudflared-config.yml    ← Cloudflare Tunnel configuration
 ├── opencode.json             ← Config file
-└── tui.json                  ← Terminal UI config
+├── tui.json                  ← Terminal UI config
+├── tools/                    ← Debug utilities
+└── query-opencode-db.*       ← OpenCode DB query scripts
 ```
