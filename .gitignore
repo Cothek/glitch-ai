@@ -21,6 +21,11 @@ Thumbs.db
 # Auto-generated server password
 .server-password
 
+# Auto-generated status files (written by launch scripts)
+/update-status.json
+/model-update-status.json
+glitch-memorycore/data/known-models.json
+
 # Session history data (persisted locally, not committed)
 .opencode/session-history/
 

@@ -86,6 +86,28 @@ try {
   Write-Host "  Update check skipped (non-critical): $_" -ForegroundColor DarkYellow
 }
 
+#  Check for new models 
+try {
+  $modelStatusFile = "$RootDir\model-update-status.json"
+  & "$RootDir\check-models.ps1" -CheckOnly *>$null
+  if (Test-Path $modelStatusFile) {
+    $modelStatus = Get-Content $modelStatusFile -Raw | ConvertFrom-Json
+    if ($modelStatus.new_models_count -gt 0) {
+      Write-Host "  $($modelStatus.new_models_count) new model(s) available" -ForegroundColor Yellow
+      foreach ($nm in $modelStatus.new_models) {
+        Write-Host "    + $($nm.model)" -ForegroundColor Green
+      }
+      if ($modelStatus.related_to_current_agents.Count -gt 0) {
+        Write-Host "  (some may be relevant to current agents -- check session brief)" -ForegroundColor DarkYellow
+      }
+    } else {
+      Write-Host "  Models up-to-date" -ForegroundColor DarkGreen
+    }
+  }
+} catch {
+  Write-Host "  Model check skipped (non-critical): $_" -ForegroundColor DarkYellow
+}
+
 #  Cloudflare Tunnel status 
 $cloudflareOk = $false
 if (Test-Path $Cloudflared) {
