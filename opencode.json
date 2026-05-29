@@ -70,10 +70,10 @@
                                                 },
                                  "temperature":  0.2
                              },
-                   "coder":  {
-                                 "model":  "opencode-go/kimi-k2.6",
-                                "mode":  "subagent",
-                                "description":  "Complex code generation and architecture work ($0.95/$4.00). Use when tasks involve 5+ files, authentication, data flow, API integration, database schemas, or any work requiring strong reasoning. Falls back from @general when free model is insufficient for complex code.",
+                    "coder":  {
+                                  "model":  "opencode-go/qwen3.6-plus",
+                                 "mode":  "subagent",
+                                 "description":  "Complex code generation and architecture work ($0.50/$3.00). Use when tasks involve 5+ files, authentication, data flow, API integration, database schemas, or any work requiring strong reasoning. Falls back from @general when free model is insufficient for complex code.",
                                 "permission":  {
                                                    "read":  "allow",
                                                    "edit":  "allow",
