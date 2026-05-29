@@ -5,12 +5,18 @@ $BackupPath = "$RootDir\opencode.json.bak"
 
 $ErrorActionPreference = "Continue"
 
-#  Known free models 
+#  Known free models  (OpenCode Zen + NVIDIA free endpoints)
+#  NVIDIA models require connecting NVIDIA as a provider first via /connect
 $FreeModels = @{
-  "opencode/deepseek-v4-flash-free"    = "DeepSeek V4 Flash Free"
-  "opencode/mimo-v2.5-free"            = "Mimo v2.5 Free"
-  "opencode/nemotron-3-super-free"     = "Nemotron 3 Super Free"
-  "opencode/big-pickle"                = "Big Pickle"
+  "opencode/deepseek-v4-flash-free"                = "DeepSeek V4 Flash Free"
+  "opencode/mimo-v2.5-free"                        = "Mimo v2.5 Free"
+  "opencode/nemotron-3-super-free"                 = "Nemotron 3 Super Free"
+  "opencode/big-pickle"                            = "Big Pickle"
+  "nvidia/qwen/qwen3-coder-480b-a35b-instruct"     = "NVIDIA Qwen3-Coder 480B"
+  "nvidia/minimaxai/minimax-m2.7"                  = "NVIDIA MiniMax M2.7"
+  "nvidia/z-ai/glm-5.1"                            = "NVIDIA GLM-5.1"
+  "nvidia/stepfun-ai/step-3.7-flash"               = "NVIDIA Step 3.7 Flash"
+  "nvidia/mistralai/mistral-large-3-675b-instruct-2512" = "NVIDIA Mistral Large 3"
 }
 
 #  Determine model 
@@ -30,7 +36,11 @@ if (-not $FreeModels.ContainsKey($FreeModel)) {
   Write-Host "Set GLITCH_FREE_MODEL env var to one of the above, or unset to use default." -ForegroundColor Cyan
   Write-Host ""
   Write-Host "  `$env:GLITCH_FREE_MODEL=`"opencode/mimo-v2.5-free`"" -ForegroundColor Gray
+  Write-Host "  `$env:GLITCH_FREE_MODEL=`"nvidia/qwen/qwen3-coder-480b-a35b-instruct`"" -ForegroundColor Gray
   Write-Host "  .\launch-glitch-free.bat" -ForegroundColor Gray
+  Write-Host ""
+  Write-Host "NOTE: NVIDIA models require connecting NVIDIA provider first:" -ForegroundColor Yellow
+  Write-Host "  In TUI: run /connect, select NVIDIA, paste your nvapi-... key" -ForegroundColor Yellow
   exit 1
 }
 
@@ -60,11 +70,12 @@ You are Glitch running in FREE MODE. All agents are using the free model `"$Free
 ## Free Mode Rules
 1. You have FULL permissions  same capabilities as normal mode.
 2. ALL agents use `"$FreeModel`"  there are NO paid fallback models available.
-3. Premium features are UNAVAILABLE: image/screenshot analysis, complex code review, and advanced code generation (qwen3.6-plus features).
+3. Premium features are generally UNAVAILABLE in OpenCode Zen free models, but some NVIDIA free endpoint models may support image/vision analysis and stronger coding  capability depends on the specific model.
 4. If the free model exhausts its quota, close this session and relaunch with a different model:
-   - Set `$env:GLITCH_FREE_MODEL to one of: opencode/mimo-v2.5-free, opencode/nemotron-3-super-free, opencode/big-pickle
+   - Set `$env:GLITCH_FREE_MODEL to one of the valid model IDs (opencode/... or nvidia/...)
    - Then run .\launch-glitch-free.bat again
 5. Tell Troy which model is active on session start so he knows what to expect.
+6. NVIDIA models require NVIDIA provider to be connected via /connect in the TUI first.
 
 ## Agent Selection (All Free)
 | Task Type | Agent | Model |
@@ -200,7 +211,7 @@ Write-Host ""
 Write-Host "  Starting OpenCode in free mode..." -ForegroundColor Cyan
 Write-Host "  Model: $FreeModel ($ModelName)" -ForegroundColor Green
 Write-Host "  When you're done, exit normally and the original config will be restored."
-Write-Host "  To switch free models: `$env:GLITCH_FREE_MODEL=`"opencode/mimo-v2.5-free`"" -ForegroundColor Gray
+  Write-Host "  To switch free models: `$env:GLITCH_FREE_MODEL=`"opencode/mimo-v2.5-free`"  or  `"nvidia/qwen/qwen3-coder-480b-a35b-instruct`"" -ForegroundColor Gray
 Write-Host ""
 
 Push-Location $RootDir

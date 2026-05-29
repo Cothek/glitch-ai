@@ -77,7 +77,7 @@ try {
   if (Test-Path $statusFile) {
     $status = Get-Content $statusFile -Raw | ConvertFrom-Json
     if ($status.updates_available -gt 0) {
-      Write-Host "  $($status.updates_available) update(s) available — run .\check-updates.ps1 -Update" -ForegroundColor Yellow
+      Write-Host "  $($status.updates_available) update(s) available -- run .\check-updates.ps1 -Update" -ForegroundColor Yellow
     } else {
       Write-Host "  All dependencies up-to-date" -ForegroundColor DarkGreen
     }
