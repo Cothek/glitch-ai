@@ -9,16 +9,16 @@ Write-Host ""
 
 $TargetPort = 4102
 
-# ── Check prerequisites ──
+#  Check prerequisites 
 if (-not (Test-Path $OpenCodeBin)) {
   Write-Host "OpenCode not found. Run bootstrap.ps1 first." -ForegroundColor Red
   exit 1
 }
 
-# ── Normalize backslash paths in session DB ──
+#  Normalize backslash paths in session DB 
 & "$RootDir\fix-paths.ps1"
 
-# ── Check port availability (zombie socket prevention) ──
+#  Check port availability (zombie socket prevention) 
 try {
   $tcp = New-Object System.Net.Sockets.TcpClient
   $r = $tcp.BeginConnect('127.0.0.1', $TargetPort, $null, $null)
@@ -33,7 +33,7 @@ try {
 } catch {}
 Write-Host "  Port $TargetPort is free" -ForegroundColor Cyan
 
-# ── Detect leftover safe mode backup ──
+#  Detect leftover safe mode backup 
 $BackupPath = "$RootDir\opencode.json.bak"
 if (Test-Path $BackupPath) {
   try {
@@ -45,7 +45,7 @@ if (Test-Path $BackupPath) {
   }
 
   if ($isSafeModeConfig) {
-    Write-Host "  Detected leftover safe mode config — restoring opencode.json.bak..." -ForegroundColor Yellow
+    Write-Host "  Detected leftover safe mode config  restoring opencode.json.bak..." -ForegroundColor Yellow
     Copy-Item $BackupPath "$RootDir\opencode.json" -Force
     Write-Host "  Backup restored." -ForegroundColor Green
   } else {
@@ -54,7 +54,7 @@ if (Test-Path $BackupPath) {
   Remove-Item $BackupPath -Force
 }
 
-# ── Validate opencode.json before launch ──
+#  Validate opencode.json before launch 
 Write-Host "  Validating opencode.json..." -ForegroundColor Cyan
 try {
     $configContent = Get-Content "$RootDir\opencode.json" -Raw
@@ -69,7 +69,7 @@ try {
     exit 1
 }
 
-# ─ Cloudflare Tunnel status ──
+#  Cloudflare Tunnel status 
 $cloudflareOk = $false
 if (Test-Path $Cloudflared) {
   $tunnelConfig = "$RootDir\cloudflared-config.yml"
@@ -83,7 +83,7 @@ if (Test-Path $Cloudflared) {
   Write-Host "  Cloudflare Tunnel: cloudflared.exe not found" -ForegroundColor Yellow
 }
 
-# ── Start Cloudflare Tunnel ──
+#  Start Cloudflare Tunnel 
 if ($cloudflareOk) {
   Write-Host "  Starting Cloudflare Tunnel..." -ForegroundColor Cyan
   $cloudflaredProcess = Start-Process -NoNewWindow -FilePath $Cloudflared -ArgumentList "tunnel", "--config", "`"$RootDir\cloudflared-config.yml`"", "run" -PassThru
@@ -91,7 +91,7 @@ if ($cloudflareOk) {
   Write-Host "  Tunnel running: https://glitch.cothekdesigns.com" -ForegroundColor Green
 }
 
-# ── Handy ──
+#  Handy 
 $HandyBin = "$RootDir\handy-voice\Handy\handy.exe"
 $handyProcess = Get-Process -Name "handy" -ErrorAction SilentlyContinue
 if (-not $handyProcess -and (Test-Path $HandyBin)) {
@@ -102,12 +102,12 @@ if (-not $handyProcess -and (Test-Path $HandyBin)) {
   Write-Host "  Handy already running" -ForegroundColor DarkGreen
 }
 
-# ── Auth Proxy (adds Basic Auth for transparent mobile auth) ──
-Write-Host "  Starting auth proxy (port 4100 → $TargetPort)..." -ForegroundColor Cyan
+#  Auth Proxy (adds Basic Auth for transparent mobile auth) 
+Write-Host "  Starting auth proxy (port 4100  $TargetPort)..." -ForegroundColor Cyan
 $proxyProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\plugins\auth-proxy.mjs`"", "4100", "http://localhost:$TargetPort" -PassThru
 Start-Sleep -Seconds 1
 
-# ── Password (ACL-locked file, current user only) ──
+#  Password (ACL-locked file, current user only) 
 $pwFile = "$RootDir\.server-password"
 $pw = $env:OPENCODE_SERVER_PASSWORD
 if (-not $pw) {
@@ -127,14 +127,14 @@ Write-Host "  Username: opencode" -ForegroundColor Yellow
 $authBytes = [System.Text.Encoding]::UTF8.GetBytes("opencode:$pw")
 $authToken = [Convert]::ToBase64String($authBytes)
 
-# Project-pinned URL — actual filesystem path (SPA decodes base64url slug and queries with real path)
+# Project-pinned URL  actual filesystem path (SPA decodes base64url slug and queries with real path)
 $projectDir = "E:/Glitch AI/glitch-ai"
 $dirBytes = [Text.Encoding]::UTF8.GetBytes($projectDir)
 $dirSlug = [Convert]::ToBase64String($dirBytes).Replace('+', '-').Replace('/', '_').TrimEnd('=')
 Write-Host "  Web access URL: https://glitch.cothekdesigns.com/$dirSlug/?auth_token=$authToken" -ForegroundColor Green
 Write-Host ""
 
-# ── Periodic path fixer (background job, runs every 5 min) ──
+#  Periodic path fixer (background job, runs every 5 min) 
 $fixJob = Start-Job -ScriptBlock {
   $rootDir = $using:RootDir
   while ($true) {
@@ -144,7 +144,7 @@ $fixJob = Start-Job -ScriptBlock {
 }
 Write-Host "  Path fixer job running (every 5 min)" -ForegroundColor Cyan
 
-# ── Launch OpenCode Web ──
+#  Launch OpenCode Web 
 Push-Location $RootDir
 try {
   & $OpenCodeBin web --port $TargetPort --hostname 0.0.0.0

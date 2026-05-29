@@ -5,17 +5,17 @@ $HandyBin = "$RootDir\handy-voice\Handy\handy.exe"
 $ErrorActionPreference = "Continue"
 
 Write-Host ""
-Write-Host "🧠 Glitch AI - Launching..." -ForegroundColor Magenta
+Write-Host " Glitch AI - Launching..." -ForegroundColor Magenta
 Write-Host ""
 
-# ── Check prerequisites ──
+# ---- Check prerequisites ----
 if (-not (Test-Path $OpenCodeBin)) {
   Write-Host "OpenCode not found. Run bootstrap.ps1 first." -ForegroundColor Red
   Write-Host "Or run: powershell -File bootstrap.ps1" -ForegroundColor Yellow
   exit 1
 }
 
-# ── Self-heal: initialize git submodules if needed ──
+# ---- Self-heal: initialize git submodules if needed ----
 if (-not (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md")) {
   Write-Host "  Initializing glitch-memorycore submodule..." -ForegroundColor Cyan
   try {
@@ -34,21 +34,19 @@ if (-not (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md")) {
   Write-Host "  glitch-memorycore found" -ForegroundColor DarkGreen
 }
 
-# ── Detect leftover safe mode backup ──
-# If safe mode crashed before restoring, .bak still exists and opencode.json
-# is the minimal safe config. Auto-restore if safe mode left its footprint.
+# ---- Detect leftover safe mode backup ----
 $BackupPath = "$RootDir\opencode.json.bak"
 if (Test-Path $BackupPath) {
   try {
     $currentConfig = Get-Content "$RootDir\opencode.json" -Raw | ConvertFrom-Json
     $agentCount = @($currentConfig.agent.PSObject.Properties).Count
-    $isSafeModeConfig = ($agentCount -le 1)  # safe mode has only delegator
+    $isSafeModeConfig = ($agentCount -le 1)
   } catch {
     $isSafeModeConfig = $false
   }
 
   if ($isSafeModeConfig) {
-    Write-Host "  Detected leftover safe mode config — restoring opencode.json.bak..." -ForegroundColor Yellow
+    Write-Host "  Detected leftover safe mode config -- restoring opencode.json.bak..." -ForegroundColor Yellow
     Copy-Item $BackupPath "$RootDir\opencode.json" -Force
     Write-Host "  Backup restored." -ForegroundColor Green
   } else {
@@ -57,7 +55,7 @@ if (Test-Path $BackupPath) {
   Remove-Item $BackupPath -Force
 }
 
-# ── Ensure Handy portable flag ──
+# ---- Ensure Handy portable flag ----
 $portableFlag = "$RootDir\handy-voice\Handy\portable"
 if (Test-Path $HandyBin) {
   if (-not (Test-Path $portableFlag)) {
@@ -65,10 +63,10 @@ if (Test-Path $HandyBin) {
   }
 }
 
-# ── Normalize backslash paths in session DB ──
+# ---- Normalize backslash paths in session DB ----
 try { & "$RootDir\fix-paths.ps1" } catch { }
 
-# ── Validate opencode.json before launch ──
+# ---- Validate opencode.json before launch ----
 Write-Host "  Validating opencode.json..." -ForegroundColor Cyan
 try {
     $configContent = Get-Content "$RootDir\opencode.json" -Raw
@@ -83,7 +81,7 @@ try {
     exit 1
 }
 
-# ── Start Handy (if not already running) ──
+# ---- Start Handy (if not already running) ----
 $handyProcess = Get-Process -Name "handy" -ErrorAction SilentlyContinue
 if (-not $handyProcess) {
   if (Test-Path $HandyBin) {
@@ -97,11 +95,10 @@ if (-not $handyProcess) {
   Write-Host "  Handy already running" -ForegroundColor DarkGreen
 }
 
-# ── Launch OpenCode ──
+# ---- Launch OpenCode ----
 Write-Host "  Starting OpenCode..." -ForegroundColor Cyan
 Write-Host ""
 
-# OpenCode reads opencode.json + tui.json from the current directory automatically
 Push-Location $RootDir
 try {
   & $OpenCodeBin
@@ -109,6 +106,6 @@ try {
   Pop-Location
 }
 
-# ── Done ──
+# ---- Done ----
 Write-Host ""
 Write-Host "Glitch session ended." -ForegroundColor Magenta

@@ -1,4 +1,4 @@
-﻿<#
+<#
 .SYNOPSIS
   Validate opencode.json for JSON syntax and file reference integrity.
 .DESCRIPTION
@@ -20,7 +20,7 @@ param(
     [switch]$Quiet
 )
 
-# ── Resolve path ──
+# ---- Resolve path ----
 if (-not $Path) {
     $ScriptDir = Split-Path -Parent $PSCommandPath
     $Path = "$ScriptDir\opencode.json"
@@ -35,8 +35,8 @@ $RootDir = Split-Path -Parent (Resolve-Path $Path)
 $exitCode = 0
 $errors = @()
 
-# ── 1. JSON Syntax Check ──
-    if (-not $Quiet) { Write-Host "==> Validating: $Path" -ForegroundColor Cyan }
+# ---- 1. JSON Syntax Check ----
+if (-not $Quiet) { Write-Host "==> Validating: $Path" -ForegroundColor Cyan }
 try {
     $raw = Get-Content $Path -Raw
     $config = $raw | ConvertFrom-Json
@@ -49,7 +49,7 @@ try {
     exit $exitCode
 }
 
-# ── 2. Check instructions files exist ──
+# ---- 2. Check instructions files exist ----
 if ($config.instructions) {
     $missingInstructions = @()
     foreach ($file in $config.instructions) {
@@ -67,7 +67,7 @@ if ($config.instructions) {
     }
 }
 
-# ── 3. Check agent configs ──
+# ---- 3. Check agent configs ----
 if ($config.agent) {
     $agentNames = @()
     foreach ($agent in $config.agent.PSObject.Properties) {
@@ -78,9 +78,19 @@ if ($config.agent) {
         if (-not $agentConfig.model) {
             $errors += "Agent '$($agent.Name)' has no model specified"
             if (-not $Quiet) { Write-Host "  [FAIL] Agent '$($agent.Name)' has no model specified" -ForegroundColor Red }
+            $exitCode = 1
+        }
 
+        # Check mode is valid
+        if ($agentConfig.mode -and @('primary', 'subagent') -notcontains $agentConfig.mode) {
+            $errors += "Agent '$($agent.Name)' has invalid mode '$($agentConfig.mode)'"
             if (-not $Quiet) { Write-Host "  [FAIL] Agent '$($agent.Name)' has invalid mode '$($agentConfig.mode)'" -ForegroundColor Red }
+            $exitCode = 1
+        }
 
+        # Check temperature range
+        if ($agentConfig.temperature -and ($agentConfig.temperature -lt 0 -or $agentConfig.temperature -gt 2)) {
+            $errors += "Agent '$($agent.Name)' has temperature out of range (0-2): $($agentConfig.temperature)"
             if (-not $Quiet) { Write-Host "  [FAIL] Agent '$($agent.Name)' has temperature out of range (0-2): $($agentConfig.temperature)" -ForegroundColor Red }
             $exitCode = 1
         }
@@ -101,7 +111,30 @@ if ($config.agent) {
     }
 }
 
-# ── 4. Check required top-level keys ──
+# ---- 4.5 Check PowerShell scripts for non-ASCII characters ----
+# Non-ASCII chars in .ps1 files (em dashes, box drawing, emojis) break
+# PowerShell 5.1 on Windows because it reads BOM-less UTF-8 as Windows-1252,
+# where byte 0x94 (part of em dash U+2014) becomes a quote character.
+$psScripts = @('launch.ps1', 'launch-safe.ps1', 'launch-free.ps1', 'serve-glitch.ps1', 'validate-config.ps1')
+$encodingErrors = @()
+foreach ($script in $psScripts) {
+    $scriptPath = Join-Path $RootDir $script
+    if (-not (Test-Path $scriptPath)) { continue }
+    $bytes = [System.IO.File]::ReadAllBytes($scriptPath)
+    $hasNonAscii = $false
+    foreach ($b in $bytes) {
+        if ($b -gt 0x7F) { $hasNonAscii = $true; break }
+    }
+    if ($hasNonAscii) {
+        $encodingErrors += "$script contains non-ASCII bytes"
+        if (-not $Quiet) { Write-Host "  [FAIL] $script has non-ASCII characters (will break PowerShell 5.1)" -ForegroundColor Red }
+        $exitCode = 1
+    } else {
+        if (-not $Quiet) { Write-Host "  [OK] $script is pure ASCII" -ForegroundColor Green }
+    }
+}
+
+# ---- 5. Check required top-level keys ----
 $requiredKeys = @('agent')
 foreach ($key in $requiredKeys) {
     if (-not $config.PSObject.Properties.Name.Contains($key)) {
@@ -111,7 +144,7 @@ foreach ($key in $requiredKeys) {
     }
 }
 
-# ── Summary ──
+# ---- Summary ----
 if ($exitCode -eq 0) {
     if (-not $Quiet) { Write-Host "
 [PASS] Config validation PASSED" -ForegroundColor Green }
