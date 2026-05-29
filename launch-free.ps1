@@ -24,7 +24,7 @@ if (-not $FreeModels.ContainsKey($FreeModel)) {
   Write-Host "ERROR: Unknown free model '$FreeModel'" -ForegroundColor Red
   Write-Host "Valid models:" -ForegroundColor Yellow
   foreach ($key in $FreeModels.Keys | Sort-Object) {
-    Write-Host "  $key  — $($FreeModels[$key])" -ForegroundColor Yellow
+    Write-Host "  $key  - $($FreeModels[$key])" -ForegroundColor Yellow
   }
   Write-Host ""
   Write-Host "Set GLITCH_FREE_MODEL env var to one of the above, or unset to use default." -ForegroundColor Cyan

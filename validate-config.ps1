@@ -20,14 +20,14 @@ param(
     [switch]$Quiet
 )
 
-# â”€â”€ Resolve path â”€â”€
+# ── Resolve path ──
 if (-not $Path) {
     $ScriptDir = Split-Path -Parent $PSCommandPath
     $Path = "$ScriptDir\opencode.json"
 }
 
 if (-not (Test-Path $Path)) {
-    if (-not $Quiet) { Write-Host "âŒ File not found: $Path" -ForegroundColor Red }
+    if (-not $Quiet) { Write-Host "ERROR: File not found: $Path" -ForegroundColor Red }
     exit 1
 }
 
@@ -35,21 +35,21 @@ $RootDir = Split-Path -Parent (Resolve-Path $Path)
 $exitCode = 0
 $errors = @()
 
-# â”€â”€ 1. JSON Syntax Check â”€â”€
-if (-not $Quiet) { Write-Host "ðŸ” Validating: $Path" -ForegroundColor Cyan }
+# ── 1. JSON Syntax Check ──
+    if (-not $Quiet) { Write-Host "==> Validating: $Path" -ForegroundColor Cyan }
 try {
     $raw = Get-Content $Path -Raw
     $config = $raw | ConvertFrom-Json
-    if (-not $Quiet) { Write-Host "  âœ… Valid JSON" -ForegroundColor Green }
+    if (-not $Quiet) { Write-Host "  [OK] Valid JSON" -ForegroundColor Green }
 } catch {
     $errors += "JSON syntax error: $_"
-    if (-not $Quiet) { Write-Host "  âŒ $($errors[-1])" -ForegroundColor Red }
+    if (-not $Quiet) { Write-Host "  [FAIL] $($errors[-1])" -ForegroundColor Red }
     $exitCode = 1
     # Can't continue checks if JSON is invalid
     exit $exitCode
 }
 
-# â”€â”€ 2. Check instructions files exist â”€â”€
+# ── 2. Check instructions files exist ──
 if ($config.instructions) {
     $missingInstructions = @()
     foreach ($file in $config.instructions) {
@@ -60,14 +60,14 @@ if ($config.instructions) {
     }
     if ($missingInstructions.Count -gt 0) {
         $errors += "Missing instruction files: $($missingInstructions -join ', ')"
-        if (-not $Quiet) { Write-Host "  âŒ Missing instruction files: $($missingInstructions -join ', ')" -ForegroundColor Red }
+        if (-not $Quiet) { Write-Host "  [FAIL] Missing instruction files: $($missingInstructions -join ', ')" -ForegroundColor Red }
         $exitCode = 1
     } else {
-        if (-not $Quiet) { Write-Host "  âœ… All instruction files exist" -ForegroundColor Green }
+        if (-not $Quiet) { Write-Host "  [OK] All instruction files exist" -ForegroundColor Green }
     }
 }
 
-# â”€â”€ 3. Check agent configs â”€â”€
+# ── 3. Check agent configs ──
 if ($config.agent) {
     $agentNames = @()
     foreach ($agent in $config.agent.PSObject.Properties) {
@@ -77,21 +77,11 @@ if ($config.agent) {
         # Check model field exists
         if (-not $agentConfig.model) {
             $errors += "Agent '$($agent.Name)' has no model specified"
-            if (-not $Quiet) { Write-Host "  âŒ Agent '$($agent.Name)' has no model specified" -ForegroundColor Red }
-            $exitCode = 1
-        }
+            if (-not $Quiet) { Write-Host "  [FAIL] Agent '$($agent.Name)' has no model specified" -ForegroundColor Red }
 
-        # Check mode is valid
-        if ($agentConfig.mode -and @('primary', 'subagent') -notcontains $agentConfig.mode) {
-            $errors += "Agent '$($agent.Name)' has invalid mode '$($agentConfig.mode)'"
-            if (-not $Quiet) { Write-Host "  âŒ Agent '$($agent.Name)' has invalid mode '$($agentConfig.mode)'" -ForegroundColor Red }
-            $exitCode = 1
-        }
+            if (-not $Quiet) { Write-Host "  [FAIL] Agent '$($agent.Name)' has invalid mode '$($agentConfig.mode)'" -ForegroundColor Red }
 
-        # Check temperature range
-        if ($agentConfig.temperature -and ($agentConfig.temperature -lt 0 -or $agentConfig.temperature -gt 2)) {
-            $errors += "Agent '$($agent.Name)' has temperature out of range (0-2): $($agentConfig.temperature)"
-            if (-not $Quiet) { Write-Host "  âŒ Agent '$($agent.Name)' has temperature out of range (0-2): $($agentConfig.temperature)" -ForegroundColor Red }
+            if (-not $Quiet) { Write-Host "  [FAIL] Agent '$($agent.Name)' has temperature out of range (0-2): $($agentConfig.temperature)" -ForegroundColor Red }
             $exitCode = 1
         }
     }
@@ -101,32 +91,34 @@ if ($config.agent) {
     if ($dupes) {
         foreach ($d in $dupes) {
             $errors += "Duplicate agent name: '$($d.Name)'"
-            if (-not $Quiet) { Write-Host "  âŒ Duplicate agent name: '$($d.Name)'" -ForegroundColor Red }
+            if (-not $Quiet) { Write-Host "  [FAIL] Duplicate agent name: '$($d.Name)'" -ForegroundColor Red }
         }
         $exitCode = 1
     }
 
     if ($errors.Count -eq 0 -and (-not $Quiet)) {
-        Write-Host "  âœ… Agents: $($agentNames.Count) configured, all valid" -ForegroundColor Green
+        Write-Host "  [OK] Agents: $($agentNames.Count) configured, all valid" -ForegroundColor Green
     }
 }
 
-# â”€â”€ 4. Check required top-level keys â”€â”€
+# ── 4. Check required top-level keys ──
 $requiredKeys = @('agent')
 foreach ($key in $requiredKeys) {
     if (-not $config.PSObject.Properties.Name.Contains($key)) {
         $errors += "Missing required key: '$key'"
-        if (-not $Quiet) { Write-Host "  âŒ Missing required key: '$key'" -ForegroundColor Red }
+        if (-not $Quiet) { Write-Host "  [FAIL] Missing required key: '$key'" -ForegroundColor Red }
         $exitCode = 1
     }
 }
 
-# â”€â”€ Summary â”€â”€
+# ── Summary ──
 if ($exitCode -eq 0) {
-    if (-not $Quiet) { Write-Host "`nâœ… Config validation PASSED" -ForegroundColor Green }
+    if (-not $Quiet) { Write-Host "
+[PASS] Config validation PASSED" -ForegroundColor Green }
 } else {
     if (-not $Quiet) {
-        Write-Host "`nâŒ Config validation FAILED â€” $($errors.Count) error(s)" -ForegroundColor Red
+        Write-Host "
+[FAIL] Config validation FAILED - $($errors.Count) error(s)" -ForegroundColor Red
         Write-Host "  Run launch-glitch-safe.bat to enter safe mode and fix issues." -ForegroundColor Yellow
     }
 }

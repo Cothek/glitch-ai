@@ -6,7 +6,7 @@ $BackupPath = "$RootDir\opencode.json.bak"
 $ErrorActionPreference = "Continue"
 
 Write-Host ""
-Write-Host "🛟 Glitch Safe Mode" -ForegroundColor Cyan
+Write-Host "== Safe Mode ==" -ForegroundColor Cyan
 Write-Host ""
 
 # Check opencode exists
@@ -28,7 +28,7 @@ $safePrompt = @"
 You are Glitch running in SAFE MODE. Something is broken with the Glitch configuration and Troy needs your help to fix it.
 
 ## Safe Mode Rules
-1. You have FULL permissions (edit, bash, task) — use them to diagnose and fix problems.
+1. You have FULL permissions (edit, bash, task) -- use them to diagnose and fix problems.
 2. The current opencode.json may be corrupted or incompatible. Check it first.
 3. Listen to Troy's description of what went wrong and systematically diagnose:
    - Check opencode.json for syntax errors
@@ -37,7 +37,7 @@ You are Glitch running in SAFE MODE. Something is broken with the Glitch configu
    - Check that git submodules are initialized
 4. After fixing, tell Troy to exit safe mode and launch normally.
 5. If you can't fix it, restore opencode.json.bak over opencode.json.
-6. Stay focused on repair — no new features, no dev work.
+6. Stay focused on repair -- no new features, no dev work.
 "@
 
 $safeConfig = @{
