@@ -65,6 +65,10 @@ function Get-NvmActiveVersion {
 
 function Confirm-Update {
   param([string]$Name, [string]$FromVer, [string]$ToVer)
+  if ([string]::IsNullOrWhiteSpace($ToVer)) {
+    Write-ColorHost "  WARNING: Latest version is unknown -- skipping $Name update." "Yellow"
+    return $false
+  }
   $response = Read-Host "Update $Name from $FromVer to $ToVer? [y/N]"
   return $response.Trim().ToLower() -eq "y"
 }
@@ -173,7 +177,7 @@ try {
     Write-ColorHost "  Syncing local opencode.exe from global install..." "Cyan"
     try {
       $globalRoot = (& "npm" "root" "-g" 2>$null).Trim()
-      $sourceBin = Join-Path $globalRoot "opencode-ai" "bin" "opencode.exe"
+      $sourceBin = [System.IO.Path]::Combine($globalRoot, "opencode-ai", "bin", "opencode.exe")
       if (Test-Path $sourceBin) {
         if (-not (Test-Path $LocalOpenCodeDir)) { New-Item -ItemType Directory -Path $LocalOpenCodeDir -Force | Out-Null }
         Copy-Item -Path $sourceBin -Destination $LocalOpenCodeBin -Force
@@ -412,10 +416,10 @@ try {
 
   $results += @{
     name = "@opencode-ai/plugin (.opencode)"
-    current = if ($outdatedCount -gt 0) { ($outdatedInfo | ForEach-Object { "$($_.package): $($_.current)->$($_.latest)" }) -join "; " } else { "up to date" }
-    latest = if ($outdatedCount -gt 0) { ($outdatedInfo | ForEach-Object { $_.latest }) -join "; " } else { "up to date" }
+    current = $(if ($outdatedCount -gt 0) { ($outdatedInfo | ForEach-Object { "$($_.package): $($_.current)->$($_.latest)" }) -join "; " } else { "up to date" })
+    latest = $(if ($outdatedCount -gt 0) { ($outdatedInfo | ForEach-Object { $_.latest }) -join "; " } else { "up to date" })
     update_available = ($outdatedCount -gt 0)
-    update_type = if ($outdatedCount -gt 0) {"$outdatedCount package(s) outdated"} else {"none"}
+    update_type = $(if ($outdatedCount -gt 0) {"$outdatedCount package(s) outdated"} else {"none"})
     auto_safe = $true
     status = "ok"
   }
@@ -454,6 +458,7 @@ try {
 
   $tag = Get-VersionTagFromRedirect -Url "https://github.com/cloudflare/cloudflared/releases/latest"
   if ($tag) {
+    $tag = $tag.Trim()
     if ($tag -match '(\d+\.\d+\.\d+)') {
       $latestVer = $matches[1]
     } else {
@@ -461,7 +466,7 @@ try {
     }
   }
 
-  if ($curVer -ne "unknown" -and $curVer -ne "not installed" -and $latestVer -ne "unknown" -and $curVer -ne $latestVer) {
+  if ($curVer -ne "unknown" -and $curVer -ne "not installed" -and $latestVer -ne "unknown" -and $latestVer -ne "" -and $curVer -ne $latestVer) {
     $updateNeeded = $true
     $updatesAvailable++
   }
@@ -515,7 +520,7 @@ try {
       $fileInfo = Get-Item $HandyBin
       $fileSizeKB = [math]::Round($fileInfo.Length / 1KB, 1)
       $fileDate = $fileInfo.LastWriteTime.ToString("yyyy-MM-dd")
-      $curInfo = "$fileDate ($fileSizeKB KB)"
+      $curInfo = '{0} ({1} KB)' -f $fileDate, $fileSizeKB
     } catch { $curInfo = "exists (size unknown)" }
   } else {
     $curInfo = "not installed"
@@ -524,10 +529,10 @@ try {
   try {
     $json = Invoke-WebRequest -Uri "https://api.github.com/repos/cjpais/Handy/releases/latest" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
     $data = $json | ConvertFrom-Json
-    $latestVer = $data.tag_name
+    $latestVer = $data.tag_name.Trim()
   } catch {}
 
-  if ($latestVer -ne "unknown" -and $latestVer -ne $curInfo) {
+  if ($latestVer -ne "unknown" -and $latestVer -ne "" -and $latestVer -ne $curInfo) {
     $updateNeeded = $true
     $updatesAvailable++
   }
@@ -535,40 +540,11 @@ try {
   if ($IsUpdate -and $updateNeeded) {
     $proceed = Confirm-Update -Name "Handy voice" -FromVer $curInfo -ToVer $latestVer
     if ($proceed) {
-      Write-ColorHost "  Downloading latest Handy release..." "Cyan"
-      try {
-        $assetUrl = $null
-        if ($data -and $data.assets) {
-          foreach ($asset in $data.assets) {
-            if ($asset.name -match 'Handy.*\.zip$') {
-              $assetUrl = $asset.browser_download_url
-              break
-            }
-          }
-        }
-        if (-not $assetUrl) {
-          $assetUrl = "https://github.com/cjpais/Handy/releases/latest/download/Handy.zip"
-        }
-        $zipPath = Join-Path $RootDir "handy-voice-tmp.zip"
-        Invoke-WebRequest -Uri $assetUrl -OutFile $zipPath -UseBasicParsing -TimeoutSec 120 -ErrorAction Stop
-        if (Test-Path $zipPath) {
-          if (-not (Test-Path $HandyDir)) { New-Item -ItemType Directory -Path $HandyDir -Force | Out-Null }
-          $shell = New-Object -ComObject Shell.Application
-          $zip = $shell.NameSpace($zipPath)
-          $dest = $shell.NameSpace($HandyDir)
-          $dest.CopyHere($zip.Items(), 16)
-          Remove-Item -Path $zipPath -Force
-          Write-ColorHost "  Done." "Green"
-          if (Test-Path $HandyBin) {
-            $fileInfo = Get-Item $HandyBin
-            $fileSizeKB = [math]::Round($fileInfo.Length / 1KB, 1)
-            $fileDate = $fileInfo.LastWriteTime.ToString("yyyy-MM-dd")
-            $curInfo = "$fileDate ($fileSizeKB KB)"
-          }
-        }
-      } catch {
-        Write-ColorHost "  Download failed: $_" "Red"
-      }
+      Write-ColorHost "  Handy uses an NSIS installer (not a zip). Run .\bootstrap.ps1 -Force to update it." "Yellow"
+      Write-ColorHost "  This ensures proper extraction via the same logic used during initial setup." "Yellow"
+      Write-ColorHost "  Manual: https://github.com/cjpais/Handy/releases" "DarkYellow"
+      $updateNeeded = $false  # Mark as handled so results don't show false pending
+      $updatesAvailable--   # Adjust total count
     }
   }
 

@@ -1,6 +1,6 @@
 ﻿{
-    "updates_available":  4,
-    "checked_at":  "2026-05-29T10:46:52.0190037-05:00",
+    "updates_available":  3,
+    "checked_at":  "2026-05-29T11:17:27.5549230-05:00",
     "items":  [
                   {
                       "current":  "1.15.12",
@@ -40,7 +40,7 @@
                       "update_type":  "none"
                   },
                   {
-                      "current":  "d0cbaad5750ead40554e429d403775bf792b2c58 glitch-memorycore (heads/main)",
+                      "current":  "bbda6eb45dfcdc06db246328f49a7709dc5eb20d glitch-memorycore (heads/main)",
                       "update_available":  false,
                       "latest":  "remote HEAD",
                       "name":  "glitch-memorycore submodule",
@@ -59,10 +59,10 @@
                       "status":  "ok"
                   },
                   {
-                      "current":  "2026.5.0",
+                      "current":  "2026.5.2",
                       "name":  "cloudflared",
-                      "update_type":  "re-download",
-                      "update_available":  true,
+                      "update_type":  "none",
+                      "update_available":  false,
                       "latest":  "2026.5.2",
                       "auto_safe":  false,
                       "status":  "ok"
