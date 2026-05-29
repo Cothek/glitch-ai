@@ -70,10 +70,10 @@
                                                 },
                                  "temperature":  0.2
                              },
-                  "coder":  {
-                                "model":  "opencode-go/qwen3.6-plus",
+                   "coder":  {
+                                 "model":  "opencode-go/kimi-k2.6",
                                 "mode":  "subagent",
-                                "description":  "Complex code generation and architecture work ($0.50/$3.00). Use when tasks involve 5+ files, authentication, data flow, API integration, database schemas, or any work requiring strong reasoning. Falls back from @general when free model is insufficient for complex code.",
+                                "description":  "Complex code generation and architecture work ($0.95/$4.00). Use when tasks involve 5+ files, authentication, data flow, API integration, database schemas, or any work requiring strong reasoning. Falls back from @general when free model is insufficient for complex code.",
                                 "permission":  {
                                                    "read":  "allow",
                                                    "edit":  "allow",
@@ -132,8 +132,8 @@
                                      "hidden":  true,
                                      "temperature":  0.2
                                  },
-                   "ui-designer":  {
-                                       "model":  "opencode-go/deepseek-v4-pro",
+                    "ui-designer":  {
+                                        "model":  "opencode-go/kimi-k2.6",
                                       "mode":  "subagent",
                                       "description":  "UI design agent that builds interfaces matching project-specific design systems. Always discovers and reads project design spec files before making any UI changes.",
                                       "color":  "#10b981",
