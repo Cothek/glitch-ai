@@ -15,10 +15,12 @@ if (-not (Test-Path $OpenCodeBin)) {
   exit 1
 }
 
-# ── Backup current config ──
+# ── Backup current config and save its checksum ──
+$backupHashAtStart = $null
 if (Test-Path $ConfigPath) {
   Write-Host "  Backing up opencode.json -> opencode.json.bak" -ForegroundColor Yellow
   Copy-Item $ConfigPath $BackupPath -Force
+  $backupHashAtStart = (Get-FileHash $BackupPath -Algorithm SHA256).Hash
 }
 
 # ── Build safe config programmatically (guaranteed valid JSON via ConvertTo-Json) ──
@@ -38,6 +40,12 @@ You are Glitch running in SAFE MODE. Something is broken with the Glitch configu
 4. After fixing, tell Troy to exit safe mode and launch normally.
 5. If you can't fix it, restore opencode.json.bak over opencode.json.
 6. Stay focused on repair -- no new features, no dev work.
+
+## CRITICAL: Where to Apply Fixes
+- **opencode.json.bak** is the backup of your ORIGINAL (broken) config. This is what gets restored when safe mode exits. Apply ALL fixes to this file.
+- **opencode.json** is a temporary minimal config that lets safe mode run. Any edits made here will BE LOST when safe mode exits — do NOT rely on it for permanent fixes.
+- After fixing opencode.json.bak, run: `validate-config.ps1` on it to verify it's valid.
+- Then tell Troy to exit safe mode. The fixed backup will be restored automatically.
 "@
 
 $safeConfig = @{
@@ -97,6 +105,9 @@ Write-Host ""
 Write-Host "  Starting OpenCode in safe mode..." -ForegroundColor Cyan
 Write-Host "  When you're done fixing, exit normally and the original config will be restored."
 Write-Host ""
+Write-Host "  IMPORTANT: Fix the ISSUE in opencode.json.bak, not in opencode.json."
+Write-Host "  opencode.json will be replaced on exit. The .bak file is what persists."
+Write-Host ""
 
 Push-Location $RootDir
 try {
@@ -107,12 +118,38 @@ try {
     Pop-Location
 }
 
-# ── Restore original config ──
+# ── Restore original config (with safety check) ──
 if (Test-Path $BackupPath) {
-    Write-Host ""
-    Write-Host "  Restoring original opencode.json..." -ForegroundColor Yellow
-    Move-Item $BackupPath $ConfigPath -Force
-    Write-Host "  Original config restored." -ForegroundColor Green
+    $backupHashNow = (Get-FileHash $BackupPath -Algorithm SHA256).Hash
+    $configHashNow = (Get-FileHash $ConfigPath -Algorithm SHA256).Hash
+    
+    if ($backupHashNow -eq $backupHashAtStart) {
+        # Backup was NOT modified during safe mode
+        Write-Host ""
+        Write-Host "  WARNING: opencode.json.bak was NOT modified during safe mode." -ForegroundColor Yellow
+        Write-Host "  If you made any fixes, they were applied to the wrong file and will be lost." -ForegroundColor Yellow
+        Write-Host ""
+        Write-Host "  Do you want to:" -ForegroundColor Cyan
+        Write-Host "    [R] Restore the original (unfixed) config from backup" -ForegroundColor Gray
+        Write-Host "    [K] Keep the current opencode.json as-is (promote safe config)" -ForegroundColor Gray
+        $choice = Read-Host "  Choose (R/K)"
+        
+        if ($choice -eq 'K' -or $choice -eq 'k') {
+            Write-Host "  Keeping current config, discarding backup." -ForegroundColor Yellow
+            Remove-Item $BackupPath -Force
+            Write-Host "  Current opencode.json kept in place." -ForegroundColor Green
+        } else {
+            Write-Host "  Restoring original (unfixed) config from backup..." -ForegroundColor Yellow
+            Move-Item $BackupPath $ConfigPath -Force
+            Write-Host "  Original config restored." -ForegroundColor Green
+        }
+    } else {
+        # Backup was modified — agent followed instructions and fixed it
+        Write-Host ""
+        Write-Host "  Backup was modified — restoring fixed config." -ForegroundColor Green
+        Move-Item $BackupPath $ConfigPath -Force
+        Write-Host "  Fixed config restored." -ForegroundColor Green
+    }
 }
 
 Write-Host ""
