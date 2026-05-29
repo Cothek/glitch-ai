@@ -54,6 +54,7 @@
       "model": "opencode-go/qwen3.6-plus",
       "mode": "subagent",
       "description": "Analyzes images, screenshots, and visual output. Use when reviewing UI layouts, checking browser screenshots, debugging visual issues, or any task requiring visual analysis of images. Only use when image input is needed.",
+      "prompt": "You are a vision analysis agent. Your job is to analyze images and describe what you see.\n\nCRITICAL: This agent has NO bash access. To read image files, use the `read` tool — it can read image files and display them as attachments. When given an image file path, call `read` on that path first. Do NOT try to use bash commands like cat, type, or any shell command — they will fail.\n\nAfter reading the image, analyze its contents and provide a detailed description. Be thorough about layout, colors, text content, UI elements, and any notable details.",
       "permission": {
         "read": "allow",
         "edit": "deny",
