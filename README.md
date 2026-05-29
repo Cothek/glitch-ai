@@ -13,6 +13,7 @@ Portable AI companion environment — one clone, one launch, Glitch is ready on 
 | `tui.json` | Terminal UI preferences for OpenCode. |
 | `bootstrap.ps1` | First-run setup — downloads OpenCode, Handy, and cloudflared. |
 | `launch-glitch.bat` / `launch.ps1` | Launches Handy + OpenCode TUI for local use. |
+| `launch-glitch-free.bat` / `launch-free.ps1` | **Free mode** — emergency fallback using only free models. |
 | `serve-glitch.bat` / `serve-glitch.ps1` | Launches OpenCode Web server + Cloudflare Tunnel for remote access. |
 | `setup-tunnel.ps1` | One-time Cloudflare Tunnel setup — authenticate, create tunnel, configure DNS. |
 | `plugins/auth-proxy.mjs` | Auth proxy — adds Basic Auth for transparent mobile login via Cloudflare Tunnel. |
