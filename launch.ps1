@@ -81,6 +81,23 @@ try {
     exit 1
 }
 
+# ---- Check for dependency updates ----
+Write-Host "  Checking dependency updates..." -ForegroundColor Cyan
+try {
+  $statusFile = "$RootDir\update-status.json"
+  & "$RootDir\check-updates.ps1" -CheckOnly *>$null
+  if (Test-Path $statusFile) {
+    $status = Get-Content $statusFile -Raw | ConvertFrom-Json
+    if ($status.updates_available -gt 0) {
+      Write-Host "  $($status.updates_available) update(s) available — run .\check-updates.ps1 -Update" -ForegroundColor Yellow
+    } else {
+      Write-Host "  All dependencies up-to-date" -ForegroundColor DarkGreen
+    }
+  }
+} catch {
+  Write-Host "  Update check skipped (non-critical): $_" -ForegroundColor DarkYellow
+}
+
 # ---- Start Handy (if not already running) ----
 $handyProcess = Get-Process -Name "handy" -ErrorAction SilentlyContinue
 if (-not $handyProcess) {
