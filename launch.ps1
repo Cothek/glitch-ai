@@ -34,26 +34,27 @@ if (-not (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md")) {
   Write-Host "  glitch-memorycore found" -ForegroundColor DarkGreen
 }
 
-# ── Check for leftover safe mode backup ──
+# ── Detect leftover safe mode backup ──
+# If safe mode crashed before restoring, .bak still exists and opencode.json
+# is the minimal safe config. Auto-restore if safe mode left its footprint.
 $BackupPath = "$RootDir\opencode.json.bak"
 if (Test-Path $BackupPath) {
-  Write-Host "  Detected leftover backup: opencode.json.bak" -ForegroundColor Yellow
-  Write-Host "  This may be from a previous safe mode session that was interrupted." -ForegroundColor Yellow
-  Write-Host ""
-  Write-Host "  What would you like to do?" -ForegroundColor Cyan
-  Write-Host "    [1] Restore the backup (recover original config)" -ForegroundColor Green
-  Write-Host "    [2] Keep current opencode.json and delete the backup" -ForegroundColor Yellow
-  $bakChoice = Read-Host "  Choose (1 or 2)"
-  if ($bakChoice -eq '1') {
-    Write-Host "  Restoring opencode.json.bak -> opencode.json..." -ForegroundColor Green
+  try {
+    $currentConfig = Get-Content "$RootDir\opencode.json" -Raw | ConvertFrom-Json
+    $agentCount = @($currentConfig.agent.PSObject.Properties).Count
+    $isSafeModeConfig = ($agentCount -le 1)  # safe mode has only delegator
+  } catch {
+    $isSafeModeConfig = $false
+  }
+
+  if ($isSafeModeConfig) {
+    Write-Host "  Detected leftover safe mode config — restoring opencode.json.bak..." -ForegroundColor Yellow
     Copy-Item $BackupPath "$RootDir\opencode.json" -Force
-    Remove-Item $BackupPath -Force
     Write-Host "  Backup restored." -ForegroundColor Green
   } else {
-    Write-Host "  Deleting backup..." -ForegroundColor Yellow
-    Remove-Item $BackupPath -Force
-    Write-Host "  Backup deleted. Current config kept." -ForegroundColor Yellow
+    Write-Host "  Cleaning up leftover backup from previous safe mode." -ForegroundColor DarkYellow
   }
+  Remove-Item $BackupPath -Force
 }
 
 # ── Ensure Handy portable flag ──
