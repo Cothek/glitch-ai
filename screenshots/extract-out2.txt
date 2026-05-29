@@ -1,0 +1,13 @@
+🔌 Connecting to http://localhost:4100...
+❌ API path failed: fetch failed
+   Falling back to DB query...
+  🔍 Falling back to SQLite DB query...
+  📁 DB: C:\Users\cothe\.local\share\opencode\opencode.db
+  📸 Found image in part prt_e75b96aa5002MWmT7v5ewrnR3E (image/png)
+     Size: 1.6 KB
+     Session: ses_191225516ffeICgzYPxQ56Nmri
+   Decoded from DB: 1.6 KB
+✅ Image saved: E:\Glitch AI\glitch-ai\screenshots\dropdown-issue.png
+   Size: 1.6 KB
+
+OUTPUT_PATH=E:\Glitch AI\glitch-ai\screenshots\dropdown-issue.png

@@ -1,6 +1,6 @@
 ﻿{
     "updates_available":  3,
-    "checked_at":  "2026-05-29T16:36:20.1129416-05:00",
+    "checked_at":  "2026-05-29T16:55:01.7752732-05:00",
     "items":  [
                   {
                       "current":  "1.15.12",
@@ -40,7 +40,7 @@
                       "update_type":  "none"
                   },
                   {
-                      "current":  "7512734ce81bbc4ef0c4cd37a3099a42b281c094 glitch-memorycore (heads/main)",
+                      "current":  "6db6940354ec934bb91ee67b9d455df9b8342554 glitch-memorycore (heads/main)",
                       "update_available":  false,
                       "latest":  "remote HEAD",
                       "name":  "glitch-memorycore submodule",
