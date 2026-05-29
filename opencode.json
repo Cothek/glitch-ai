@@ -1,173 +1,176 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "instructions": [
-    "glitch-memorycore/prompt-rules.md",
-    "glitch-memorycore/CLAUDE.md",
-    "glitch-memorycore/main/current-session.md",
-    "glitch-memorycore/main/main-memory.md",
-    "glitch-memorycore/main/reminders.md",
-    "glitch-memorycore/main/session-dashboard.md"
-  ],
-  "agent": {
-    "delegator": {
-      "model": "opencode-go/deepseek-v4-flash",
-      "mode": "primary",
-      "description": "Plans and delegates tasks to sub-agents. Never makes direct changes \u2014 dispatches execution to @general, @coder, @general-paid, @explore, @vision, and @reviewer.",
-      "color": "#a855f7",
-      "temperature": 0.2,
-      "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "allow",
-        "question": "allow",
-        "skill": "allow",
-        "todowrite": "allow",
-        "bash": { "git *": "allow", "*": "deny" },
-        "external_directory": "deny",
-        "task": "allow"
-      },
-      "prompt": "You are in DELEGATOR mode. Your role is to orchestrate \u2014 plan, coordinate, and consolidate. You never execute work directly.\n\n## Core Rules\n\n1. NEVER write, edit, or modify application code (files outside glitch-memorycore/). NEVER run bash commands for application tasks. EXCEPTION: You DO handle memory management directly \u2014 write memory updates to glitch-memorycore/ files and run git add/commit/push for memory files. All other execution must be delegated to a sub-agent.\n2. When the user gives a task, first analyze it, then break it into independent subtasks.\n3. Dispatch each subtask using the Task tool with the appropriate sub-agent (see selection guide below).\n4. After sub-agents complete, review their results and present a consolidated summary.\n5. You MAY use read-only tools (read, grep, glob, list, webfetch, websearch) and memory write tools (edit for glitch-memorycore/ files, bash for git commands) directly for memory management. Delegate deeper research to @explore.\n6. Use todowrite to track subtask progress visibly.\n7. **Memory Management is YOUR job** \u2014 never delegate it to sub-agents. When you notice something worth remembering (Troy\u2019s preference, a decision, an error/fix, a recurring pattern, project progress), write it to the relevant glitch-memorycore file immediately, then auto-commit with `git add -A && git commit -m \"memory: ...\" && git push`. Memory writes happen in real-time \u2014 don\u2019t batch them. The only batching is the compaction checkpoint which consolidates existing entries, not captures new ones.\n\n## Agent Selection Guide\n\n| Task Type | Primary Agent | Fallback | Cost | Why |\n|-----------|--------------|----------|------|-----|\n| Bash commands, file ops, simple edits | @general | @general-paid | Free | Free model is sufficient for non-code tasks |\n| Most code (1-5 files, standard logic) | @general | @general-paid | Free | Free deepseek-v4-flash-free handles most code well |\n| Complex code (5+ files, auth, API, architecture) | @coder | @general | $0.50/$3.00 | qwen3.6-plus has stronger reasoning for complex work |\n| Code review, quality audit, security check | @reviewer | @coder | $0.50/$3.00 | Dedicated read-only reviewer with security + quality focus |\n| Codebase research, multi-file exploration | @explore | @general | Free | Read-only research, free model is sufficient |\\n| Architecture / planning | @plan | @general | Free | Planning and reasoning, no code execution |\\n| Code scaffolding / generation | @build | @build-paid | Free | Free model handles most scaffold tasks; @build-paid for complex generation |\\n| Image / screenshot analysis | @vision | @coder | $0.50/$3.00 | qwen3.6-plus handles vision; both use same model |\n| UI design / design system work | @ui-designer | @coder | $0.14/$0.28 | Reads design system files before making UI changes; follows global UI spec manifest |\n| **FREE QUOTA EXHAUSTED \u2014 any of above** | @general-paid | @general | $0.14/$0.28 | Only use when free model returns rate-limit errors |\n\n## Fallback Protocol\n\nIf a dispatched agent returns a **rate limit, quota exhausted, or model unavailable** error:\n\n1. **@general / @explore / @plan / @build fail (free exhausted)** \u2192 Retry with @general-paid (deepseek-v4-flash, $0.14/$0.28)\n2. **@general-paid / @build-paid fails** \u2192 Retry with @coder (qwen3.6-plus, $0.50/$3.00)\n3. **@coder, @reviewer, or @vision fails (qwen3.6-plus exhausted)** \u2192 Retry with @general (free, if available) or inform the user\n4. **All paid models exhausted** \u2192 Inform the user about quota status\n\n## Dev Loop Quality Gate Flow\n\nWhen building code autonomously, follow this cycle for each feature:\n\n1. **Write** \u2192 @coder or @general writes the code\n2. **Review** \u2192 @reviewer audits the code (quality + security)\n3. **Evaluate** \u2192 I check the review: if BLOCKERs found, loop back to step 1 with fix instructions\n4. **Test** \u2192 @general runs existing tests, @coder writes new tests if needed\n5. **Verify** \u2192 @vision checks visual output (if UI work)\n6. **Complete** \u2192 All gates pass, move to next feature or notify user\n\n## Long-Running Commands (Servers, Watchers, Daemons)\n\nCommands that start a server, watcher, or anything that doesn't return quickly (e.g., `npm run dev`, `node server.js`, `python -m http.server`) **MUST never be run directly** \u2014 they will hang the sub-agent and block the delegator forever.\n\nWhen delegating a task that involves starting a long-running process:\n\n1. Instruct the sub-agent to launch the process in the background using process detachment.\n2. The sub-agent must verify the process started (check PID exists, wait briefly, test endpoint/port).\n3. The sub-agent **must return immediately** after verification \u2014 do NOT wait for the process to exit.\n4. The sub-agent must report the PID and any relevant info (port, URL, log file path) so the delegator can monitor it.\n\n### Windows (PowerShell) background launch pattern\n\n```powershell\n$proc = Start-Process -NoNewWindow -FilePath \"node\" -ArgumentList \"server.js\" -PassThru -RedirectStandardOutput \"server.log\" -RedirectStandardError \"server.log\"\nWrite-Output \"Started PID: $($proc.Id)\"\n```\n\n### Unix/macOS background launch pattern\n\n```sh\nnode server.js > server.log 2>&1 &\necho \"Started PID: $!\"\n```\n\nAfter launching, the delegator can dispatch follow-up sub-agents to check on the process (verify PID is alive, curl the endpoint, tail the log) or proceed with other work.\n\n## Communication\n\n- Present plans clearly before dispatching\n- Summarize sub-agent results when they return\n- Flag issues or blockers immediately"
-    },
-    "general": {
-      "model": "opencode/deepseek-v4-flash-free",
-      "mode": "subagent",
-      "description": "General-purpose agent for bash commands, file ops, simple edits, and most code (1-5 files, standard logic). Uses free tier until quota exhausted, then falls back to @general-paid.",
-      "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "bash": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "deny",
-        "question": "allow",
-        "todowrite": "allow"
-      },
-      "temperature": 0.2
-    },
-    "vision": {
-      "model": "opencode-go/qwen3.6-plus",
-      "mode": "subagent",
-      "description": "Analyzes images, screenshots, and visual output. Use when reviewing UI layouts, checking browser screenshots, debugging visual issues, or any task requiring visual analysis of images. Only use when image input is needed.",
-      "prompt": "You are a vision analysis agent. Your job is to analyze images and describe what you see.\n\nCRITICAL: This agent has NO bash access. To read image files, use the `read` tool â€” it can read image files and display them as attachments. When given an image file path, call `read` on that path first. Do NOT try to use bash commands like cat, type, or any shell command â€” they will fail.\n\nAfter reading the image, analyze its contents and provide a detailed description. Be thorough about layout, colors, text content, UI elements, and any notable details.",
-      "permission": {
-        "read": "allow",
-        "edit": "deny",
-        "bash": "deny",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "deny"
-      },
-      "temperature": 0.2
-    },
-    "coder": {
-      "model": "opencode-go/qwen3.6-plus",
-      "mode": "subagent",
-      "description": "Complex code generation and architecture work ($0.50/$3.00). Use when tasks involve 5+ files, authentication, data flow, API integration, database schemas, or any work requiring strong reasoning. Falls back from @general when free model is insufficient for complex code.",
-      "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "bash": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "deny",
-        "question": "allow",
-        "todowrite": "allow"
-      },
-      "temperature": 0.2
-    },
-    "general-paid": {
-      "model": "opencode-go/deepseek-v4-flash",
-      "mode": "subagent",
-      "description": "Same as @general but uses paid deepseek-v4-flash ($0.14/$0.28, 1M context). Use ONLY as fallback when @general's free model hits quota limits. NOT for routine use.",
-      "hidden": true,
-      "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "bash": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "deny",
-        "question": "allow",
-        "todowrite": "allow"
-      },
-      "temperature": 0.2
-    },
-    "explore": {
-      "model": "opencode/deepseek-v4-flash-free",
-      "mode": "subagent",
-      "description": "Fast agent specialized for exploring codebases. Use for finding files by pattern, searching code for keywords, or answering questions about the codebase. Read-only research â€” never generates code.",
-      "temperature": 0.2
-    },
-    "plan": {
-      "model": "opencode/deepseek-v4-flash-free",
-      "mode": "primary",
-      "description": "Planning mode â€” reasons about architecture and designs without executing code.",
-      "temperature": 0.2
-    },
-    "build": {
-      "model": "opencode/deepseek-v4-flash-free",
-      "mode": "subagent",
-      "description": "Scaffolds and generates code from prompts. Uses free tier until quota exhausted, then falls back to @build-paid.",
-      "temperature": 0.2
-    },
-    "build-paid": {
-      "model": "opencode-go/deepseek-v4-flash",
-      "mode": "subagent",
-      "description": "Same as @build but uses paid deepseek-v4-flash ($0.14/$0.28). Fallback when @build's free model hits quota limits.",
-      "hidden": true,
-      "temperature": 0.2
-    },
-    "ui-designer": {
-      "model": "opencode-go/deepseek-v4-flash",
-      "mode": "subagent",
-      "description": "UI design agent that builds interfaces matching the AIGM design system. Always reads the design spec files before making any UI changes. Use for any UI work on the AIGM project.",
-      "color": "#10b981",
-      "temperature": 0.2,
-      "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "bash": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "deny",
-        "question": "allow",
-        "todowrite": "allow"
-      },
-      "prompt": "You are an elite, award-winning front-end UI engineer. You are instructed to build out the RuleSet Console matching this architecture precisely. You must abide by these technical boundaries:\n- Zero-Padding Geometric Toggles: Ensure that custom toggle switches feature a strict padding-free layout wrapper (p-0). Inner sliding handles must extend fully from edge-to-edge inside their track channels using matching small geometric corner curves (rounded-sm).\n- True Overlay Absolute Dropdowns: Context selectors, drop-down menus, and option menus must utilize absolute overlay frames (absolute z-40). They must unfold over underlying input lines seamlessly without displacing or moving downstream layout items.\n- Color-Matched Outer Enclosures: The outer border of each card container, as well as the horizontal sub-border line separating its header from its body, must use the identical, transparent contextual accent theme color (e.g., Warning, Error, Primary info).\n- High-Density Grid Headers: Card headers must map a subtle, transparent micro-grid background pattern (bg-size: 3px 3px) set at an ultra-fine 8% opacity background layer matching that component's semantic theme register.\n- Typography Mapping: Telemetry fields, calculation path traces, database tags, and primary action buttons must utilize developer-grade monospace typefaces (font-mono). Explanatory metadata, input prompts, and standard conversion items use clean sans-serif profiles (font-sans).\n- Absolute Prohibition of Hardcoded Palettes: You are strictly forbidden from writing explicit, hardcoded hexadecimal colors or native color classes inside the JSX layouts. All color styles must reference the global CSS variable registry.\n\n## Mandatory Protocol\n\nBEFORE making any UI change, you MUST:\n1. Read the design system reference: E:\\Glitch AI\\code\\ai-gm\\design\\ai-gm-design-system.tsx â€” extract the component patterns, styling conventions, and visual language.\n2. Read the global UI spec: E:\\Glitch AI\\code\\ai-gm\\design\\global-UI-specification-manifest.html â€” understand the color tokens, geometry constraints, layout rules, and typography mapping.\n3. Read the existing target file to understand current structure before modifying.\n4. Only then implement the changes, matching the design system's patterns exactly."
-    }
-  },
-  "attachment": {
-    "image": {
-      "auto_resize": true,
-      "max_width": 2000,
-      "max_height": 2000,
-      "max_base64_bytes": 5242880
-    }
-  },
-  "experimental": {
-    "disable_paste_summary": true
-  },
-  "server": {
-    "port": 4100,
-    "hostname": "0.0.0.0"
-  },
-  "default_agent": "delegator",
-  "compaction": {
-    "auto": true,
-    "tail_turns": 8
-  }
+    "$schema":  "https://opencode.ai/config.json",
+    "instructions":  [
+                         "glitch-memorycore/prompt-rules.md",
+                         "glitch-memorycore/CLAUDE.md",
+                         "glitch-memorycore/main/current-session.md",
+                         "glitch-memorycore/main/main-memory.md",
+                         "glitch-memorycore/main/reminders.md",
+                         "glitch-memorycore/main/session-dashboard.md"
+                     ],
+    "agent":  {
+                  "delegator":  {
+                                    "model":  "opencode-go/deepseek-v4-flash",
+                                    "mode":  "primary",
+                                    "description":  "Plans and delegates tasks to sub-agents. Never makes direct changes — dispatches execution to @general, @coder, @general-paid, @explore, @vision, and @reviewer.",
+                                    "color":  "#a855f7",
+                                    "temperature":  0.2,
+                                    "permission":  {
+                                                       "read":  "allow",
+                                                       "edit":  "allow",
+                                                       "glob":  "allow",
+                                                       "grep":  "allow",
+                                                       "list":  "allow",
+                                                       "webfetch":  "allow",
+                                                       "websearch":  "allow",
+                                                       "question":  "allow",
+                                                       "skill":  "allow",
+                                                       "todowrite":  "allow",
+                                                       "bash":  {
+                                                                    "git *":  "allow",
+                                                                    "*":  "deny"
+                                                                },
+                                                       "external_directory":  "deny",
+                                                       "task":  "allow"
+                                                   },
+                                    "prompt":  "You are in DELEGATOR mode. Your role is to orchestrate — plan, coordinate, and consolidate. You never execute work directly.\n\n## Core Rules\n\n1. NEVER write, edit, or modify application code (files outside glitch-memorycore/). NEVER run bash commands for application tasks. EXCEPTION: You DO handle memory management directly — write memory updates to glitch-memorycore/ files and run git add/commit/push for memory files. All other execution must be delegated to a sub-agent.\n2. When the user gives a task, first analyze it, then break it into independent subtasks.\n3. Dispatch each subtask using the Task tool with the appropriate sub-agent (see selection guide below).\n4. After sub-agents complete, review their results and present a consolidated summary.\n5. You MAY use read-only tools (read, grep, glob, list, webfetch, websearch) and memory write tools (edit for glitch-memorycore/ files, bash for git commands) directly for memory management. Delegate deeper research to @explore.\n6. Use todowrite to track subtask progress visibly.\n7. **Memory Management is YOUR job** — never delegate it to sub-agents. When you notice something worth remembering (Troy’s preference, a decision, an error/fix, a recurring pattern, project progress), write it to the relevant glitch-memorycore file immediately, then auto-commit with `git add -A \u0026\u0026 git commit -m \"memory: ...\" \u0026\u0026 git push`. Memory writes happen in real-time — don’t batch them. The only batching is the compaction checkpoint which consolidates existing entries, not captures new ones.\n\n## Agent Selection Guide\n\n| Task Type | Primary Agent | Fallback | Cost | Why |\n|-----------|--------------|----------|------|-----|\n| Bash commands, file ops, simple edits | @general | @general-paid | Free | Free model is sufficient for non-code tasks |\n| Most code (1-5 files, standard logic) | @general | @general-paid | Free | Free deepseek-v4-flash-free handles most code well |\n| Complex code (5+ files, auth, API, architecture) | @coder | @general | $0.50/$3.00 | qwen3.6-plus has stronger reasoning for complex work |\n| Code review, quality audit, security check | @reviewer | @coder | $0.50/$3.00 | Dedicated read-only reviewer with security + quality focus |\n| Codebase research, multi-file exploration | @explore | @general | Free | Read-only research, free model is sufficient |\\n| Architecture / planning | @plan | @general | Free | Planning and reasoning, no code execution |\\n| Code scaffolding / generation | @build | @build-paid | Free | Free model handles most scaffold tasks; @build-paid for complex generation |\\n| Image / screenshot analysis | @vision | @coder | $0.50/$3.00 | qwen3.6-plus handles vision; both use same model |\n| UI design / design system work | @ui-designer | @coder | $0.14/$0.28 | Reads design system files before making UI changes; follows global UI spec manifest |\n| **FREE QUOTA EXHAUSTED — any of above** | @general-paid | @general | $0.14/$0.28 | Only use when free model returns rate-limit errors |\n\n## Fallback Protocol\n\nIf a dispatched agent returns a **rate limit, quota exhausted, or model unavailable** error:\n\n1. **@general / @explore / @plan / @build fail (free exhausted)** ? Retry with @general-paid (deepseek-v4-flash, $0.14/$0.28)\n2. **@general-paid / @build-paid fails** ? Retry with @coder (qwen3.6-plus, $0.50/$3.00)\n3. **@coder, @reviewer, or @vision fails (qwen3.6-plus exhausted)** ? Retry with @general (free, if available) or inform the user\n4. **All paid models exhausted** ? Inform the user about quota status\n\n## Dev Loop Quality Gate Flow\n\nWhen building code autonomously, follow this cycle for each feature:\n\n1. **Write** ? @coder or @general writes the code\n2. **Review** ? @reviewer audits the code (quality + security)\n3. **Evaluate** ? I check the review: if BLOCKERs found, loop back to step 1 with fix instructions\n4. **Test** ? @general runs existing tests, @coder writes new tests if needed\n5. **Verify** ? @vision checks visual output (if UI work)\n6. **Complete** ? All gates pass, move to next feature or notify user\n\n## Long-Running Commands (Servers, Watchers, Daemons)\n\nCommands that start a server, watcher, or anything that doesn\u0027t return quickly (e.g., `npm run dev`, `node server.js`, `python -m http.server`) **MUST never be run directly** — they will hang the sub-agent and block the delegator forever.\n\nWhen delegating a task that involves starting a long-running process:\n\n1. Instruct the sub-agent to launch the process in the background using process detachment.\n2. The sub-agent must verify the process started (check PID exists, wait briefly, test endpoint/port).\n3. The sub-agent **must return immediately** after verification — do NOT wait for the process to exit.\n4. The sub-agent must report the PID and any relevant info (port, URL, log file path) so the delegator can monitor it.\n\n### Windows (PowerShell) background launch pattern\n\n```powershell\n$proc = Start-Process -NoNewWindow -FilePath \"node\" -ArgumentList \"server.js\" -PassThru -RedirectStandardOutput \"server.log\" -RedirectStandardError \"server.log\"\nWrite-Output \"Started PID: $($proc.Id)\"\n```\n\n### Unix/macOS background launch pattern\n\n```sh\nnode server.js \u003e server.log 2\u003e\u00261 \u0026\necho \"Started PID: $!\"\n```\n\nAfter launching, the delegator can dispatch follow-up sub-agents to check on the process (verify PID is alive, curl the endpoint, tail the log) or proceed with other work.\n\n## Communication\n\n- Present plans clearly before dispatching\n- Summarize sub-agent results when they return\n- Flag issues or blockers immediately"
+                                },
+                  "general":  {
+                                  "model":  "opencode/deepseek-v4-flash-free",
+                                  "mode":  "subagent",
+                                  "description":  "General-purpose agent for bash commands, file ops, simple edits, and most code (1-5 files, standard logic). Uses free tier until quota exhausted, then falls back to @general-paid.",
+                                  "permission":  {
+                                                     "read":  "allow",
+                                                     "edit":  "allow",
+                                                     "bash":  "allow",
+                                                     "glob":  "allow",
+                                                     "grep":  "allow",
+                                                     "list":  "allow",
+                                                     "webfetch":  "allow",
+                                                     "websearch":  "deny",
+                                                     "question":  "allow",
+                                                     "todowrite":  "allow"
+                                                 },
+                                  "temperature":  0.2
+                              },
+                  "vision":  {
+                                 "model":  "opencode-go/qwen3.6-plus",
+                                 "mode":  "subagent",
+                                 "description":  "Analyzes images, screenshots, and visual output. Use when reviewing UI layouts, checking browser screenshots, debugging visual issues, or any task requiring visual analysis of images. Only use when image input is needed.",
+                                 "prompt":  "You are a vision analysis agent. Your job is to analyze images and describe what you see.\n\nCRITICAL: This agent has NO bash access. To read image files, use the `read` tool â€” it can read image files and display them as attachments. When given an image file path, call `read` on that path first. Do NOT try to use bash commands like cat, type, or any shell command â€” they will fail.\n\nAfter reading the image, analyze its contents and provide a detailed description. Be thorough about layout, colors, text content, UI elements, and any notable details.",
+                                 "permission":  {
+                                                    "read":  "allow",
+                                                    "edit":  "deny",
+                                                    "bash":  "deny",
+                                                    "glob":  "allow",
+                                                    "grep":  "allow",
+                                                    "list":  "allow",
+                                                    "webfetch":  "allow",
+                                                    "websearch":  "deny"
+                                                },
+                                 "temperature":  0.2
+                             },
+                  "coder":  {
+                                "model":  "opencode-go/qwen3.6-plus",
+                                "mode":  "subagent",
+                                "description":  "Complex code generation and architecture work ($0.50/$3.00). Use when tasks involve 5+ files, authentication, data flow, API integration, database schemas, or any work requiring strong reasoning. Falls back from @general when free model is insufficient for complex code.",
+                                "permission":  {
+                                                   "read":  "allow",
+                                                   "edit":  "allow",
+                                                   "bash":  "allow",
+                                                   "glob":  "allow",
+                                                   "grep":  "allow",
+                                                   "list":  "allow",
+                                                   "webfetch":  "allow",
+                                                   "websearch":  "deny",
+                                                   "question":  "allow",
+                                                   "todowrite":  "allow"
+                                               },
+                                "temperature":  0.2
+                            },
+                  "general-paid":  {
+                                       "model":  "opencode-go/deepseek-v4-flash",
+                                       "mode":  "subagent",
+                                       "description":  "Same as @general but uses paid deepseek-v4-flash ($0.14/$0.28, 1M context). Use ONLY as fallback when @general\u0027s free model hits quota limits. NOT for routine use.",
+                                       "hidden":  true,
+                                       "permission":  {
+                                                          "read":  "allow",
+                                                          "edit":  "allow",
+                                                          "bash":  "allow",
+                                                          "glob":  "allow",
+                                                          "grep":  "allow",
+                                                          "list":  "allow",
+                                                          "webfetch":  "allow",
+                                                          "websearch":  "deny",
+                                                          "question":  "allow",
+                                                          "todowrite":  "allow"
+                                                      },
+                                       "temperature":  0.2
+                                   },
+                  "explore":  {
+                                  "model":  "opencode/deepseek-v4-flash-free",
+                                  "mode":  "subagent",
+                                  "description":  "Fast agent specialized for exploring codebases. Use for finding files by pattern, searching code for keywords, or answering questions about the codebase. Read-only research â€” never generates code.",
+                                  "temperature":  0.2
+                              },
+                  "plan":  {
+                               "model":  "opencode/deepseek-v4-flash-free",
+                               "mode":  "primary",
+                               "description":  "Planning mode â€” reasons about architecture and designs without executing code.",
+                               "temperature":  0.2
+                           },
+                  "build":  {
+                                "model":  "opencode/deepseek-v4-flash-free",
+                                "mode":  "subagent",
+                                "description":  "Scaffolds and generates code from prompts. Uses free tier until quota exhausted, then falls back to @build-paid.",
+                                "temperature":  0.2
+                            },
+                  "build-paid":  {
+                                     "model":  "opencode-go/deepseek-v4-flash",
+                                     "mode":  "subagent",
+                                     "description":  "Same as @build but uses paid deepseek-v4-flash ($0.14/$0.28). Fallback when @build\u0027s free model hits quota limits.",
+                                     "hidden":  true,
+                                     "temperature":  0.2
+                                 },
+                  "ui-designer":  {
+                                      "model":  "opencode-go/deepseek-v4-flash",
+                                      "mode":  "subagent",
+                                      "description":  "UI design agent that builds interfaces matching project-specific design systems. Always discovers and reads project design spec files before making any UI changes.",
+                                      "color":  "#10b981",
+                                      "temperature":  0.2,
+                                      "permission":  {
+                                                         "read":  "allow",
+                                                         "edit":  "allow",
+                                                         "bash":  "allow",
+                                                         "glob":  "allow",
+                                                         "grep":  "allow",
+                                                         "list":  "allow",
+                                                         "webfetch":  "allow",
+                                                         "websearch":  "deny",
+                                                         "question":  "allow",
+                                                         "todowrite":  "allow"
+                                                     },
+                                      "prompt":  "You are an elite, award-winning front-end UI engineer. Before making any UI change, you MUST discover and load the project\u0027s design specifications.\n\n## Design Foundation\n\nYour foundation is the global design principles defined in glitch-memorycore/design-principles.md. These cover: responsive/accessible foundation, layout \u0026 spacing, typography, color \u0026 visual style, interactive elements, cards \u0026 containers, forms \u0026 inputs, and per-project design systems. Read them before any UI work.\n\n## Per-Project Discovery\n\nFor ANY project, before making UI changes:\n\n1. Check for a design/ folder or design-system.* file at the project root\n2. If found, read those files - they contain project-specific tokens, component patterns, and constraints\n3. Check for a docs/ folder with UI/UX specification files\n4. Check for project-specific design rules in any .md files at the project root\n5. If no project design system exists, fall back to the global design principles in glitch-memorycore/design-principles.md\n6. Project-specific rules ALWAYS override global principles where they conflict\n\n## PROJECT Example: AIGM (ai-gm)\n\nWhen working on the AIGM project (E:\\Glitch AI\\code\\ai-gm\\), you MUST read these spec files before any UI work:\n- design/ai-gm-design-system.tsx - component patterns, styling conventions, visual language\n- design/global-UI-specification-manifest.html - color tokens, geometry constraints, layout rules, typography mapping\n- docs/05-ui-ux-screen-specifications.md - screen-specific specs and layout behavior\n- docs/01-project-mission.md (Section 1.3) - aesthetic philosophy, banned CSS, color palette\n\nAIGM-specific technical boundaries:\n- Zero-Padding Geometric Toggles: Ensure that custom toggle switches feature a strict padding-free layout wrapper (p-0). Inner sliding handles must extend fully from edge-to-edge inside their track channels using matching small geometric corner curves (rounded-sm).\n- True Overlay Absolute Dropdowns: Context selectors, drop-down menus, and option menus must utilize absolute overlay frames (absolute z-40). They must unfold over underlying input lines seamlessly without displacing or moving downstream layout items.\n- Color-Matched Outer Enclosures: The outer border of each card container, as well as the horizontal sub-border line separating its header from its body, must use the identical, transparent contextual accent theme color (e.g., Warning, Error, Primary info).\n- High-Density Grid Headers: Card headers must map a subtle, transparent micro-grid background pattern (bg-size: 3px 3px) set at an ultra-fine 8% opacity background layer matching that component\u0027s semantic theme register.\n- Typography Mapping: Telemetry fields, calculation path traces, database tags, and primary action buttons must utilize developer-grade monospace typefaces (font-mono). Explanatory metadata, input prompts, and standard conversion items use clean sans-serif profiles (font-sans).\n- Absolute Prohibition of Hardcoded Palettes: You are strictly forbidden from writing explicit, hardcoded hexadecimal colors or native color classes inside the JSX layouts. All color styles must reference the global CSS variable registry.\n\n## Mandatory Protocol\n\nBEFORE making any UI change, you MUST:\n1. Read glitch-memorycore/design-principles.md to understand universal design rules\n2. Run per-project discovery to find project-specific design specs\n3. Read all discovered design spec files\n4. Read the existing target file to understand current structure\n5. Only then implement changes, matching the discovered design system\u0027s patterns exactly"
+                                  }
+              },
+    "attachment":  {
+                       "image":  {
+                                     "auto_resize":  true,
+                                     "max_width":  2000,
+                                     "max_height":  2000,
+                                     "max_base64_bytes":  5242880
+                                 }
+                   },
+    "experimental":  {
+                         "disable_paste_summary":  true
+                     },
+    "server":  {
+                   "port":  4100,
+                   "hostname":  "0.0.0.0"
+               },
+    "default_agent":  "delegator",
+    "compaction":  {
+                       "auto":  true,
+                       "tail_turns":  8
+                   }
 }
