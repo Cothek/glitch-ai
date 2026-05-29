@@ -34,6 +34,28 @@ if (-not (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md")) {
   Write-Host "  glitch-memorycore found" -ForegroundColor DarkGreen
 }
 
+# ── Check for leftover safe mode backup ──
+$BackupPath = "$RootDir\opencode.json.bak"
+if (Test-Path $BackupPath) {
+  Write-Host "  Detected leftover backup: opencode.json.bak" -ForegroundColor Yellow
+  Write-Host "  This may be from a previous safe mode session that was interrupted." -ForegroundColor Yellow
+  Write-Host ""
+  Write-Host "  What would you like to do?" -ForegroundColor Cyan
+  Write-Host "    [1] Restore the backup (recover original config)" -ForegroundColor Green
+  Write-Host "    [2] Keep current opencode.json and delete the backup" -ForegroundColor Yellow
+  $bakChoice = Read-Host "  Choose (1 or 2)"
+  if ($bakChoice -eq '1') {
+    Write-Host "  Restoring opencode.json.bak -> opencode.json..." -ForegroundColor Green
+    Copy-Item $BackupPath "$RootDir\opencode.json" -Force
+    Remove-Item $BackupPath -Force
+    Write-Host "  Backup restored." -ForegroundColor Green
+  } else {
+    Write-Host "  Deleting backup..." -ForegroundColor Yellow
+    Remove-Item $BackupPath -Force
+    Write-Host "  Backup deleted. Current config kept." -ForegroundColor Yellow
+  }
+}
+
 # ── Ensure Handy portable flag ──
 $portableFlag = "$RootDir\handy-voice\Handy\portable"
 if (Test-Path $HandyBin) {
