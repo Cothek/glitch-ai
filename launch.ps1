@@ -45,6 +45,21 @@ if (Test-Path $HandyBin) {
 # ── Normalize backslash paths in session DB ──
 try { & "$RootDir\fix-paths.ps1" } catch { }
 
+# ── Validate opencode.json before launch ──
+Write-Host "  Validating opencode.json..." -ForegroundColor Cyan
+try {
+    $configContent = Get-Content "$RootDir\opencode.json" -Raw
+    $null = $configContent | ConvertFrom-Json
+    Write-Host "  Config is valid JSON" -ForegroundColor DarkGreen
+} catch {
+    Write-Host "  ERROR: opencode.json is not valid JSON!" -ForegroundColor Red
+    Write-Host "  $_" -ForegroundColor Red
+    Write-Host ""
+    Write-Host "  Launch was cancelled to prevent a crash." -ForegroundColor Yellow
+    Write-Host "  Fix the config or run launch-glitch-safe.bat to enter safe mode." -ForegroundColor Yellow
+    exit 1
+}
+
 # ── Start Handy (if not already running) ──
 $handyProcess = Get-Process -Name "handy" -ErrorAction SilentlyContinue
 if (-not $handyProcess) {

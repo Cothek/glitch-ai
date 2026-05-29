@@ -167,6 +167,21 @@ $freeConfig = @"
 }
 "@
 
+# ── Validate generated config ──
+Write-Host "  Validating generated config..." -ForegroundColor Cyan
+try {
+    $null = $freeConfig | ConvertFrom-Json
+    Write-Host "  Config is valid JSON" -ForegroundColor DarkGreen
+} catch {
+    Write-Host "  ERROR: Generated free mode config is not valid JSON!" -ForegroundColor Red
+    Write-Host "  $_" -ForegroundColor Red
+    if (Test-Path $BackupPath) {
+        Write-Host "  Restoring original config..." -ForegroundColor Yellow
+        Move-Item $BackupPath $ConfigPath -Force
+    }
+    exit 1
+}
+
 Write-Host "  Writing free mode config..." -ForegroundColor Cyan
 $freeConfig | Out-File -FilePath $ConfigPath -Encoding utf8 -Force
 
