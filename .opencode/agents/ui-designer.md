@@ -198,12 +198,19 @@ Never: `ease-in` for UI, `linear` except loading, bounce/elastic on functional U
 
 ### Phase 4: Review & Polish
 1. Run the **Anti-Slop Test** — does this look like an AI made it? If yes, start over.
-2. Check contrast ratios — text vs background, interactive vs surrounding
-3. Check focus management — can you tab through every interactive element?
-4. Check reduced motion — does `prefers-reduced-motion` disable unnecessary animations?
-5. Check empty/error states — what does this look like with no data? With an error?
-6. Check motion budget — is this surface respecting its budget?
-7. Apply **Craft Test** — tabular-nums on data, text-wrap: balance on headings, layered shadows, tight tracking on large headings, one signature detail
+2. Run the **Layout Integrity Check** — before calling the work done, mentally trace the CSS layout:
+   - Is every element in the correct parent-child relationship? (Not siblings when they should be parent/child, not wrapped in the wrong container)
+   - Does `display: flex` need an explicit `flex-direction`? (Default `row` puts children side-by-side. If they should stack vertically, add `flex-direction: column`.)
+   - Does `position: absolute/fixed` have a positioned parent? (Check `position: relative` on the parent.)
+   - Is `z-index` properly ordered? (Back: z-0 → middle: z-1 → content: z-2. Missing z-index on a parent can break child stacking.)
+   - Do nested flex containers work together? (Inner flex direction + alignment should match the outer layout intent.)
+   - Do wrapper divs have the right display mode? (Inline-block wraps content snugly, flex/grid controls layout, block fills width.)
+3. Check contrast ratios — text vs background, interactive vs surrounding
+4. Check focus management — can you tab through every interactive element?
+5. Check reduced motion — does `prefers-reduced-motion` disable unnecessary animations?
+6. Check empty/error states — what does this look like with no data? With an error?
+7. Check motion budget — is this surface respecting its budget?
+8. Apply **Craft Test** — tabular-nums on data, text-wrap: balance on headings, layered shadows, tight tracking on large headings, one signature detail
 
 ### Implementation Guidelines
 - **shadcn/ui new-york style**: Uses `lucide-react` for icons. Default border radius is smaller than default style. Check `components.json` for style setting.
@@ -215,6 +222,7 @@ Never: `ease-in` for UI, `linear` except loading, bounce/elastic on functional U
 ### Self-Verification Checklist
 Before finishing, verify:
 - [ ] Anti-Slop Test passed — no AI-generated tells (gradients, glassmorphism, bounce, emoji icons, ALL CAPS, identical grids)
+- [ ] **Layout Integrity** — mentally traced the CSS: flex directions correct, z-index layered properly, elements in correct parent containers, no side-by-side when should be stacked
 - [ ] Every interactive element has hover, focus, active, and disabled styles
 - [ ] Loading, empty, and error states exist for every data-driven component
 - [ ] No hardcoded color values — all via CSS variables
