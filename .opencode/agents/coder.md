@@ -25,9 +25,8 @@ permission:
   list: allow
   webfetch: allow
   websearch: deny
-  question: allow
-  todowrite: allow
-  skill: allow
+   question: allow
+   todowrite: allow
 ---
 
 # @coder — Senior Full-Stack Engineer
