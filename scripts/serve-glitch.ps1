@@ -72,18 +72,32 @@ if (Test-Path $BackupPath) {
 # ---- User Profile Detection ----
 $UserName = $env:GLITCH_USER
 $UserDir = ""
+$userFound = $false
 $userBase = "$RootDir\user"
 
-if (-not $UserName) {
+if (-not $userFound) {
   # Auto-detect: check flat layout first, then subdirectory layout
   if (Test-Path "$userBase\main-memory.md") {
-    $UserName = ""  # flat layout - no subdirectory name
+    $UserName = ""  # flat layout — no subdirectory name
     $UserDir = $userBase
-    Write-Host "  User profile: (flat - user/main-memory.md)" -ForegroundColor Cyan
+    $userFound = $true
+    Write-Host "  User profile: (flat — user/main-memory.md)" -ForegroundColor Cyan
   } elseif (Test-Path $userBase) {
     $profiles = Get-ChildItem -Directory $userBase | Where-Object {
       Test-Path "$($_.FullName)\main-memory.md"
     }
+    if ($profiles.Count -ge 1) {
+      $UserName = $profiles[0].Name
+      $UserDir = $profiles[0].FullName
+      $userFound = $true
+      Write-Host "  User profile: $UserName" -ForegroundColor Cyan
+    }
+  }
+}
+
+if ($UserName -and $UserName -ne "") {
+  $UserDir = "$RootDir\user\$UserName"
+}
     if ($profiles.Count -ge 1) {
       $UserName = $profiles[0].Name
       $UserDir = $profiles[0].FullName

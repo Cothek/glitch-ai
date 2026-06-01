@@ -5,7 +5,11 @@
     "glitch-memorycore/CLAUDE.md",
     "glitch-memorycore/master-memory.md",
     "glitch-memorycore/core/identity.md",
-    "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+    "glitch-memorycore/plugins/glitch-skills/skills-registry.md",
+    "user/main-memory.md",
+    "user/current-session.md",
+    "user/reminders.md",
+    "user/session-dashboard.md"
   ],
   "agent": {
     "delegator": {
@@ -83,3 +87,5 @@
     "tail_turns": 8
   }
 }
+
+
