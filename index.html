@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Glitch AI</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --bg-surface: #12121a;
+    --bg-code: #0d0d14;
+    --bg-elevated: #1a1a28;
+    --border: #1e1e30;
+    --text: #e4e4ef;
+    --text-muted: #8888a0;
+    --text-dim: #555570;
+    --accent: #a855f7;
+    --accent-soft: rgba(168,85,247,0.15);
+    --cyan: #06b6d4;
+    --cyan-soft: rgba(6,182,212,0.12);
+    --green: #22c55e;
+    --radius: 10px;
+    --radius-sm: 6px;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, -apple-system, sans-serif;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Header */
+  header {
+    border-bottom: 1px solid var(--border);
+    padding: 3rem 1.5rem 2rem;
+    text-align: center;
+    background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg) 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 50%, var(--accent-soft) 0%, transparent 50%),
+                radial-gradient(circle at 70% 50%, var(--cyan-soft) 0%, transparent 50%);
+    pointer-events: none;
+  }
+  header h1 {
+    font-size: 3rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, var(--accent), var(--cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    position: relative;
+  }
+  header p {
+    margin-top: 0.75rem;
+    color: var(--text-muted);
+    font-size: 1.1rem;
+    max-width: 480px;
+    margin-left: auto;
+    margin-right: auto;
+    position: relative;
+  }
+
+  /* Terminal badge */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin-bottom: 1rem;
+    position: relative;
+  }
+  .badge-terminal {
+    background: var(--bg-elevated);
+    color: var(--cyan);
+    border: 1px solid rgba(6,182,212,0.2);
+  }
+  .badge-terminal::before {
+    content: '';
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    display: inline-block;
+  }
+
+  /* Layout */
+  .container {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 1.5rem;
+  }
+
+  /* TOC */
+  .toc {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.5rem 2rem;
+    margin: 2rem 0;
+  }
+  .toc h2 {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--text-dim);
+    margin-bottom: 0.75rem;
+  }
+  .toc nav { display: flex; flex-wrap: wrap; gap: 0.25rem 1.5rem; }
+  .toc a {
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.875rem;
+    padding: 0.2rem 0;
+    transition: color 0.15s;
+  }
+  .toc a:hover { color: var(--accent); }
+
+  /* Sections */
+  section { margin: 3.5rem 0; }
+  h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  h2 .icon { width: 24px; height: 24px; flex-shrink: 0; }
+  h3 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    margin: 1.5rem 0 0.75rem;
+    color: var(--text);
+  }
+
+  /* Divider */
+  .divider {
+    border: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--border), transparent);
+    margin: 2rem 0;
+  }
+
+  /* Code blocks */
+  pre {
+    background: var(--bg-code);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.25rem;
+    overflow-x: auto;
+    margin: 0.75rem 0;
+    position: relative;
+  }
+  pre code {
+    font-family: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.8125rem;
+    line-height: 1.65;
+    color: #c8d6e5;
+  }
+  .code-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-bottom: 0;
+    border-radius: var(--radius) var(--radius) 0 0;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    font-family: 'Cascadia Code', 'JetBrains Mono', monospace;
+  }
+  .code-header + pre {
+    border-top-left-radius: 0;
+    border-top-right-radius: 0;
+    margin-top: 0;
+  }
+  .code-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+  .code-dot.red { background: #ff5f56; }
+  .code-dot.yellow { background: #ffbd2e; }
+  .code-dot.green { background: #27c93f; }
+
+  /* Inline code */
+  p code, li code {
+    background: var(--bg-elevated);
+    color: var(--cyan);
+    padding: 0.15rem 0.4rem;
+    border-radius: 4px;
+    font-family: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', monospace;
+    font-size: 0.8125rem;
+  }
+
+  /* Tables */
+  .table-wrap {
+    overflow-x: auto;
+    margin: 1rem 0;
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.875rem;
+  }
+  th {
+    text-align: left;
+    padding: 0.625rem 0.75rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    border-bottom: 1px solid var(--border);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  td {
+    padding: 0.625rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+  }
+  tr:last-child td { border-bottom: 0; }
+
+  /* File tree */
+  .tree { font-family: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', monospace; font-size: 0.8125rem; line-height: 1.8; }
+  .tree .dir { color: var(--cyan); }
+  .tree .file { color: var(--text-muted); }
+  .tree .comment { color: var(--text-dim); font-style: italic; }
+  .tree .highlight { color: var(--accent); }
+  .tree-indent { padding-left: 1.5rem; }
+
+  /* Details / Collapsible */
+  details {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    margin: 1rem 0;
+    overflow: hidden;
+  }
+  details summary {
+    padding: 0.875rem 1.125rem;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 0.9375rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    user-select: none;
+  }
+  details summary::-webkit-details-marker { display: none; }
+  details summary::before {
+    content: '+';
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 1.1rem;
+    transition: transform 0.2s;
+    display: inline-block;
+    width: 1rem;
+  }
+  details[open] summary::before {
+    content: '−';
+    transform: rotate(0deg);
+  }
+  details .content {
+    padding: 0 1.125rem 1.125rem;
+    border-top: 1px solid var(--border);
+    padding-top: 1rem;
+  }
+
+  /* Cards */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+  }
+  .card {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: var(--accent); }
+  .card .title {
+    font-weight: 600;
+    margin-bottom: 0.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .card .desc {
+    font-size: 0.875rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+  .card .badge-layer {
+    display: inline-block;
+    font-size: 0.625rem;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 0.15rem 0.5rem;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+  }
+  .badge-public { background: var(--accent-soft); color: var(--accent); border: 1px solid rgba(168,85,247,0.2); }
+  .badge-private { background: var(--cyan-soft); color: var(--cyan); border: 1px solid rgba(6,182,212,0.2); }
+
+  /* Lists */
+  ul, ol { padding-left: 1.25rem; margin: 0.5rem 0; }
+  li { margin: 0.25rem 0; color: var(--text-muted); font-size: 0.9375rem; }
+  li strong { color: var(--text); }
+
+  /* Step numbers */
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps li {
+    counter-increment: step;
+    padding: 0.75rem 0 0.75rem 2.5rem;
+    position: relative;
+    color: var(--text);
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0.75rem;
+    width: 1.5rem;
+    height: 1.5rem;
+    background: var(--accent-soft);
+    color: var(--accent);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 700;
+  }
+  .steps li code { font-size: 0.8rem; }
+
+  /* Note box */
+  .note {
+    background: var(--bg-elevated);
+    border-left: 3px solid var(--accent);
+    padding: 1rem 1.25rem;
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+    margin: 1rem 0;
+    font-size: 0.875rem;
+    color: var(--text-muted);
+  }
+  .note strong { color: var(--text); }
+  .note.cyan { border-left-color: var(--cyan); }
+
+  /* Footer */
+  footer {
+    border-top: 1px solid var(--border);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 0.8125rem;
+  }
+
+  /* Responsive */
+  @media (max-width: 640px) {
+    header h1 { font-size: 2rem; }
+    .card-grid { grid-template-columns: 1fr; }
+    .container { padding: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="badge badge-terminal">Glitch AI Terminal</div>
+  <h1>Glitch AI</h1>
+  <p>Portable AI companion environment — one clone, one setup, ready on any Windows PC.</p>
+</header>
+
+<div class="container">
+
+<!-- TOC -->
+<nav class="toc">
+  <h2>Contents</h2>
+  <nav>
+  <a href="#quickstart">Quick Start</a>
+  <a href="#how-it-works">How It Works</a>
+  <a href="#structure">Repository Structure</a>
+  <a href="#remote">Remote Access</a>
+  <a href="#modifying">Modifying Config</a>
+  <a href="#requirements">Requirements</a>
+  </nav>
+</nav>
+
+<!-- Quick Start -->
+<section id="quickstart">
+<h2>
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
+  </svg>
+  Quick Start
+</h2>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="badge-layer badge-public">New user</span>
+    <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> For New Users</div>
+    <div class="desc">
+      Clone, run setup, and launch. No configuration needed.
+    </div>
+  </div>
+  <div class="card">
+    <span class="badge-layer badge-private">Returning</span>
+    <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> For Troy</div>
+    <div class="desc">
+      Clone engine + private user repo for full memory restoration.
+    </div>
+  </div>
+</div>
+
+<h3>New Users</h3>
+<ol class="steps">
+  <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
+  <li><code>cd glitch-ai</code></li>
+  <li><code>.\setup.bat</code> — initializes engine + launches profile wizard</li>
+  <li><code>.\launch-glitch.bat</code> — start using Glitch</li>
+</ol>
+<p style="color:var(--text-muted);font-size:0.875rem">Your data stays local under <code>user/</code> — nothing shared.</p>
+
+<hr class="divider">
+
+<h3>Troy (Returning User)</h3>
+<ol class="steps">
+  <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
+  <li><code>cd glitch-ai</code></li>
+  <li><code>git submodule update --init --recursive</code></li>
+  <li><code>git clone https://cothek@github.com/Cothek/glitch-user-troy.git user/</code></li>
+  <li><code>.\launch-glitch.bat</code></li>
+</ol>
+<p style="color:var(--text-muted);font-size:0.875rem">The <code>cothek@</code> prefix tells Windows Credential Manager to auto-select your stored PAT — no login pop-up.</p>
+
+<div class="note cyan">
+  <strong>GitHub login pop-up?</strong> If you get one after <code>git submodule sync</code>, the submodule remote got reset. Fix it:<br>
+  <pre style="margin-top:0.5rem"><code>cd glitch-memorycore
+git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</code></pre>
+</div>
+
+<h3>First Run Only</h3>
+<p>Run <code>.\scripts\bootstrap.ps1</code> to download OpenCode and optional tools (Handy voice input, Cloudflare Tunnel). Subsequent runs skip this.</p>
+</section>
+
+<hr class="divider">
+
+<!-- How It Works -->
+<section id="how-it-works">
+<h2>
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/>
+  </svg>
+  How It Works
+</h2>
+
+<p>Glitch is split into three independent layers:</p>
+
+<div class="card-grid">
+  <div class="card">
+    <span class="badge-layer badge-public">Public</span>
+    <div class="title">Engine</div>
+    <div class="desc"><code>Cothek/glitch-engine</code> — Core identity, 23+ skills, plugins, library. No user data.</div>
+  </div>
+  <div class="card">
+    <span class="badge-layer badge-private">Private</span>
+    <div class="title">User Data</div>
+    <div class="desc"><code>Cothek/glitch-user-troy</code> — Personal memory, diary, decisions, projects. Troy only.</div>
+  </div>
+  <div class="card">
+    <span class="badge-layer badge-public">Public</span>
+    <div class="title">Launcher</div>
+    <div class="desc"><code>Cothek/glitch-ai</code> — OpenCode binary, launch scripts, config, bootstrap.</div>
+  </div>
+</div>
+
+<h3>Launch Flow</h3>
+<ol class="steps">
+  <li><code>launch-glitch.bat</code> calls <code>scripts/launch.ps1</code></li>
+  <li>Detects your user profile (<code>user/main-memory.md</code> or <code>user/{name}/main-memory.md</code>)</li>
+  <li>Generates a runtime <code>opencode.json</code> with engine + user instruction paths (string-level regex — never re-serializes JSON, preserves escaping)</li>
+  <li>Starts OpenCode with the generated config</li>
+  <li>On exit, restores the engine-only base config</li>
+</ol>
+</section>
+
+<hr class="divider">
+
+<!-- Repository Structure -->
+<section id="structure">
+<h2>
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+  </svg>
+  Repository Structure
+</h2>
+
+<details open>
+<summary>glitch-ai/ <span style="color:var(--text-dim);font-weight:400;font-size:0.8rem">— This repo (public)</span></summary>
+<div class="content">
+<div class="tree">
+  <span class="dir">├── glitch-memorycore/</span> <span class="comment">← Submodule: public engine</span>
+  <div class="tree-indent">
+    <span class="dir">├── core/</span> <span class="comment">Generic Glitch identity (no user data)</span><br>
+    <span class="dir">├── plugins/glitch-skills/</span> <span class="comment">23 skills + registry</span><br>
+    <span class="dir">├── library/</span> <span class="comment">Knowledge library</span><br>
+    <span class="file">└── users/_template/</span> <span class="comment">New-user profile template</span>
+  </div>
+  <span class="dir">├── user/</span> <span class="comment">← Personal data (gitignored / private submodule)</span>
+  <div class="tree-indent">
+    <span class="file">├── main-memory.md</span> <span class="comment">Your profile, preferences, history</span><br>
+    <span class="file">├── current-session.md</span> <span class="comment">Session context</span><br>
+    <span class="file">├── daily-diary/</span> <span class="comment">Session diary</span><br>
+    <span class="file">└── projects/</span> <span class="comment">Active projects</span>
+  </div>
+  <span class="dir">├── scripts/</span> <span class="comment">Internal PowerShell scripts</span><br>
+  <span class="dir">├── config/</span> <span class="comment">Configuration files</span><br>
+  <span class="dir">├── data/</span> <span class="comment">Auto-generated runtime data (gitignored)</span><br>
+  <span class="file">├── setup.bat</span> <span class="comment">First-time setup (double-click)</span><br>
+  <span class="file">├── launch-glitch.bat</span> <span class="comment">Local terminal mode</span><br>
+  <span class="file">├── launch-glitch-free.bat</span> <span class="comment">Free model emergency mode</span><br>
+  <span class="file">├── launch-glitch-safe.bat</span> <span class="comment">Safe mode for troubleshooting</span><br>
+  <span class="file highlight">├── serve-glitch.bat</span> <span class="comment">Web server mode</span><br>
+  <span class="file">├── opencode.json</span> <span class="comment">Engine-only base config</span><br>
+  <span class="file">├── .env.example</span> <span class="comment">Domain/port configuration template</span><br>
+  <span class="file">├── plugins/</span> <span class="comment">Auth proxy, helpers</span><br>
+  <span class="file">├── opencode/</span> <span class="comment">OpenCode binary</span><br>
+  <span class="file">├── handy-voice/</span> <span class="comment">Offline voice-to-text</span><br>
+  <span class="file">├── cloudflared.exe</span> <span class="comment">Cloudflare Tunnel binary</span><br>
+  <span class="file">└── tools/</span> <span class="comment">Debug utilities</span>
+</div>
+</div>
+</details>
+
+<h3>Key Items</h3>
+<div class="table-wrap">
+<table>
+  <thead><tr><th>Item</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>glitch-memorycore/</code></td><td>Engine submodule — identity, rules, skills, plugins</td></tr>
+    <tr><td><code>user/</code></td><td>Your personal memory, diary, projects (gitignored)</td></tr>
+    <tr><td><code>scripts/</code></td><td>Launch, setup, validation, and utility scripts</td></tr>
+    <tr><td><code>setup.bat</code></td><td>First-time setup — inits engine + profile wizard</td></tr>
+    <tr><td><code>launch-glitch.bat</code></td><td>Local terminal mode</td></tr>
+    <tr><td><code>serve-glitch.bat</code></td><td>Web server mode with Cloudflare Tunnel</td></tr>
+    <tr><td><code>opencode.json</code></td><td>Engine-only base config (user data added at runtime)</td></tr>
+    <tr><td><code>.env.example</code></td><td>Domain/port configuration template</td></tr>
+  </tbody>
+</table>
+</div>
+</section>
+
+<hr class="divider">
+
+<!-- Remote Access -->
+<section id="remote">
+<h2>
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+  </svg>
+  Access from Anywhere
+</h2>
+
+<p>Start OpenCode as a web server proxied through Cloudflare Tunnel. No open ports, no VPN required.</p>
+
+<div class="code-header">
+  <span class="code-dot red"></span>
+  <span class="code-dot yellow"></span>
+  <span class="code-dot green"></span>
+  <span style="margin-left:0.5rem">Terminal</span>
+</div>
+<pre><code>.\scripts\setup-tunnel.ps1    # One-time: authenticate + create tunnel
+.\serve-glitch.bat            # Each session: starts server + tunnel</code></pre>
+
+<p>Login with username <code>opencode</code> and the auto-generated password shown in the terminal. Configure your domain via <code>.env</code>:</p>
+
+<pre><code># Copy .env.example to .env and set:
+GLITCH_DOMAIN=glitch.yourdomain.com</code></pre>
+</section>
+
+<hr class="divider">
+
+<!-- Modifying Config -->
+<section id="modifying">
+<h2>
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/>
+  </svg>
+  Modifying Config / Launch Scripts
+</h2>
+
+<p>Changes to <code>opencode.json</code>, <code>launch.ps1</code>, <code>serve-glitch.ps1</code>, or any <code>.bat</code> launcher require:</p>
+
+<ol class="steps">
+  <li>A review pass (@reviewer) before applying</li>
+  <li><code>validate-config.ps1</code> passing after the change</li>
+  <li>A restart of OpenCode to pick up the new config</li>
+</ol>
+
+<div class="note">
+  <strong>R14 — Immutable Rule.</strong> This is enforced by <code>glitch-memorycore/prompt-rules.md</code>. Every config/launch change must pass review before it lands.
+</div>
+
+<p>To validate the config at any time:</p>
+<pre><code>.\scripts\validate-config.ps1</code></pre>
+</section>
+
+<hr class="divider">
+
+<!-- Requirements -->
+<section id="requirements">
+<h2>
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+  </svg>
+  Requirements
+</h2>
+
+<ul>
+  <li><strong>Windows 10 or 11</strong></li>
+  <li><strong>API key</strong> for an LLM provider (configured via OpenCode's <code>/connect</code> or env vars)</li>
+  <li><strong>GitHub account</strong> (for cloning)</li>
+  <li><strong>NVIDIA GPU</strong> with CUDA (recommended for Handy voice-to-text speed)</li>
+  <li><strong>Cloudflare account</strong> (free) — for remote access via tunnel</li>
+</ul>
+</section>
+
+</div>
+
+<footer>
+  Glitch AI — built with <a href="https://opencode.ai" style="color:var(--accent);text-decoration:none">OpenCode</a>
+</footer>
+
+</body>
+</html>
