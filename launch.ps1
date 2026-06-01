@@ -1,6 +1,8 @@
 $RootDir = Split-Path -Parent $PSCommandPath
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $HandyBin = "$RootDir\handy-voice\Handy\handy.exe"
+$ConfigPath = "$RootDir\opencode.json"
+$BackupPath = "$RootDir\opencode.json.bak"
 
 $ErrorActionPreference = "Continue"
 
@@ -21,24 +23,23 @@ if (-not (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md")) {
   try {
     git submodule update --init --recursive 2>&1 | Out-Null
     if (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md") {
-      Write-Host "  glitch-memorycore ready!" -ForegroundColor Green
+      Write-Host "  Engine ready!" -ForegroundColor Green
     } else {
-      Write-Host "  WARNING: Could not load glitch-memorycore." -ForegroundColor Yellow
+      Write-Host "  WARNING: Could not load engine." -ForegroundColor Yellow
       Write-Host "  Run: git submodule update --init --recursive" -ForegroundColor Yellow
     }
   } catch {
     Write-Host "  WARNING: Could not initialize submodules. Error: $_" -ForegroundColor Yellow
-    Write-Host "  OpenCode may not start correctly without memory files." -ForegroundColor Yellow
+    Write-Host "  OpenCode may not start correctly without engine files." -ForegroundColor Yellow
   }
 } else {
-  Write-Host "  glitch-memorycore found" -ForegroundColor DarkGreen
+  Write-Host "  Engine found" -ForegroundColor DarkGreen
 }
 
 # ---- Detect leftover safe mode backup ----
-$BackupPath = "$RootDir\opencode.json.bak"
 if (Test-Path $BackupPath) {
   try {
-    $currentConfig = Get-Content "$RootDir\opencode.json" -Raw | ConvertFrom-Json
+    $currentConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
     $agentCount = @($currentConfig.agent.PSObject.Properties).Count
     $isSafeModeConfig = ($agentCount -le 1)
   } catch {
@@ -47,12 +48,121 @@ if (Test-Path $BackupPath) {
 
   if ($isSafeModeConfig) {
     Write-Host "  Detected leftover safe mode config -- restoring opencode.json.bak..." -ForegroundColor Yellow
-    Copy-Item $BackupPath "$RootDir\opencode.json" -Force
+    Copy-Item $BackupPath $ConfigPath -Force
     Write-Host "  Backup restored." -ForegroundColor Green
   } else {
     Write-Host "  Cleaning up leftover backup from previous safe mode." -ForegroundColor DarkYellow
   }
   Remove-Item $BackupPath -Force
+}
+
+# ---- User Profile Detection ----
+$UserName = $env:GLITCH_USER
+$UserDir = ""
+
+if ($UserName) {
+  # Explicit user via env var
+  $UserDir = "$RootDir\user\$UserName"
+  if (-not (Test-Path "$UserDir\main-memory.md")) {
+    Write-Host "  WARNING: User '$UserName' specified but no profile found at user\$UserName" -ForegroundColor Yellow
+    Write-Host "  Run: .\setup.ps1 --user $UserName" -ForegroundColor Yellow
+    $UserName = $null
+  }
+}
+
+if (-not $UserName) {
+  # Auto-detect: scan user/ directory for profiles
+  $userBase = "$RootDir\user"
+  if (Test-Path $userBase) {
+    $profiles = Get-ChildItem -Directory $userBase | Where-Object {
+      Test-Path "$($_.FullName)\main-memory.md"
+    }
+    if ($profiles.Count -eq 1) {
+      $UserName = $profiles[0].Name
+      $UserDir = $profiles[0].FullName
+      Write-Host "  User profile: $UserName" -ForegroundColor Cyan
+    } elseif ($profiles.Count -gt 1) {
+      Write-Host "  Multiple user profiles found:" -ForegroundColor Yellow
+      $i = 1
+      $profileNames = @()
+      foreach ($p in $profiles) {
+        Write-Host "    [$i] $($p.Name)" -ForegroundColor Cyan
+        $profileNames += $p.Name
+        $i++
+      }
+      Write-Host "  Set `$env:GLITCH_USER=<name> to auto-select." -ForegroundColor Gray
+      # Default to first profile
+      $UserName = $profileNames[0]
+      $UserDir = "$RootDir\user\$UserName"
+      Write-Host "  Using: $UserName" -ForegroundColor Cyan
+    }
+  }
+}
+
+if (-not $UserName) {
+  Write-Host "  No user profile found." -ForegroundColor Yellow
+  Write-Host "  Run .\setup.ps1 to create one, or set `$env:GLITCH_USER=<name>" -ForegroundColor Yellow
+  Write-Host "  Starting with engine defaults (no user profile loaded)." -ForegroundColor DarkYellow
+}
+
+# ---- Generate runtime config with user profile ----
+Write-Host "  Generating runtime config..." -ForegroundColor Cyan
+
+# Read base config
+$baseConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+
+# Add user profile instructions
+$engineInstructions = @(
+  "glitch-memorycore/prompt-rules.md",
+  "glitch-memorycore/CLAUDE.md",
+  "glitch-memorycore/master-memory.md",
+  "glitch-memorycore/core/identity.md",
+  "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+)
+
+$userInstructions = @()
+if ($UserName) {
+  $userInstructions = @(
+    "user/$UserName/main-memory.md",
+    "user/$UserName/current-session.md",
+    "user/$UserName/reminders.md",
+    "user/$UserName/session-dashboard.md"
+  )
+}
+
+$allInstructions = $engineInstructions + $userInstructions
+$baseConfig.instructions = $allInstructions
+
+# Back up current config
+Copy-Item $ConfigPath $BackupPath -Force
+
+try {
+  $runtimeJson = $baseConfig | ConvertTo-Json -Depth 10
+  $null = $runtimeJson | ConvertFrom-Json  # validate
+  $runtimeJson | Out-File -FilePath $ConfigPath -Encoding utf8 -Force
+  Write-Host "  Runtime config generated ($($allInstructions.Count) instruction files)" -ForegroundColor DarkGreen
+} catch {
+  Write-Host "  ERROR: Generated config is invalid JSON!" -ForegroundColor Red
+  Write-Host "  $_" -ForegroundColor Red
+  if (Test-Path $BackupPath) {
+    Move-Item $BackupPath $ConfigPath -Force
+  }
+  exit 1
+}
+
+# ---- Validate opencode.json ----
+Write-Host "  Validating config..." -ForegroundColor Cyan
+try {
+    $configContent = Get-Content $ConfigPath -Raw
+    $null = $configContent | ConvertFrom-Json
+    Write-Host "  Config is valid JSON" -ForegroundColor DarkGreen
+} catch {
+    Write-Host "  ERROR: Config is not valid JSON!" -ForegroundColor Red
+    Write-Host "  $_" -ForegroundColor Red
+    if (Test-Path $BackupPath) {
+      Move-Item $BackupPath $ConfigPath -Force
+    }
+    exit 1
 }
 
 # ---- Ensure Handy portable flag ----
@@ -65,21 +175,6 @@ if (Test-Path $HandyBin) {
 
 # ---- Normalize backslash paths in session DB ----
 try { & "$RootDir\fix-paths.ps1" } catch { }
-
-# ---- Validate opencode.json before launch ----
-Write-Host "  Validating opencode.json..." -ForegroundColor Cyan
-try {
-    $configContent = Get-Content "$RootDir\opencode.json" -Raw
-    $null = $configContent | ConvertFrom-Json
-    Write-Host "  Config is valid JSON" -ForegroundColor DarkGreen
-} catch {
-    Write-Host "  ERROR: opencode.json is not valid JSON!" -ForegroundColor Red
-    Write-Host "  $_" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "  Launch was cancelled to prevent a crash." -ForegroundColor Yellow
-    Write-Host "  Fix the config or run launch-glitch-safe.bat to enter safe mode." -ForegroundColor Yellow
-    exit 1
-}
 
 # ---- Check for dependency updates ----
 Write-Host "  Checking dependency updates..." -ForegroundColor Cyan
@@ -141,8 +236,18 @@ Write-Host ""
 Push-Location $RootDir
 try {
   & $OpenCodeBin
+} catch {
+  Write-Host "  OpenCode exited with error: $_" -ForegroundColor Red
 } finally {
   Pop-Location
+}
+
+# ---- Restore engine-only config ----
+if (Test-Path $BackupPath) {
+  Write-Host ""
+  Write-Host "  Restoring base config..." -ForegroundColor Yellow
+  Move-Item $BackupPath $ConfigPath -Force
+  Write-Host "  Base config restored." -ForegroundColor Green
 }
 
 # ---- Done ----

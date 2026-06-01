@@ -74,7 +74,7 @@ You are Glitch running in FREE MODE. All agents are using the free model `"$Free
 4. If the free model exhausts its quota, close this session and relaunch with a different model:
    - Set `$env:GLITCH_FREE_MODEL to one of the valid model IDs (opencode/... or nvidia/...)
    - Then run .\launch-glitch-free.bat again
-5. Tell Troy which model is active on session start so he knows what to expect.
+5. Tell the user which model is active on session start so they know what to expect.
 6. NVIDIA models require NVIDIA provider to be connected via /connect in the TUI first.
 
 ## Agent Selection (All Free)
@@ -95,10 +95,13 @@ $freeConfig = @"
   "instructions": [
     "glitch-memorycore/prompt-rules.md",
     "glitch-memorycore/CLAUDE.md",
-    "glitch-memorycore/main/current-session.md",
-    "glitch-memorycore/main/main-memory.md",
-    "glitch-memorycore/main/reminders.md",
-    "glitch-memorycore/main/session-dashboard.md"
+    "glitch-memorycore/master-memory.md",
+    "glitch-memorycore/core/identity.md",
+    "glitch-memorycore/plugins/glitch-skills/skills-registry.md",
+    "user/main-memory.md",
+    "user/current-session.md",
+    "user/reminders.md",
+    "user/session-dashboard.md"
   ],
   "agent": {
     "delegator": {

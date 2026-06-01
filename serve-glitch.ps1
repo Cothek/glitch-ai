@@ -2,23 +2,39 @@ $ErrorActionPreference = "Stop"
 $RootDir = Split-Path -Parent $PSCommandPath
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $Cloudflared = "$RootDir\cloudflared.exe"
+$ConfigPath = "$RootDir\opencode.json"
+$BackupPath = "$RootDir\opencode.json.bak"
 
 Write-Host ""
 Write-Host "Glitch AI - Server Mode" -ForegroundColor Magenta
 Write-Host ""
 
 $TargetPort = 4102
+$AuthProxyPort = 4100
 
-#  Check prerequisites 
+# ---- Load .env if present ----
+$envFile = "$RootDir\.env"
+if (Test-Path $envFile) {
+  Get-Content $envFile | ForEach-Object {
+    if ($_ -match '^\s*([^#=]+)=(.*)\s*$') {
+      $key = $matches[1].Trim()
+      $val = $matches[2].Trim().Trim('"', "'")
+      Set-Item -Path "env:$key" -Value $val
+    }
+  }
+  Write-Host "  Loaded .env config" -ForegroundColor Green
+}
+
+# Check prerequisites
 if (-not (Test-Path $OpenCodeBin)) {
   Write-Host "OpenCode not found. Run bootstrap.ps1 first." -ForegroundColor Red
   exit 1
 }
 
-#  Normalize backslash paths in session DB 
+# Normalize backslash paths in session DB
 & "$RootDir\fix-paths.ps1"
 
-#  Check port availability (zombie socket prevention) 
+# Check port availability (zombie socket prevention)
 try {
   $tcp = New-Object System.Net.Sockets.TcpClient
   $r = $tcp.BeginConnect('127.0.0.1', $TargetPort, $null, $null)
@@ -33,20 +49,18 @@ try {
 } catch {}
 Write-Host "  Port $TargetPort is free" -ForegroundColor Cyan
 
-#  Detect leftover safe mode backup 
-$BackupPath = "$RootDir\opencode.json.bak"
+# Detect leftover safe mode backup
 if (Test-Path $BackupPath) {
   try {
-    $currentConfig = Get-Content "$RootDir\opencode.json" -Raw | ConvertFrom-Json
+    $currentConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
     $agentCount = @($currentConfig.agent.PSObject.Properties).Count
     $isSafeModeConfig = ($agentCount -le 1)
   } catch {
     $isSafeModeConfig = $false
   }
-
   if ($isSafeModeConfig) {
-    Write-Host "  Detected leftover safe mode config  restoring opencode.json.bak..." -ForegroundColor Yellow
-    Copy-Item $BackupPath "$RootDir\opencode.json" -Force
+    Write-Host "  Detected leftover safe mode config -- restoring backup..." -ForegroundColor Yellow
+    Copy-Item $BackupPath $ConfigPath -Force
     Write-Host "  Backup restored." -ForegroundColor Green
   } else {
     Write-Host "  Cleaning up leftover backup from previous safe mode." -ForegroundColor DarkYellow
@@ -54,22 +68,81 @@ if (Test-Path $BackupPath) {
   Remove-Item $BackupPath -Force
 }
 
-#  Validate opencode.json before launch 
-Write-Host "  Validating opencode.json..." -ForegroundColor Cyan
+# ---- User Profile Detection ----
+$UserName = $env:GLITCH_USER
+$UserDir = ""
+
+if (-not $UserName) {
+  $userBase = "$RootDir\user"
+  if (Test-Path $userBase) {
+    $profiles = Get-ChildItem -Directory $userBase | Where-Object {
+      Test-Path "$($_.FullName)\main-memory.md"
+    }
+    if ($profiles.Count -ge 1) {
+      $UserName = $profiles[0].Name
+      $UserDir = $profiles[0].FullName
+      Write-Host "  User profile: $UserName" -ForegroundColor Cyan
+    }
+  }
+}
+
+if ($UserName) {
+  $UserDir = "$RootDir\user\$UserName"
+}
+
+# ---- Generate runtime config with user profile ----
+Write-Host "  Generating runtime config..." -ForegroundColor Cyan
+
+$baseConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
+
+$engineInstructions = @(
+  "glitch-memorycore/prompt-rules.md",
+  "glitch-memorycore/CLAUDE.md",
+  "glitch-memorycore/master-memory.md",
+  "glitch-memorycore/core/identity.md",
+  "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+)
+
+$userInstructions = @()
+if ($UserName) {
+  $userInstructions = @(
+    "user/$UserName/main-memory.md",
+    "user/$UserName/current-session.md",
+    "user/$UserName/reminders.md",
+    "user/$UserName/session-dashboard.md"
+  )
+}
+
+$allInstructions = $engineInstructions + $userInstructions
+$baseConfig.instructions = $allInstructions
+
+Copy-Item $ConfigPath $BackupPath -Force
+
 try {
-    $configContent = Get-Content "$RootDir\opencode.json" -Raw
-    $null = $configContent | ConvertFrom-Json
+  $runtimeJson = $baseConfig | ConvertTo-Json -Depth 10
+  $null = $runtimeJson | ConvertFrom-Json
+  $runtimeJson | Out-File -FilePath $ConfigPath -Encoding utf8 -Force
+  Write-Host "  Runtime config generated" -ForegroundColor DarkGreen
+} catch {
+  Write-Host "  ERROR: Generated config is invalid JSON!" -ForegroundColor Red
+  if (Test-Path $BackupPath) {
+    Move-Item $BackupPath $ConfigPath -Force
+  }
+  exit 1
+}
+
+# ---- Validate config ----
+Write-Host "  Validating config..." -ForegroundColor Cyan
+try {
+    $null = Get-Content $ConfigPath -Raw | ConvertFrom-Json
     Write-Host "  Config is valid JSON" -ForegroundColor DarkGreen
 } catch {
     Write-Host "  ERROR: opencode.json is not valid JSON!" -ForegroundColor Red
     Write-Host "  $_" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "  Server launch was cancelled to prevent a crash." -ForegroundColor Yellow
-    Write-Host "  Fix the config or run launch-glitch-safe.bat to enter safe mode." -ForegroundColor Yellow
     exit 1
 }
 
-#  Check for dependency updates 
+# ---- Check for dependency updates ----
 Write-Host "  Checking dependency updates..." -ForegroundColor Cyan
 try {
   $statusFile = "$RootDir\update-status.json"
@@ -86,7 +159,7 @@ try {
   Write-Host "  Update check skipped (non-critical): $_" -ForegroundColor DarkYellow
 }
 
-#  Check for new models 
+# ---- Check for new models ----
 try {
   $modelStatusFile = "$RootDir\model-update-status.json"
   & "$RootDir\check-models.ps1" -CheckOnly *>$null
@@ -108,13 +181,18 @@ try {
   Write-Host "  Model check skipped (non-critical): $_" -ForegroundColor DarkYellow
 }
 
-#  Cloudflare Tunnel status 
+# ---- Cloudflare Tunnel status ----
 $cloudflareOk = $false
+$cloudflareDomain = $env:GLITCH_DOMAIN
 if (Test-Path $Cloudflared) {
   $tunnelConfig = "$RootDir\cloudflared-config.yml"
   if (Test-Path $tunnelConfig) {
     $cloudflareOk = $true
-    Write-Host "  Cloudflare Tunnel: configured (glitch.cothekdesigns.com)" -ForegroundColor Green
+    if ($cloudflareDomain) {
+      Write-Host "  Cloudflare Tunnel: $cloudflareDomain" -ForegroundColor Green
+    } else {
+      Write-Host "  Cloudflare Tunnel: configured" -ForegroundColor Green
+    }
   } else {
     Write-Host "  Cloudflare Tunnel: not configured. Run setup-tunnel.ps1 first." -ForegroundColor Yellow
   }
@@ -122,15 +200,17 @@ if (Test-Path $Cloudflared) {
   Write-Host "  Cloudflare Tunnel: cloudflared.exe not found" -ForegroundColor Yellow
 }
 
-#  Start Cloudflare Tunnel 
+# ---- Start Cloudflare Tunnel ----
 if ($cloudflareOk) {
   Write-Host "  Starting Cloudflare Tunnel..." -ForegroundColor Cyan
   $cloudflaredProcess = Start-Process -NoNewWindow -FilePath $Cloudflared -ArgumentList "tunnel", "--config", "`"$RootDir\cloudflared-config.yml`"", "run" -PassThru
   Start-Sleep -Seconds 2
-  Write-Host "  Tunnel running: https://glitch.cothekdesigns.com" -ForegroundColor Green
+  if ($cloudflareDomain) {
+    Write-Host "  Tunnel running: https://$cloudflareDomain" -ForegroundColor Green
+  }
 }
 
-#  Handy 
+# ---- Handy ----
 $HandyBin = "$RootDir\handy-voice\Handy\handy.exe"
 $handyProcess = Get-Process -Name "handy" -ErrorAction SilentlyContinue
 if (-not $handyProcess -and (Test-Path $HandyBin)) {
@@ -141,12 +221,12 @@ if (-not $handyProcess -and (Test-Path $HandyBin)) {
   Write-Host "  Handy already running" -ForegroundColor DarkGreen
 }
 
-#  Auth Proxy (adds Basic Auth for transparent mobile auth) 
-Write-Host "  Starting auth proxy (port 4100  $TargetPort)..." -ForegroundColor Cyan
-$proxyProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\plugins\auth-proxy.mjs`"", "4100", "http://localhost:$TargetPort" -PassThru
+# ---- Auth Proxy (adds Basic Auth for transparent mobile auth) ----
+Write-Host "  Starting auth proxy (port $AuthProxyPort -> $TargetPort)..." -ForegroundColor Cyan
+$proxyProcess = Start-Process -NoNewWindow -FilePath "node" -ArgumentList "`"$RootDir\plugins\auth-proxy.mjs`"", "$AuthProxyPort", "http://localhost:$TargetPort" -PassThru
 Start-Sleep -Seconds 1
 
-#  Password (ACL-locked file, current user only) 
+# ---- Password (ACL-locked file, current user only) ----
 $pwFile = "$RootDir\.server-password"
 $pw = $env:OPENCODE_SERVER_PASSWORD
 if (-not $pw) {
@@ -166,14 +246,20 @@ Write-Host "  Username: opencode" -ForegroundColor Yellow
 $authBytes = [System.Text.Encoding]::UTF8.GetBytes("opencode:$pw")
 $authToken = [Convert]::ToBase64String($authBytes)
 
-# Project-pinned URL  actual filesystem path (SPA decodes base64url slug and queries with real path)
-$projectDir = "E:/Glitch AI/glitch-ai"
+# ---- Project-pinned URL (SPA decodes base64url slug) ----
+$projectDir = $env:GLITCH_PROJECT_DIR
+if (-not $projectDir) {
+  $projectDir = "$RootDir"
+}
 $dirBytes = [Text.Encoding]::UTF8.GetBytes($projectDir)
 $dirSlug = [Convert]::ToBase64String($dirBytes).Replace('+', '-').Replace('/', '_').TrimEnd('=')
-Write-Host "  Web access URL: https://glitch.cothekdesigns.com/$dirSlug/?auth_token=$authToken" -ForegroundColor Green
+if ($cloudflareDomain) {
+  Write-Host "  Web access URL: https://$cloudflareDomain/$dirSlug/?auth_token=$authToken" -ForegroundColor Green
+}
+Write-Host "  Local URL: http://localhost:$TargetPort" -ForegroundColor Green
 Write-Host ""
 
-#  Periodic path fixer (background job, runs every 5 min) 
+# ---- Periodic path fixer (background job, runs every 5 min) ----
 $fixJob = Start-Job -ScriptBlock {
   $rootDir = $using:RootDir
   while ($true) {
@@ -183,12 +269,19 @@ $fixJob = Start-Job -ScriptBlock {
 }
 Write-Host "  Path fixer job running (every 5 min)" -ForegroundColor Cyan
 
-#  Launch OpenCode Web 
+# ---- Launch OpenCode Web ----
 Push-Location $RootDir
 try {
   & $OpenCodeBin web --port $TargetPort --hostname 0.0.0.0
 } finally {
   Pop-Location
+  # Restore base config
+  if (Test-Path $BackupPath) {
+    Write-Host ""
+    Write-Host "  Restoring base config..." -ForegroundColor Yellow
+    Move-Item $BackupPath $ConfigPath -Force
+    Write-Host "  Base config restored." -ForegroundColor Green
+  }
   # Clean up cloudflared when OpenCode exits
   if ($cloudflaredProcess -and -not $cloudflaredProcess.HasExited) {
     $cloudflaredProcess.Kill()

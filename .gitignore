@@ -37,3 +37,7 @@ tmp/
 
 # Bootstrap log
 bootstrap.log
+
+# User data (separate git submodule for Troy, or local for others)
+user/
+!/user/.gitkeep
