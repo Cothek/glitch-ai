@@ -122,46 +122,6 @@ if (-not $userFound) {
   Write-Host "  First time? Run .\setup.bat (double-click, handles everything)" -ForegroundColor Cyan
   Write-Host "  Starting with engine defaults (no user profile loaded)." -ForegroundColor DarkYellow
 }
-}
-
-if (-not $UserName) {
-  # Auto-detect: check flat layout first, then subdirectory layout
-  $userBase = "$RootDir\user"
-  if (Test-Path "$userBase\main-memory.md") {
-    $UserName = ""  # flat layout - no subdirectory name
-    $UserDir = $userBase
-    Write-Host "  User profile: (flat - user/main-memory.md)" -ForegroundColor Cyan
-  } elseif (Test-Path $userBase) {
-    $profiles = Get-ChildItem -Directory $userBase | Where-Object {
-      Test-Path "$($_.FullName)\main-memory.md"
-    }
-    if ($profiles.Count -eq 1) {
-      $UserName = $profiles[0].Name
-      $UserDir = $profiles[0].FullName
-      Write-Host "  User profile: $UserName" -ForegroundColor Cyan
-    } elseif ($profiles.Count -gt 1) {
-      Write-Host "  Multiple user profiles found:" -ForegroundColor Yellow
-      $i = 1
-      $profileNames = @()
-      foreach ($p in $profiles) {
-        Write-Host "    [$i] $($p.Name)" -ForegroundColor Cyan
-        $profileNames += $p.Name
-        $i++
-      }
-      Write-Host "  Set `$env:GLITCH_USER=<name> to auto-select." -ForegroundColor Gray
-      # Default to first profile
-      $UserName = $profileNames[0]
-      $UserDir = "$RootDir\user\$UserName"
-      Write-Host "  Using: $UserName" -ForegroundColor Cyan
-    }
-  }
-}
-
-if (-not $UserName) {
-  Write-Host "  No user profile found." -ForegroundColor Yellow
-  Write-Host "  First time? Run .\setup.bat (double-click, handles everything)" -ForegroundColor Cyan
-  Write-Host "  Starting with engine defaults (no user profile loaded)." -ForegroundColor DarkYellow
-}
 
 # ---- Generate runtime config with user profile ----
 Write-Host "  Generating runtime config..." -ForegroundColor Cyan

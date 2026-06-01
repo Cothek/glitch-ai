@@ -95,21 +95,6 @@ if (-not $userFound) {
   }
 }
 
-if ($UserName -and $UserName -ne "") {
-  $UserDir = "$RootDir\user\$UserName"
-}
-    if ($profiles.Count -ge 1) {
-      $UserName = $profiles[0].Name
-      $UserDir = $profiles[0].FullName
-      Write-Host "  User profile: $UserName" -ForegroundColor Cyan
-    }
-  }
-}
-
-if ($UserName -and $UserName -ne "") {
-  $UserDir = "$RootDir\user\$UserName"
-}
-
 # ---- Generate runtime config with user profile ----
 Write-Host "  Generating runtime config..." -ForegroundColor Cyan
 
