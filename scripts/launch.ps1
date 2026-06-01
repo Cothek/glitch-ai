@@ -62,9 +62,15 @@ $UserName = $env:GLITCH_USER
 $UserDir = ""
 
 if ($UserName) {
-  # Explicit user via env var
+  # Explicit user via env var — check both flat and subdirectory layouts
   $UserDir = "$RootDir\user\$UserName"
-  if (-not (Test-Path "$UserDir\main-memory.md")) {
+  if (Test-Path "$UserDir\main-memory.md") {
+    Write-Host "  User profile: $UserName" -ForegroundColor Cyan
+  } elseif (Test-Path "$RootDir\user\main-memory.md") {
+    # Flat layout exists, ignore explicit subdir username
+    $UserName = ""  # signals flat layout
+    Write-Host "  User profile: (flat — user/main-memory.md)" -ForegroundColor Cyan
+  } else {
     Write-Host "  WARNING: User '$UserName' specified but no profile found at user\$UserName" -ForegroundColor Yellow
     Write-Host "  Run: .\setup.ps1 --user $UserName" -ForegroundColor Yellow
     $UserName = $null
@@ -72,9 +78,13 @@ if ($UserName) {
 }
 
 if (-not $UserName) {
-  # Auto-detect: scan user/ directory for profiles
+  # Auto-detect: check flat layout first, then subdirectory layout
   $userBase = "$RootDir\user"
-  if (Test-Path $userBase) {
+  if (Test-Path "$userBase\main-memory.md") {
+    $UserName = ""  # flat layout — no subdirectory name
+    $UserDir = $userBase
+    Write-Host "  User profile: (flat — user/main-memory.md)" -ForegroundColor Cyan
+  } elseif (Test-Path $userBase) {
     $profiles = Get-ChildItem -Directory $userBase | Where-Object {
       Test-Path "$($_.FullName)\main-memory.md"
     }
@@ -122,12 +132,21 @@ $engineInstructions = @(
 )
 
 $userInstructions = @()
-if ($UserName) {
+if ($UserName -and $UserName -ne "") {
+  # Named subdirectory layout: user/troy/main-memory.md
   $userInstructions = @(
     "user/$UserName/main-memory.md",
     "user/$UserName/current-session.md",
     "user/$UserName/reminders.md",
     "user/$UserName/session-dashboard.md"
+  )
+} elseif (Test-Path "$RootDir\user\main-memory.md") {
+  # Flat layout: user/main-memory.md (e.g., cloned repo directly into user/)
+  $userInstructions = @(
+    "user/main-memory.md",
+    "user/current-session.md",
+    "user/reminders.md",
+    "user/session-dashboard.md"
   )
 }
 

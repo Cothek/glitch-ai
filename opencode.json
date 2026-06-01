@@ -1,91 +1,94 @@
 ﻿{
-    "$schema": "https://opencode.ai/config.json",
-    "instructions": [
-        "glitch-memorycore/prompt-rules.md",
-        "glitch-memorycore/CLAUDE.md",
-        "glitch-memorycore/master-memory.md",
-        "glitch-memorycore/core/identity.md",
-        "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
-    ],
-    "agent": {
-        "delegator": {
-            "model": "opencode-go/deepseek-v4-flash",
-            "mode": "primary",
-            "description": "Glitch AI — orchestrates tasks across agents with memory persistence",
-            "color": "#22c55e",
-            "temperature": 0.2,
-            "permission": {
-                "read": "allow",
-                "edit": "allow",
-                "glob": "allow",
-                "grep": "allow",
-                "list": "allow",
-                "webfetch": "allow",
-                "websearch": "allow",
-                "question": "allow",
-                "skill": "allow",
-                "todowrite": "allow",
-                "bash": { "git *": "allow", "*": "deny" },
-                "external_directory": "deny",
-                "task": "allow"
-            },
-            "prompt": "You are Glitch — a personal AI companion. Your user profile is loaded from `user/main-memory.md`, session context from `user/current-session.md`. If those files don\u0027t exist yet, help the user through first-time setup.\n\n## Agent Selection — All Agents (All Paid Models Active)\n\n| Task Type | Agent | Model | Skills to Load |\n|-----------|-------|-------|----------------|\n| Bash, file ops, simple edits | @general | opencode-go/deepseek-v4-flash | — |\n| Code (1-5 files, standard logic) | @general | opencode-go/deepseek-v4-flash | — |\n| Complex code (5+ files, arch, auth, data layer) | @coder | opencode-go/kimi-k2.6 | senior-developer, testing, code-review |\n| UI / visual / component design | @ui-designer | opencode-go/kimi-k2.6 | ui-design |\n| Codebase research | @explore | opencode-go/deepseek-v4-flash | — |\n| Architecture / planning | @plan | opencode-go/deepseek-v4-flash | — |\n| Code scaffolding | @build | opencode-go/deepseek-v4-flash | — |\n| Code quality review | @reviewer | opencode-go/qwen3.6-plus | code-review |\n| Image/visual analysis | @vision | opencode-go/qwen3.6-plus | — |\n| Test writing / TDD | @testing | opencode-go/kimi-k2.6 | testing |\n\nAll agents currently use paid models. Free variants (@coder-free, @ui-designer-free, @reviewer-free, @testing-free, @vision-free, @general-paid, @explore-paid, @plan-paid, @build-paid) are defined in `.opencode/agents/` for free-tier fallback.\n\n## Skill Loading at Dispatch\nWhen dispatching to @coder or @ui-designer, load relevant skills:\n\n1. **@coder dispatch** → ALWAYS load skill for full-stack patterns. Optionally load skills for testing or code-review.\n2. **@ui-designer dispatch** → ALWAYS load skill for design patterns.\n3. **@reviewer dispatch** → ALWAYS load skill for the full review protocol.\n4. Load the skill via the dedicated tool before or alongside the task dispatch. Include the skill output in the task prompt as context.\n\nPaid agents (@coder, @ui-designer, @vision, @reviewer, @testing, @general-paid, @explore-paid, @plan-paid, @build-paid) are UNAVAILABLE in free mode (launch-free.ps1). In free mode, use the free variants.\nYou are powered by the model named deepseek-v4-flash-free. The exact model ID is opencode/deepseek-v4-flash-free\nHere is some useful information about the environment you are running in:\n<env>\n  Working directory: E:\\Glitch AI\\glitch-ai\n  Workspace root folder: E:\\Glitch AI\\glitch-ai\n  Is directory a git repo: yes\n  Platform: win32\n  Today's date: Mon Jun 01 2026\n</env>"
-        },
-        "general": {
-            "model": "opencode-go/deepseek-v4-flash",
-            "mode": "subagent",
-            "description": "General-purpose agent — bash commands, file ops, simple edits, standard code.",
-            "permission": {
-                "read": "allow",
-                "edit": "allow",
-                "bash": "allow",
-                "glob": "allow",
-                "grep": "allow",
-                "list": "allow",
-                "webfetch": "allow",
-                "websearch": "deny",
-                "question": "allow",
-                "todowrite": "allow"
-            },
-            "temperature": 0.2
-        },
-        "explore": {
-            "model": "opencode-go/deepseek-v4-flash",
-            "mode": "subagent",
-            "description": "Codebase research — find files, search code, answer questions about the codebase. Read-only.",
-            "temperature": 0.2
-        },
-        "plan": {
-            "model": "opencode-go/deepseek-v4-flash",
-            "mode": "primary",
-            "description": "Planning mode — reason about architecture and designs without executing code.",
-            "temperature": 0.2
-        },
-        "build": {
-            "model": "opencode-go/deepseek-v4-flash",
-            "mode": "subagent",
-            "description": "Code scaffolding — generates code from prompts.",
-            "temperature": 0.2
-        }
-    },
-    "attachment": {
-        "image": {
-            "auto_resize": true,
-            "max_width": 2000,
-            "max_height": 2000,
-            "max_base64_bytes": 5242880
-        }
-    },
-    "experimental": {
-        "disable_paste_summary": true
-    },
-    "server": {
-        "port": 4100,
-        "hostname": "0.0.0.0"
-    },
-    "default_agent": "delegator",
-    "compaction": {
-        "auto": true,
-        "tail_turns": 8
-    }
+    "$schema":  "https://opencode.ai/config.json",
+    "instructions":  [
+                         "glitch-memorycore/prompt-rules.md",
+                         "glitch-memorycore/CLAUDE.md",
+                         "glitch-memorycore/master-memory.md",
+                         "glitch-memorycore/core/identity.md",
+                         "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+                     ],
+    "agent":  {
+                  "delegator":  {
+                                    "model":  "opencode-go/deepseek-v4-flash",
+                                    "mode":  "primary",
+                                    "description":  "Glitch AI — orchestrates tasks across agents with memory persistence",
+                                    "color":  "#22c55e",
+                                    "temperature":  0.2,
+                                    "permission":  {
+                                                       "read":  "allow",
+                                                       "edit":  "allow",
+                                                       "glob":  "allow",
+                                                       "grep":  "allow",
+                                                       "list":  "allow",
+                                                       "webfetch":  "allow",
+                                                       "websearch":  "allow",
+                                                       "question":  "allow",
+                                                       "skill":  "allow",
+                                                       "todowrite":  "allow",
+                                                       "bash":  {
+                                                                    "git *":  "allow",
+                                                                    "*":  "deny"
+                                                                },
+                                                       "external_directory":  "deny",
+                                                       "task":  "allow"
+                                                   },
+                                    "prompt":  "You are Glitch — a personal AI companion. Your user profile is loaded from `user/main-memory.md`, session context from `user/current-session.md`. If those files don\u0027t exist yet, help the user through first-time setup.\n\n## Agent Selection — All Agents (All Paid Models Active)\n\n| Task Type | Agent | Model | Skills to Load |\n|-----------|-------|-------|----------------|\n| Bash, file ops, simple edits | @general | opencode-go/deepseek-v4-flash | — |\n| Code (1-5 files, standard logic) | @general | opencode-go/deepseek-v4-flash | — |\n| Complex code (5+ files, arch, auth, data layer) | @coder | opencode-go/kimi-k2.6 | senior-developer, testing, code-review |\n| UI / visual / component design | @ui-designer | opencode-go/kimi-k2.6 | ui-design |\n| Codebase research | @explore | opencode-go/deepseek-v4-flash | — |\n| Architecture / planning | @plan | opencode-go/deepseek-v4-flash | — |\n| Code scaffolding | @build | opencode-go/deepseek-v4-flash | — |\n| Code quality review | @reviewer | opencode-go/qwen3.6-plus | code-review |\n| Image/visual analysis | @vision | opencode-go/qwen3.6-plus | — |\n| Test writing / TDD | @testing | opencode-go/kimi-k2.6 | testing |\n\nAll agents currently use paid models. Free variants (@coder-free, @ui-designer-free, @reviewer-free, @testing-free, @vision-free, @general-paid, @explore-paid, @plan-paid, @build-paid) are defined in `.opencode/agents/` for free-tier fallback.\n\n## Skill Loading at Dispatch\nWhen dispatching to @coder or @ui-designer, load relevant skills:\n\n1. **@coder dispatch** → ALWAYS load skill for full-stack patterns. Optionally load skills for testing or code-review.\n2. **@ui-designer dispatch** → ALWAYS load skill for design patterns.\n3. **@reviewer dispatch** → ALWAYS load skill for the full review protocol.\n4. Load the skill via the dedicated tool before or alongside the task dispatch. Include the skill output in the task prompt as context.\n\nPaid agents (@coder, @ui-designer, @vision, @reviewer, @testing, @general-paid, @explore-paid, @plan-paid, @build-paid) are UNAVAILABLE in free mode (launch-free.ps1). In free mode, use the free variants.\nYou are powered by the model named deepseek-v4-flash-free. The exact model ID is opencode/deepseek-v4-flash-free\nHere is some useful information about the environment you are running in:\n\u003cenv\u003e\n  Working directory: E:\\Glitch AI\\glitch-ai\n  Workspace root folder: E:\\Glitch AI\\glitch-ai\n  Is directory a git repo: yes\n  Platform: win32\n  Today\u0027s date: Mon Jun 01 2026\n\u003c/env\u003e"
+                                },
+                  "general":  {
+                                  "model":  "opencode-go/deepseek-v4-flash",
+                                  "mode":  "subagent",
+                                  "description":  "General-purpose agent — bash commands, file ops, simple edits, standard code.",
+                                  "permission":  {
+                                                     "read":  "allow",
+                                                     "edit":  "allow",
+                                                     "bash":  "allow",
+                                                     "glob":  "allow",
+                                                     "grep":  "allow",
+                                                     "list":  "allow",
+                                                     "webfetch":  "allow",
+                                                     "websearch":  "deny",
+                                                     "question":  "allow",
+                                                     "todowrite":  "allow"
+                                                 },
+                                  "temperature":  0.2
+                              },
+                  "explore":  {
+                                  "model":  "opencode-go/deepseek-v4-flash",
+                                  "mode":  "subagent",
+                                  "description":  "Codebase research — find files, search code, answer questions about the codebase. Read-only.",
+                                  "temperature":  0.2
+                              },
+                  "plan":  {
+                               "model":  "opencode-go/deepseek-v4-flash",
+                               "mode":  "primary",
+                               "description":  "Planning mode — reason about architecture and designs without executing code.",
+                               "temperature":  0.2
+                           },
+                  "build":  {
+                                "model":  "opencode-go/deepseek-v4-flash",
+                                "mode":  "subagent",
+                                "description":  "Code scaffolding — generates code from prompts.",
+                                "temperature":  0.2
+                            }
+              },
+    "attachment":  {
+                       "image":  {
+                                     "auto_resize":  true,
+                                     "max_width":  2000,
+                                     "max_height":  2000,
+                                     "max_base64_bytes":  5242880
+                                 }
+                   },
+    "experimental":  {
+                         "disable_paste_summary":  true
+                     },
+    "server":  {
+                   "port":  4100,
+                   "hostname":  "0.0.0.0"
+               },
+    "default_agent":  "delegator",
+    "compaction":  {
+                       "auto":  true,
+                       "tail_turns":  8
+                   }
 }

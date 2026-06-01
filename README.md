@@ -29,7 +29,7 @@ The `cothek@` prefix in the clone URL tells Windows Credential Manager to auto-s
 
 ### First Run Only
 
-After cloning, run `.\bootstrap.ps1` to download OpenCode and optional tools (Handy voice input, Cloudflare Tunnel). Subsequent runs skip this.
+After cloning, run `.\scripts\bootstrap.ps1` to download OpenCode and optional tools (Handy voice input, Cloudflare Tunnel). Subsequent runs skip this.
 
 ## How It Works
 
@@ -46,8 +46,8 @@ On every launch, `launch.ps1` detects your user profile, generates a runtime con
 ## Access from Anywhere (Phone / Other PC)
 
 ```powershell
-.\setup-tunnel.ps1    # One-time: authenticate Cloudflare + create tunnel
-.\serve-glitch.bat    # Each session: starts server + tunnel
+.\scripts\setup-tunnel.ps1    # One-time: authenticate Cloudflare + create tunnel
+.\serve-glitch.bat            # Each session: starts server + tunnel
 ```
 
 This starts OpenCode as a web server proxied through Cloudflare Tunnel. No open ports, no VPN required. Login with username `opencode` and the auto-generated password shown in the terminal.
@@ -65,7 +65,7 @@ Configure your domain via `.env`: copy `.env.example` to `.env` and set `GLITCH_
 | `setup.bat` | First-time setup — initializes engine + profile wizard |
 | `launch-glitch.bat` | Local terminal mode |
 | `serve-glitch.bat` | Web server mode with Cloudflare Tunnel |
-| `bootstrap.ps1` | Downloads OpenCode, Handy, and cloudflared |
+| `scripts/bootstrap.ps1` | Downloads OpenCode, Handy, and cloudflared |
 | `opencode.json` | Base config (engine-only — user data added at runtime) |
 | `.env.example` | Domain/port configuration template |
 | `plugins/auth-proxy.mjs` | Basic auth proxy for mobile access |
@@ -84,16 +84,17 @@ Configure your domain via `.env`: copy `.env.example` to `.env` and set `GLITCH_
 glitch-ai/                    ← This repo (public)
 ├── glitch-memorycore/        ← Submodule: engine (glitch-engine)
 ├── user/                     ← Your data (gitignored / private submodule)
+├── scripts/                  ← Internal PowerShell scripts
+├── config/                   ← Configuration files
+├── data/                     ← Auto-generated data (gitignored)
 ├── setup.bat                 ← First-time setup
 ├── launch-glitch.bat         ← Local terminal
 ├── serve-glitch.bat          ← Web server
-├── bootstrap.ps1             ← Downloads dependencies
 ├── opencode.json             ← Engine-only base config
-├── launch.ps1                ← User-aware launcher (generates runtime config)
-├── setup.ps1                 ← Profile wizard (PowerShell)
 ├── .env.example              ← Configuration template
 ├── plugins/                  ← Auth proxy, helpers
 ├── handy-voice/              ← Voice input
 ├── opencode/                 ← OpenCode binary
+├── cloudflared.exe           ← Cloudflare Tunnel binary
 └── tools/                    ← Debug utilities
 ```

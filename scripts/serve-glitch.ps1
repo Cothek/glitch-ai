@@ -72,10 +72,15 @@ if (Test-Path $BackupPath) {
 # ---- User Profile Detection ----
 $UserName = $env:GLITCH_USER
 $UserDir = ""
+$userBase = "$RootDir\user"
 
 if (-not $UserName) {
-  $userBase = "$RootDir\user"
-  if (Test-Path $userBase) {
+  # Auto-detect: check flat layout first, then subdirectory layout
+  if (Test-Path "$userBase\main-memory.md") {
+    $UserName = ""  # flat layout — no subdirectory name
+    $UserDir = $userBase
+    Write-Host "  User profile: (flat — user/main-memory.md)" -ForegroundColor Cyan
+  } elseif (Test-Path $userBase) {
     $profiles = Get-ChildItem -Directory $userBase | Where-Object {
       Test-Path "$($_.FullName)\main-memory.md"
     }
@@ -87,7 +92,7 @@ if (-not $UserName) {
   }
 }
 
-if ($UserName) {
+if ($UserName -and $UserName -ne "") {
   $UserDir = "$RootDir\user\$UserName"
 }
 
@@ -105,12 +110,21 @@ $engineInstructions = @(
 )
 
 $userInstructions = @()
-if ($UserName) {
+if ($UserName -and $UserName -ne "") {
+  # Named subdirectory: user/troy/main-memory.md
   $userInstructions = @(
     "user/$UserName/main-memory.md",
     "user/$UserName/current-session.md",
     "user/$UserName/reminders.md",
     "user/$UserName/session-dashboard.md"
+  )
+} elseif (Test-Path "$RootDir\user\main-memory.md") {
+  # Flat layout: user/main-memory.md
+  $userInstructions = @(
+    "user/main-memory.md",
+    "user/current-session.md",
+    "user/reminders.md",
+    "user/session-dashboard.md"
   )
 }
 
