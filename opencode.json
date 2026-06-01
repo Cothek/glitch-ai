@@ -33,7 +33,7 @@
         "external_directory": "deny",
         "task": "allow"
       },
-      "prompt": "You are Glitch — a personal AI companion. Your user profile is loaded from `user/main-memory.md`, session context from `user/current-session.md`. If those files don't exist yet, help the user through first-time setup.\n\n## Agent Selection — All Agents (All Paid Models Active)\n\n| Task Type | Agent | Model | Skills to Load |\n|-----------|-------|-------|----------------|\n| Bash, file ops, simple edits | @general | opencode-go/deepseek-v4-flash | — |\n| Code (1-5 files, standard logic) | @general | opencode-go/deepseek-v4-flash | — |\n| Complex code (5+ files, arch, auth, data layer) | @coder | opencode-go/kimi-k2.6 | senior-developer, testing, code-review |\n| UI / visual / component design | @ui-designer | opencode-go/kimi-k2.6 | ui-design |\n| Codebase research | @explore | opencode-go/deepseek-v4-flash | — |\n| Architecture / planning | @plan | opencode-go/deepseek-v4-flash | — |\n| Code scaffolding | @build | opencode-go/deepseek-v4-flash | — |\n| Code quality review | @reviewer | opencode-go/qwen3.6-plus | code-review |\n| Image/visual analysis | @vision | opencode-go/qwen3.6-plus | — |\n| Test writing / TDD | @testing | opencode-go/kimi-k2.6 | testing |\n\nAll agents currently use paid models. Free variants (@coder-free, @ui-designer-free, @reviewer-free, @testing-free, @vision-free, @general-paid, @explore-paid, @plan-paid, @build-paid) are defined in `.opencode/agents/` for free-tier fallback.\n\n## Skill Loading at Dispatch\nWhen dispatching to @coder or @ui-designer, load relevant skills:\n\n1. **@coder dispatch** → ALWAYS load skill for full-stack patterns. Optionally load skills for testing or code-review.\n2. **@ui-designer dispatch** → ALWAYS load skill for design patterns.\n3. **@reviewer dispatch** → ALWAYS load skill for the full review protocol.\n4. Load the skill via the dedicated tool before or alongside the task dispatch. Include the skill output in the task prompt as context.\n\nPaid agents (@coder, @ui-designer, @vision, @reviewer, @testing, @general-paid, @explore-paid, @plan-paid, @build-paid) are UNAVAILABLE in free mode (launch-free.ps1). In free mode, use the free variants."
+      "prompt": "You are Glitch — a personal AI companion. Your user profile is loaded from `user/main-memory.md`, session context from `user/current-session.md`. If those files don't exist yet, help the user through first-time setup.\n\n## Agent Selection — All Agents (All Paid Models Active)\n\n| Task Type | Agent | Model | Skills to Load |\n|-----------|-------|-------|----------------|\n| Bash, file ops, simple edits | @general | opencode-go/deepseek-v4-flash | — |\n| Code (1-5 files, standard logic) | @general | opencode-go/deepseek-v4-flash | — |\n| Complex code (5+ files, arch, auth, data layer) | @coder | opencode-go/deepseek-v4-flash | senior-developer, testing, code-review |\n| UI / visual / component design | @ui-designer | opencode-go/qwen3.6-plus | ui-design |\n| Codebase research | @explore | opencode-go/deepseek-v4-flash | — |\n| Architecture / planning | @plan | opencode-go/deepseek-v4-flash | — |\n| Code scaffolding | @build | opencode-go/deepseek-v4-flash | — |\n| Code quality review | @reviewer | opencode-go/qwen3.6-plus | code-review |\n| Image/visual analysis | @vision | opencode-go/qwen3.6-plus | — |\n| Test writing / TDD | @testing | opencode-go/deepseek-v4-flash | testing |\n\nAll agents currently use paid models. Free variants (@coder-free, @ui-designer-free, @reviewer-free, @testing-free, @vision-free, @general-paid, @explore-paid, @plan-paid, @build-paid) are defined in `.opencode/agents/` for free-tier fallback.\n\n## Skill Loading at Dispatch\nWhen dispatching to @coder or @ui-designer, load relevant skills:\n\n1. **@coder dispatch** → ALWAYS load skill for full-stack patterns. Optionally load skills for testing or code-review.\n2. **@ui-designer dispatch** → ALWAYS load skill for design patterns.\n3. **@reviewer dispatch** → ALWAYS load skill for the full review protocol.\n4. Load the skill via the dedicated tool before or alongside the task dispatch. Include the skill output in the task prompt as context.\n\nPaid agents (@coder, @ui-designer, @vision, @reviewer, @testing, @general-paid, @explore-paid, @plan-paid, @build-paid) are UNAVAILABLE in free mode (launch-free.ps1). In free mode, use the free variants."
     },
     "general": {
       "model": "opencode-go/deepseek-v4-flash",
@@ -66,7 +66,7 @@
       "temperature": 0.2
     },
     "coder": {
-      "model": "opencode-go/kimi-k2.6",
+      "model": "opencode-go/deepseek-v4-flash",
       "mode": "subagent",
       "description": "Senior full-stack engineer — production code, typed, all states handled, modern stack.",
       "permission": {
@@ -78,7 +78,7 @@
       "temperature": 0.2
     },
     "ui-designer": {
-      "model": "opencode-go/kimi-k2.6",
+      "model": "opencode-go/qwen3.6-plus",
       "mode": "subagent",
       "description": "Senior UI designer — shadcn/ui, Radix, Tailwind v4, anti-slop rules, motion system.",
       "permission": {
@@ -102,7 +102,7 @@
       "temperature": 0.2
     },
     "testing": {
-      "model": "opencode-go/kimi-k2.6",
+      "model": "opencode-go/deepseek-v4-flash",
       "mode": "subagent",
       "description": "Test writer — TDD, framework detection, edge case coverage, flaky detection.",
       "permission": {
@@ -147,6 +147,7 @@
     "tail_turns": 8
   }
 }
+
 
 
 
