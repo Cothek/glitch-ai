@@ -101,8 +101,7 @@ if (-not $UserName) {
 
 if (-not $UserName) {
   Write-Host "  No user profile found." -ForegroundColor Yellow
-  Write-Host "  If you're Troy: run .\setup-troy.bat (clones engine + private user repo)" -ForegroundColor Cyan
-  Write-Host "  If you're new:  run .\setup.ps1 --new-user (creates a fresh profile)" -ForegroundColor Cyan
+  Write-Host "  First time? Run .\setup.bat (double-click, handles everything)" -ForegroundColor Cyan
   Write-Host "  Starting with engine defaults (no user profile loaded)." -ForegroundColor DarkYellow
 }
 

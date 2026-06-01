@@ -13,6 +13,18 @@ Write-Host ""
 Write-Host " Glitch Setup" -ForegroundColor Magenta
 Write-Host ""
 
+# ---- Self-heal: initialize git submodule if needed ----
+if (-not (Test-Path $TemplateDir)) {
+  Write-Host "  Initializing engine submodule..." -ForegroundColor Cyan
+  try {
+    git submodule update --init --recursive 2>&1 | Out-Null
+  } catch {
+    Write-Host "  ERROR: Could not initialize submodule." -ForegroundColor Red
+    Write-Host "  Run: git submodule update --init --recursive" -ForegroundColor Yellow
+    exit 1
+  }
+}
+
 # ---- Check prerequisites ----
 if (-not (Test-Path $TemplateDir)) {
   Write-Host "  ERROR: Engine template directory not found." -ForegroundColor Red
