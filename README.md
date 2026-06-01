@@ -34,10 +34,6 @@ cd glitch-memorycore
 git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git
 ```
 
-### First Run Only
-
-After cloning, run `.\scripts\bootstrap.ps1` to download OpenCode and optional tools (Handy voice input, Cloudflare Tunnel). Subsequent runs skip this.
-
 ## How It Works
 
 Glitch is split into three layers:

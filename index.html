@@ -595,7 +595,6 @@
   <li><code>.\launch-glitch.bat</code> — start using Glitch</li>
 </ol>
 <p style="color:var(--text-muted);font-size:0.875rem">Your data stays local under <code>user/</code> — nothing shared.</p>
-<p style="color:var(--text-muted);font-size:0.875rem;margin-top:0.5rem">After setup, see <strong>First Run Only</strong> below to download required tools.</p>
 
 <hr class="divider">
 
@@ -608,7 +607,6 @@
   <li><code>.\launch-glitch.bat</code></li>
 </ol>
 <p style="color:var(--text-muted);font-size:0.875rem">The <code>cothek@</code> prefix tells Windows Credential Manager to auto-select your stored PAT — no login pop-up.</p>
-<p style="color:var(--text-muted);font-size:0.875rem;margin-top:0.5rem">After cloning, see <strong>First Run Only</strong> below to download required tools.</p>
 
 <div class="note cyan">
   <strong>GitHub login pop-up?</strong> If you get one after <code>git submodule sync</code>, the submodule remote got reset. Fix it:<br>
@@ -616,8 +614,6 @@
 git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</code></pre>
 </div>
 
-<h3>First Run Only — Everyone</h3>
-<p>Run <code>.\scripts\bootstrap.ps1</code> to download OpenCode and optional tools (Handy voice input, Cloudflare Tunnel). <strong>This applies to everyone</strong> — new users and returning users alike. The script checks what's already present and skips anything downloaded previously, so subsequent runs are fast.</p>
 </section>
 
 <hr class="divider">
@@ -647,7 +643,7 @@ git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</co
   <div class="card">
     <span class="badge-layer badge-public">Public</span>
     <div class="title">Launcher</div>
-    <div class="desc"><code>Cothek/glitch-ai</code> — OpenCode binary, launch scripts, config, bootstrap.</div>
+    <div class="desc"><code>Cothek/glitch-ai</code> — OpenCode binary, launch scripts, config.</div>
   </div>
 </div>
 
