@@ -87,8 +87,8 @@
     padding: 0.75rem 2rem 1.5rem;
     border-radius: 12px;
     background: rgba(10, 10, 15, 0.25);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
     text-align: center;
   }
 
@@ -122,9 +122,21 @@
     letter-spacing: -0.04em;
     color: var(--text);
     position: relative;
+    background: linear-gradient(135deg, #a855f7, #06b6d4);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  header h1::before {
+    content: 'Glitch AI';
+    position: absolute;
+    inset: 0;
+    color: var(--text);
     text-shadow:
       0 0 40px var(--accent-soft),
       0 0 80px rgba(168,85,247,0.2);
+    z-index: -1;
+    -webkit-text-fill-color: var(--text);
   }
 
   /* Subtitle with blinking cursor */
@@ -217,14 +229,7 @@
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 1.75rem 2.25rem;
-    margin: 2.5rem 0;
-  }
-  .toc h2 {
-    font-size: 0.875rem;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    color: var(--text-muted);
-    margin-bottom: 1rem;
+    margin: 0 0 2.5rem;
   }
   .toc nav { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5rem 0; }
   .toc a {
@@ -920,8 +925,14 @@
 <div class="container">
 
 <!-- TOC -->
+<h2>
+  <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+    <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+  </svg>
+  Contents
+</h2>
 <nav class="toc">
-  <h2>Contents</h2>
   <nav>
   <a href="#quickstart">Quick Start</a>
   <a href="#how-it-works">How It Works</a>
