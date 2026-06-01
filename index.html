@@ -115,28 +115,16 @@
     color: var(--cyan);
   }
 
-  /* Title with subtle glow */
+  /* Title with gradient */
   header h1 {
     font-size: 3.25rem;
     font-weight: 800;
     letter-spacing: -0.04em;
-    color: var(--text);
     position: relative;
     background: linear-gradient(135deg, #a855f7, #06b6d4);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-  }
-  header h1::before {
-    content: 'Glitch AI';
-    position: absolute;
-    inset: 0;
-    color: var(--text);
-    text-shadow:
-      0 0 40px var(--accent-soft),
-      0 0 80px rgba(168,85,247,0.2);
-    z-index: -1;
-    -webkit-text-fill-color: var(--text);
   }
 
   /* Subtitle with blinking cursor */
