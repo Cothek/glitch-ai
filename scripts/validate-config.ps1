@@ -23,7 +23,8 @@ param(
 # ---- Resolve path ----
 if (-not $Path) {
     $ScriptDir = Split-Path -Parent $PSCommandPath
-    $Path = "$ScriptDir\opencode.json"
+    $RootDir = Split-Path -Parent $ScriptDir
+    $Path = "$RootDir\opencode.json"
 }
 
 if (-not (Test-Path $Path)) {

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $RootDir = Split-Path -Parent $ScriptDir
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
@@ -77,9 +77,9 @@ $userBase = "$RootDir\user"
 if (-not $UserName) {
   # Auto-detect: check flat layout first, then subdirectory layout
   if (Test-Path "$userBase\main-memory.md") {
-    $UserName = ""  # flat layout — no subdirectory name
+    $UserName = ""  # flat layout - no subdirectory name
     $UserDir = $userBase
-    Write-Host "  User profile: (flat — user/main-memory.md)" -ForegroundColor Cyan
+    Write-Host "  User profile: (flat - user/main-memory.md)" -ForegroundColor Cyan
   } elseif (Test-Path $userBase) {
     $profiles = Get-ChildItem -Directory $userBase | Where-Object {
       Test-Path "$($_.FullName)\main-memory.md"
@@ -99,8 +99,6 @@ if ($UserName -and $UserName -ne "") {
 # ---- Generate runtime config with user profile ----
 Write-Host "  Generating runtime config..." -ForegroundColor Cyan
 
-$baseConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
-
 $engineInstructions = @(
   "glitch-memorycore/prompt-rules.md",
   "glitch-memorycore/CLAUDE.md",
@@ -111,7 +109,6 @@ $engineInstructions = @(
 
 $userInstructions = @()
 if ($UserName -and $UserName -ne "") {
-  # Named subdirectory: user/troy/main-memory.md
   $userInstructions = @(
     "user/$UserName/main-memory.md",
     "user/$UserName/current-session.md",
@@ -119,7 +116,6 @@ if ($UserName -and $UserName -ne "") {
     "user/$UserName/session-dashboard.md"
   )
 } elseif (Test-Path "$RootDir\user\main-memory.md") {
-  # Flat layout: user/main-memory.md
   $userInstructions = @(
     "user/main-memory.md",
     "user/current-session.md",
@@ -129,12 +125,15 @@ if ($UserName -and $UserName -ne "") {
 }
 
 $allInstructions = $engineInstructions + $userInstructions
-$baseConfig.instructions = $allInstructions
+$instrJson = ($allInstructions | ForEach-Object { "    `"$_`"" }) -join ",`n"
+$instrBlock = "`"instructions`": [`n$instrJson`n  ]"
+
+$baseText = Get-Content $ConfigPath -Raw
+$runtimeJson = $baseText -replace '"[Ii]nstructions"\s*:\s*\[[^\]]*\]', $instrBlock
 
 Copy-Item $ConfigPath $BackupPath -Force
 
 try {
-  $runtimeJson = $baseConfig | ConvertTo-Json -Depth 10
   $null = $runtimeJson | ConvertFrom-Json
   $runtimeJson | Out-File -FilePath $ConfigPath -Encoding utf8 -Force
   Write-Host "  Runtime config generated" -ForegroundColor DarkGreen

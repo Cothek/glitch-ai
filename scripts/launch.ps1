@@ -1,4 +1,4 @@
-$ScriptDir = Split-Path -Parent $PSCommandPath
+﻿$ScriptDir = Split-Path -Parent $PSCommandPath
 $RootDir = Split-Path -Parent $ScriptDir
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $HandyBin = "$RootDir\handy-voice\Handy\handy.exe"
@@ -62,14 +62,14 @@ $UserName = $env:GLITCH_USER
 $UserDir = ""
 
 if ($UserName) {
-  # Explicit user via env var — check both flat and subdirectory layouts
+  # Explicit user via env var - check both flat and subdirectory layouts
   $UserDir = "$RootDir\user\$UserName"
   if (Test-Path "$UserDir\main-memory.md") {
     Write-Host "  User profile: $UserName" -ForegroundColor Cyan
   } elseif (Test-Path "$RootDir\user\main-memory.md") {
     # Flat layout exists, ignore explicit subdir username
     $UserName = ""  # signals flat layout
-    Write-Host "  User profile: (flat — user/main-memory.md)" -ForegroundColor Cyan
+    Write-Host "  User profile: (flat - user/main-memory.md)" -ForegroundColor Cyan
   } else {
     Write-Host "  WARNING: User '$UserName' specified but no profile found at user\$UserName" -ForegroundColor Yellow
     Write-Host "  Run: .\setup.ps1 --user $UserName" -ForegroundColor Yellow
@@ -81,9 +81,9 @@ if (-not $UserName) {
   # Auto-detect: check flat layout first, then subdirectory layout
   $userBase = "$RootDir\user"
   if (Test-Path "$userBase\main-memory.md") {
-    $UserName = ""  # flat layout — no subdirectory name
+    $UserName = ""  # flat layout - no subdirectory name
     $UserDir = $userBase
-    Write-Host "  User profile: (flat — user/main-memory.md)" -ForegroundColor Cyan
+    Write-Host "  User profile: (flat - user/main-memory.md)" -ForegroundColor Cyan
   } elseif (Test-Path $userBase) {
     $profiles = Get-ChildItem -Directory $userBase | Where-Object {
       Test-Path "$($_.FullName)\main-memory.md"
@@ -119,10 +119,7 @@ if (-not $UserName) {
 # ---- Generate runtime config with user profile ----
 Write-Host "  Generating runtime config..." -ForegroundColor Cyan
 
-# Read base config
-$baseConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
-
-# Add user profile instructions
+# Build instruction list
 $engineInstructions = @(
   "glitch-memorycore/prompt-rules.md",
   "glitch-memorycore/CLAUDE.md",
@@ -133,7 +130,6 @@ $engineInstructions = @(
 
 $userInstructions = @()
 if ($UserName -and $UserName -ne "") {
-  # Named subdirectory layout: user/troy/main-memory.md
   $userInstructions = @(
     "user/$UserName/main-memory.md",
     "user/$UserName/current-session.md",
@@ -141,7 +137,6 @@ if ($UserName -and $UserName -ne "") {
     "user/$UserName/session-dashboard.md"
   )
 } elseif (Test-Path "$RootDir\user\main-memory.md") {
-  # Flat layout: user/main-memory.md (e.g., cloned repo directly into user/)
   $userInstructions = @(
     "user/main-memory.md",
     "user/current-session.md",
@@ -151,13 +146,19 @@ if ($UserName -and $UserName -ne "") {
 }
 
 $allInstructions = $engineInstructions + $userInstructions
-$baseConfig.instructions = $allInstructions
+
+# Build instruction JSON array string (preserve escaping — never parse/re-serialize JSON)
+$instrJson = ($allInstructions | ForEach-Object { "    `"$_`"" }) -join ",`n"
+$instrBlock = "`"instructions`": [`n$instrJson`n  ]"
+
+# Read base config as text, replace instructions line by regex
+$baseText = Get-Content $ConfigPath -Raw
+$runtimeJson = $baseText -replace '"[Ii]nstructions"\s*:\s*\[[^\]]*\]', $instrBlock
 
 # Back up current config
 Copy-Item $ConfigPath $BackupPath -Force
 
 try {
-  $runtimeJson = $baseConfig | ConvertTo-Json -Depth 10
   $null = $runtimeJson | ConvertFrom-Json  # validate
   $runtimeJson | Out-File -FilePath $ConfigPath -Encoding utf8 -Force
   Write-Host "  Runtime config generated ($($allInstructions.Count) instruction files)" -ForegroundColor DarkGreen
