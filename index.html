@@ -34,42 +34,130 @@
   /* Header */
   header {
     border-bottom: 1px solid var(--border);
-    padding: 3rem 1.5rem 2rem;
+    padding: 4rem 1.5rem 2.5rem;
     text-align: center;
-    background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg) 100%);
+    background: var(--bg);
     position: relative;
     overflow: hidden;
   }
+
+  /* Subtle grid pattern */
   header::before {
     content: '';
     position: absolute;
-    top: -50%;
-    left: -50%;
-    width: 200%;
-    height: 200%;
-    background: radial-gradient(circle at 30% 50%, var(--accent-soft) 0%, transparent 50%),
-                radial-gradient(circle at 70% 50%, var(--cyan-soft) 0%, transparent 50%);
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(168,85,247,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(168,85,247,0.04) 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse 60% 50% at 50% 40%, black 20%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 40%, black 20%, transparent 70%);
     pointer-events: none;
   }
-  header h1 {
-    font-size: 3rem;
-    font-weight: 800;
-    letter-spacing: -0.03em;
-    background: linear-gradient(135deg, var(--accent), var(--cyan));
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    position: relative;
+
+  /* Animated scan-line */
+  header::after {
+    content: '';
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
+    opacity: 0;
+    animation: scanline 5s ease-in-out infinite;
+    pointer-events: none;
   }
-  header p {
+  @keyframes scanline {
+    0%   { top: 0;    opacity: 0; }
+    8%   { opacity: 0.35; }
+    92%  { opacity: 0.35; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  /* Terminal prompt decoration */
+  .header-prompt {
+    font-family: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+    font-size: 0.75rem;
+    color: var(--text-dim);
+    margin-bottom: 1.25rem;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.3rem 0.75rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+  }
+  .header-prompt .prompt-symbol {
+    color: var(--green);
+    font-weight: 700;
+  }
+  .header-prompt .prompt-cmd {
+    color: var(--cyan);
+  }
+
+  /* Title with subtle glow */
+  header h1 {
+    font-size: 3.25rem;
+    font-weight: 800;
+    letter-spacing: -0.04em;
+    color: var(--text);
+    position: relative;
+    text-shadow:
+      0 0 40px var(--accent-soft),
+      0 0 80px rgba(168,85,247,0.06);
+  }
+
+  /* Subtitle with blinking cursor */
+  header .subtitle {
     margin-top: 0.75rem;
     color: var(--text-muted);
-    font-size: 1.1rem;
-    max-width: 480px;
+    font-size: 1.05rem;
+    max-width: 520px;
     margin-left: auto;
     margin-right: auto;
     position: relative;
+    display: inline;
   }
+  header .subtitle::after {
+    content: '\2588';
+    color: var(--accent);
+    animation: blink 1s step-end infinite;
+    margin-left: 2px;
+    font-size: 0.9em;
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50%      { opacity: 0; }
+  }
+
+  /* Stats row */
+  .header-stats {
+    display: flex;
+    justify-content: center;
+    gap: 1.5rem;
+    margin-top: 1.75rem;
+    flex-wrap: wrap;
+    position: relative;
+  }
+  .header-stat {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    font-family: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', monospace;
+    letter-spacing: 0.02em;
+  }
+  .header-stat .stat-dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .header-stat .stat-dot.purple { background: var(--accent); box-shadow: 0 0 6px var(--accent); }
+  .header-stat .stat-dot.cyan   { background: var(--cyan);   box-shadow: 0 0 6px var(--cyan); }
+  .header-stat .stat-dot.green  { background: var(--green);  box-shadow: 0 0 6px var(--green); }
 
   /* Terminal badge */
   .badge {
@@ -80,7 +168,6 @@
     border-radius: 999px;
     font-size: 0.75rem;
     font-weight: 600;
-    text-transform: uppercase;
     letter-spacing: 0.05em;
     margin-bottom: 1rem;
     position: relative;
@@ -378,7 +465,10 @@
 
   /* Responsive */
   @media (max-width: 640px) {
-    header h1 { font-size: 2rem; }
+    header { padding: 3rem 1.25rem 2rem; }
+    header h1 { font-size: 2.25rem; }
+    .header-prompt { font-size: 0.6875rem; }
+    .header-stats { gap: 1rem; }
     .card-grid { grid-template-columns: 1fr; }
     .container { padding: 1rem; }
   }
@@ -387,9 +477,18 @@
 <body>
 
 <header>
-  <div class="badge badge-terminal">Glitch AI Terminal</div>
+  <div class="header-prompt">
+    <span class="prompt-symbol">$</span>
+    <span class="prompt-cmd">glitch init</span>
+    <span>--portable</span>
+  </div>
   <h1>Glitch AI</h1>
-  <p>Portable AI companion environment — one clone, one setup, ready on any Windows PC.</p>
+  <p class="subtitle">Portable AI companion environment — one clone, one setup, ready on any Windows PC.</p>
+  <div class="header-stats">
+    <span class="header-stat"><span class="stat-dot green"></span> 23 skills</span>
+    <span class="header-stat"><span class="stat-dot purple"></span> 3-layer architecture</span>
+    <span class="header-stat"><span class="stat-dot cyan"></span> Windows 10+</span>
+  </div>
 </header>
 
 <div class="container">
