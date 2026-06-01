@@ -989,43 +989,31 @@ git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</co
 
 <hr class="divider">
 
-<!-- How It Works -->
+<!-- How Glitch Works -->
 <section id="how-it-works">
 <h2>
   <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-    <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5"/><line x1="12" y1="22" x2="12" y2="15.5"/><polyline points="22 8.5 12 15.5 2 8.5"/>
+    <path d="M9 18h6"/><path d="M10 22h4"/><path d="M15.09 14c.18-.98.65-1.74 1.41-2.5A4.65 4.65 0 0 0 18 8 6 6 0 0 0 6 8c0 1 .23 2.23 1.5 3.5A4.61 4.61 0 0 1 8.91 14"/>
   </svg>
-  How It Works
+  How Glitch Works
 </h2>
 
-<p>Glitch is split into three independent layers:</p>
+<p>Glitch isn't just another AI tool — it's a companion that remembers, adapts, and grows with you. Here's what that looks like in practice.</p>
 
-<div class="card-grid">
-  <div class="card">
-    <span class="badge-layer badge-public">Public</span>
-    <div class="title">Engine</div>
-    <div class="desc"><code>Cothek/glitch-engine</code> — Core identity, 23+ skills, plugins, library. No user data.</div>
-  </div>
-  <div class="card">
-    <span class="badge-layer badge-private">Private</span>
-    <div class="title">User Data</div>
-    <div class="desc"><code>Cothek/glitch-user-troy</code> — Personal memory, diary, decisions, projects. Troy only.</div>
-  </div>
-  <div class="card">
-    <span class="badge-layer badge-public">Public</span>
-    <div class="title">Launcher</div>
-    <div class="desc"><code>Cothek/glitch-ai</code> — OpenCode binary, launch scripts, config.</div>
-  </div>
-</div>
+<h3>Your AI companion, always in context</h3>
+<p>Glitch remembers your conversations, preferences, decisions, and projects across sessions. Every launch restores your full context — past diary entries, active workstreams, and ongoing tasks. No cold starts, no repeating yourself.</p>
 
-<h3>Launch Flow</h3>
-<ol class="steps">
-  <li><code>launch-glitch.bat</code> calls <code>scripts/launch.ps1</code></li>
-  <li>Detects your user profile (<code>user/main-memory.md</code> or <code>user/{name}/main-memory.md</code>)</li>
-  <li>Generates a runtime <code>opencode.json</code> with engine + user instruction paths (string-level regex — never re-serializes JSON, preserves escaping)</li>
-  <li>Starts OpenCode with the generated config</li>
-  <li>On exit, restores the engine-only base config</li>
-</ol>
+<h3>Voice or text, your choice</h3>
+<p>Use Handy voice input (Ctrl+Space) to speak your prompts hands-free, or type directly. Glitch adapts to how you work best in the moment.</p>
+
+<h3>Smart delegation</h3>
+<p>Glitch automatically routes your tasks to specialized agents: coding to <code>@coder</code>, UI design to <code>@ui-designer</code>, code review to <code>@reviewer</code>. You give the task, Glitch handles the orchestration.</p>
+
+<h3>Memory that persists</h3>
+<p>Every session updates your profile, diary, and project files. Start a task today, pick it up tomorrow with full context. Your Glitch learns and adapts as you work together.</p>
+
+<h3>Private by design</h3>
+<p>Your personal data stays in <code>user/</code> — gitignored, never in the public engine repo. Share the Glitch engine with friends without sharing your history or preferences.</p>
 </section>
 
 <hr class="divider">
