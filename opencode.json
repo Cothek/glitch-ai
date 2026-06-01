@@ -64,6 +64,66 @@
       "mode": "subagent",
       "description": "Code scaffolding — generates code from prompts.",
       "temperature": 0.2
+    },
+    "coder": {
+      "model": "opencode-go/kimi-k2.6",
+      "mode": "subagent",
+      "description": "Senior full-stack engineer — production code, typed, all states handled, modern stack.",
+      "permission": {
+        "read": "allow", "edit": "allow", "bash": "allow",
+        "glob": "allow", "grep": "allow", "list": "allow",
+        "webfetch": "allow", "websearch": "deny",
+        "question": "allow", "todowrite": "allow", "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "ui-designer": {
+      "model": "opencode-go/kimi-k2.6",
+      "mode": "subagent",
+      "description": "Senior UI designer — shadcn/ui, Radix, Tailwind v4, anti-slop rules, motion system.",
+      "permission": {
+        "read": "allow", "edit": "allow", "bash": "allow",
+        "glob": "allow", "grep": "allow", "list": "allow",
+        "webfetch": "allow", "websearch": "deny",
+        "question": "allow", "todowrite": "allow", "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "reviewer": {
+      "model": "opencode-go/qwen3.6-plus",
+      "mode": "subagent",
+      "description": "Independent code quality gate — read-only, severity-rated reports, SIMPLIFY directive.",
+      "permission": {
+        "read": "allow", "edit": "deny", "bash": "deny",
+        "glob": "allow", "grep": "allow", "list": "allow",
+        "webfetch": "allow", "websearch": "deny",
+        "question": "allow", "todowrite": "deny"
+      },
+      "temperature": 0.2
+    },
+    "testing": {
+      "model": "opencode-go/kimi-k2.6",
+      "mode": "subagent",
+      "description": "Test writer — TDD, framework detection, edge case coverage, flaky detection.",
+      "permission": {
+        "read": "allow", "edit": "allow", "bash": "allow",
+        "glob": "allow", "grep": "allow", "list": "allow",
+        "webfetch": "allow", "websearch": "deny",
+        "question": "allow", "todowrite": "allow"
+      },
+      "temperature": 0.2
+    },
+    "vision": {
+      "model": "opencode-go/qwen3.6-plus",
+      "mode": "subagent",
+      "description": "Image/visual content analysis — uses read tool, bash: deny.",
+      "permission": {
+        "read": "allow", "edit": "deny", "bash": "deny",
+        "glob": "allow", "grep": "allow", "list": "allow",
+        "webfetch": "allow", "websearch": "deny",
+        "question": "allow", "todowrite": "deny"
+      },
+      "temperature": 0.2
     }
   },
   "attachment": {
