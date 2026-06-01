@@ -11,11 +11,22 @@ Write-Host ""
 Write-Host " Glitch AI - Launching..." -ForegroundColor Magenta
 Write-Host ""
 
-# ---- Check prerequisites ----
+# ---- Auto-bootstrap: download OpenCode if missing ----
 if (-not (Test-Path $OpenCodeBin)) {
-  Write-Host "OpenCode not found. Run bootstrap.ps1 first." -ForegroundColor Red
-  Write-Host "Or run: powershell -File bootstrap.ps1" -ForegroundColor Yellow
-  exit 1
+  Write-Host "  OpenCode not found. Running bootstrap to download..." -ForegroundColor Yellow
+  try {
+    & "$RootDir\scripts\bootstrap.ps1"
+    if (-not (Test-Path $OpenCodeBin)) {
+      Write-Host "  ERROR: Bootstrap finished but OpenCode still not found." -ForegroundColor Red
+      Write-Host "  Try running manually: .\scripts\bootstrap.ps1" -ForegroundColor Yellow
+      exit 1
+    }
+    Write-Host "  OpenCode downloaded successfully." -ForegroundColor Green
+  } catch {
+    Write-Host "  ERROR: Bootstrap failed: $_" -ForegroundColor Red
+    Write-Host "  Try running manually: .\scripts\bootstrap.ps1" -ForegroundColor Yellow
+    exit 1
+  }
 }
 
 # ---- Self-heal: initialize git submodules if needed ----
