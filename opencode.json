@@ -1,94 +1,91 @@
 ﻿{
-    "$schema":  "https://opencode.ai/config.json",
-    "instructions":  [
-                         "glitch-memorycore/prompt-rules.md",
-                         "glitch-memorycore/CLAUDE.md",
-                         "glitch-memorycore/master-memory.md",
-                         "glitch-memorycore/core/identity.md",
-                         "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
-                     ],
-    "agent":  {
-                  "delegator":  {
-                                    "model":  "opencode/deepseek-v4-flash-free",
-                                    "mode":  "primary",
-                                    "description":  "Glitch AI — orchestrates tasks across agents with memory persistence",
-                                    "color":  "#22c55e",
-                                    "temperature":  0.2,
-                                    "permission":  {
-                                                       "read":  "allow",
-                                                       "edit":  "allow",
-                                                       "glob":  "allow",
-                                                       "grep":  "allow",
-                                                       "list":  "allow",
-                                                       "webfetch":  "allow",
-                                                       "websearch":  "allow",
-                                                       "question":  "allow",
-                                                       "skill":  "allow",
-                                                       "todowrite":  "allow",
-                                                       "bash":  {
-                                                                    "git *":  "allow",
-                                                                    "*":  "deny"
-                                                                },
-                                                       "external_directory":  "deny",
-                                                       "task":  "allow"
-                                                   },
-                                    "prompt":  "You are Glitch — a personal AI companion. Your user profile is loaded from `user/main-memory.md`, session context from `user/current-session.md`. If those files don\u0027t exist yet, help the user through first-time setup.\n\n## Agent Selection\n| Task Type | Agent | Model | Skills to Load |\n|-----------|-------|-------|----------------|\n| Bash, file ops, simple edits | @general | opencode/deepseek-v4-flash-free | — |\n| Code (1-5 files, standard logic) | @general | opencode/deepseek-v4-flash-free | — |\n| Complex code (5+ files, architecture, auth, data layer) | @coder | opencode-go/kimi-k2.6 (paid) | senior-developer, testing, code-review |\n| UI / visual / component design | @ui-designer | opencode-go/kimi-k2.6 (paid) | ui-design |\n| Codebase research | @explore | opencode/deepseek-v4-flash-free | — |\n| Architecture / planning | @plan | opencode/deepseek-v4-flash-free | — |\n| Code scaffolding | @build | opencode/deepseek-v4-flash-free | — |\n| Code quality review | @reviewer | opencode-go/qwen3.6-plus (paid) | code-review |\n| Image/visual analysis | @vision | opencode-go/qwen3.6-plus (paid) | — |\n\n## Skill Loading at Dispatch\nWhen dispatching to @coder or @ui-designer, load relevant skills to provide rich implementation context:\n\n1. **@coder dispatch** → ALWAYS load `skill \"senior-developer\"` for full-stack patterns. Optionally load `skill \"testing\"` for test-first tasks, `skill \"code-review\"` for quality-critical work.\n2. **@ui-designer dispatch** → ALWAYS load `skill \"ui-design\"` for design patterns and component standards.\n3. **@reviewer dispatch** → ALWAYS load `skill \"code-review\"` for the full review protocol.\n4. The skill is loaded via the `skill` tool before or alongside the task dispatch. Include the skill output in the task prompt as context.\n\n**Example dispatch pattern:**\n```\n1. skill \"senior-developer\" → get patterns\n2. task subagent_type=coder: \"Build feature X. Patterns from senior-developer skill: [paste key patterns]. Follow your system prompt quality standards.\"\n```\n\n**Paid agents (@coder, @ui-designer, @vision, @reviewer) are UNAVAILABLE in free mode.** In free mode, use @general for all coding work and indicate to the user that paid agents would produce better results."
-                                },
-                  "general":  {
-                                  "model":  "opencode/deepseek-v4-flash-free",
-                                  "mode":  "subagent",
-                                  "description":  "General-purpose agent — bash commands, file ops, simple edits, standard code.",
-                                  "permission":  {
-                                                     "read":  "allow",
-                                                     "edit":  "allow",
-                                                     "bash":  "allow",
-                                                     "glob":  "allow",
-                                                     "grep":  "allow",
-                                                     "list":  "allow",
-                                                     "webfetch":  "allow",
-                                                     "websearch":  "deny",
-                                                     "question":  "allow",
-                                                     "todowrite":  "allow"
-                                                 },
-                                  "temperature":  0.2
-                              },
-                  "explore":  {
-                                  "model":  "opencode/deepseek-v4-flash-free",
-                                  "mode":  "subagent",
-                                  "description":  "Codebase research — find files, search code, answer questions about the codebase. Read-only.",
-                                  "temperature":  0.2
-                              },
-                  "plan":  {
-                               "model":  "opencode/deepseek-v4-flash-free",
-                               "mode":  "primary",
-                               "description":  "Planning mode — reason about architecture and designs without executing code.",
-                               "temperature":  0.2
-                           },
-                  "build":  {
-                                "model":  "opencode/deepseek-v4-flash-free",
-                                "mode":  "subagent",
-                                "description":  "Code scaffolding — generates code from prompts.",
-                                "temperature":  0.2
-                            }
-              },
-    "attachment":  {
-                       "image":  {
-                                     "auto_resize":  true,
-                                     "max_width":  2000,
-                                     "max_height":  2000,
-                                     "max_base64_bytes":  5242880
-                                 }
-                   },
-    "experimental":  {
-                         "disable_paste_summary":  true
-                     },
-    "server":  {
-                   "port":  4100,
-                   "hostname":  "0.0.0.0"
-               },
-    "default_agent":  "delegator",
-    "compaction":  {
-                       "auto":  true,
-                       "tail_turns":  8
-                   }
+    "$schema": "https://opencode.ai/config.json",
+    "instructions": [
+        "glitch-memorycore/prompt-rules.md",
+        "glitch-memorycore/CLAUDE.md",
+        "glitch-memorycore/master-memory.md",
+        "glitch-memorycore/core/identity.md",
+        "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+    ],
+    "agent": {
+        "delegator": {
+            "model": "opencode/deepseek-v4-flash-free",
+            "mode": "primary",
+            "description": "Glitch AI — orchestrates tasks across agents with memory persistence and free-to-paid fallback",
+            "color": "#22c55e",
+            "temperature": 0.2,
+            "permission": {
+                "read": "allow",
+                "edit": "allow",
+                "glob": "allow",
+                "grep": "allow",
+                "list": "allow",
+                "webfetch": "allow",
+                "websearch": "allow",
+                "question": "allow",
+                "skill": "allow",
+                "todowrite": "allow",
+                "bash": { "git *": "allow", "*": "deny" },
+                "external_directory": "deny",
+                "task": "allow"
+            },
+            "prompt": "You are Glitch — a personal AI companion. Your user profile is loaded from `user/main-memory.md`, session context from `user/current-session.md`. If those files don't exist yet, help the user through first-time setup.\n\n## Agent Selection — Free-First, Paid-Fallback\n\nEvery agent has a free variant (try first) and a paid fallback (retry on failure). Always dispatch to the free agent first. If it returns empty or fails, save context to the scratchpad, then re-dispatch to the paid agent.\n\n| Task Type | Try First (Free) | Fallback (Paid) | Model Chain |\n|-----------|-----------------|-----------------|-------------|\n| Bash, file ops, simple edits | @general | @general-paid | deepseek-v4-flash-free to deepseek-v4-flash |\n| Code (1-5 files, standard logic) | @general | @general-paid | deepseek-v4-flash-free to deepseek-v4-flash |\n| Complex code (5+ files, architecture, auth, data layer) | @coder-free | @coder | qwen3.6-plus-free to kimi-k2.6 |\n| UI / visual / component design | @ui-designer-free | @ui-designer | qwen3.6-plus-free to kimi-k2.6 |\n| Codebase research | @explore | @explore-paid | deepseek-v4-flash-free to deepseek-v4-flash |\n| Architecture / planning | @plan | @plan-paid | deepseek-v4-flash-free to deepseek-v4-flash |\n| Code scaffolding | @build | @build-paid | deepseek-v4-flash-free to deepseek-v4-flash |\n| Code quality review | @reviewer-free | @reviewer | qwen3.6-plus-free to qwen3.6-plus (same family) |\n| Image/visual analysis | @vision-free | @vision | qwen3.6-plus-free to qwen3.6-plus (same family) |\n| Test writing / TDD | @testing-free | @testing | qwen3.6-plus-free to kimi-k2.6 |\n\n## Free-to-Paid Fallback Protocol\n\n1. **Save context first** — before dispatching to any free agent, save the task state, current progress, and any partial work to the Working Memory scratchpad in `user/current-session.md`\n2. **Try free** — dispatch to the free variant from the table above\n3. **Free succeeds** — incorporate the result into your response\n4. **Free fails or returns empty** — Do NOT retry free. Instead:\n   a. Read the scratchpad for saved context\n   b. Re-dispatch to the paid fallback with: \"Free agent returned empty. Context: [saved state]. Pick up from here: [task description].\"\n   c. The paid agent completes the task with full awareness of what was already done\n\n### Why This Works\n- The scratchpad preserves task context across retries — no progress lost\n- Model families match where possible: qwen3.6-plus-free to qwen3.6-plus (same family), deepseek-v4-flash-free to deepseek-v4-flash (same family)\n- Cross-family fallbacks (coder-free to coder) still work — same prompt and standards, different model quality\n- Quota exhaustion is handled gracefully without the user seeing a failure\n\nPaid agents (@coder, @ui-designer, @vision, @reviewer, @testing, @general-paid, @explore-paid, @plan-paid, @build-paid) are UNAVAILABLE in free mode (launch-free.ps1). In free mode, use the free variants for everything.\n\n## Skill Loading at Dispatch\nWhen dispatching to @coder, @coder-free, @ui-designer, @ui-designer-free, load relevant skills:\n\n1. **@coder / @coder-free dispatch** — ALWAYS load specific skill for full-stack patterns. Optionally load specific skill for test-first tasks or code-review for quality-critical work.\n2. **@ui-designer / @ui-designer-free dispatch** — ALWAYS load specific skill for design patterns and component standards.\n3. **@reviewer / @reviewer-free dispatch** — ALWAYS load specific skill for the full review protocol.\n4. The skill is loaded via the dedicated tool before or alongside the task dispatch. Include the skill output in the task prompt as context.\n\n**Example dispatch pattern:**\n```\n1. skill loading tool to get patterns\n2. task subagent_type=coder-free: \"Build feature X. Patterns: [paste key patterns]. Save progress to scratchpad.\"\n3. On empty/failure: task subagent_type=coder: \"Free agent returned empty. Context: [saved state]. Complete this: [task].\"\n```\n\nPaid agents (@coder, @ui-designer, @vision, @reviewer) are UNAVAILABLE in free mode. In free mode, use @general for all coding work and indicate to the user that paid agents would produce better results.\nYou are powered by the model named deepseek-v4-flash-free. The exact model ID is opencode/deepseek-v4-flash-free\nHere is some useful information about the environment you are running in:\n<env>\n  Working directory: E:\\Glitch AI\\glitch-ai\n  Workspace root folder: E:\\Glitch AI\\glitch-ai\n  Is directory a git repo: yes\n  Platform: win32\n  Today's date: Mon Jun 01 2026\n</env>"
+        },
+        "general": {
+            "model": "opencode/deepseek-v4-flash-free",
+            "mode": "subagent",
+            "description": "General-purpose agent — bash commands, file ops, simple edits, standard code.",
+            "permission": {
+                "read": "allow",
+                "edit": "allow",
+                "bash": "allow",
+                "glob": "allow",
+                "grep": "allow",
+                "list": "allow",
+                "webfetch": "allow",
+                "websearch": "deny",
+                "question": "allow",
+                "todowrite": "allow"
+            },
+            "temperature": 0.2
+        },
+        "explore": {
+            "model": "opencode/deepseek-v4-flash-free",
+            "mode": "subagent",
+            "description": "Codebase research — find files, search code, answer questions about the codebase. Read-only.",
+            "temperature": 0.2
+        },
+        "plan": {
+            "model": "opencode/deepseek-v4-flash-free",
+            "mode": "primary",
+            "description": "Planning mode — reason about architecture and designs without executing code.",
+            "temperature": 0.2
+        },
+        "build": {
+            "model": "opencode/deepseek-v4-flash-free",
+            "mode": "subagent",
+            "description": "Code scaffolding — generates code from prompts.",
+            "temperature": 0.2
+        }
+    },
+    "attachment": {
+        "image": {
+            "auto_resize": true,
+            "max_width": 2000,
+            "max_height": 2000,
+            "max_base64_bytes": 5242880
+        }
+    },
+    "experimental": {
+        "disable_paste_summary": true
+    },
+    "server": {
+        "port": 4100,
+        "hostname": "0.0.0.0"
+    },
+    "default_agent": "delegator",
+    "compaction": {
+        "auto": true,
+        "tail_turns": 8
+    }
 }
