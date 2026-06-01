@@ -41,74 +41,33 @@
     overflow: hidden;
   }
 
-  /* Subtle grid pattern */
-  header::before {
-    content: '';
+  /* Vertical scan-line layer — sits behind content */
+  .vscan-line {
     position: absolute;
-    inset: 0;
-    z-index: 0;
-    background-image:
-      linear-gradient(rgba(168,85,247,0.04) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(168,85,247,0.04) 1px, transparent 1px);
-    background-size: 48px 48px;
-    mask-image: radial-gradient(ellipse 60% 50% at 50% 40%, black 20%, transparent 70%);
-    -webkit-mask-image: radial-gradient(ellipse 60% 50% at 50% 40%, black 20%, transparent 70%);
-    pointer-events: none;
-  }
-
-  /* Scan-line layer — sits between grid and content */
-  .scan-line {
-    position: absolute;
-    left: 0; right: 0;
-    height: 1px;
+    top: 0;
+    bottom: 0;
+    width: 1px;
     z-index: 1;
     pointer-events: none;
     opacity: 0;
+    animation: vscan-pulse var(--duration, 3s) ease-in-out infinite;
+    animation-delay: var(--delay, 0s);
   }
-  .scan-line.purple {
-    background: linear-gradient(90deg, transparent 0%, rgba(168,85,247,0.6) 20%, rgba(168,85,247,0.9) 50%, rgba(168,85,247,0.6) 80%, transparent 100%);
+  .vscan-line.purple {
+    background: linear-gradient(180deg, transparent 0%, rgba(168,85,247,0.5) 15%, rgba(168,85,247,0.8) 50%, rgba(168,85,247,0.5) 85%, transparent 100%);
   }
-  .scan-line.cyan {
-    background: linear-gradient(90deg, transparent 0%, rgba(6,182,212,0.5) 20%, rgba(6,182,212,0.8) 50%, rgba(6,182,212,0.5) 80%, transparent 100%);
+  .vscan-line.cyan {
+    background: linear-gradient(180deg, transparent 0%, rgba(6,182,212,0.4) 15%, rgba(6,182,212,0.7) 50%, rgba(6,182,212,0.4) 85%, transparent 100%);
   }
-  .scan-line:nth-child(1) { animation: scanline1 4s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 0s; }
-  .scan-line:nth-child(2) { animation: scanline2 6s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 1.2s; }
-  .scan-line:nth-child(3) { animation: scanline3 3.5s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 2.8s; }
-  .scan-line:nth-child(4) { animation: scanline4 7s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 0.5s; }
-  .scan-line:nth-child(5) { animation: scanline1 5s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 3.5s; }
-  .scan-line:nth-child(6) { animation: scanline3 8s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 1.8s; }
-  .scan-line:nth-child(7) { animation: scanline2 4.5s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 4.2s; }
 
-  @keyframes scanline1 {
-    0%   { top: -1px; opacity: 0; }
-    5%   { opacity: 0.4; }
-    50%  { opacity: 0.25; }
-    95%  { opacity: 0.4; }
-    100% { top: 100%; opacity: 0; }
-  }
-  @keyframes scanline2 {
-    0%   { top: -1px; opacity: 0; }
-    8%   { opacity: 0.3; }
-    40%  { opacity: 0.15; }
-    60%  { opacity: 0.35; }
-    92%  { opacity: 0.3; }
-    100% { top: 100%; opacity: 0; }
-  }
-  @keyframes scanline3 {
-    0%   { top: -1px; opacity: 0; }
-    10%  { opacity: 0.5; }
-    30%  { opacity: 0.2; }
-    70%  { opacity: 0.45; }
-    100% { top: 100%; opacity: 0; }
-  }
-  @keyframes scanline4 {
-    0%   { top: -1px; opacity: 0; }
-    6%   { opacity: 0.2; }
-    25%  { opacity: 0.35; }
-    50%  { opacity: 0.15; }
-    75%  { opacity: 0.3; }
-    94%  { opacity: 0.2; }
-    100% { top: 100%; opacity: 0; }
+  @keyframes vscan-pulse {
+    0%   { opacity: 0; }
+    15%  { opacity: 0.6; }
+    30%  { opacity: 0.15; }
+    50%  { opacity: 0.8; }
+    70%  { opacity: 0.2; }
+    85%  { opacity: 0.5; }
+    100% { opacity: 0; }
   }
 
   /* Header content — above scan lines */
@@ -521,14 +480,31 @@
 <body>
 
 <header>
-  <!-- Scan lines (z-index: 1, behind content) -->
-  <span class="scan-line purple"></span>
-  <span class="scan-line cyan"></span>
-  <span class="scan-line purple"></span>
-  <span class="scan-line cyan"></span>
-  <span class="scan-line purple"></span>
-  <span class="scan-line cyan"></span>
-  <span class="scan-line purple"></span>
+  <!-- Vertical scan lines (z-index: 1, behind content) -->
+  <span class="vscan-line purple" style="--delay:0.0s;--duration:3.2s;left:4%"></span>
+  <span class="vscan-line cyan"   style="--delay:1.7s;--duration:4.1s;left:8%"></span>
+  <span class="vscan-line purple" style="--delay:0.5s;--duration:2.8s;left:12%"></span>
+  <span class="vscan-line cyan"   style="--delay:2.3s;--duration:3.6s;left:16%"></span>
+  <span class="vscan-line purple" style="--delay:1.1s;--duration:4.5s;left:20%"></span>
+  <span class="vscan-line cyan"   style="--delay:0.8s;--duration:3.0s;left:24%"></span>
+  <span class="vscan-line purple" style="--delay:2.9s;--duration:3.8s;left:28%"></span>
+  <span class="vscan-line cyan"   style="--delay:0.3s;--duration:4.3s;left:32%"></span>
+  <span class="vscan-line purple" style="--delay:1.5s;--duration:2.6s;left:36%"></span>
+  <span class="vscan-line cyan"   style="--delay:2.1s;--duration:3.4s;left:40%"></span>
+  <span class="vscan-line purple" style="--delay:0.7s;--duration:4.0s;left:44%"></span>
+  <span class="vscan-line cyan"   style="--delay:1.9s;--duration:3.1s;left:48%"></span>
+  <span class="vscan-line purple" style="--delay:2.6s;--duration:3.7s;left:52%"></span>
+  <span class="vscan-line cyan"   style="--delay:0.2s;--duration:4.4s;left:56%"></span>
+  <span class="vscan-line purple" style="--delay:1.3s;--duration:2.9s;left:60%"></span>
+  <span class="vscan-line cyan"   style="--delay:2.8s;--duration:3.5s;left:64%"></span>
+  <span class="vscan-line purple" style="--delay:0.9s;--duration:4.2s;left:68%"></span>
+  <span class="vscan-line cyan"   style="--delay:1.6s;--duration:3.3s;left:72%"></span>
+  <span class="vscan-line purple" style="--delay:2.4s;--duration:2.7s;left:76%"></span>
+  <span class="vscan-line cyan"   style="--delay:0.4s;--duration:3.9s;left:80%"></span>
+  <span class="vscan-line purple" style="--delay:1.8s;--duration:4.6s;left:84%"></span>
+  <span class="vscan-line cyan"   style="--delay:2.7s;--duration:3.2s;left:88%"></span>
+  <span class="vscan-line purple" style="--delay:0.6s;--duration:3.6s;left:92%"></span>
+  <span class="vscan-line cyan"   style="--delay:1.4s;--duration:4.0s;left:96%"></span>
 
   <div class="header-content">
     <div class="header-prompt">
