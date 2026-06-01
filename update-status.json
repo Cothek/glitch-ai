@@ -1,14 +1,14 @@
 ﻿{
-    "updates_available":  4,
-    "checked_at":  "2026-06-01T09:17:23.6132677-05:00",
+    "updates_available":  3,
+    "checked_at":  "2026-06-01T09:35:41.4736402-05:00",
     "items":  [
                   {
-                      "current":  "1.15.12",
+                      "current":  "1.15.13",
                       "name":  "opencode (global)",
-                      "update_type":  "patch",
-                      "update_available":  true,
+                      "update_type":  "unknown",
+                      "update_available":  false,
                       "latest":  "1.15.13",
-                      "auto_safe":  true,
+                      "auto_safe":  false,
                       "status":  "ok"
                   },
                   {
@@ -16,7 +16,7 @@
                       "name":  "opencode (local)",
                       "update_type":  "sync",
                       "update_available":  true,
-                      "latest":  "1.15.12",
+                      "latest":  "1.15.13",
                       "auto_safe":  true,
                       "status":  "ok"
                   },
@@ -40,7 +40,7 @@
                       "update_type":  "none"
                   },
                   {
-                      "current":  "13c21c9394e951e428f96584fd19206d4d114a47 glitch-memorycore (heads/main)",
+                      "current":  "293c9cef4a1953aa35058528233f6f693706e7cb glitch-memorycore (heads/main)",
                       "update_available":  false,
                       "latest":  "remote HEAD",
                       "name":  "glitch-memorycore submodule",
