@@ -1,4 +1,5 @@
-$RootDir = Split-Path -Parent $PSCommandPath
+$ScriptDir = Split-Path -Parent $PSCommandPath
+$RootDir = Split-Path -Parent $ScriptDir
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $HandyBin = "$RootDir\handy-voice\Handy\handy.exe"
 $ConfigPath = "$RootDir\opencode.json"
@@ -174,13 +175,13 @@ if (Test-Path $HandyBin) {
 }
 
 # ---- Normalize backslash paths in session DB ----
-try { & "$RootDir\fix-paths.ps1" } catch { }
+try { & "$RootDir\scripts\fix-paths.ps1" } catch { }
 
 # ---- Check for dependency updates ----
 Write-Host "  Checking dependency updates..." -ForegroundColor Cyan
 try {
-  $statusFile = "$RootDir\update-status.json"
-  & "$RootDir\check-updates.ps1" -CheckOnly *>$null
+  $statusFile = "$RootDir\data\update-status.json"
+  & "$RootDir\scripts\check-updates.ps1" -CheckOnly *>$null
   if (Test-Path $statusFile) {
     $status = Get-Content $statusFile -Raw | ConvertFrom-Json
     if ($status.updates_available -gt 0) {
@@ -195,8 +196,8 @@ try {
 
 # ---- Check for new models ----
 try {
-  $modelStatusFile = "$RootDir\model-update-status.json"
-  & "$RootDir\check-models.ps1" -CheckOnly *>$null
+  $modelStatusFile = "$RootDir\data\model-update-status.json"
+  & "$RootDir\scripts\check-models.ps1" -CheckOnly *>$null
   if (Test-Path $modelStatusFile) {
     $modelStatus = Get-Content $modelStatusFile -Raw | ConvertFrom-Json
     if ($modelStatus.new_models_count -gt 0) {

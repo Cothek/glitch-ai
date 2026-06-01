@@ -3,7 +3,8 @@ param(
   [switch]$NewUser = $false
 )
 
-$RootDir = Split-Path -Parent $PSCommandPath
+$ScriptDir = Split-Path -Parent $PSCommandPath
+$RootDir = Split-Path -Parent $ScriptDir
 $UserBase = "$RootDir\user"
 $TemplateDir = "$RootDir\glitch-memorycore\users\_template"
 

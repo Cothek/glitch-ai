@@ -1,7 +1,8 @@
-$RootDir = Split-Path -Parent $PSCommandPath
+$ScriptDir = Split-Path -Parent $PSCommandPath
+$RootDir = Split-Path -Parent $ScriptDir
 $CacheDir = "$RootDir\glitch-memorycore\data"
 $CacheFile = "$CacheDir\known-models.json"
-$StatusFile = "$RootDir\model-update-status.json"
+$StatusFile = "$RootDir\data\model-update-status.json"
 $ConfigFile = "$RootDir\opencode.json"
 
 $ErrorActionPreference = "Continue"

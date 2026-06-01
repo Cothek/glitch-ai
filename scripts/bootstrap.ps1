@@ -2,8 +2,9 @@ param(
   [switch]$Force
 )
 
-$RootDir = Split-Path -Parent $PSCommandPath
-$LogFile = "$RootDir\bootstrap.log"
+$ScriptDir = Split-Path -Parent $PSCommandPath
+$RootDir = Split-Path -Parent $ScriptDir
+$LogFile = "$RootDir\data\bootstrap.log"
 $OpenCodeDir = "$RootDir\opencode"
 $OpenCodeBin = "$OpenCodeDir\opencode.exe"
 $HandyDir = "$RootDir\handy-voice\Handy"

@@ -1,5 +1,6 @@
 $ErrorActionPreference = "Stop"
-$RootDir = Split-Path -Parent $PSCommandPath
+$ScriptDir = Split-Path -Parent $PSCommandPath
+$RootDir = Split-Path -Parent $ScriptDir
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $Cloudflared = "$RootDir\cloudflared.exe"
 $ConfigPath = "$RootDir\opencode.json"
@@ -32,7 +33,7 @@ if (-not (Test-Path $OpenCodeBin)) {
 }
 
 # Normalize backslash paths in session DB
-& "$RootDir\fix-paths.ps1"
+& "$RootDir\scripts\fix-paths.ps1"
 
 # Check port availability (zombie socket prevention)
 try {
@@ -145,8 +146,8 @@ try {
 # ---- Check for dependency updates ----
 Write-Host "  Checking dependency updates..." -ForegroundColor Cyan
 try {
-  $statusFile = "$RootDir\update-status.json"
-  & "$RootDir\check-updates.ps1" -CheckOnly *>$null
+  $statusFile = "$RootDir\data\update-status.json"
+  & "$RootDir\scripts\check-updates.ps1" -CheckOnly *>$null
   if (Test-Path $statusFile) {
     $status = Get-Content $statusFile -Raw | ConvertFrom-Json
     if ($status.updates_available -gt 0) {
@@ -161,8 +162,8 @@ try {
 
 # ---- Check for new models ----
 try {
-  $modelStatusFile = "$RootDir\model-update-status.json"
-  & "$RootDir\check-models.ps1" -CheckOnly *>$null
+  $modelStatusFile = "$RootDir\data\model-update-status.json"
+  & "$RootDir\scripts\check-models.ps1" -CheckOnly *>$null
   if (Test-Path $modelStatusFile) {
     $modelStatus = Get-Content $modelStatusFile -Raw | ConvertFrom-Json
     if ($modelStatus.new_models_count -gt 0) {
@@ -185,7 +186,7 @@ try {
 $cloudflareOk = $false
 $cloudflareDomain = $env:GLITCH_DOMAIN
 if (Test-Path $Cloudflared) {
-  $tunnelConfig = "$RootDir\cloudflared-config.yml"
+  $tunnelConfig = "$RootDir\config\cloudflared-config.yml"
   if (Test-Path $tunnelConfig) {
     $cloudflareOk = $true
     if ($cloudflareDomain) {
@@ -203,7 +204,7 @@ if (Test-Path $Cloudflared) {
 # ---- Start Cloudflare Tunnel ----
 if ($cloudflareOk) {
   Write-Host "  Starting Cloudflare Tunnel..." -ForegroundColor Cyan
-  $cloudflaredProcess = Start-Process -NoNewWindow -FilePath $Cloudflared -ArgumentList "tunnel", "--config", "`"$RootDir\cloudflared-config.yml`"", "run" -PassThru
+  $cloudflaredProcess = Start-Process -NoNewWindow -FilePath $Cloudflared -ArgumentList "tunnel", "--config", "`"$RootDir\config\cloudflared-config.yml`"", "run" -PassThru
   Start-Sleep -Seconds 2
   if ($cloudflareDomain) {
     Write-Host "  Tunnel running: https://$cloudflareDomain" -ForegroundColor Green
@@ -264,7 +265,7 @@ $fixJob = Start-Job -ScriptBlock {
   $rootDir = $using:RootDir
   while ($true) {
     Start-Sleep -Seconds 300
-    & node "$rootDir\fix-paths.mjs"
+    & node "$rootDir\scripts\fix-paths.mjs"
   }
 }
 Write-Host "  Path fixer job running (every 5 min)" -ForegroundColor Cyan

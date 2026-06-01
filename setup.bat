@@ -23,11 +23,11 @@ echo.
 :: Step 2: Create your user profile
 echo [2/2] Setting up your profile...
 echo.
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0setup.ps1" --new-user
+powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\setup.ps1" --new-user
 if %errorlevel% neq 0 (
     echo.
     echo Setup wizard had an issue. Try running this instead:
-    echo   powershell -NoProfile -File "%~dp0setup.ps1" --new-user
+    echo   powershell -NoProfile -File "%~dp0scripts\setup.ps1" --new-user
     pause
     exit /b 1
 )

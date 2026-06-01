@@ -1,4 +1,5 @@
-$RootDir = Split-Path -Parent $PSCommandPath
+$ScriptDir = Split-Path -Parent $PSCommandPath
+$RootDir = Split-Path -Parent $ScriptDir
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $ConfigPath = "$RootDir\opencode.json"
 $BackupPath = "$RootDir\opencode.json.bak"

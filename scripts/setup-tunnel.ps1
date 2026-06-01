@@ -1,6 +1,8 @@
 $ErrorActionPreference = "Stop"
-$RootDir = Split-Path -Parent $PSCommandPath
+$ScriptDir = Split-Path -Parent $PSCommandPath
+$RootDir = Split-Path -Parent $ScriptDir
 $Cloudflared = "$RootDir\cloudflared.exe"
+$ConfigDir = "$RootDir\config"
 $TunnelName = "glitch-ai"
 $Hostname = "glitch.cothekdesigns.com"
 

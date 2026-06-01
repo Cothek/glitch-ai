@@ -24,19 +24,25 @@ Thumbs.db
 # Auto-generated status files (written by launch scripts)
 /update-status.json
 /model-update-status.json
+/opencode.json.bak
+data/update-status.json
+data/model-update-status.json
+data/skills-lock.json
+data/screenshots/
+data/bootstrap.log
 glitch-memorycore/data/known-models.json
 
 # Session history data (persisted locally, not committed)
 .opencode/session-history/
 
-
+# Temp / build artifacts
 tmp/
+test-debug/
+test-results/
+.next/
 
 # Old binary backups
 *.old
-
-# Bootstrap log
-bootstrap.log
 
 # User data (separate git submodule for Troy, or local for others)
 user/

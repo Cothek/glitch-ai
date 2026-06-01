@@ -14,7 +14,7 @@ $PluginDir = Join-Path $RootDir ".opencode"
 $CloudflaredBin = Join-Path $RootDir "cloudflared.exe"
 $HandyDir = Join-Path $RootDir "handy-voice"
 $HandyBin = [System.IO.Path]::Combine($HandyDir, "Handy", "handy.exe")
-$StatusFile = Join-Path $RootDir "update-status.json"
+$StatusFile = Join-Path $RootDir "data\update-status.json"
 $IsUpdate = $Update -or (-not $CheckOnly)
 
 function Write-ColorHost {

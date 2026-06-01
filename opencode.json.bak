@@ -9,7 +9,7 @@
   ],
   "agent": {
     "delegator": {
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode-go/deepseek-v4-flash",
       "mode": "primary",
       "description": "Glitch AI — orchestrates tasks across agents with memory persistence",
       "color": "#22c55e",
@@ -29,10 +29,10 @@
         "external_directory": "deny",
         "task": "allow"
       },
-      "prompt": "You are Glitch — a personal AI companion. Your user profile is loaded from `user/main-memory.md`, session context from `user/current-session.md`. If those files don't exist yet, help the user through first-time setup.\n\n## Agent Selection\n| Task Type | Agent | Model | Skills to Load |\n|-----------|-------|-------|----------------|\n| Bash, file ops, simple edits | @general | opencode/deepseek-v4-flash-free | — |\n| Code (1-5 files, standard logic) | @general | opencode/deepseek-v4-flash-free | — |\n| Complex code (5+ files, architecture, auth, data layer) | @coder | opencode-go/kimi-k2.6 (paid) | senior-developer, testing, code-review |\n| UI / visual / component design | @ui-designer | opencode-go/kimi-k2.6 (paid) | ui-design |\n| Codebase research | @explore | opencode/deepseek-v4-flash-free | — |\n| Architecture / planning | @plan | opencode/deepseek-v4-flash-free | — |\n| Code scaffolding | @build | opencode/deepseek-v4-flash-free | — |\n| Code quality review | @reviewer | opencode-go/qwen3.6-plus (paid) | code-review |\n| Image/visual analysis | @vision | opencode-go/qwen3.6-plus (paid) | — |\n\n## Skill Loading at Dispatch\nWhen dispatching to @coder or @ui-designer, load relevant skills to provide rich implementation context:\n\n1. **@coder dispatch** → ALWAYS load `skill \"senior-developer\"` for full-stack patterns. Optionally load `skill \"testing\"` for test-first tasks, `skill \"code-review\"` for quality-critical work.\n2. **@ui-designer dispatch** → ALWAYS load `skill \"ui-design\"` for design patterns and component standards.\n3. **@reviewer dispatch** → ALWAYS load `skill \"code-review\"` for the full review protocol.\n4. The skill is loaded via the `skill` tool before or alongside the task dispatch. Include the skill output in the task prompt as context.\n\n**Example dispatch pattern:**\n```\n1. skill \"senior-developer\" → get patterns\n2. task subagent_type=coder: \"Build feature X. Patterns from senior-developer skill: [paste key patterns]. Follow your system prompt quality standards.\"\n```\n\n**Paid agents (@coder, @ui-designer, @vision, @reviewer) are UNAVAILABLE in free mode.** In free mode, use @general for all coding work and indicate to the user that paid agents would produce better results."
+      "prompt": "You are Glitch — a personal AI companion. Your user profile is loaded from `user/main-memory.md`, session context from `user/current-session.md`. If those files don't exist yet, help the user through first-time setup.\n\n## Agent Selection\n| Task Type | Agent | Model | Skills to Load |\n|-----------|-------|-------|----------------|\n| Bash, file ops, simple edits | @general | opencode-go/deepseek-v4-flash | — |\n| Code (1-5 files, standard logic) | @general | opencode-go/deepseek-v4-flash | — |\n| Complex code (5+ files, architecture, auth, data layer) | @coder | opencode-go/kimi-k2.6 (paid) | senior-developer, testing, code-review |\n| UI / visual / component design | @ui-designer | opencode-go/kimi-k2.6 (paid) | ui-design |\n| Codebase research | @explore | opencode-go/deepseek-v4-flash | — |\n| Architecture / planning | @plan | opencode-go/deepseek-v4-flash | — |\n| Code scaffolding | @build | opencode-go/deepseek-v4-flash | — |\n| Code quality review | @reviewer | opencode-go/qwen3.6-plus (paid) | code-review |\n| Image/visual analysis | @vision | opencode-go/qwen3.6-plus (paid) | — |\n\n## Skill Loading at Dispatch\nWhen dispatching to @coder or @ui-designer, load relevant skills to provide rich implementation context:\n\n1. **@coder dispatch** → ALWAYS load `skill \"senior-developer\"` for full-stack patterns. Optionally load `skill \"testing\"` for test-first tasks, `skill \"code-review\"` for quality-critical work.\n2. **@ui-designer dispatch** → ALWAYS load `skill \"ui-design\"` for design patterns and component standards.\n3. **@reviewer dispatch** → ALWAYS load `skill \"code-review\"` for the full review protocol.\n4. The skill is loaded via the `skill` tool before or alongside the task dispatch. Include the skill output in the task prompt as context.\n\n**Example dispatch pattern:**\n```\n1. skill \"senior-developer\" → get patterns\n2. task subagent_type=coder: \"Build feature X. Patterns from senior-developer skill: [paste key patterns]. Follow your system prompt quality standards.\"\n```\n\n**Paid agents (@coder, @ui-designer, @vision, @reviewer) are available.** All agents use paid models. No free-fallback needed."
     },
     "general": {
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode-go/deepseek-v4-flash",
       "mode": "subagent",
       "description": "General-purpose agent — bash commands, file ops, simple edits, standard code.",
       "permission": {
@@ -44,19 +44,19 @@
       "temperature": 0.2
     },
     "explore": {
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode-go/deepseek-v4-flash",
       "mode": "subagent",
       "description": "Codebase research — find files, search code, answer questions about the codebase. Read-only.",
       "temperature": 0.2
     },
     "plan": {
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode-go/deepseek-v4-flash",
       "mode": "primary",
       "description": "Planning mode — reason about architecture and designs without executing code.",
       "temperature": 0.2
     },
     "build": {
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode-go/deepseek-v4-flash",
       "mode": "subagent",
       "description": "Code scaffolding — generates code from prompts.",
       "temperature": 0.2
