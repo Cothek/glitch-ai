@@ -74,6 +74,21 @@
   .header-content {
     position: relative;
     z-index: 2;
+    display: flex;
+    justify-content: center;
+  }
+
+  /* Frosted glass panel behind hero text */
+  .hero-content {
+    display: inline-block;
+    position: relative;
+    z-index: 2;
+    padding: 2rem 3rem;
+    border-radius: 16px;
+    background: rgba(10, 10, 15, 0.6);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    text-align: center;
   }
 
   /* Terminal prompt decoration */
@@ -472,6 +487,7 @@
     header h1 { font-size: 2.25rem; }
     .header-prompt { font-size: 0.6875rem; }
     .header-stats { gap: 1rem; }
+    .hero-content { padding: 1.25rem 1.5rem; border-radius: 12px; }
     .card-grid { grid-template-columns: 1fr; }
     .container { padding: 1rem; }
   }
@@ -883,17 +899,19 @@
   <span class="vscan-line cyan" style="--delay:2.7s;--duration:4.2s;left:100%"></span>
 
   <div class="header-content">
-    <div class="header-prompt">
-      <span class="prompt-symbol">$</span>
-      <span class="prompt-cmd">glitch init</span>
-      <span>--portable</span>
-    </div>
-    <h1>Glitch AI</h1>
-    <p class="subtitle">Portable AI companion environment — one clone, one setup, ready on any Windows PC.</p>
-    <div class="header-stats">
-      <span class="header-stat"><span class="stat-dot green"></span> 23 skills</span>
-      <span class="header-stat"><span class="stat-dot purple"></span> 3-layer architecture</span>
-      <span class="header-stat"><span class="stat-dot cyan"></span> Windows 10+</span>
+    <div class="hero-content">
+      <div class="header-prompt">
+        <span class="prompt-symbol">$</span>
+        <span class="prompt-cmd">glitch init</span>
+        <span>--portable</span>
+      </div>
+      <h1>Glitch AI</h1>
+      <p class="subtitle">Portable AI companion environment — one clone, one setup, ready on any Windows PC.</p>
+      <div class="header-stats">
+        <span class="header-stat"><span class="stat-dot green"></span> 23 skills</span>
+        <span class="header-stat"><span class="stat-dot purple"></span> 3-layer architecture</span>
+        <span class="header-stat"><span class="stat-dot cyan"></span> Windows 10+</span>
+      </div>
     </div>
   </div>
 </header>
