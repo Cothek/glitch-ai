@@ -1,14 +1,14 @@
 ﻿{
-    "updates_available":  3,
-    "checked_at":  "2026-05-30T08:12:18.3507942-05:00",
+    "updates_available":  4,
+    "checked_at":  "2026-06-01T09:17:23.6132677-05:00",
     "items":  [
                   {
                       "current":  "1.15.12",
                       "name":  "opencode (global)",
-                      "update_type":  "unknown",
-                      "update_available":  false,
-                      "latest":  "1.15.12",
-                      "auto_safe":  false,
+                      "update_type":  "patch",
+                      "update_available":  true,
+                      "latest":  "1.15.13",
+                      "auto_safe":  true,
                       "status":  "ok"
                   },
                   {
@@ -40,7 +40,7 @@
                       "update_type":  "none"
                   },
                   {
-                      "current":  "77ab7e7bfad13968e43e6d05887c84be01c4e84c glitch-memorycore (heads/main)",
+                      "current":  "13c21c9394e951e428f96584fd19206d4d114a47 glitch-memorycore (heads/main)",
                       "update_available":  false,
                       "latest":  "remote HEAD",
                       "name":  "glitch-memorycore submodule",
@@ -50,11 +50,11 @@
                       "update_type":  "none"
                   },
                   {
-                      "current":  "@opencode-ai/plugin: 1.15.7-\u003e1.15.12",
+                      "current":  "@opencode-ai/plugin: 1.15.7-\u003e1.15.13",
                       "name":  "@opencode-ai/plugin (.opencode)",
                       "update_type":  "1 package(s) outdated",
                       "update_available":  true,
-                      "latest":  "1.15.12",
+                      "latest":  "1.15.13",
                       "auto_safe":  true,
                       "status":  "ok"
                   },
