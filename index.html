@@ -46,6 +46,7 @@
     content: '';
     position: absolute;
     inset: 0;
+    z-index: 0;
     background-image:
       linear-gradient(rgba(168,85,247,0.04) 1px, transparent 1px),
       linear-gradient(90deg, rgba(168,85,247,0.04) 1px, transparent 1px);
@@ -55,22 +56,65 @@
     pointer-events: none;
   }
 
-  /* Animated scan-line */
-  header::after {
-    content: '';
+  /* Scan-line layer — sits between grid and content */
+  .scan-line {
     position: absolute;
     left: 0; right: 0;
     height: 1px;
-    background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
-    opacity: 0;
-    animation: scanline 5s ease-in-out infinite;
+    z-index: 1;
     pointer-events: none;
+    opacity: 0;
   }
-  @keyframes scanline {
-    0%   { top: 0;    opacity: 0; }
-    8%   { opacity: 0.35; }
-    92%  { opacity: 0.35; }
+  .scan-line.purple {
+    background: linear-gradient(90deg, transparent 0%, rgba(168,85,247,0.6) 20%, rgba(168,85,247,0.9) 50%, rgba(168,85,247,0.6) 80%, transparent 100%);
+  }
+  .scan-line.cyan {
+    background: linear-gradient(90deg, transparent 0%, rgba(6,182,212,0.5) 20%, rgba(6,182,212,0.8) 50%, rgba(6,182,212,0.5) 80%, transparent 100%);
+  }
+  .scan-line:nth-child(1) { animation: scanline1 4s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 0s; }
+  .scan-line:nth-child(2) { animation: scanline2 6s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 1.2s; }
+  .scan-line:nth-child(3) { animation: scanline3 3.5s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 2.8s; }
+  .scan-line:nth-child(4) { animation: scanline4 7s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 0.5s; }
+  .scan-line:nth-child(5) { animation: scanline1 5s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 3.5s; }
+  .scan-line:nth-child(6) { animation: scanline3 8s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 1.8s; }
+  .scan-line:nth-child(7) { animation: scanline2 4.5s cubic-bezier(0.22,1,0.36,1) infinite; animation-delay: 4.2s; }
+
+  @keyframes scanline1 {
+    0%   { top: -1px; opacity: 0; }
+    5%   { opacity: 0.4; }
+    50%  { opacity: 0.25; }
+    95%  { opacity: 0.4; }
     100% { top: 100%; opacity: 0; }
+  }
+  @keyframes scanline2 {
+    0%   { top: -1px; opacity: 0; }
+    8%   { opacity: 0.3; }
+    40%  { opacity: 0.15; }
+    60%  { opacity: 0.35; }
+    92%  { opacity: 0.3; }
+    100% { top: 100%; opacity: 0; }
+  }
+  @keyframes scanline3 {
+    0%   { top: -1px; opacity: 0; }
+    10%  { opacity: 0.5; }
+    30%  { opacity: 0.2; }
+    70%  { opacity: 0.45; }
+    100% { top: 100%; opacity: 0; }
+  }
+  @keyframes scanline4 {
+    0%   { top: -1px; opacity: 0; }
+    6%   { opacity: 0.2; }
+    25%  { opacity: 0.35; }
+    50%  { opacity: 0.15; }
+    75%  { opacity: 0.3; }
+    94%  { opacity: 0.2; }
+    100% { top: 100%; opacity: 0; }
+  }
+
+  /* Header content — above scan lines */
+  .header-content {
+    position: relative;
+    z-index: 2;
   }
 
   /* Terminal prompt decoration */
@@ -477,17 +521,28 @@
 <body>
 
 <header>
-  <div class="header-prompt">
-    <span class="prompt-symbol">$</span>
-    <span class="prompt-cmd">glitch init</span>
-    <span>--portable</span>
-  </div>
-  <h1>Glitch AI</h1>
-  <p class="subtitle">Portable AI companion environment — one clone, one setup, ready on any Windows PC.</p>
-  <div class="header-stats">
-    <span class="header-stat"><span class="stat-dot green"></span> 23 skills</span>
-    <span class="header-stat"><span class="stat-dot purple"></span> 3-layer architecture</span>
-    <span class="header-stat"><span class="stat-dot cyan"></span> Windows 10+</span>
+  <!-- Scan lines (z-index: 1, behind content) -->
+  <span class="scan-line purple"></span>
+  <span class="scan-line cyan"></span>
+  <span class="scan-line purple"></span>
+  <span class="scan-line cyan"></span>
+  <span class="scan-line purple"></span>
+  <span class="scan-line cyan"></span>
+  <span class="scan-line purple"></span>
+
+  <div class="header-content">
+    <div class="header-prompt">
+      <span class="prompt-symbol">$</span>
+      <span class="prompt-cmd">glitch init</span>
+      <span>--portable</span>
+    </div>
+    <h1>Glitch AI</h1>
+    <p class="subtitle">Portable AI companion environment — one clone, one setup, ready on any Windows PC.</p>
+    <div class="header-stats">
+      <span class="header-stat"><span class="stat-dot green"></span> 23 skills</span>
+      <span class="header-stat"><span class="stat-dot purple"></span> 3-layer architecture</span>
+      <span class="header-stat"><span class="stat-dot cyan"></span> Windows 10+</span>
+    </div>
   </div>
 </header>
 
