@@ -266,6 +266,8 @@
     overflow-x: auto;
     margin: 0.75rem 0;
     position: relative;
+    white-space: pre;
+    word-break: normal;
   }
   pre code {
     font-family: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
@@ -308,6 +310,8 @@
     border-radius: 4px;
     font-family: 'Cascadia Code', 'JetBrains Mono', 'SF Mono', monospace;
     font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
 
   /* Tables */
@@ -435,6 +439,8 @@
     padding: 0.75rem 0 0.75rem 2.5rem;
     position: relative;
     color: var(--text);
+    overflow-wrap: anywhere;
+    word-break: break-word;
   }
   .steps li::before {
     content: counter(step);
@@ -485,6 +491,11 @@
     .hero-content { padding: 0.5rem 1.25rem 1rem; border-radius: 10px; }
     .card-grid { grid-template-columns: 1fr; }
     .container { padding: 1rem; }
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+    }
   }
 </style>
 </head>
