@@ -1,0 +1,257 @@
+@import "tailwindcss";
+
+@theme {
+  /* ===== Colors ===== */
+  /* Surfaces */
+  --color-bg: #0a0a0f;
+  --color-bg-elevated: #12121a;
+  --color-bg-surface: #1a1a28;
+  --color-bg-code: #0d0d14;
+  --color-bg-frost: rgba(10, 10, 15, 0.4);
+
+  /* Borders */
+  --color-border: #1e1e30;
+  --color-border-strong: #2a2a40;
+
+  /* Text */
+  --color-text: #e4e4ef;
+  --color-text-muted: #8888a0;
+  --color-text-dim: #555570;
+
+  /* Brand */
+  --color-accent: #a855f7;
+  --color-accent-hover: #c084fc;
+  --color-accent-soft: rgba(168, 85, 247, 0.15);
+  --color-cyan: #22d3ee;
+  --color-cyan-soft: rgba(34, 211, 238, 0.12);
+  --color-green: #22c55e;
+  --color-amber: #f59e0b;
+  --color-red: #ef4444;
+
+  /* ===== Typography ===== */
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), "Cascadia Code", "JetBrains Mono", "SF Mono", "Fira Code", monospace;
+
+  /* ===== Radii ===== */
+  --radius-sm: 6px;
+  --radius: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* ===== Motion ===== */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration: 250ms;
+  --duration-slow: 400ms;
+}
+
+/* ===== Base ===== */
+html {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  scroll-behavior: smooth;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  overflow-x: hidden;
+  min-height: 100vh;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+::selection {
+  background: var(--color-accent-soft);
+  color: var(--color-text);
+}
+
+/* ===== Custom utilities ===== */
+@layer utilities {
+  .gradient-text {
+    background: linear-gradient(135deg, #c084fc 0%, #22d3ee 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    -webkit-text-fill-color: transparent;
+    color: transparent;
+  }
+
+  .text-balance {
+    text-wrap: balance;
+  }
+
+  .glow-purple {
+    text-shadow: 0 0 30px rgba(168, 85, 247, 0.4), 0 0 60px rgba(34, 211, 238, 0.15);
+  }
+
+  .frosted {
+    background: var(--color-bg-frost);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
+  }
+
+  .ring-glow {
+    box-shadow:
+      0 0 0 1px var(--color-border),
+      0 0 30px -5px var(--color-accent-soft);
+  }
+}
+
+/* ===== Scan lines (hero background) ===== */
+@keyframes vscan-pulse {
+  0%   { opacity: 0; }
+  15%  { opacity: 0.6; }
+  30%  { opacity: 0.15; }
+  50%  { opacity: 0.8; }
+  70%  { opacity: 0.2; }
+  85%  { opacity: 0.5; }
+  100% { opacity: 0; }
+}
+
+.vscan-line {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  pointer-events: none;
+  animation: vscan-pulse var(--duration, 3s) ease-in-out infinite;
+  animation-delay: var(--delay, 0s);
+  will-change: opacity;
+}
+
+.vscan-line.purple {
+  background: linear-gradient(180deg, transparent 0%, rgba(168, 85, 247, 0.5) 15%, rgba(168, 85, 247, 0.8) 50%, rgba(168, 85, 247, 0.5) 85%, transparent 100%);
+}
+
+.vscan-line.cyan {
+  background: linear-gradient(180deg, transparent 0%, rgba(34, 211, 238, 0.4) 15%, rgba(34, 211, 238, 0.7) 50%, rgba(34, 211, 238, 0.4) 85%, transparent 100%);
+}
+
+/* ===== Cursor blink ===== */
+@keyframes blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+.cursor-blink {
+  animation: blink 1s step-end infinite;
+}
+
+/* ===== Glow pulse (hero stats) ===== */
+@keyframes pulse-glow {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.5; }
+}
+
+.pulse-dot {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+
+/* ===== Reveal on scroll ===== */
+@keyframes reveal-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.reveal {
+  animation: reveal-up 0.6s var(--ease-out) both;
+}
+
+/* ===== Reduced motion ===== */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ===== Focus visible ===== */
+*:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* ===== Code blocks (terminal frames) ===== */
+.terminal-frame {
+  background: var(--color-bg-code);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.875rem;
+  background: var(--color-bg-elevated);
+  border-bottom: 1px solid var(--color-border);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--color-text-dim);
+}
+
+.terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.terminal-dot.red { background: #ff5f56; }
+.terminal-dot.yellow { background: #ffbd2e; }
+.terminal-dot.green { background: #27c93f; }
+
+.terminal-body {
+  padding: 1rem 1.25rem;
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+  line-height: 1.7;
+  color: #c8d6e5;
+  overflow-x: auto;
+}
+
+.terminal-body .prompt-symbol { color: var(--color-green); }
+.terminal-body .prompt-cmd { color: var(--color-cyan); }
+.terminal-body .prompt-text { color: var(--color-text); }
+.terminal-body .dim { color: var(--color-text-dim); }
+.terminal-body .accent { color: var(--color-accent); }
+
+/* ===== Hover lift ===== */
+.hover-lift {
+  transition: transform var(--duration) var(--ease-out), border-color var(--duration) var(--ease-out);
+}
+.hover-lift:hover {
+  transform: translateY(-2px);
+  border-color: var(--color-accent);
+}
+
+/* ===== Code inline ===== */
+code {
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+  background: var(--color-bg-surface);
+  color: var(--color-cyan);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+pre code {
+  background: transparent;
+  padding: 0;
+  font-size: inherit;
+  color: inherit;
+}
+
+/* ===== Print ===== */
+@media print {
+  body { background: white; color: black; }
+  .no-print { display: none; }
+}
