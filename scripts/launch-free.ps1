@@ -4,33 +4,84 @@ $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $ConfigPath = "$RootDir\opencode.json"
 $BackupPath = "$RootDir\opencode.json.bak"
 $PrefFile = "$RootDir\data\free-model-preference.json"
+$FreeModelsFile = "$RootDir\data\free-models.json"
 
 $ErrorActionPreference = "Continue"
 
-# --- Known free models ---------------------------------------------------------
-$ModelGroups = @(
-    @{
-        Name = "NVIDIA (free endpoint, requires /connect)"
-        Models = @(
-            @{ ID = "nvidia/z-ai/glm-5.1"; Name = "GLM-5.1"; Tag = "default" }
-            @{ ID = "nvidia/qwen/qwen3-coder-480b-a35b-instruct"; Name = "Qwen3-Coder 480B"; Tag = "" }
-            @{ ID = "nvidia/minimaxai/minimax-m2.7"; Name = "MiniMax M2.7"; Tag = "" }
-            @{ ID = "nvidia/stepfun-ai/step-3.7-flash"; Name = "Step 3.7 Flash"; Tag = "" }
-            @{ ID = "nvidia/mistralai/mistral-large-3-675b-instruct-2512"; Name = "Mistral Large 3"; Tag = "" }
-        )
-    }
-    @{
-        Name = "OpenCode Zen (free tier)"
-        Models = @(
-            @{ ID = "opencode/deepseek-v4-flash-free"; Name = "DeepSeek V4 Flash"; Tag = "" }
-            @{ ID = "opencode/qwen3.6-plus-free"; Name = "Qwen 3.6 Plus"; Tag = "" }
-            @{ ID = "opencode/mimo-v2.5-free"; Name = "Mimo v2.5"; Tag = "" }
-            @{ ID = "opencode/minimax-m3-free"; Name = "MiniMax M3"; Tag = "" }
-            @{ ID = "opencode/nemotron-3-super-free"; Name = "Nemotron 3 Super"; Tag = "" }
-            @{ ID = "opencode/big-pickle"; Name = "Big Pickle"; Tag = "" }
-        )
-    }
+# --- Hardcoded fallback models (used when free-models.json is missing/stale) ----
+$FallbackModelGroups = @(
+  @{
+    Name = "OpenCode Zen (free tier)"
+    Models = @(
+      @{ ID = "opencode/deepseek-v4-flash-free"; Name = "DeepSeek V4 Flash"; Tag = "" }
+      @{ ID = "opencode/qwen3.6-plus-free"; Name = "Qwen 3.6 Plus"; Tag = "" }
+      @{ ID = "opencode/mimo-v2.5-free"; Name = "Mimo v2.5"; Tag = "" }
+      @{ ID = "opencode/minimax-m3-free"; Name = "MiniMax M3"; Tag = "" }
+      @{ ID = "opencode/nemotron-3-super-free"; Name = "Nemotron 3 Super"; Tag = "" }
+      @{ ID = "opencode/big-pickle"; Name = "Big Pickle"; Tag = "" }
+    )
+  }
+  @{
+    Name = "NVIDIA (free endpoint, requires /connect)"
+    Models = @(
+      @{ ID = "nvidia/z-ai/glm-5.1"; Name = "GLM-5.1"; Tag = "default" }
+      @{ ID = "nvidia/qwen/qwen3-coder-480b-a35b-instruct"; Name = "Qwen3-Coder 480B"; Tag = "" }
+      @{ ID = "nvidia/minimaxai/minimax-m2.7"; Name = "MiniMax M2.7"; Tag = "" }
+      @{ ID = "nvidia/stepfun-ai/step-3.7-flash"; Name = "Step 3.7 Flash"; Tag = "" }
+      @{ ID = "nvidia/mistralai/mistral-large-3-675b-instruct-2512"; Name = "Mistral Large 3"; Tag = "" }
+    )
+  }
 )
+
+# --- Load model list from free-models.json (live cache) or fallback -------------
+function Get-FreeModelGroups {
+  param([string]$FilePath, [array]$Fallback)
+
+  if (-not (Test-Path $FilePath)) { return $Fallback }
+
+  try {
+    $data = Get-Content $FilePath -Raw | ConvertFrom-Json
+
+    # Check staleness: if older than 7 days, warn but still use it
+    $genTime = [DateTime]::Parse($data.generated_at)
+    $age = ((Get-Date) - $genTime).TotalDays
+
+    if ($age -gt 7) {
+      Write-Host " [WARN] free-models.json is $($age.ToString('F0')) days old. Run check-models.ps1 to refresh." -ForegroundColor Yellow
+    }
+
+    # Convert from cache format to the ModelGroups format
+    $groups = @()
+    foreach ($provider in $data.providers) {
+      $group = @{
+        Name = $provider.name
+        Models = @()
+      }
+      foreach ($m in $provider.models) {
+        # Mark default if it's the GLM-5.1 model
+        $tag = if ($m.id -eq "nvidia/z-ai/glm-5.1") { "default" } else { "" }
+        $group.Models += @{ ID = $m.id; Name = $m.name; Tag = $tag }
+      }
+      if ($group.Models.Count -gt 0) { $groups += $group }
+    }
+
+    if ($groups.Count -gt 0) { return $groups }
+  } catch {
+    Write-Host " [WARN] Could not parse free-models.json, using fallback list." -ForegroundColor Yellow
+  }
+
+  return $Fallback
+}
+
+# --- Run check-models.ps1 silently to refresh cache (if available) ---------------
+if (Test-Path "$ScriptDir\check-models.ps1") {
+  try {
+    & "$ScriptDir\check-models.ps1" -Silent -CheckOnly 2>&1 | Out-Null
+  } catch { }
+}
+
+# Load model groups (live cache > fallback)
+$ModelGroups = Get-FreeModelGroups -FilePath $FreeModelsFile -Fallback $FallbackModelGroups
 
 # Flat lookup table
 $AllModels = @{}

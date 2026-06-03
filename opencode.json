@@ -1,89 +1,95 @@
 ﻿{
-  "$schema": "https://opencode.ai/config.json",
-  "instructions": [
-    "glitch-memorycore/prompt-rules.md",
-    "glitch-memorycore/CLAUDE.md",
-    "glitch-memorycore/master-memory.md",
-    "glitch-memorycore/core/identity.md",
-    "glitch-memorycore/plugins/glitch-skills/skills-registry.md",
-    "user/main-memory.md",
-    "user/current-session.md",
-    "user/reminders.md",
-    "user/session-dashboard.md"
-  ],
-  "agent": {
-    "delegator": {
-      "model": "nvidia/z-ai/glm-5.1",
-      "mode": "primary",
-      "description": "Free mode  orchestrates tasks using only free models (NVIDIA GLM-5.1).",
-      "color": "#22c55e",
-      "temperature": 0.2,
-      "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "allow",
-        "question": "allow",
-        "skill": "allow",
-        "todowrite": "allow",
-        "bash": { "git *": "allow", "*": "deny" },
-        "external_directory": "deny",
-        "task": "allow"
-      },
-      "prompt": "You are Glitch running in FREE MODE. All agents are using the free model \"nvidia/z-ai/glm-5.1\" (NVIDIA GLM-5.1).\n\n## Free Mode Rules\n1. You have FULL permissions  same capabilities as normal mode.\n2. ALL agents use \"nvidia/z-ai/glm-5.1\"  there are NO paid fallback models available.\n3. Premium features are generally UNAVAILABLE in OpenCode Zen free models, but some NVIDIA free endpoint models may support image/vision analysis and stronger coding  capability depends on the specific model.\n4. If the free model exhausts its quota, close this session and relaunch with a different model:\n   - Set $env:GLITCH_FREE_MODEL to one of the valid model IDs (opencode/... or nvidia/...)\n   - Then run .\\launch-glitch-free.bat again\n5. Tell the user which model is active on session start so they know what to expect.\n6. NVIDIA models require NVIDIA provider to be connected via /connect in the TUI first.\n\n## Agent Selection (All Free)\n| Task Type | Agent | Model |\n|-----------|-------|-------|\n| Bash, file ops, simple edits | @general | nvidia/z-ai/glm-5.1 |\n| Code (1-5 files, standard logic) | @general | nvidia/z-ai/glm-5.1 |\n| Codebase research | @explore | nvidia/z-ai/glm-5.1 |\n| Architecture / planning | @plan | nvidia/z-ai/glm-5.1 |\n| Code scaffolding | @build | nvidia/z-ai/glm-5.1 |\n\nNo premium agents (@coder, @vision, @reviewer, @general-paid, @build-paid) are available in free mode."
-    },
-    "general": {
-      "model": "nvidia/z-ai/glm-5.1",
-      "mode": "subagent",
-      "description": "General-purpose agent  bash commands, file ops, simple edits, standard code.",
-      "permission": {
-        "read": "allow", "edit": "allow", "bash": "allow",
-        "glob": "allow", "grep": "allow", "list": "allow",
-        "webfetch": "allow", "websearch": "deny",
-        "question": "allow", "todowrite": "allow"
-      },
-      "temperature": 0.2
-    },
-    "explore": {
-      "model": "nvidia/z-ai/glm-5.1",
-      "mode": "subagent",
-      "description": "Codebase research  find files, search code, answer questions about the codebase. Read-only.",
-      "temperature": 0.2
-    },
-    "plan": {
-      "model": "nvidia/z-ai/glm-5.1",
-      "mode": "primary",
-      "description": "Planning mode  reason about architecture and designs without executing code.",
-      "temperature": 0.2
-    },
-    "build": {
-      "model": "nvidia/z-ai/glm-5.1",
-      "mode": "subagent",
-      "description": "Code scaffolding  generates code from prompts.",
-      "temperature": 0.2
-    }
-  },
-  "attachment": {
-    "image": {
-      "auto_resize": true,
-      "max_width": 2000,
-      "max_height": 2000,
-      "max_base64_bytes": 5242880
-    }
-  },
-  "experimental": {
-    "disable_paste_summary": true
-  },
-  "server": {
-    "port": 4100,
-    "hostname": "0.0.0.0"
-  },
-  "default_agent": "delegator",
-  "compaction": {
-    "auto": true,
-    "tail_turns": 8
-  }
+"$schema": "https://opencode.ai/config.json",
+"instructions": [
+"glitch-memorycore/prompt-rules.md",
+"glitch-memorycore/CLAUDE.md",
+"glitch-memorycore/master-memory.md",
+"glitch-memorycore/core/identity.md",
+"glitch-memorycore/plugins/glitch-skills/skills-registry.md",
+"user/main-memory.md",
+"user/current-session.md",
+"user/reminders.md",
+"user/session-dashboard.md"
+],
+"agent": {
+"delegator": {
+"model": "nvidia/deepseek-ai/deepseek-v4-flash",
+"mode": "primary",
+"description": "Free mode orchestrates tasks using only free models (deepseek-v4-flash).",
+"color": "#22c55e",
+"temperature": 0.2,
+"permission": {
+"read": "allow",
+"edit": "allow",
+"glob": "allow",
+"grep": "allow",
+"list": "allow",
+"webfetch": "allow",
+"websearch": "allow",
+"question": "allow",
+"skill": "allow",
+"todowrite": "allow",
+"bash": { "git *": "allow", "*": "deny" },
+"external_directory": "deny",
+"task": "allow"
+},
+"prompt": "You are Glitch running in FREE MODE. All agents are using the free model \"nvidia/deepseek-ai/deepseek-v4-flash\" (deepseek-v4-flash).\n\n## Free Mode Rules\n1. You have FULL permissions same capabilities as normal mode.\n2. ALL agents use \"nvidia/deepseek-ai/deepseek-v4-flash\" there are NO paid fallback models available.\n3. Premium features are generally UNAVAILABLE in OpenCode Zen free models, but some NVIDIA free endpoint models may support image/vision analysis and stronger coding capability depends on the specific model.\n4. If the free model exhausts its quota, close this session and relaunch with a different model:\n- Set $env:GLITCH_FREE_MODEL to one of the valid model IDs (opencode/... or nvidia/...)\n- Or run .\\scripts\\switch-model.ps1 to pick a new model\n- Then run .\\launch-glitch-free.bat again (or .\\launch-glitch-free.bat --pick)\n5. Tell the user which model is active on session start so they know what to expect.\n6. NVIDIA models require NVIDIA provider to be connected via /connect in the TUI first.\n\n## Agent Selection (All Free)\n| Task Type | Agent | Model |\n|-----------|-------|-------|\n| Bash, file ops, simple edits | @general | nvidia/deepseek-ai/deepseek-v4-flash |\n| Code (1-5 files, standard logic) | @general | nvidia/deepseek-ai/deepseek-v4-flash |\n| Codebase research | @explore | nvidia/deepseek-ai/deepseek-v4-flash |\n| Architecture / planning | @plan | nvidia/deepseek-ai/deepseek-v4-flash |\n| Code scaffolding | @build | nvidia/deepseek-ai/deepseek-v4-flash |\n\nNo premium agents (@coder, @vision, @reviewer, @general-paid, @build-paid) are available in free mode."
+},
+"general": {
+"model": "nvidia/deepseek-ai/deepseek-v4-flash",
+"mode": "subagent",
+"description": "General-purpose agent bash commands, file ops, simple edits, standard code.",
+"permission": {
+"read": "allow",
+"edit": "allow",
+"bash": "allow",
+"glob": "allow",
+"grep": "allow",
+"list": "allow",
+"webfetch": "allow",
+"websearch": "deny",
+"question": "allow",
+"todowrite": "allow"
+},
+"temperature": 0.2
+},
+"explore": {
+"model": "nvidia/deepseek-ai/deepseek-v4-flash",
+"mode": "subagent",
+"description": "Codebase research find files, search code, answer questions about the codebase. Read-only.",
+"temperature": 0.2
+},
+"plan": {
+"model": "nvidia/deepseek-ai/deepseek-v4-flash",
+"mode": "primary",
+"description": "Planning mode reason about architecture and designs without executing code.",
+"temperature": 0.2
+},
+"build": {
+"model": "nvidia/deepseek-ai/deepseek-v4-flash",
+"mode": "subagent",
+"description": "Code scaffolding generates code from prompts.",
+"temperature": 0.2
+}
+},
+"attachment": {
+"image": {
+"auto_resize": true,
+"max_width": 2000,
+"max_height": 2000,
+"max_base64_bytes": 5242880
+}
+},
+"experimental": {
+"disable_paste_summary": true
+},
+"server": {
+"port": 4100,
+"hostname": "0.0.0.0"
+},
+"default_agent": "delegator",
+"compaction": {
+"auto": true,
+"tail_turns": 8
+}
 }

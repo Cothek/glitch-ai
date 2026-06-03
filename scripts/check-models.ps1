@@ -2,70 +2,104 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
 $RootDir = Split-Path -Parent $ScriptDir
 $CacheDir = "$RootDir\glitch-memorycore\data"
 $CacheFile = "$CacheDir\known-models.json"
+$FreeModelsFile = "$RootDir\data\free-models.json"
 $StatusFile = "$RootDir\data\model-update-status.json"
 $ConfigFile = "$RootDir\opencode.json"
 
 $ErrorActionPreference = "Continue"
 
-# ─── Parse flags ──────────────────────────────────────────────────────────────
+# --- Parse flags ----------------------------------------------------------------
 $ResetCache = $args -contains "-ResetCache"
 $UpdateCache = $args -contains "-UpdateCache"
 $CheckOnly = (-not $ResetCache -and -not $UpdateCache) -or $args -contains "-CheckOnly"
+$Silent = $args -contains "-Silent"
 
-# ─── Helper: fetch JSON from a URL ────────────────────────────────────────────
+# --- Helper: fetch JSON from a URL ----------------------------------------------
 function Fetch-Models($url) {
-    try {
-        $response = Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 15 -ErrorAction Stop
-        $ids = if ($response.data) { $response.data.id } else { @() }
-        return @($ids | Where-Object { $_ -ne $null })
-    } catch {
-        Write-Host "    [WARN] Failed to fetch $url : $_" -ForegroundColor Yellow
-        return $null
-    }
+  try {
+    $response = Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 15 -ErrorAction Stop
+    $ids = if ($response.data) { $response.data.id } else { @() }
+    return @($ids | Where-Object { $_ -ne $null })
+  } catch {
+    if (-not $Silent) { Write-Host " [WARN] Failed to fetch $url : $_" -ForegroundColor Yellow }
+    return $null
+      }
 }
 
-# ─── Helper: fetch NVIDIA models (needs API key) ──────────────────────────────
+# --- Helper: fetch NVIDIA models (needs API key) --------------------------------
 function Fetch-NvidiaModels {
-    # Try environment variable first
-    $apiKey = $env:NVIDIA_API_KEY
+  # Try environment variable first
+  $apiKey = $env:NVIDIA_API_KEY
 
-    # Fall back to opencode auth store
-    if (-not $apiKey) {
-        $authFile = "$env:USERPROFILE\.local\share\opencode\auth.json"
-        if (Test-Path $authFile) {
-            try {
-                $auth = Get-Content $authFile -Raw | ConvertFrom-Json
-                # NVIDIA keys in auth.json are keyed by the provider slug
-                $nvidiaAuth = $auth.PSObject.Properties | Where-Object { $_.Name -like "*nvidia*" } | Select-Object -First 1
-                if ($nvidiaAuth) {
-                    $apiKey = $nvidiaAuth.Value.apiKey
-                }
-            } catch { }
+  # Fall back to opencode auth store
+  if (-not $apiKey) {
+    $authFile = "$env:USERPROFILE\.local\share\opencode\auth.json"
+    if (Test-Path $authFile) {
+      try {
+        $auth = Get-Content $authFile -Raw | ConvertFrom-Json
+        # NVIDIA keys in auth.json are keyed by the provider slug
+        $nvidiaAuth = $auth.PSObject.Properties | Where-Object { $_.Name -like "*nvidia*" } | Select-Object -First 1
+        if ($nvidiaAuth) {
+          $apiKey = $nvidiaAuth.Value.key
         }
+      } catch { }
     }
+  }
 
-    if (-not $apiKey) {
-        Write-Host "    [WARN] NVIDIA_API_KEY not found (env or opencode auth) - skipping NVIDIA models" -ForegroundColor Yellow
-        return $null
-    }
+  if (-not $apiKey) {
+    if (-not $Silent) { Write-Host " [WARN] NVIDIA_API_KEY not found (env or opencode auth) - skipping NVIDIA models" -ForegroundColor Yellow }
+    return $null
+  }
 
-    $headers = @{ "Authorization" = "Bearer $apiKey" }
-    $result = Fetch-ModelsWithHeaders "https://integrate.api.nvidia.com/v1/models" $headers
-    return $result
+  $headers = @{ "Authorization" = "Bearer $apiKey" }
+  $result = Fetch-ModelsWithHeaders "https://integrate.api.nvidia.com/v1/models" $headers
+  return $result
 }
 
 function Fetch-ModelsWithHeaders($url, $headers) {
-    try {
-        $response = Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 15 -Headers $headers -ErrorAction Stop
-        $ids = if ($response.data) { $response.data.id } else { @() }
-        return @($ids | Where-Object { $_ -ne $null })
-    } catch {
-        Write-Host "    [WARN] Failed to fetch $url : $_" -ForegroundColor Yellow
-        return $null
-    }
+  try {
+    $response = Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 15 -Headers $headers -ErrorAction Stop
+    $ids = if ($response.data) { $response.data.id } else { @() }
+    return @($ids | Where-Object { $_ -ne $null })
+  } catch {
+    if (-not $Silent) { Write-Host " [WARN] Failed to fetch $url : $_" -ForegroundColor Yellow }
+    return $null
+  }
 }
 
-# ─── Load our current agent models from opencode.json ─────────────────────────
+# --- Helper: fetch OpenRouter free models ----------------------------------------
+function Fetch-OpenRouterFreeModels {
+  try {
+    $response = Invoke-RestMethod -Uri "https://openrouter.ai/api/v1/models" -Method Get -TimeoutSec 20 -ErrorAction Stop
+    if (-not $response.data) { return @() }
+    # OpenRouter free models: pricing.prompt == "0" AND pricing.completion == "0"
+    # Also filter to text-capable models (modality contains "->text")
+    $freeModels = @()
+    foreach ($m in $response.data) {
+      # Skip OpenRouter's own routing/free models (not real LLMs)
+      if ($m.id -eq "openrouter/free" -or $m.id -eq "openrouter/owl-alpha") { continue }
+
+      $promptPrice = if ($m.pricing.prompt) { $m.pricing.prompt } else { "1" }
+      $compPrice = if ($m.pricing.completion) { $m.pricing.completion } else { "1" }
+      if ($promptPrice -eq "0" -and $compPrice -eq "0") {
+        # Only include text-capable models (skip audio-only like lyria)
+        $outputModalities = if ($m.architecture.output_modalities) { @($m.architecture.output_modalities) } else { @() }
+        $hasText = $outputModalities -contains "text"
+        $hasAudio = $outputModalities -contains "audio"
+        if ($hasText -and -not $hasAudio) {
+          # Prefix with openrouter/ for consistency
+          $freeModels += "openrouter/$($m.id)"
+        }
+      }
+    }
+    return $freeModels
+  } catch {
+    if (-not $Silent) { Write-Host " [WARN] Failed to fetch OpenRouter models: $_" -ForegroundColor Yellow }
+    return $null
+  }
+}
+
+# --- Load our current agent models from opencode.json ---------------------------
 function Get-CurrentAgentModels {
     if (-not (Test-Path $ConfigFile)) { return @{} }
 
@@ -86,7 +120,7 @@ function Get-CurrentAgentModels {
     }
 }
 
-# ─── Load cache ───────────────────────────────────────────────────────────────
+# --- Load cache -----------------------------------------------------------------
 function Load-Cache {
     if (-not (Test-Path $CacheFile)) { return $null }
     try {
@@ -100,16 +134,18 @@ function Save-Cache($data) {
     $data | ConvertTo-Json -Depth 4 | Out-File -FilePath $CacheFile -Encoding utf8
 }
 
-# ─── Extract short model name from prefixed ID (e.g. nvidia/qwen/... -> qwen3-coder-480b) ──
+# --- Extract short model name from prefixed ID (e.g. nvidia/qwen/... -> qwen3-coder-480b) ---
 function Get-ShortName($modelId) {
     if ($modelId -match '^([^/]+/)?(.+)$') { return $matches[2] }
     return $modelId
 }
 
-# ─── Main ─────────────────────────────────────────────────────────────────────
-Write-Host ""
-Write-Host "  Model Update Checker" -ForegroundColor Cyan
-Write-Host ""
+# --- Main -----------------------------------------------------------------------
+if (-not $Silent) {
+  Write-Host ""
+  Write-Host " Model Update Checker" -ForegroundColor Cyan
+  Write-Host ""
+}
 
 # Reset cache if requested
 if ($ResetCache) {
@@ -133,16 +169,21 @@ if ($cache -and $cache.sources) {
 }
 $prevTotal = ($knownModels.Values | ForEach-Object { $_ }).Count
 
-Write-Host "  Sources: Go (opencode-go), Zen (opencode), NVIDIA"
-if ($cache) { Write-Host "  Previous snapshot: $($cache.lastCheck)  ($prevTotal models)" }
+if (-not $Silent) {
+  Write-Host " Sources: Go (opencode-go), Zen (opencode), NVIDIA, OpenRouter"
+  if ($cache) { Write-Host " Previous snapshot: $($cache.lastCheck) ($prevTotal models)" }
+}
 
 # 2. Fetch current model lists
-Write-Host ""
-Write-Host "  Fetching model lists..." -ForegroundColor Cyan
+if (-not $Silent) {
+  Write-Host ""
+  Write-Host " Fetching model lists..." -ForegroundColor Cyan
+}
 
 $goModels = Fetch-Models "https://opencode.ai/zen/go/v1/models"
 $zenModels = Fetch-Models "https://opencode.ai/zen/v1/models"
 $nvidiaModels = Fetch-NvidiaModels
+$openrouterModels = Fetch-OpenRouterFreeModels
 
 $currentSources = @{}
 $newModels = @()
@@ -178,7 +219,17 @@ if ($nvidiaModels -ne $null) {
         $newModels += @{ model = $m; source = "NVIDIA" }
         $allNew += $m
     }
-    Write-Host "    NVIDIA: $($nvidiaShort.Count) models ($($newInNvidia.Count) new)" -ForegroundColor $(if ($newInNvidia.Count -gt 0) { "Green" } else { "Gray" })
+  Write-Host " NVIDIA: $($nvidiaShort.Count) models ($($newInNvidia.Count) new)" -ForegroundColor $(if ($newInNvidia.Count -gt 0) { "Green" } else { "Gray" })
+}
+
+if ($openrouterModels -ne $null) {
+  $currentSources["openrouter"] = $openrouterModels
+  $newInOR = if ($knownModels.ContainsKey("openrouter")) { Compare-Object $openrouterModels $knownModels["openrouter"] | Where-Object { $_.SideIndicator -eq "<=" } | ForEach-Object { $_.InputObject } } else { $openrouterModels }
+  foreach ($m in $newInOR) {
+    $newModels += @{ model = $m; source = "OpenRouter" }
+    $allNew += $m
+  }
+  if (-not $Silent) { Write-Host " OpenRouter: $($openrouterModels.Count) free models ($($newInOR.Count) new)" -ForegroundColor $(if ($newInOR.Count -gt 0) { "Green" } else { "Gray" }) }
 }
 
 # 3. Load current agent config for cross-reference
@@ -212,16 +263,97 @@ $newFreeModels = $allNew | Where-Object { $_ -match "free" }
 
 # 6. Save updated cache
 if ($UpdateCache -or $CheckOnly) {
-    $cacheData = @{
-        lastCheck = (Get-Date).ToString("o")
-        sources = $currentSources
-    }
-    Save-Cache $cacheData
-    if ($UpdateCache) {
-        Write-Host ""
-        Write-Host "  Cache updated." -ForegroundColor Green
-    }
+  $cacheData = @{
+    lastCheck = (Get-Date).ToString("o")
+    sources = $currentSources
+  }
+  Save-Cache $cacheData
+  if ($UpdateCache) {
+    Write-Host ""
+    Write-Host " Cache updated." -ForegroundColor Green
+  }
 }
+
+# 6.5. Write free-models.json for the model picker scripts
+# This file contains ONLY free models, grouped by provider, with display names
+$freeModelsData = @{
+  generated_at = (Get-Date).ToString("o")
+  providers = @()
+}
+
+# OpenCode Zen: models ending in -free or named big-pickle
+if ($zenModels -ne $null) {
+  $zenGroup = @{
+    name = "OpenCode Zen (free tier)"
+    id_prefix = "opencode"
+    models = @()
+  }
+  foreach ($m in $zenModels) {
+    if ($m -match '-free$' -or $m -eq 'big-pickle') {
+      # Derive display name: strip -free suffix, capitalize words
+      $displayName = $m -replace '-free$', ''
+      $displayName = ($displayName -split '-' | ForEach-Object { $_.Substring(0,1).ToUpper() + $_.Substring(1) }) -join ' '
+      $zenGroup.models += @{ id = "opencode/$m"; name = $displayName }
+    }
+  }
+  $freeModelsData.providers += $zenGroup
+}
+
+# OpenRouter: already filtered to free-only by Fetch-OpenRouterFreeModels
+if ($openrouterModels -ne $null -and $openrouterModels.Count -gt 0) {
+  $orGroup = @{
+    name = "OpenRouter (free models)"
+    id_prefix = "openrouter"
+    models = @()
+  }
+  foreach ($m in $openrouterModels) {
+    # Strip openrouter/ prefix to get the raw ID, then derive display name
+    $rawId = $m -replace '^openrouter/', ''
+    # Strip :free suffix for display
+    $displayName = $rawId -replace ':free$', ''
+    # Take the part after the first / as the model name
+    if ($displayName -match '/') {
+      $displayName = ($displayName -split '/')[-1]
+    }
+    $displayName = ($displayName -split '-' | ForEach-Object { $_.Substring(0,1).ToUpper() + $_.Substring(1) }) -join ' '
+    $orGroup.models += @{ id = $m; name = $displayName }
+  }
+  $freeModelsData.providers += $orGroup
+}
+
+# NVIDIA: all models on the free endpoint are free (listed last)
+# If API is available, use live list; otherwise use known fallback
+$nvidiaGroup = @{
+  name = "NVIDIA (free endpoint, requires /connect)"
+  id_prefix = "nvidia"
+  models = @()
+}
+
+if ($nvidiaModels -ne $null) {
+  foreach ($m in $nvidiaModels) {
+    $fullId = "nvidia/$($m.Replace('nvidia/', ''))"
+    $parts = $m -split '/'
+    $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
+    $displayName = $shortName -replace '-instruct-\d+$', '' -replace '-a\d+b$', ''
+    $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
+  }
+} else {
+  # Fallback: known NVIDIA free endpoint models (used when API key unavailable)
+  $nvidiaFallback = @(
+    @{ id = "nvidia/z-ai/glm-5.1"; name = "GLM-5.1" }
+    @{ id = "nvidia/qwen/qwen3-coder-480b-a35b-instruct"; name = "Qwen3-Coder 480B" }
+    @{ id = "nvidia/minimaxai/minimax-m2.7"; name = "MiniMax M2.7" }
+    @{ id = "nvidia/stepfun-ai/step-3.7-flash"; name = "Step 3.7 Flash" }
+    @{ id = "nvidia/mistralai/mistral-large-3-675b-instruct-2512"; name = "Mistral Large 3" }
+  )
+  $nvidiaGroup.models = $nvidiaFallback
+}
+$freeModelsData.providers += $nvidiaGroup
+
+# Write free-models.json
+$freeModelsDir = Split-Path -Parent $FreeModelsFile
+if (-not (Test-Path $freeModelsDir)) { New-Item -ItemType Directory -Path $freeModelsDir -Force | Out-Null }
+$freeModelsData | ConvertTo-Json -Depth 4 | Out-File -FilePath $FreeModelsFile -Encoding utf8 -Force
 
 # 7. Write status file
 $totalNow = ($currentSources.Values | ForEach-Object { $_ }).Count
@@ -243,39 +375,42 @@ $status = @{
 $status | ConvertTo-Json -Depth 4 | Out-File -FilePath $StatusFile -Encoding utf8 -Force
 
 # 8. Print summary
-Write-Host ""
-Write-Host "  ── Summary ──" -ForegroundColor Cyan
-Write-Host "  Total known models: $totalNow"
+if (-not $Silent) {
+  Write-Host ""
+  Write-Host " -- Summary --" -ForegroundColor Cyan
+  Write-Host " Total known models: $totalNow"
 
-if ($newModels.Count -gt 0) {
-    Write-Host "  New models found: $($newModels.Count)" -ForegroundColor Green
+  if ($newModels.Count -gt 0) {
+    Write-Host " New models found: $($newModels.Count)" -ForegroundColor Green
     $newModels | Group-Object model | ForEach-Object {
-        $m = $_.Name
-        $src = ($_.Group.source -join ", ")
-        Write-Host "    + $m  ($src)" -ForegroundColor Green
+      $m = $_.Name
+      $src = ($_.Group.source -join ", ")
+      Write-Host " + $m ($src)" -ForegroundColor Green
     }
 
     if ($relatedModels.Count -gt 0) {
-        Write-Host ""
-        Write-Host "  Possibly relevant to current agents:" -ForegroundColor Yellow
-        foreach ($r in $relatedModels) {
-            Write-Host "    @$($r.agent): $($r.currentModel)  →  $($r.newModel)  ($($r.source))" -ForegroundColor Yellow
-        }
+      Write-Host ""
+      Write-Host " Possibly relevant to current agents:" -ForegroundColor Yellow
+      foreach ($r in $relatedModels) {
+        Write-Host " @$($r.agent): $($r.currentModel) -> $($r.newModel) ($($r.source))" -ForegroundColor Yellow
+      }
     }
 
     if ($newFreeModels.Count -gt 0) {
-        Write-Host ""
-        Write-Host "  New free models available:" -ForegroundColor Green
-        foreach ($f in $newFreeModels) { Write-Host "    + $f (FREE)" -ForegroundColor Green }
+      Write-Host ""
+      Write-Host " New free models available:" -ForegroundColor Green
+      foreach ($f in $newFreeModels) { Write-Host " + $f (FREE)" -ForegroundColor Green }
     }
-} else {
-    Write-Host "  No new models since last check." -ForegroundColor Gray
-}
+  } else {
+    Write-Host " No new models since last check." -ForegroundColor Gray
+  }
 
-Write-Host ""
-Write-Host "  Status written to: model-update-status.json" -ForegroundColor DarkGray
-Write-Host "  Cache: glitch-memorycore\data\known-models.json" -ForegroundColor DarkGray
-Write-Host ""
+    Write-Host ""
+    Write-Host " Status written to: model-update-status.json" -ForegroundColor DarkGray
+    Write-Host " Cache: glitch-memorycore\data\known-models.json" -ForegroundColor DarkGray
+    Write-Host " Free models: data\free-models.json" -ForegroundColor DarkGray
+    Write-Host ""
+}
 
 # Exit with code indicating if new models were found
 if ($newModels.Count -gt 0) { exit 1 } else { exit 0 }

@@ -1,0 +1,607 @@
+﻿{
+    "generated_at":  "2026-06-03T14:29:52.3883987-05:00",
+    "providers":  [
+                      {
+                          "models":  [
+                                         {
+                                             "id":  "opencode/big-pickle",
+                                             "name":  "Big Pickle"
+                                         },
+                                         {
+                                             "id":  "opencode/deepseek-v4-flash-free",
+                                             "name":  "Deepseek V4 Flash"
+                                         },
+                                         {
+                                             "id":  "opencode/mimo-v2.5-free",
+                                             "name":  "Mimo V2.5"
+                                         },
+                                         {
+                                             "id":  "opencode/qwen3.6-plus-free",
+                                             "name":  "Qwen3.6 Plus"
+                                         },
+                                         {
+                                             "id":  "opencode/minimax-m3-free",
+                                             "name":  "Minimax M3"
+                                         },
+                                         {
+                                             "id":  "opencode/nemotron-3-super-free",
+                                             "name":  "Nemotron 3 Super"
+                                         }
+                                     ],
+                          "name":  "OpenCode Zen (free tier)",
+                          "id_prefix":  "opencode"
+                      },
+                      {
+                          "models":  [
+                                         {
+                                             "id":  "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+                                             "name":  "Nemotron 3 Nano Omni 30b A3b Reasoning"
+                                         },
+                                         {
+                                             "id":  "openrouter/poolside/laguna-xs.2:free",
+                                             "name":  "Laguna Xs.2"
+                                         },
+                                         {
+                                             "id":  "openrouter/poolside/laguna-m.1:free",
+                                             "name":  "Laguna M.1"
+                                         },
+                                         {
+                                             "id":  "openrouter/moonshotai/kimi-k2.6:free",
+                                             "name":  "Kimi K2.6"
+                                         },
+                                         {
+                                             "id":  "openrouter/google/gemma-4-26b-a4b-it:free",
+                                             "name":  "Gemma 4 26b A4b It"
+                                         },
+                                         {
+                                             "id":  "openrouter/google/gemma-4-31b-it:free",
+                                             "name":  "Gemma 4 31b It"
+                                         },
+                                         {
+                                             "id":  "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
+                                             "name":  "Nemotron 3 Super 120b A12b"
+                                         },
+                                         {
+                                             "id":  "openrouter/liquid/lfm-2.5-1.2b-thinking:free",
+                                             "name":  "Lfm 2.5 1.2b Thinking"
+                                         },
+                                         {
+                                             "id":  "openrouter/liquid/lfm-2.5-1.2b-instruct:free",
+                                             "name":  "Lfm 2.5 1.2b Instruct"
+                                         },
+                                         {
+                                             "id":  "openrouter/nvidia/nemotron-3-nano-30b-a3b:free",
+                                             "name":  "Nemotron 3 Nano 30b A3b"
+                                         },
+                                         {
+                                             "id":  "openrouter/nvidia/nemotron-nano-12b-v2-vl:free",
+                                             "name":  "Nemotron Nano 12b V2 Vl"
+                                         },
+                                         {
+                                             "id":  "openrouter/qwen/qwen3-next-80b-a3b-instruct:free",
+                                             "name":  "Qwen3 Next 80b A3b Instruct"
+                                         },
+                                         {
+                                             "id":  "openrouter/nvidia/nemotron-nano-9b-v2:free",
+                                             "name":  "Nemotron Nano 9b V2"
+                                         },
+                                         {
+                                             "id":  "openrouter/openai/gpt-oss-120b:free",
+                                             "name":  "Gpt Oss 120b"
+                                         },
+                                         {
+                                             "id":  "openrouter/openai/gpt-oss-20b:free",
+                                             "name":  "Gpt Oss 20b"
+                                         },
+                                         {
+                                             "id":  "openrouter/z-ai/glm-4.5-air:free",
+                                             "name":  "Glm 4.5 Air"
+                                         },
+                                         {
+                                             "id":  "openrouter/qwen/qwen3-coder:free",
+                                             "name":  "Qwen3 Coder"
+                                         },
+                                         {
+                                             "id":  "openrouter/cognitivecomputations/dolphin-mistral-24b-venice-edition:free",
+                                             "name":  "Dolphin Mistral 24b Venice Edition"
+                                         },
+                                         {
+                                             "id":  "openrouter/meta-llama/llama-3.3-70b-instruct:free",
+                                             "name":  "Llama 3.3 70b Instruct"
+                                         },
+                                         {
+                                             "id":  "openrouter/meta-llama/llama-3.2-3b-instruct:free",
+                                             "name":  "Llama 3.2 3b Instruct"
+                                         },
+                                         {
+                                             "id":  "openrouter/nousresearch/hermes-3-llama-3.1-405b:free",
+                                             "name":  "Hermes 3 Llama 3.1 405b"
+                                         }
+                                     ],
+                          "name":  "OpenRouter (free models)",
+                          "id_prefix":  "openrouter"
+                      },
+                      {
+                          "models":  [
+                                         {
+                                             "id":  "nvidia/01-ai/yi-large",
+                                             "name":  "yi-large"
+                                         },
+                                         {
+                                             "id":  "nvidia/abacusai/dracarys-llama-3.1-70b-instruct",
+                                             "name":  "dracarys-llama-3.1-70b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/adept/fuyu-8b",
+                                             "name":  "fuyu-8b"
+                                         },
+                                         {
+                                             "id":  "nvidia/ai21labs/jamba-1.5-large-instruct",
+                                             "name":  "jamba-1.5-large-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/aisingapore/sea-lion-7b-instruct",
+                                             "name":  "sea-lion-7b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/baai/bge-m3",
+                                             "name":  "bge-m3"
+                                         },
+                                         {
+                                             "id":  "nvidia/bigcode/starcoder2-15b",
+                                             "name":  "starcoder2-15b"
+                                         },
+                                         {
+                                             "id":  "nvidia/bytedance/seed-oss-36b-instruct",
+                                             "name":  "seed-oss-36b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/databricks/dbrx-instruct",
+                                             "name":  "dbrx-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/deepseek-ai/deepseek-coder-6.7b-instruct",
+                                             "name":  "deepseek-coder-6.7b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/deepseek-ai/deepseek-v4-flash",
+                                             "name":  "deepseek-v4-flash"
+                                         },
+                                         {
+                                             "id":  "nvidia/deepseek-ai/deepseek-v4-pro",
+                                             "name":  "deepseek-v4-pro"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/codegemma-1.1-7b",
+                                             "name":  "codegemma-1.1-7b"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/codegemma-7b",
+                                             "name":  "codegemma-7b"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/deplot",
+                                             "name":  "deplot"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/gemma-2-2b-it",
+                                             "name":  "gemma-2-2b-it"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/gemma-2b",
+                                             "name":  "gemma-2b"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/gemma-3-12b-it",
+                                             "name":  "gemma-3-12b-it"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/gemma-3-4b-it",
+                                             "name":  "gemma-3-4b-it"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/gemma-3n-e2b-it",
+                                             "name":  "gemma-3n-e2b-it"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/gemma-3n-e4b-it",
+                                             "name":  "gemma-3n-e4b-it"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/gemma-4-31b-it",
+                                             "name":  "gemma-4-31b-it"
+                                         },
+                                         {
+                                             "id":  "nvidia/google/recurrentgemma-2b",
+                                             "name":  "recurrentgemma-2b"
+                                         },
+                                         {
+                                             "id":  "nvidia/ibm/granite-3.0-3b-a800m-instruct",
+                                             "name":  "granite-3.0-3b-a800m-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/ibm/granite-3.0-8b-instruct",
+                                             "name":  "granite-3.0-8b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/ibm/granite-34b-code-instruct",
+                                             "name":  "granite-34b-code-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/ibm/granite-8b-code-instruct",
+                                             "name":  "granite-8b-code-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/codellama-70b",
+                                             "name":  "codellama-70b"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/llama-3.1-70b-instruct",
+                                             "name":  "llama-3.1-70b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/llama-3.1-8b-instruct",
+                                             "name":  "llama-3.1-8b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/llama-3.2-11b-vision-instruct",
+                                             "name":  "llama-3.2-11b-vision-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/llama-3.2-1b-instruct",
+                                             "name":  "llama-3.2-1b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/llama-3.2-3b-instruct",
+                                             "name":  "llama-3.2-3b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/llama-3.2-90b-vision-instruct",
+                                             "name":  "llama-3.2-90b-vision-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/llama-3.3-70b-instruct",
+                                             "name":  "llama-3.3-70b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/llama-4-maverick-17b-128e-instruct",
+                                             "name":  "llama-4-maverick-17b-128e-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/llama-guard-4-12b",
+                                             "name":  "llama-guard-4-12b"
+                                         },
+                                         {
+                                             "id":  "nvidia/meta/llama2-70b",
+                                             "name":  "llama2-70b"
+                                         },
+                                         {
+                                             "id":  "nvidia/microsoft/kosmos-2",
+                                             "name":  "kosmos-2"
+                                         },
+                                         {
+                                             "id":  "nvidia/microsoft/phi-3-vision-128k-instruct",
+                                             "name":  "phi-3-vision-128k-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/microsoft/phi-3.5-moe-instruct",
+                                             "name":  "phi-3.5-moe-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/microsoft/phi-4-mini-instruct",
+                                             "name":  "phi-4-mini-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/microsoft/phi-4-multimodal-instruct",
+                                             "name":  "phi-4-multimodal-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/minimaxai/minimax-m2.7",
+                                             "name":  "minimax-m2.7"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/codestral-22b-instruct-v0.1",
+                                             "name":  "codestral-22b-instruct-v0.1"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/ministral-14b-instruct-2512",
+                                             "name":  "ministral-14b"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/mistral-7b-instruct-v0.3",
+                                             "name":  "mistral-7b-instruct-v0.3"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/mistral-large",
+                                             "name":  "mistral-large"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/mistral-large-2-instruct",
+                                             "name":  "mistral-large-2-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/mistral-large-3-675b-instruct-2512",
+                                             "name":  "mistral-large-3-675b"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/mistral-medium-3.5-128b",
+                                             "name":  "mistral-medium-3.5-128b"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/mistral-nemotron",
+                                             "name":  "mistral-nemotron"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/mistral-small-4-119b-2603",
+                                             "name":  "mistral-small-4-119b-2603"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/mixtral-8x22b-v0.1",
+                                             "name":  "mixtral-8x22b-v0.1"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistralai/mixtral-8x7b-instruct-v0.1",
+                                             "name":  "mixtral-8x7b-instruct-v0.1"
+                                         },
+                                         {
+                                             "id":  "nvidia/moonshotai/kimi-k2.6",
+                                             "name":  "kimi-k2.6"
+                                         },
+                                         {
+                                             "id":  "nvidia/nv-mistralai/mistral-nemo-12b-instruct",
+                                             "name":  "mistral-nemo-12b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/ai-synthetic-video-detector",
+                                             "name":  "ai-synthetic-video-detector"
+                                         },
+                                         {
+                                             "id":  "nvidia/cosmos-reason2-8b",
+                                             "name":  "cosmos-reason2-8b"
+                                         },
+                                         {
+                                             "id":  "nvidia/embed-qa-4",
+                                             "name":  "embed-qa-4"
+                                         },
+                                         {
+                                             "id":  "nvidia/gliner-pii",
+                                             "name":  "gliner-pii"
+                                         },
+                                         {
+                                             "id":  "nvidia/ising-calibration-1-35b-a3b",
+                                             "name":  "ising-calibration-1-35b"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.1-nemoguard-8b-content-safety",
+                                             "name":  "llama-3.1-nemoguard-8b-content-safety"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.1-nemoguard-8b-topic-control",
+                                             "name":  "llama-3.1-nemoguard-8b-topic-control"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.1-nemotron-51b-instruct",
+                                             "name":  "llama-3.1-nemotron-51b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.1-nemotron-70b-instruct",
+                                             "name":  "llama-3.1-nemotron-70b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.1-nemotron-nano-8b-v1",
+                                             "name":  "llama-3.1-nemotron-nano-8b-v1"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
+                                             "name":  "llama-3.1-nemotron-nano-vl-8b-v1"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.1-nemotron-safety-guard-8b-v3",
+                                             "name":  "llama-3.1-nemotron-safety-guard-8b-v3"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.1-nemotron-ultra-253b-v1",
+                                             "name":  "llama-3.1-nemotron-ultra-253b-v1"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.2-nemoretriever-1b-vlm-embed-v1",
+                                             "name":  "llama-3.2-nemoretriever-1b-vlm-embed-v1"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.2-nv-embedqa-1b-v1",
+                                             "name":  "llama-3.2-nv-embedqa-1b-v1"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.3-nemotron-super-49b-v1",
+                                             "name":  "llama-3.3-nemotron-super-49b-v1"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+                                             "name":  "llama-3.3-nemotron-super-49b-v1.5"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-nemotron-embed-1b-v2",
+                                             "name":  "llama-nemotron-embed-1b-v2"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama-nemotron-embed-vl-1b-v2",
+                                             "name":  "llama-nemotron-embed-vl-1b-v2"
+                                         },
+                                         {
+                                             "id":  "nvidia/llama3-chatqa-1.5-70b",
+                                             "name":  "llama3-chatqa-1.5-70b"
+                                         },
+                                         {
+                                             "id":  "nvidia/mistral-nemo-minitron-8b-8k-instruct",
+                                             "name":  "mistral-nemo-minitron-8b-8k-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemoretriever-parse",
+                                             "name":  "nemoretriever-parse"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-3-content-safety",
+                                             "name":  "nemotron-3-content-safety"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-3-nano-30b-a3b",
+                                             "name":  "nemotron-3-nano-30b"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+                                             "name":  "nemotron-3-nano-omni-30b-a3b-reasoning"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-3-super-120b-a12b",
+                                             "name":  "nemotron-3-super-120b"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-3.5-content-safety",
+                                             "name":  "nemotron-3.5-content-safety"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-4-340b-instruct",
+                                             "name":  "nemotron-4-340b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-4-340b-reward",
+                                             "name":  "nemotron-4-340b-reward"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-content-safety-reasoning-4b",
+                                             "name":  "nemotron-content-safety-reasoning-4b"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-mini-4b-instruct",
+                                             "name":  "nemotron-mini-4b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-nano-12b-v2-vl",
+                                             "name":  "nemotron-nano-12b-v2-vl"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-nano-3-30b-a3b",
+                                             "name":  "nemotron-nano-3-30b"
+                                         },
+                                         {
+                                             "id":  "nvidia/nemotron-parse",
+                                             "name":  "nemotron-parse"
+                                         },
+                                         {
+                                             "id":  "nvidia/neva-22b",
+                                             "name":  "neva-22b"
+                                         },
+                                         {
+                                             "id":  "nvidia/nv-embed-v1",
+                                             "name":  "nv-embed-v1"
+                                         },
+                                         {
+                                             "id":  "nvidia/nv-embedcode-7b-v1",
+                                             "name":  "nv-embedcode-7b-v1"
+                                         },
+                                         {
+                                             "id":  "nvidia/nv-embedqa-e5-v5",
+                                             "name":  "nv-embedqa-e5-v5"
+                                         },
+                                         {
+                                             "id":  "nvidia/nv-embedqa-mistral-7b-v2",
+                                             "name":  "nv-embedqa-mistral-7b-v2"
+                                         },
+                                         {
+                                             "id":  "nvidia/nvclip",
+                                             "name":  "nvclip"
+                                         },
+                                         {
+                                             "id":  "nvidia/nvidia-nemotron-nano-9b-v2",
+                                             "name":  "nvidia-nemotron-nano-9b-v2"
+                                         },
+                                         {
+                                             "id":  "nvidia/riva-translate-4b-instruct",
+                                             "name":  "riva-translate-4b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/riva-translate-4b-instruct-v1.1",
+                                             "name":  "riva-translate-4b-instruct-v1.1"
+                                         },
+                                         {
+                                             "id":  "nvidia/vila",
+                                             "name":  "vila"
+                                         },
+                                         {
+                                             "id":  "nvidia/openai/gpt-oss-120b",
+                                             "name":  "gpt-oss-120b"
+                                         },
+                                         {
+                                             "id":  "nvidia/openai/gpt-oss-20b",
+                                             "name":  "gpt-oss-20b"
+                                         },
+                                         {
+                                             "id":  "nvidia/qwen/qwen3-coder-480b-a35b-instruct",
+                                             "name":  "qwen3-coder-480b-a35b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/qwen/qwen3-next-80b-a3b-instruct",
+                                             "name":  "qwen3-next-80b-a3b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/qwen/qwen3.5-122b-a10b",
+                                             "name":  "qwen3.5-122b"
+                                         },
+                                         {
+                                             "id":  "nvidia/qwen/qwen3.5-397b-a17b",
+                                             "name":  "qwen3.5-397b"
+                                         },
+                                         {
+                                             "id":  "nvidia/sarvamai/sarvam-m",
+                                             "name":  "sarvam-m"
+                                         },
+                                         {
+                                             "id":  "nvidia/snowflake/arctic-embed-l",
+                                             "name":  "arctic-embed-l"
+                                         },
+                                         {
+                                             "id":  "nvidia/stepfun-ai/step-3.5-flash",
+                                             "name":  "step-3.5-flash"
+                                         },
+                                         {
+                                             "id":  "nvidia/stepfun-ai/step-3.7-flash",
+                                             "name":  "step-3.7-flash"
+                                         },
+                                         {
+                                             "id":  "nvidia/stockmark/stockmark-2-100b-instruct",
+                                             "name":  "stockmark-2-100b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/upstage/solar-10.7b-instruct",
+                                             "name":  "solar-10.7b-instruct"
+                                         },
+                                         {
+                                             "id":  "nvidia/writer/palmyra-creative-122b",
+                                             "name":  "palmyra-creative-122b"
+                                         },
+                                         {
+                                             "id":  "nvidia/writer/palmyra-fin-70b-32k",
+                                             "name":  "palmyra-fin-70b-32k"
+                                         },
+                                         {
+                                             "id":  "nvidia/writer/palmyra-med-70b",
+                                             "name":  "palmyra-med-70b"
+                                         },
+                                         {
+                                             "id":  "nvidia/writer/palmyra-med-70b-32k",
+                                             "name":  "palmyra-med-70b-32k"
+                                         },
+                                         {
+                                             "id":  "nvidia/z-ai/glm-5.1",
+                                             "name":  "glm-5.1"
+                                         },
+                                         {
+                                             "id":  "nvidia/zyphra/zamba2-7b-instruct",
+                                             "name":  "zamba2-7b-instruct"
+                                         }
+                                     ],
+                          "name":  "NVIDIA (free endpoint, requires /connect)",
+                          "id_prefix":  "nvidia"
+                      }
+                  ]
+}
