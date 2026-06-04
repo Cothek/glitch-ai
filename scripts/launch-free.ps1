@@ -113,38 +113,35 @@ function Set-Preference($modelId) {
     $pref | ConvertTo-Json | Out-File -FilePath $PrefFile -Encoding utf8 -Force
 }
 
-# --- Determine model (priority: env var > --pick flag > preference file > menu) -
+# --- Determine model (priority: env var > --pick flag > menu with default) -----
 $ForcePick = $args -contains "--pick"
 $FreeModel = $null
 
-# 1. Environment variable overrides everything
+# 1. Environment variable overrides everything (no menu)
 if ($env:GLITCH_FREE_MODEL) {
     $FreeModel = $env:GLITCH_FREE_MODEL
     Write-Host ""
     Write-Host " Model from env var: $FreeModel" -ForegroundColor Cyan
 }
 
-# 2. If --pick flag, force interactive menu
+# 2. If --pick flag, force interactive menu (ignore saved preference)
 if ($ForcePick -and -not $env:GLITCH_FREE_MODEL) {
-    $FreeModel = $null  # will trigger menu below
+    $FreeModel = $null
 }
 
-# 3. Try saved preference
+# 3. If no model yet, show interactive menu (with saved preference as default)
 if (-not $FreeModel) {
     $saved = Get-Preference
-    if ($saved -and $AllModels.ContainsKey($saved)) {
-        $FreeModel = $saved
-        Write-Host ""
-        Write-Host " Model from preference: $FreeModel ($($AllModels[$saved].Name))" -ForegroundColor Cyan
-        Write-Host " (run with --pick to change, or: .\scripts\switch-model.ps1)" -ForegroundColor DarkGray
-    }
-}
+    $hasDefault = $saved -and $AllModels.ContainsKey($saved)
 
-# 4. Interactive menu if no model determined yet
-if (-not $FreeModel) {
     Write-Host ""
     Write-Host " Glitch Free Mode -- Model Picker" -ForegroundColor Green
-    Write-Host " No saved preference. Pick a model:" -ForegroundColor DarkGray
+    if ($hasDefault) {
+        Write-Host " Current: $saved ($($AllModels[$saved].Name))" -ForegroundColor Cyan
+        Write-Host " Press Enter to keep current, or pick a number:" -ForegroundColor DarkGray
+    } else {
+        Write-Host " No saved preference. Pick a model:" -ForegroundColor DarkGray
+    }
     Write-Host ""
 
     $choices = @()
@@ -152,8 +149,9 @@ if (-not $FreeModel) {
     foreach ($group in $ModelGroups) {
         Write-Host " $($group.Name)" -ForegroundColor Yellow
         foreach ($m in $group.Models) {
+            $marker = if ($m.ID -eq $saved) { " *" } else { "" }
             $tagStr = if ($m.Tag) { " ($($m.Tag))" } else { "" }
-            Write-Host "   [$idx] $($m.Name)$tagStr" -ForegroundColor White
+            Write-Host "   [$idx] $($m.Name)$tagStr$marker" -ForegroundColor $(if ($m.ID -eq $saved) { "Green" } else { "White" })
             Write-Host "       $($m.ID)" -ForegroundColor DarkGray
             $choices += $m
             $idx++
@@ -161,11 +159,16 @@ if (-not $FreeModel) {
         Write-Host ""
     }
 
-    $selection = Read-Host "Pick a model (1-$($choices.Count))"
+    $selection = Read-Host "Pick a model (1-$($choices.Count), or Enter for current)"
     $num = 0
-    if ([int]::TryParse($selection, [ref]$num) -and $num -ge 1 -and $num -le $choices.Count) {
+
+    if ([string]::IsNullOrWhiteSpace($selection) -and $hasDefault) {
+        # Enter with no selection -- keep current preference
+        $FreeModel = $saved
+        Write-Host ""
+        Write-Host " Keeping current: $FreeModel ($($AllModels[$FreeModel].Name))" -ForegroundColor Green
+    } elseif ([int]::TryParse($selection, [ref]$num) -and $num -ge 1 -and $num -le $choices.Count) {
         $FreeModel = $choices[$num - 1].ID
-        # Save as preference for next time
         Set-Preference $FreeModel
         Write-Host ""
         Write-Host " Saved preference: $FreeModel ($($AllModels[$FreeModel].Name))" -ForegroundColor Green

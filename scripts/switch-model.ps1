@@ -207,12 +207,24 @@ Write-Host "   [0] Clear saved preference (prompt on next launch)" -ForegroundCo
 Write-Host ""
 
 # Prompt for selection
-$selection = Read-Host "Pick a model (0-$($choices.Count))"
+if ($current) {
+    $selection = Read-Host "Pick a model (0-$($choices.Count), or Enter to keep current)"
+} else {
+    $selection = Read-Host "Pick a model (0-$($choices.Count))"
+}
 
 if ($selection -eq "0") {
     Clear-Preference
     Write-Host ""
     Write-Host " Preference cleared. Next launch will prompt or use default." -ForegroundColor Yellow
+    Write-Host ""
+    exit 0
+}
+
+# Enter with no selection -- keep current preference
+if ([string]::IsNullOrWhiteSpace($selection) -and $current) {
+    Write-Host ""
+    Write-Host " Keeping current: $current ($($AllModels[$current].Name))" -ForegroundColor Green
     Write-Host ""
     exit 0
 }
