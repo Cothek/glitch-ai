@@ -4,8 +4,8 @@
 #   .\scripts\restart-free-model.ps1 -ModelId "opencode/deepseek-v4-flash-free" -OldPid 12345
 #
 # Designed to be launched DETACHED from within a running Glitch session.
-# The script waits for the parent session to end, kills the old opencode,
-# then launches a new instance with the chosen model.
+# The script launches a new opencode instance FIRST, waits for it to bind,
+# then kills the old opencode, and verifies the port ownership.
 
 param(
     [string]$ModelId = "",
@@ -26,8 +26,15 @@ if ($ModelId) {
     Write-Host "Preference saved: $ModelId" -ForegroundColor Green
 }
 
-# --- Wait for parent to fully exit ----------------------------------------------
-Write-Host "Waiting for current session to end..." -ForegroundColor Yellow
+# --- Launch new opencode FIRST (detached) ---------------------------------------
+Write-Host ""
+Write-Host "Launching free mode..." -ForegroundColor Green
+Write-Host ""
+
+Start-Process powershell.exe -ArgumentList "-NoProfile", "-ExecutionPolicy Bypass", "-File", "$ScriptDir\launch-free.ps1"
+
+# --- Wait for new instance to bind -----------------------------------------------
+Write-Host "Waiting 5 seconds for new instance to start..." -ForegroundColor Yellow
 Start-Sleep -Seconds 5
 
 # --- Kill old opencode process --------------------------------------------------
@@ -37,20 +44,17 @@ if ($OldPid -gt 0) {
     Start-Sleep -Seconds 2
 }
 
-# Also check if anything is still on the port and kill it
+# --- Verify port is free (old process gone, new one should own it) ---------------
 $portProcess = netstat -ano 2>$null | findstr ":$Port" | findstr "LISTENING"
 if ($portProcess) {
     $pidOnPort = ($portProcess -split '\s+')[-1]
-    if ($pidOnPort -and $pidOnPort -ne $OldPid) {
-        Write-Host "Killing stale process on port $Port (PID $pidOnPort)..." -ForegroundColor Yellow
-        Stop-Process -Id $pidOnPort -Force -ErrorAction SilentlyContinue
+    if ($pidOnPort -eq $OldPid) {
+        Write-Host "WARNING: Old process (PID $OldPid) still on port $Port — killing again..." -ForegroundColor Yellow
+        Stop-Process -Id $OldPid -Force -ErrorAction SilentlyContinue
         Start-Sleep -Seconds 1
+    } else {
+        Write-Host "Port $Port owned by PID $pidOnPort (new instance)" -ForegroundColor Green
     }
+} else {
+    Write-Host "Port $Port free — new instance may still be starting" -ForegroundColor Yellow
 }
-
-# --- Launch with new model ------------------------------------------------------
-Write-Host ""
-Write-Host "Launching free mode..." -ForegroundColor Green
-Write-Host ""
-
-& "$ScriptDir\launch-free.ps1"
