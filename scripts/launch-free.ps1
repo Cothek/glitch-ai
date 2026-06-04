@@ -3,7 +3,7 @@ $RootDir = Split-Path -Parent $ScriptDir
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $ConfigPath = "$RootDir\opencode.json"
 $BackupPath = "$RootDir\opencode.json.bak"
-$PrefFile = "$RootDir\data\free-model-preference.json"
+$PrefFile = "$RootDir\user\free-model-preference.json"
 $FreeModelsFile = "$RootDir\data\free-models.json"
 
 $ErrorActionPreference = "Continue"

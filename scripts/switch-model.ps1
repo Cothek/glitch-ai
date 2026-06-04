@@ -14,7 +14,7 @@ param(
 
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $RootDir = Split-Path -Parent $ScriptDir
-$PrefFile = "$RootDir\data\free-model-preference.json"
+$PrefFile = "$RootDir\user\free-model-preference.json"
 $FreeModelsFile = "$RootDir\data\free-models.json"
 
 $ErrorActionPreference = "Continue"
