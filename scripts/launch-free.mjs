@@ -362,7 +362,7 @@ async function main() {
   const configObj = JSON.parse(withModel);
 
   // Set the free mode prompt directly on the parsed object (avoids string escaping)
-  configObj.agent.delegator.prompt = buildFreePrompt(freeModel, modelName);
+  configObj.agent.glitch.prompt = buildFreePrompt(freeModel, modelName);
 
   // Validate and write
   const finalJson = JSON.stringify(configObj, null, 2);
