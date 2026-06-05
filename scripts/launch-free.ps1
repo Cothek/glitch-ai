@@ -330,7 +330,8 @@ try {
                     & "$RootDir\scripts\check-updates.ps1" -Update -Filter $selectedNames
                 } else {
                     Write-Host "  Applying all updates..." -ForegroundColor Cyan
-                    & "$RootDir\scripts\check-updates.ps1" -Update
+                    $allNames = $updateItems | ForEach-Object { $_.name }
+                    & "$RootDir\scripts\check-updates.ps1" -Update -Filter $allNames
                 }
                 Write-Host "  Updates complete." -ForegroundColor Green
             }

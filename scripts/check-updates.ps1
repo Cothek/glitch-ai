@@ -131,7 +131,7 @@ try {
 
   if ($IsUpdate -and $hasUpdate) {
     if ($updateType -eq "major") {
-      $proceed = Confirm-Update -Name "opencode (global)" -FromVer $currentVer -ToVer $latestVer
+      $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "opencode (global)" -FromVer $currentVer -ToVer $latestVer)
     } else {
       $proceed = $true
     }
@@ -235,7 +235,7 @@ try {
 
   if ($IsUpdate -and $hasUpdate) {
     if ($updateType -eq "major") {
-      $proceed = Confirm-Update -Name "GitNexus" -FromVer $curVer -ToVer $latestVer
+      $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "GitNexus" -FromVer $curVer -ToVer $latestVer)
     } else {
       $proceed = $true
     }
@@ -284,7 +284,7 @@ try {
   Pop-Location
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-ai repo")) {
-    $proceed = Confirm-Update -Name "glitch-ai repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main"
+    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "glitch-ai repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main")
     if ($proceed) {
       Push-Location $RootDir
       Write-ColorHost "  Pulling from origin/main..." "Cyan"
@@ -339,7 +339,7 @@ try {
   Pop-Location
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-memorycore submodule")) {
-    $proceed = Confirm-Update -Name "glitch-memorycore submodule" -FromVer "$currentSha" -ToVer "remote"
+    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "glitch-memorycore submodule" -FromVer "$currentSha" -ToVer "remote")
     if ($proceed) {
       Push-Location $RootDir
       Write-ColorHost "  Updating glitch-memorycore submodule..." "Cyan"
@@ -473,7 +473,7 @@ try {
   }
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "cloudflared")) {
-    $proceed = Confirm-Update -Name "cloudflared" -FromVer $curVer -ToVer $latestVer
+    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "cloudflared" -FromVer $curVer -ToVer $latestVer)
     if ($proceed) {
       Write-ColorHost "  Downloading latest cloudflared..." "Cyan"
       try {
@@ -539,7 +539,7 @@ try {
   }
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "Handy voice")) {
-    $proceed = Confirm-Update -Name "Handy voice" -FromVer $curInfo -ToVer $latestVer
+    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "Handy voice" -FromVer $curInfo -ToVer $latestVer)
     if ($proceed) {
       Write-ColorHost "  Handy uses an NSIS installer (not a zip). Run .\bootstrap.ps1 -Force to update it." "Yellow"
       Write-ColorHost "  This ensures proper extraction via the same logic used during initial setup." "Yellow"
@@ -597,7 +597,7 @@ try {
   }
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-user-troy (user/)")) {
-    $proceed = Confirm-Update -Name "glitch-user-troy repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main"
+    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "glitch-user-troy repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main")
     if ($proceed) {
       Push-Location $UserDir
       Write-ColorHost "  Pulling from origin/main..." "Cyan"
