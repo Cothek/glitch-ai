@@ -496,6 +496,36 @@
     font-size: 0.8125rem;
   }
 
+  /* Tabs */
+  .tab-wrap { margin: 1rem 0; }
+  .tab-wrap input[type="radio"] { display: none; }
+  .tab-bar {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.5rem;
+  }
+  .tab-bar label {
+    padding: 0.625rem 1.25rem;
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--text-dim);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: color 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+  .tab-bar label:hover { color: var(--text-muted); }
+  .tab-wrap .tab-panel { display: none; }
+  #tab-new:checked ~ .tab-bar label[for="tab-new"],
+  #tab-old:checked ~ .tab-bar label[for="tab-old"] {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+  #tab-new:checked ~ .tab-new { display: block; }
+  #tab-old:checked ~ .tab-old { display: block; }
+
   /* Responsive */
   @media (max-width: 640px) {
     header { padding: 3rem 1.25rem 2rem; }
@@ -968,53 +998,59 @@
   Quick Start
 </h2>
 
-<div class="card-grid">
-  <div class="card">
-    <span class="badge-layer badge-public">New user</span>
-    <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> For New Users</div>
-    <div class="desc">
-      Clone, run setup, and launch. No configuration needed.
-    </div>
-  </div>
-  <div class="card">
-    <span class="badge-layer badge-private">Returning</span>
-    <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> For Troy</div>
-    <div class="desc">
-      Clone engine + private user repo for full memory restoration.
-    </div>
-  </div>
-</div>
+<div class="tab-wrap">
+  <input type="radio" name="qs" id="tab-new" checked>
+  <input type="radio" name="qs" id="tab-old">
 
-<div class="card-grid">
-  <div class="card">
-    <span class="badge-layer badge-public">Windows</span>
-    <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/></svg> New Users</div>
-    <div class="desc">
-      <ol class="steps" style="margin:0">
-        <li><code>.\setup.bat</code></li>
-        <li><code>.\launch-glitch.bat</code></li>
-      </ol>
+  <div class="tab-bar">
+    <label for="tab-new">New User</label>
+    <label for="tab-old">Returning User</label>
+  </div>
+
+  <div class="tab-panel tab-new">
+    <div class="card-grid">
+      <div class="card">
+        <span class="badge-layer badge-public">Windows</span>
+        <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/></svg> New Users</div>
+        <div class="desc">
+          <ol class="steps" style="margin:0">
+            <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
+            <li><code>cd glitch-ai</code></li>
+            <li><code>.\setup.bat</code></li>
+            <li><code>.\launch-glitch.bat</code></li>
+          </ol>
+        </div>
+      </div>
+      <div class="card">
+        <span class="badge-layer badge-public">Mac / Linux</span>
+        <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M4 20h16"/></svg> New Users</div>
+        <div class="desc">
+          <ol class="steps" style="margin:0">
+            <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
+            <li><code>cd glitch-ai</code></li>
+            <li><code>git submodule update --init --recursive</code></li>
+            <li><code>node scripts/launch.mjs</code></li>
+          </ol>
+        </div>
+      </div>
     </div>
   </div>
-  <div class="card">
-    <span class="badge-layer badge-public">Mac / Linux</span>
-    <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M4 20h16"/></svg> New Users</div>
-    <div class="desc">
-      <ol class="steps" style="margin:0">
-        <li><code>node scripts/setup.mjs</code></li>
-        <li><code>./launch-glitch.sh</code></li>
-      </ol>
-    </div>
-  </div>
-  <div class="card">
-    <span class="badge-layer badge-private">Returning</span>
-    <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Troy (cross-platform)</div>
-    <div class="desc">
-      <ol class="steps" style="margin:0">
-        <li><code>git submodule update --init --recursive</code></li>
-        <li><code>git clone https://cothek@github.com/Cothek/glitch-user-troy.git user/</code></li>
-        <li><code>./launch-glitch.sh</code></li>
-      </ol>
+
+  <div class="tab-panel tab-old">
+    <div class="card-grid">
+      <div class="card">
+        <span class="badge-layer badge-private">Returning</span>
+        <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Troy (cross-platform)</div>
+        <div class="desc">
+          <ol class="steps" style="margin:0">
+            <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
+            <li><code>cd glitch-ai</code></li>
+            <li><code>git submodule update --init --recursive</code></li>
+            <li><code>git clone https://cothek@github.com/Cothek/glitch-user-troy.git user/</code></li>
+            <li><code>./launch-glitch.sh</code></li>
+          </ol>
+        </div>
+      </div>
     </div>
   </div>
 </div>
