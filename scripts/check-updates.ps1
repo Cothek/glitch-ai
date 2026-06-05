@@ -181,14 +181,15 @@ try {
 # ========== 2. opencode local binary ==========
 try {
   $curVer = "unknown"
-  $globVer = $currentVer
+  # Use npm latest version as target (fallback if global npm install not found)
+  $targetVer = if ($currentVer -ne "unknown" -and $currentVer -ne "") { $currentVer } else { $latestVer }
   $updateNeeded = $false
 
   try {
     $curVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim()
   } catch { $curVer = "unknown" }
 
-  if ($globVer -ne "unknown" -and $curVer -ne "unknown" -and $curVer -ne $globVer) {
+  if ($targetVer -ne "unknown" -and $targetVer -ne "" -and $curVer -ne "unknown" -and $curVer -ne $targetVer) {
     $updateNeeded = $true
     $updatesAvailable++
   }
@@ -198,6 +199,12 @@ try {
     try {
       $globalRoot = (& "npm" "root" "-g" 2>$null).Trim()
       $sourceBin = [System.IO.Path]::Combine($globalRoot, "opencode-ai", "bin", "opencode.exe")
+      if (-not (Test-Path $sourceBin)) {
+        Write-ColorHost "  Installing opencode-ai globally first..." "Yellow"
+        $null = Invoke-WithSpinner -Label "Installing opencode-ai@latest globally" -ScriptBlock { & "npm" "install" "-g" "opencode-ai@latest" 2>&1 | Out-Null }
+        $globalRoot = (& "npm" "root" "-g" 2>$null).Trim()
+        $sourceBin = [System.IO.Path]::Combine($globalRoot, "opencode-ai", "bin", "opencode.exe")
+      }
       if (Test-Path $sourceBin) {
         if (-not (Test-Path $LocalOpenCodeDir)) { New-Item -ItemType Directory -Path $LocalOpenCodeDir -Force | Out-Null }
         Copy-Item -Path $sourceBin -Destination $LocalOpenCodeBin -Force
@@ -214,14 +221,14 @@ try {
   $results += @{
     name = "opencode (local)"
     current = $curVer
-    latest = $globVer
+    latest = $targetVer
     update_available = $updateNeeded
     update_type = if ($updateNeeded) {"sync"} else {"none"}
     auto_safe = $true
     status = "ok"
   }
 
-  Write-ColorHost ("  [{0}] Current: {1} | Global: {2}" -f $(if ($updateNeeded) {"UPDATE"} else {"OK"}), $curVer, $globVer) $(if ($updateNeeded) {"Yellow"} else {"Green"})
+  Write-ColorHost ("  [{0}] Current: {1} | Latest: {2}" -f $(if ($updateNeeded) {"UPDATE"} else {"OK"}), $curVer, $targetVer) $(if ($updateNeeded) {"Yellow"} else {"Green"})
 } catch {
   $results += @{ name = "opencode (local)"; status = "error"; error_message = $_.Exception.Message }
   Write-ColorHost "  [ERROR] $_" "Red"
