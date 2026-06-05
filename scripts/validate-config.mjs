@@ -116,7 +116,9 @@ for (const script of psScripts) {
   if (!existsSync(scriptPath)) continue;
 
   const bytes = readFileSync(scriptPath);
-  const hasNonAscii = bytes.some(b => b > 0x7F);
+  // Skip UTF-8 BOM (EF BB BF) bytes, which are valid for PowerShell 5.1
+  const start = (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) ? 3 : 0;
+  const hasNonAscii = bytes.slice(start).some(b => b > 0x7F);
 
   if (hasNonAscii) {
     logFail(`[FAIL] ${script} has non-ASCII characters (will break PowerShell 5.1)`);
@@ -131,7 +133,9 @@ if (existsSync(scriptsDir)) {
   for (const file of mjsFiles) {
     const filePath = join(scriptsDir, file);
     const bytes = readFileSync(filePath);
-    const hasNonAscii = bytes.some(b => b > 0x7F);
+    // Skip UTF-8 BOM (EF BB BF) bytes
+    const start = (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) ? 3 : 0;
+    const hasNonAscii = bytes.slice(start).some(b => b > 0x7F);
 
     if (hasNonAscii) {
       logFail(`[FAIL] ${file} has non-ASCII characters`);

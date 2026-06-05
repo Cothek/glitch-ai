@@ -1,6 +1,6 @@
 @echo off
 title Glitch AI
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\launch.ps1"
+node "%~dp0scripts\launch.mjs"
 if %errorlevel% neq 0 (
     echo.
     echo Press any key to exit...
