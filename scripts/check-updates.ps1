@@ -319,7 +319,7 @@ try {
 
   Push-Location $RootDir
   try {
-    $subRaw = & "git" "submodule" "status" 2>&1
+    $subRaw = & "git" "submodule" "status" 2>$null | Out-String
     $subStatus = $subRaw.Trim()
     if ($subStatus -match '^([\+\- ])([a-f0-9]+)') {
       $prefix = $matches[1]

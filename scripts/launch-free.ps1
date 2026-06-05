@@ -287,6 +287,45 @@ if (-not (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md")) {
     }
 }
 
+# ---- Check for dependency updates ----
+Write-Host "  Checking dependency updates..." -ForegroundColor Cyan
+try {
+    $statusFile = "$RootDir\data\update-status.json"
+    & "$RootDir\scripts\check-updates.ps1" -CheckOnly *>$null
+    if (Test-Path $statusFile) {
+        $status = Get-Content $statusFile -Raw | ConvertFrom-Json
+        if ($status.updates_available -gt 0) {
+            Write-Host "  $($status.updates_available) update(s) available -- run .\check-updates.ps1 -Update" -ForegroundColor Yellow
+        } else {
+            Write-Host "  All dependencies up-to-date" -ForegroundColor DarkGreen
+        }
+    }
+} catch {
+    Write-Host "  Update check skipped (non-critical): $_" -ForegroundColor DarkYellow
+}
+
+# ---- Check for new models ----
+try {
+    $modelStatusFile = "$RootDir\data\model-update-status.json"
+    & "$RootDir\scripts\check-models.ps1" -CheckOnly *>$null
+    if (Test-Path $modelStatusFile) {
+        $modelStatus = Get-Content $modelStatusFile -Raw | ConvertFrom-Json
+        if ($modelStatus.new_models_count -gt 0) {
+            Write-Host "  $($modelStatus.new_models_count) new model(s) available" -ForegroundColor Yellow
+            foreach ($nm in $modelStatus.new_models) {
+                Write-Host "    + $($nm.model)" -ForegroundColor Green
+            }
+            if ($modelStatus.related_to_current_agents.Count -gt 0) {
+                Write-Host "  (some may be relevant to current agents -- check session brief)" -ForegroundColor DarkYellow
+            }
+        } else {
+            Write-Host "  Models up-to-date" -ForegroundColor DarkGreen
+        }
+    }
+} catch {
+    Write-Host "  Model check skipped (non-critical): $_" -ForegroundColor DarkYellow
+}
+
 # Launch opencode
 Write-Host ""
 Write-Host " Starting OpenCode in free mode..." -ForegroundColor Cyan
