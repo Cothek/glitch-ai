@@ -70,6 +70,7 @@ function Test-BranchConfigs($branchName) {
         "config/opencode-normal.json",
         "config/opencode-free.json",
         "config/opencode-safe.json",
+        "config/opencode-local.json",
         "glitch-memorycore/prompt-rules.md",
         "scripts/launch.ps1"
     )
