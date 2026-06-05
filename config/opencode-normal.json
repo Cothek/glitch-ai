@@ -84,6 +84,20 @@
     "hostname": "0.0.0.0"
   },
   "default_agent": "delegator",
+  "provider": {
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio (local)",
+      "options": {
+        "baseURL": "http://192.168.86.139:1234/v1"
+      },
+      "models": {
+        "google/gemma-4-12b": {
+          "name": "Gemma 4 12B (local)"
+        }
+      }
+    }
+  },
   "compaction": {
     "auto": true,
     "tail_turns": 8
