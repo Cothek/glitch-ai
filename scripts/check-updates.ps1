@@ -1,6 +1,7 @@
 param(
   [switch]$Update = $false,
-  [switch]$CheckOnly = $false
+  [switch]$CheckOnly = $false,
+  [string[]]$Filter = @()
 )
 
 $ErrorActionPreference = "Continue"
@@ -173,7 +174,7 @@ try {
     $updatesAvailable++
   }
 
-  if ($IsUpdate -and $updateNeeded) {
+  if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "opencode (local)")) {
     Write-ColorHost "  Syncing local opencode.exe from global install..." "Cyan"
     try {
       $globalRoot = (& "npm" "root" "-g" 2>$null).Trim()
@@ -282,7 +283,7 @@ try {
   } catch { $behindCount = "error" }
   Pop-Location
 
-  if ($IsUpdate -and $updateNeeded) {
+  if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-ai repo")) {
     $proceed = Confirm-Update -Name "glitch-ai repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main"
     if ($proceed) {
       Push-Location $RootDir
@@ -337,7 +338,7 @@ try {
   } catch { $subStatus = "error" }
   Pop-Location
 
-  if ($IsUpdate -and $updateNeeded) {
+  if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-memorycore submodule")) {
     $proceed = Confirm-Update -Name "glitch-memorycore submodule" -FromVer "$currentSha" -ToVer "remote"
     if ($proceed) {
       Push-Location $RootDir
@@ -403,7 +404,7 @@ try {
 
     if ($outdatedCount -gt 0) { $updatesAvailable++ }
 
-    if ($IsUpdate -and $outdatedCount -gt 0) {
+    if ($IsUpdate -and $outdatedCount -gt 0 -and ($Filter.Count -eq 0 -or $Filter -contains "@opencode-ai/plugin (.opencode)")) {
       Push-Location $PluginDir
       Write-ColorHost "  Updating $outdatedCount package(s) in .opencode..." "Cyan"
       $null = & "npm" "update" 2>&1
@@ -471,7 +472,7 @@ try {
     $updatesAvailable++
   }
 
-  if ($IsUpdate -and $updateNeeded) {
+  if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "cloudflared")) {
     $proceed = Confirm-Update -Name "cloudflared" -FromVer $curVer -ToVer $latestVer
     if ($proceed) {
       Write-ColorHost "  Downloading latest cloudflared..." "Cyan"
@@ -537,7 +538,7 @@ try {
     $updatesAvailable++
   }
 
-  if ($IsUpdate -and $updateNeeded) {
+  if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "Handy voice")) {
     $proceed = Confirm-Update -Name "Handy voice" -FromVer $curInfo -ToVer $latestVer
     if ($proceed) {
       Write-ColorHost "  Handy uses an NSIS installer (not a zip). Run .\bootstrap.ps1 -Force to update it." "Yellow"

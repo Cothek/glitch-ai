@@ -287,7 +287,7 @@ if (-not (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md")) {
     }
 }
 
-# ---- Check for dependency updates ----
+# ---- Check for dependency updates & offer interactive update ----
 Write-Host "  Checking dependency updates..." -ForegroundColor Cyan
 try {
     $statusFile = "$RootDir\data\update-status.json"
@@ -295,7 +295,45 @@ try {
     if (Test-Path $statusFile) {
         $status = Get-Content $statusFile -Raw | ConvertFrom-Json
         if ($status.updates_available -gt 0) {
-            Write-Host "  $($status.updates_available) update(s) available -- run .\check-updates.ps1 -Update" -ForegroundColor Yellow
+            Write-Host ""
+            Write-Host "  ===== Updates Available =====" -ForegroundColor Yellow
+            $updateItems = $status.items | Where-Object { $_.update_available }
+
+            $i = 1
+            foreach ($item in $updateItems) {
+                Write-Host "  [$i] $($item.name)" -ForegroundColor Cyan
+                Write-Host "      $($item.current) -> $($item.latest)" -ForegroundColor DarkYellow
+                $i++
+            }
+
+            Write-Host ""
+            Write-Host "  Enter numbers to select (e.g. '1,3')," -ForegroundColor White
+            Write-Host "  press Enter to apply all, or type 's' to skip:" -ForegroundColor White
+            $selection = Read-Host "  > "
+
+            if ($selection.Trim().ToLower() -eq "s") {
+                Write-Host "  Skipping updates." -ForegroundColor DarkYellow
+            } else {
+                $selectedNames = @()
+                if (-not [string]::IsNullOrWhiteSpace($selection)) {
+                    $indices = $selection.Split(',') | ForEach-Object { $_.Trim() } | Where-Object { $_ -match '^\d+$' }
+                    foreach ($idx in $indices) {
+                        $num = [int]$idx - 1
+                        if ($num -ge 0 -and $num -lt $updateItems.Count) {
+                            $selectedNames += $updateItems[$num].name
+                        }
+                    }
+                }
+
+                if ($selectedNames.Count -gt 0) {
+                    Write-Host "  Applying selected updates..." -ForegroundColor Cyan
+                    & "$RootDir\scripts\check-updates.ps1" -Update -Filter $selectedNames
+                } else {
+                    Write-Host "  Applying all updates..." -ForegroundColor Cyan
+                    & "$RootDir\scripts\check-updates.ps1" -Update
+                }
+                Write-Host "  Updates complete." -ForegroundColor Green
+            }
         } else {
             Write-Host "  All dependencies up-to-date" -ForegroundColor DarkGreen
         }
