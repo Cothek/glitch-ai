@@ -1,24 +1,32 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, readdirSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, readdirSync, unlinkSync, createWriteStream } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync, spawn } from 'child_process';
 import net from 'net';
 import crypto from 'crypto';
+import { get as httpsGet } from 'https';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SCRIPT_DIR = __dirname;
 const ROOT_DIR = resolve(SCRIPT_DIR, '..');
 const isWin = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
+const isLinux = process.platform === 'linux';
 
 const OPENCODE_BIN_NAME = isWin ? 'opencode.exe' : 'opencode';
 const OpenCodeBin = join(ROOT_DIR, 'opencode', OPENCODE_BIN_NAME);
 const CLOUDFLARED_BIN_NAME = isWin ? 'cloudflared.exe' : 'cloudflared';
 const CloudflaredBin = join(ROOT_DIR, CLOUDFLARED_BIN_NAME);
 const CloudflaredConfig = join(ROOT_DIR, 'config', 'cloudflared-config.yml');
-const HandyBin = join(ROOT_DIR, 'handy-voice', 'Handy', 'handy.exe');
+const HANDY_VERSION = '0.8.3';
+const HandyBin = isWin
+  ? join(ROOT_DIR, 'handy-voice', 'Handy', 'handy.exe')
+  : isMac
+    ? join(ROOT_DIR, 'handy-voice', 'Handy.app', 'Contents', 'MacOS', 'Handy')
+    : join(ROOT_DIR, 'handy-voice', 'Handy.AppImage');
 const ConfigPath = join(ROOT_DIR, 'opencode.json');
 const TemplatePath = join(ROOT_DIR, 'config', 'opencode-normal.json');
 const BackupDir = join(ROOT_DIR, 'data', 'backups');
@@ -86,6 +94,86 @@ function readJson(path) {
   }
 }
 
+function downloadFile(url, destPath) {
+  return new Promise((resolve, reject) => {
+    const file = createWriteStream(destPath);
+    httpsGet(url, (response) => {
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        file.close();
+        try { unlinkSync(destPath); } catch {}
+        downloadFile(response.headers.location, destPath).then(resolve).catch(reject);
+        return;
+      }
+      if (response.statusCode !== 200) {
+        file.close();
+        try { unlinkSync(destPath); } catch {}
+        reject(new Error(`HTTP ${response.statusCode}`));
+        return;
+      }
+      response.pipe(file);
+      file.on('finish', () => { file.close(); resolve(); });
+    }).on('error', (err) => {
+      file.close();
+      try { unlinkSync(destPath); } catch {}
+      reject(err);
+    });
+  });
+}
+
+async function ensureHandy() {
+  if (existsSync(HandyBin)) return true;
+
+  log(YELLOW, '  Handy not found. Downloading...');
+
+  const handyVoiceDir = join(ROOT_DIR, 'handy-voice');
+  if (!existsSync(handyVoiceDir)) mkdirSync(handyVoiceDir, { recursive: true });
+
+  try {
+    if (isWin) {
+      log(YELLOW, '  On Windows, run .\\scripts\\bootstrap.ps1 to install Handy.');
+      return false;
+    } else if (isMac) {
+      const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
+      const url = `https://github.com/cjpais/Handy/releases/download/v${HANDY_VERSION}/Handy_${arch}.app.tar.gz`;
+      const tarPath = join(handyVoiceDir, 'Handy.app.tar.gz');
+
+      log(CYAN, `  Downloading Handy v${HANDY_VERSION} for macOS (${arch})...`);
+      await downloadFile(url, tarPath);
+
+      log(CYAN, '  Extracting...');
+      const result = run('tar', ['-xzf', tarPath, '-C', handyVoiceDir], { timeout: 30000 });
+      if (!result.success) throw new Error('Extraction failed: ' + (result.stderr || result.error));
+
+      try { unlinkSync(tarPath); } catch {}
+
+      if (existsSync(HandyBin)) {
+        log(GREEN, '  Handy installed!');
+        return true;
+      }
+    } else if (isLinux) {
+      const arch = process.arch === 'arm64' ? 'aarch64' : 'amd64';
+      const url = `https://github.com/cjpais/Handy/releases/download/v${HANDY_VERSION}/Handy_${HANDY_VERSION}_${arch}.AppImage`;
+      const appImagePath = join(handyVoiceDir, 'Handy.AppImage');
+
+      log(CYAN, `  Downloading Handy v${HANDY_VERSION} for Linux (${arch})...`);
+      await downloadFile(url, appImagePath);
+
+      log(CYAN, '  Making executable...');
+      const chmod = run('chmod', ['+x', appImagePath], { timeout: 5000 });
+      if (!chmod.success) throw new Error('chmod failed: ' + (chmod.stderr || chmod.error));
+
+      if (existsSync(HandyBin)) {
+        log(GREEN, '  Handy installed!');
+        return true;
+      }
+    }
+  } catch (e) {
+    log(RED, `  ERROR downloading Handy: ${e.message || e}`);
+  }
+
+  return false;
+}
+
 const NPM_BIN = isWin ? 'npm.cmd' : 'npm';
 const GIT_BIN = 'git';
 const POWERSHELL = isWin ? 'powershell.exe' : null;
@@ -96,10 +184,17 @@ function pwsh(args, opts = {}) {
 }
 
 function isProcessRunning(name) {
-  if (!isWin) return false;
   try {
-    const out = execFileSync('tasklist', ['/NH', '/FI', `IMAGENAME eq ${name}.exe`], { encoding: 'utf-8', timeout: 5000 });
-    return out.includes(`${name}.exe`);
+    if (isWin) {
+      const out = execFileSync('tasklist', ['/NH', '/FI', `IMAGENAME eq ${name}.exe`], { encoding: 'utf-8', timeout: 5000 });
+      return out.includes(`${name}.exe`);
+    } else if (isMac) {
+      execFileSync('pgrep', ['-x', name], { encoding: 'utf-8', timeout: 3000 });
+      return true;
+    } else {
+      execFileSync('pgrep', ['-f', 'Handy'], { encoding: 'utf-8', timeout: 3000 });
+      return true;
+    }
   } catch {
     return false;
   }
@@ -211,6 +306,10 @@ async function main() {
   } else {
     log(DARK_GREEN, '  Engine found');
   }
+
+  // ---- Auto-install Handy if missing ----
+  log(CYAN, '  Checking Handy voice input...');
+  await ensureHandy();
 
   // ---- Normalize backslash paths (startup) ----
   try {
@@ -547,20 +646,29 @@ async function main() {
     }
   }
 
-  // ---- Start Handy (Win only) ----
-  if (isWin) {
-    if (!isProcessRunning('handy')) {
-      if (existsSync(HandyBin)) {
-        log(CYAN, '  Starting Handy voice input...');
+  // ---- Start Handy ----
+  const handyProcName = isWin ? 'handy' : 'Handy';
+  if (!isProcessRunning(handyProcName)) {
+    if (existsSync(HandyBin)) {
+      log(CYAN, '  Starting Handy voice input...');
+      if (isMac) {
+        const handyApp = join(ROOT_DIR, 'handy-voice', 'Handy.app');
+        if (existsSync(handyApp)) {
+          spawn('open', [handyApp], { detached: true, stdio: 'ignore' }).unref();
+        } else {
+          const proc = spawn(HandyBin, [], { detached: true, stdio: 'ignore' });
+          proc.unref();
+        }
+      } else {
         const proc = spawn(HandyBin, [], { detached: true, stdio: 'ignore', windowsHide: true });
         proc.unref();
-        await new Promise(r => setTimeout(r, 1000));
-      } else {
-        log(DARK_YELLOW, '  Handy not found (optional). Voice input disabled.');
       }
+      await new Promise(r => setTimeout(r, 1000));
     } else {
-      log(DARK_GREEN, '  Handy already running');
+      log(DARK_YELLOW, '  Handy not found (optional). Voice input disabled.');
     }
+  } else {
+    log(DARK_GREEN, '  Handy already running');
   }
 
   // ---- Start Auth Proxy ----
