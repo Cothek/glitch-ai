@@ -24,6 +24,25 @@ function Write-ColorHost {
   Write-Host $Text -ForegroundColor $Color
 }
 
+function Invoke-WithSpinner {
+  param([string]$Label, [scriptblock]$ScriptBlock)
+  Write-Host -NoNewline "  $Label" -ForegroundColor Cyan
+  $job = Start-Job -ScriptBlock $ScriptBlock 2>$null
+  while ($job.JobStateInfo.State -eq 'Running') {
+    Start-Sleep -Milliseconds 1000
+    Write-Host "." -NoNewline
+  }
+  if ($job.JobStateInfo.State -eq 'Failed') {
+    $null = Receive-Job $job -ErrorAction SilentlyContinue
+    Remove-Job $job -Force
+    Write-Host " failed." -ForegroundColor Red
+    return $false
+  }
+  $null = Receive-Job $job -ErrorAction SilentlyContinue
+  Remove-Job $job -Force
+  return $true
+}
+
 function Get-NvmActiveVersion {
   $nvmRoot = [Environment]::GetEnvironmentVariable("NVM_HOME", "User")
   if (-not $nvmRoot) { $nvmRoot = [Environment]::GetEnvironmentVariable("NVM_HOME", "Machine") }
@@ -137,8 +156,7 @@ try {
       $proceed = $true
     }
     if ($proceed) {
-      Write-ColorHost "  Upgrading opencode-ai from $currentVer to $latestVer..." "Cyan"
-      $null = & "npm" "install" "-g" "opencode-ai@latest" 2>&1
+      $null = Invoke-WithSpinner -Label "Upgrading opencode-ai from $currentVer to $latestVer" -ScriptBlock { & "npm" "install" "-g" "opencode-ai@latest" 2>&1 | Out-Null }
       try { $currentVer = (& "opencode" "--version" 2>$null).Trim() } catch {}
       Write-ColorHost "  Done. Version: $currentVer" "Green"
     }
@@ -241,8 +259,7 @@ try {
       $proceed = $true
     }
     if ($proceed) {
-      Write-ColorHost "  Upgrading gitnexus from $curVer to $latestVer..." "Cyan"
-      $null = & "npm" "install" "-g" "gitnexus@latest" 2>&1
+      $null = Invoke-WithSpinner -Label "Upgrading gitnexus from $curVer to $latestVer" -ScriptBlock { & "npm" "install" "-g" "gitnexus@latest" 2>&1 | Out-Null }
       try { $curVer = (& "gitnexus" "--version" 2>$null).Trim() } catch {}
       Write-ColorHost "  Done. Version: $curVer" "Green"
     }
@@ -406,11 +423,7 @@ try {
     if ($outdatedCount -gt 0) { $updatesAvailable++ }
 
     if ($IsUpdate -and $outdatedCount -gt 0 -and ($Filter.Count -eq 0 -or $Filter -contains "@opencode-ai/plugin (.opencode)")) {
-      Push-Location $PluginDir
-      Write-ColorHost "  Updating $outdatedCount package(s) in .opencode..." "Cyan"
-      $null = & "npm" "update" 2>&1
-      Pop-Location
-      Write-ColorHost "  Done." "Green"
+      $null = Invoke-WithSpinner -Label "Updating $outdatedCount package(s) in .opencode" -ScriptBlock ([scriptblock]::Create("Push-Location '$PluginDir'; & 'npm' 'update' 2>&1 | Out-Null; Pop-Location"))
     }
   } else {
     Write-ColorHost "  [SKIP] No package.json found in .opencode" "Gray"
@@ -476,11 +489,11 @@ try {
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "cloudflared")) {
     $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "cloudflared" -FromVer $curVer -ToVer $latestVer)
     if ($proceed) {
-      Write-ColorHost "  Downloading latest cloudflared..." "Cyan"
+      $cloudflaredUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
       try {
         $outFile = Join-Path $RootDir "cloudflared.exe.tmp"
-        Invoke-WebRequest -Uri "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe" -OutFile $outFile -UseBasicParsing -TimeoutSec 60 -ErrorAction Stop
-        if (Test-Path $outFile) {
+        $downloaded = Invoke-WithSpinner -Label "Downloading cloudflared" -ScriptBlock ([scriptblock]::Create("Invoke-WebRequest -Uri '$cloudflaredUrl' -OutFile '$outFile' -UseBasicParsing -TimeoutSec 60 -ErrorAction Stop"))
+        if ($downloaded -and (Test-Path $outFile)) {
           Copy-Item -Path $outFile -Destination $CloudflaredBin -Force
           Remove-Item -Path $outFile -Force
           Write-ColorHost "  Done." "Green"
