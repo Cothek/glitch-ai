@@ -1,5 +1,5 @@
 ﻿{
-    "generated_at":  "2026-06-04T22:43:38.3635893-05:00",
+    "generated_at":  "2026-06-05T09:46:52.2999813-05:00",
     "providers":  [
                       {
                           "models":  [
@@ -26,10 +26,6 @@
                                          {
                                              "id":  "opencode/nemotron-3-super-free",
                                              "name":  "Nemotron 3 Super"
-                                         },
-                                         {
-                                             "id":  "opencode/nemotron-3-ultra-free",
-                                             "name":  "Nemotron 3 Ultra"
                                          }
                                      ],
                           "name":  "OpenCode Zen (free tier)",

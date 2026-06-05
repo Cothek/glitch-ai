@@ -1,15 +1,11 @@
-﻿{
+{
   "$schema": "https://opencode.ai/config.json",
   "instructions": [
     "glitch-memorycore/prompt-rules.md",
     "glitch-memorycore/CLAUDE.md",
     "glitch-memorycore/master-memory.md",
     "glitch-memorycore/core/identity.md",
-    "glitch-memorycore/plugins/glitch-skills/skills-registry.md",
-    "user/main-memory.md",
-    "user/current-session.md",
-    "user/reminders.md",
-    "user/session-dashboard.md"
+    "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
   ],
   "agent": {
     "delegator": {
@@ -93,4 +89,3 @@
     "tail_turns": 8
   }
 }
-

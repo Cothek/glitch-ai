@@ -565,6 +565,70 @@ try {
   Write-ColorHost "  [ERROR] $_" "Red"
 }
 
+# ========== 9. glitch-user-troy repo (user/) ==========
+try {
+  $UserDir = Join-Path $RootDir "user"
+  $behindCount = "?"
+  $dirtyCount = 0
+  $updateNeeded = $false
+
+  if (Test-Path (Join-Path $UserDir ".git")) {
+    Push-Location $UserDir
+    try {
+      $null = & "git" "fetch" "origin" "main" 2>&1
+      $behindRaw = & "git" "rev-list" "--count" "HEAD..origin/main" 2>&1
+      $behindStr = $behindRaw.Trim()
+      if ($behindStr -match '^\d+$') {
+        $behindCount = [int]$behindStr
+        if ($behindCount -gt 0) {
+          $updateNeeded = $true
+          $updatesAvailable++
+        }
+      } else {
+        $behindCount = "?"
+      }
+      # Also count dirty files
+      $dirtyRaw = & "git" "status" "--porcelain" 2>&1
+      $dirtyCount = ($dirtyRaw | Where-Object { $_ -match '.' }).Count
+    } catch { $behindCount = "error" }
+    Pop-Location
+  } else {
+    $behindCount = "not a repo"
+  }
+
+  if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-user-troy (user/)")) {
+    $proceed = Confirm-Update -Name "glitch-user-troy repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main"
+    if ($proceed) {
+      Push-Location $UserDir
+      Write-ColorHost "  Pulling from origin/main..." "Cyan"
+      $null = & "git" "pull" "origin" "main" 2>&1
+      Pop-Location
+      Write-ColorHost "  Done." "Green"
+      $updateNeeded = $false
+      $behindCount = "0"
+    }
+  }
+
+  $dirtySuffix = if ($dirtyCount -gt 0) { " ($dirtyCount dirty)" } else { "" }
+  $statusDisplay = if ($behindCount -eq "?") { "unknown" } elseif ($behindCount -eq "error") { "error" } else { "$behindCount commit(s) behind$dirtySuffix" }
+
+  $results += @{
+    name = "glitch-user-troy (user/)"
+    current = $statusDisplay
+    latest = "origin/main"
+    update_available = $updateNeeded
+    update_type = if ($updateNeeded) {"git pull"} else {"none"}
+    auto_safe = $false
+    status = if ($behindCount -eq "error") {"error"} else {"ok"}
+    error_message = if ($behindCount -eq "error") {"git fetch/rev-list failed"} else {$null}
+  }
+
+  Write-ColorHost ("  [{0}] $statusDisplay" -f $(if ($updateNeeded) {"UPDATE"} else {"OK"})) $(if ($updateNeeded) {"Yellow"} else {"Green"})
+} catch {
+  $results += @{ name = "glitch-user-troy (user/)"; status = "error"; error_message = $_.Exception.Message }
+  Write-ColorHost "  [ERROR] $_" "Red"
+}
+
 # ========== Summary Table ==========
 Write-Host ""
 Write-Host ("=" * 75) -ForegroundColor White
