@@ -1043,7 +1043,7 @@
     <label for="tab-old">
       <div class="tab-title">
         <span class="tab-dot"></span>
-        Returning User
+        Troy's Setup
       </div>
       <div class="tab-desc">Restore full memory with your private user repo — cross-platform steps</div>
     </label>
@@ -1094,16 +1094,16 @@
         </div>
       </div>
     </div>
+
+    <div class="note cyan">
+      <strong>GitHub login pop-up?</strong> If you get one after <code>git submodule sync</code>, the submodule remote got reset. Fix it:<br>
+      <pre style="margin-top:0.5rem"><code>cd glitch-memorycore
+git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</code></pre>
+    </div>
   </div>
 </div>
 
 <p style="color:var(--text-muted);font-size:0.875rem">Your data stays local under <code>user/</code> — nothing shared. Requires <strong>Node.js 22+</strong> and <strong>Git</strong>. Handy voice input is Windows-only; all other features work on all platforms.</p>
-
-<div class="note cyan">
-  <strong>GitHub login pop-up?</strong> If you get one after <code>git submodule sync</code>, the submodule remote got reset. Fix it:<br>
-  <pre style="margin-top:0.5rem"><code>cd glitch-memorycore
-git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</code></pre>
-</div>
 
 </section>
 
