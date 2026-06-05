@@ -8,6 +8,12 @@ $ModeFile = "$BackupDir\.last-mode"
 $PrefFile = "$RootDir\user\free-model-preference.json"
 $FreeModelsFile = "$RootDir\data\free-models.json"
 
+# ---- Prepend bundled Node to PATH if available ----
+$BundledNode = "$PSScriptRoot\..\data\node"
+if (Test-Path "$BundledNode\node.exe") {
+  $env:PATH = "$BundledNode;$env:PATH"
+}
+
 $ErrorActionPreference = "Continue"
 
 # --- Hardcoded fallback models (used when free-models.json is missing/stale) ----

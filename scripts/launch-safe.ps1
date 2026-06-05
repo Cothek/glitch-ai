@@ -6,6 +6,12 @@ $TemplatePath = "$RootDir\config\opencode-safe.json"
 $BackupDir = "$RootDir\data\backups"
 $ModeFile = "$BackupDir\.last-mode"
 
+# ---- Prepend bundled Node to PATH if available ----
+$BundledNode = "$PSScriptRoot\..\data\node"
+if (Test-Path "$BundledNode\node.exe") {
+  $env:PATH = "$BundledNode;$env:PATH"
+}
+
 $ErrorActionPreference = "Continue"
 
 Write-Host ""

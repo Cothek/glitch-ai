@@ -28,6 +28,13 @@ const PwFile = join(ROOT_DIR, '.server-password');
 const AuthProxyPath = join(ROOT_DIR, 'plugins', 'auth-proxy.mjs');
 const FixPathsMjs = join(ROOT_DIR, 'scripts', 'fix-paths.mjs');
 
+// ---- Prepend bundled Node to PATH if available ----
+const BundledNodeDir = join(ROOT_DIR, 'data', 'node');
+const BundledNodeBin = join(BundledNodeDir, isWin ? 'node.exe' : 'node');
+if (existsSync(BundledNodeBin)) {
+  process.env.PATH = BundledNodeDir + (isWin ? ';' : ':') + process.env.PATH;
+}
+
 const TARGET_PORT = 4102;
 const AUTH_PROXY_PORT = 4100;
 

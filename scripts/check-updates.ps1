@@ -643,6 +643,110 @@ try {
   Write-ColorHost "  [ERROR] $_" "Red"
 }
 
+# ========== 10. Node.js (bundled) ==========
+try {
+  $curInfo = "not installed"
+  $latestVer = "unknown"
+  $updateNeeded = $false
+  $systemVer = "unknown"
+  $bundledVer = ""
+
+  # Check system Node version
+  try {
+    $systemNode = Get-Command "node" -ErrorAction SilentlyContinue
+    if ($systemNode) {
+      $sv = & $systemNode.Source "--version" 2>$null
+      if ($sv) { $systemVer = $sv.Trim() }
+    }
+  } catch { $systemVer = "unknown" }
+
+  # Check bundled Node version
+  $bundledNodeBin = Join-Path $RootDir "data\node\node.exe"
+  if (Test-Path $bundledNodeBin) {
+    try {
+      $bv = & $bundledNodeBin "--version" 2>$null
+      if ($bv) {
+        $bundledVer = $bv.Trim()
+        $curInfo = "$bundledVer (bundled)"
+      } else {
+        $curInfo = "exists (version unknown)"
+      }
+    } catch { $curInfo = "exists (version check failed)" }
+  } elseif ($systemVer -ne "unknown") {
+    $curInfo = "$systemVer (system)"
+  }
+
+  # Fetch latest LTS version
+  try {
+    $json = Invoke-WebRequest -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+    $releases = $json | ConvertFrom-Json
+    $latestLTS = ($releases | Where-Object { $_.lts -ne $false } | Select-Object -First 1)
+    if ($latestLTS -and $latestLTS.version) {
+      $latestVer = $latestLTS.version
+    }
+  } catch {
+    $latestVer = "v22.14.0"  # fallback if offline
+  }
+
+  # Determine if update is needed (bundled version vs latest LTS)
+  $hasUpdate = $false
+  if ($bundledVer -and $bundledVer -ne $latestVer -and $latestVer -ne "unknown") {
+    $hasUpdate = $true
+    $updatesAvailable++
+  }
+
+  if ($IsUpdate -and $hasUpdate -and ($Filter.Count -eq 0 -or $Filter -contains "Node.js (bundled)")) {
+    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "Node.js (bundled)" -FromVer $bundledVer -ToVer $latestVer)
+    if ($proceed) {
+      $nodeArch = "x64"
+      try {
+        $isArm = (Get-CimInstance Win32_Processor).Architecture -eq 5
+        if ($isArm) { $nodeArch = "arm64" }
+      } catch { }
+
+      $zipUrl = "https://nodejs.org/dist/$latestVer/node-$latestVer-win-$nodeArch.zip"
+      $zipPath = "$env:TEMP\node-portable.zip"
+      try {
+        $downloaded = Invoke-WithSpinner -Label "Downloading Node.js $latestVer" -ScriptBlock ([scriptblock]::Create("Invoke-WebRequest -Uri '$zipUrl' -OutFile '$zipPath' -UseBasicParsing -TimeoutSec 60 -ErrorAction Stop"))
+        if ($downloaded -and (Test-Path $zipPath)) {
+          $extractDir = "$env:TEMP\node-extracted"
+          if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
+          Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+
+          $exe = Get-ChildItem $extractDir -Recurse -Filter "node.exe" | Select-Object -First 1
+          if ($exe) {
+            $targetDir = Join-Path $RootDir "data\node"
+            if (Test-Path $targetDir) { Remove-Item $targetDir -Recurse -Force -ErrorAction SilentlyContinue }
+            New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+            Copy-Item "$($exe.Directory.FullName)\*" $targetDir -Recurse -Force
+            Write-ColorHost "  Node.js $latestVer extracted to data/node/" "Green"
+          }
+
+          Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+          Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+        }
+      } catch {
+        Write-ColorHost "  Download failed: $_" "Red"
+      }
+    }
+  }
+
+  $results += @{
+    name = "Node.js (bundled)"
+    current = $curInfo
+    latest = $latestVer
+    update_available = $hasUpdate
+    update_type = if ($hasUpdate) {"re-download"} else {"none"}
+    auto_safe = $true
+    status = "ok"
+  }
+
+  Write-ColorHost ("  [{0}] Current: {1} | Latest: {2}" -f $(if ($hasUpdate) {"UPDATE"} else {"OK"}), $curInfo, $latestVer) $(if ($hasUpdate) {"Yellow"} else {"Green"})
+} catch {
+  $results += @{ name = "Node.js (bundled)"; status = "error"; error_message = $_.Exception.Message }
+  Write-ColorHost "  [ERROR] $_" "Red"
+}
+
 # ========== Summary Table ==========
 Write-Host ""
 Write-Host ("=" * 75) -ForegroundColor White
