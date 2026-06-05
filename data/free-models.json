@@ -1,5 +1,5 @@
 ﻿{
-    "generated_at":  "2026-06-05T11:05:36.5777417-05:00",
+    "generated_at":  "2026-06-05T13:14:11.8287863-05:00",
     "providers":  [
                       {
                           "models":  [
@@ -22,6 +22,10 @@
                                          {
                                              "id":  "opencode/minimax-m3-free",
                                              "name":  "Minimax M3"
+                                         },
+                                         {
+                                             "id":  "opencode/nemotron-3-ultra-free",
+                                             "name":  "Nemotron 3 Ultra"
                                          },
                                          {
                                              "id":  "opencode/nemotron-3-super-free",

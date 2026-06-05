@@ -1,8 +1,9 @@
 import { DatabaseSync } from 'node:sqlite';
 import { join } from 'path';
+import { homedir } from 'os';
 
 // opencode DB is at ~/.local/share/opencode/opencode.db
-const dbPath = join(process.env.USERPROFILE, '.local', 'share', 'opencode', 'opencode.db');
+const dbPath = join(homedir(), '.local', 'share', 'opencode', 'opencode.db');
 
 try {
   const db = new DatabaseSync(dbPath.replace(/\\/g, '/'));

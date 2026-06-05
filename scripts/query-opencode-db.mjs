@@ -1,5 +1,7 @@
 import sqlite3 from 'node:sqlite';
-const db = new sqlite3.DatabaseSync('C:\\Users\\cothe\\.local\\share\\opencode\\opencode.db');
+import { join } from 'path';
+import { homedir } from 'os';
+const db = new sqlite3.DatabaseSync(join(homedir(), '.local', 'share', 'opencode', 'opencode.db'));
 
 console.log('=== Most recent 25 root sessions (parent_id IS NULL) ALL directories ===');
 console.log('id\tdirectory\ttime_created\ttitle');
@@ -16,7 +18,8 @@ for (const r of rows2) {
 }
 
 console.log('\n=== Check if any NEW session directories exist ===');
-const rows3 = db.prepare("SELECT DISTINCT directory FROM session WHERE directory NOT LIKE 'E:/%' AND directory NOT LIKE 'C:/%' AND directory NOT LIKE 'E:\\%'").all();
+// Cross-platform: exclude known drive letters (Windows) and / (Unix)
+const rows3 = db.prepare("SELECT DISTINCT directory FROM session WHERE directory NOT LIKE 'E:/%' AND directory NOT LIKE 'C:/%' AND directory NOT LIKE 'E:\\%' AND directory NOT LIKE '/%'").all();
 console.log(JSON.stringify(rows3));
 
 db.close();

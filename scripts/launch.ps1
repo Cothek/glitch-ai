@@ -9,6 +9,12 @@ $ModeFile = "$BackupDir\.last-mode"
 
 $ErrorActionPreference = "Continue"
 
+# ---- Prepend bundled Node to PATH if available ----
+$BundledNode = "$PSScriptRoot\..\data\node"
+if (Test-Path "$BundledNode\node.exe") {
+  $env:PATH = "$BundledNode;$env:PATH"
+}
+
 Write-Host ""
 Write-Host " Glitch AI - Normal Mode" -ForegroundColor Magenta
 Write-Host ""

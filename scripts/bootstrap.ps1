@@ -27,8 +27,91 @@ Write-Host ""
 
 $failures = @()
 
-# ── Step 1: Git Submodules ──
-Write-Host "[1/4] Initializing git submodules..." -ForegroundColor Cyan
+# ── Step 1: Node.js (portable if not on PATH) ──
+$BundledNodeDir = "$RootDir\data\node"
+$NodeBin = "$BundledNodeDir\node.exe"
+
+Write-Host "[1/5] Checking Node.js..." -ForegroundColor Cyan
+
+$systemNode = Get-Command "node" -ErrorAction SilentlyContinue
+if ($systemNode) {
+  $systemVerRaw = & $systemNode.Source "--version" 2>$null
+  $systemVer = if ($systemVerRaw) { $systemVerRaw.Trim() } else { "unknown" }
+  Write-Host "  Node found on PATH: $systemVer" -ForegroundColor Green
+
+  if ($Force) {
+    try {
+      Write-Host "  Checking latest LTS version..." -ForegroundColor Yellow
+      $json = Invoke-WebRequest -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+      $releases = $json | ConvertFrom-Json
+      $latestLTS = ($releases | Where-Object { $_.lts -ne $false } | Select-Object -First 1)
+      if ($latestLTS -and $latestLTS.version) {
+        if ($systemVer -ne $latestLTS.version) {
+          Write-Host "  Latest LTS: $($latestLTS.version) (system has $systemVer)" -ForegroundColor Yellow
+          Write-Host "  Run check-updates.ps1 -Update if you want to upgrade." -ForegroundColor Yellow
+        } else {
+          Write-Host "  System Node is up-to-date." -ForegroundColor DarkGreen
+        }
+      }
+    } catch {
+      Write-Host "  Could not check latest LTS version (offline?)" -ForegroundColor DarkYellow
+    }
+  }
+} else {
+  Write-Host "  Node.js not found on PATH." -ForegroundColor Yellow
+  if (-not (Test-Path $NodeBin) -or $Force) {
+    Write-Host "  Downloading portable Node.js..." -ForegroundColor Yellow
+    try {
+      $latestVer = "v22.14.0"
+      try {
+        $json = Invoke-WebRequest -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+        $releases = $json | ConvertFrom-Json
+        $latestLTS = ($releases | Where-Object { $_.lts -ne $false } | Select-Object -First 1)
+        if ($latestLTS -and $latestLTS.version) { $latestVer = $latestLTS.version }
+      } catch { }
+
+      $nodeArch = if ($isArm) { "arm64" } else { "x64" }
+      $zipUrl = "https://nodejs.org/dist/$latestVer/node-$latestVer-win-$nodeArch.zip"
+      $zipPath = "$env:TEMP\node-portable.zip"
+
+      Write-Host "  Downloading $latestVer..." -ForegroundColor Yellow
+      Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+
+      Write-Host "  Extracting..." -ForegroundColor Yellow
+      $extractDir = "$env:TEMP\node-extracted"
+      if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
+      Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+
+      $extractedExe = Get-ChildItem $extractDir -Recurse -Filter "node.exe" | Select-Object -First 1
+      if ($extractedExe) {
+        if (Test-Path $BundledNodeDir) { Remove-Item $BundledNodeDir -Recurse -Force -ErrorAction SilentlyContinue }
+        New-Item -ItemType Directory -Path $BundledNodeDir -Force | Out-Null
+        Copy-Item "$($extractedExe.Directory.FullName)\*" $BundledNodeDir -Recurse -Force
+        Write-Host "  Node.js extracted to data/node/" -ForegroundColor Green
+      } else {
+        throw "Could not find node.exe in extracted archive"
+      }
+
+      Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+      Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+    } catch {
+      Write-Host "  ERROR downloading Node.js: $_" -ForegroundColor Red
+      $failures += "Step 1: Node.js -- $_"
+    }
+  } else {
+    Write-Host "  Bundled Node.js found at data/node/" -ForegroundColor DarkGreen
+  }
+}
+
+if (Test-Path $NodeBin) {
+  $ver = & $NodeBin "--version" 2>$null
+  Write-Host "  Node.js ready: $(if ($ver) { $ver.Trim() } else { 'unknown version' })" -ForegroundColor Green
+} elseif ($systemNode) {
+  Write-Host "  (using system Node.js)" -ForegroundColor DarkGreen
+}
+
+# ── Step 2: Git Submodules ──
+Write-Host "[2/5] Initializing git submodules..." -ForegroundColor Cyan
 try {
   git submodule update --init --recursive 2>&1 | Out-Null
   Write-Host "  Submodules ready!" -ForegroundColor Green
@@ -36,10 +119,10 @@ try {
   Write-Host "  Skipping submodules (not a git repo or git not available)" -ForegroundColor Yellow
 }
 
-# ── Step 2: OpenCode ──
+# ── Step 3: OpenCode ──
 $stepOk = $true
 if (-not (Test-Path $OpenCodeBin) -or $Force) {
-  Write-Host "[2/5] Installing OpenCode..." -ForegroundColor Cyan
+  Write-Host "[3/5] Installing OpenCode..." -ForegroundColor Cyan
   try {
     $systemOpenCode = "C:\Program Files\nodejs\node_modules\opencode-ai\bin\opencode.exe"
     if (Test-Path $systemOpenCode) {
@@ -65,13 +148,13 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
   } catch {
     Write-Host "  ERROR installing OpenCode: $_" -ForegroundColor Red
     $stepOk = $false
-    $failures += "Step 2: OpenCode -- $_"
+    $failures += "Step 3: OpenCode -- $_"
   }
 } else {
-  Write-Host "[2/4] OpenCode found" -ForegroundColor DarkGreen
+  Write-Host "[3/5] OpenCode found" -ForegroundColor DarkGreen
 }
 
-# ── Step 3: Handy ──
+# ── Step 4: Handy ──
 $handyVersion = "0.8.3"
 $handyArch = if ($isArm) { "arm64" } else { "x64" }
 $handySize = 105925408
@@ -81,7 +164,7 @@ if (Test-Path $HandyBin) {
   if ($actualSize -ne $handySize) { $needsInstall = $true }
 } else { $needsInstall = $true }
 if ($needsInstall) {
-  Write-Host "[3/4] Installing Handy..." -ForegroundColor Cyan
+  Write-Host "[4/5] Installing Handy..." -ForegroundColor Cyan
   try {
     $systemHandy = "$env:LOCALAPPDATA\Handy\handy.exe"
     if (Test-Path $systemHandy) {
@@ -139,12 +222,12 @@ if ($needsInstall) {
     $failures += "Step 3: Handy -- $_"
   }
 } else {
-  Write-Host "[3/4] Handy found" -ForegroundColor DarkGreen
+  Write-Host "[4/5] Handy found" -ForegroundColor DarkGreen
 }
 
-# ── Step 4: Cloudflare Tunnel (standalone EXE, no admin needed) ──
+# ── Step 5: Cloudflare Tunnel (standalone EXE, no admin needed) ──
 if (-not (Test-Path $CloudflaredBin) -or $Force) {
-  Write-Host "[4/4] Installing Cloudflare Tunnel..." -ForegroundColor Cyan
+  Write-Host "[5/5] Installing Cloudflare Tunnel..." -ForegroundColor Cyan
   try {
     if ($isArm) {
       Write-Host "  ARM64: Download cloudflared manually:" -ForegroundColor Yellow
@@ -161,7 +244,7 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
     $failures += "Step 4: Cloudflare Tunnel -- $_"
   }
 } else {
-  Write-Host "[4/4] cloudflared found" -ForegroundColor DarkGreen
+  Write-Host "[5/5] cloudflared found" -ForegroundColor DarkGreen
 }
 
 # ── Summary ──

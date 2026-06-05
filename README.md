@@ -1,31 +1,44 @@
 # Glitch AI
 
-Portable AI companion environment — one clone, one setup, Glitch is ready on any Windows PC.
+Portable AI companion environment — one clone, one setup, Glitch is ready on Windows, Mac, or Linux.
 
 ## Quick Start
 
-### For New Users
+### Windows
 
 ```powershell
 git clone https://github.com/Cothek/glitch-ai.git
 cd glitch-ai
-.\setup.bat          # Double-click or run in terminal — handles everything
-.\launch-glitch.bat  # Start using Glitch
+.\setup.bat                    # First-time: init engine + profile wizard
+.\launch-glitch.bat            # Start using Glitch
 ```
 
-`setup.bat` initializes the engine submodule (`glitch-engine`) and launches a profile wizard (name, preferences). Your data stays local under `user/` — nothing shared.
-
-### For Troy (Returning User)
-
+Or use the Node.js launcher (works on all platforms):
 ```powershell
+node scripts\launch.mjs        # Cross-platform launcher
+```
+
+### Mac / Linux
+
+```bash
+git clone https://github.com/Cothek/glitch-ai.git
+cd glitch-ai
+git submodule update --init --recursive
+node scripts/setup.mjs         # First-time setup
+./launch-glitch.sh             # Start using Glitch
+```
+
+### For Troy (Returning User, cross-platform)
+
+```bash
 git clone https://github.com/Cothek/glitch-ai.git
 cd glitch-ai
 git submodule update --init --recursive
 git clone https://cothek@github.com/Cothek/glitch-user-troy.git user/
-.\launch-glitch.bat
+./launch-glitch.sh
 ```
 
-The `cothek@` prefix tells Windows Credential Manager to auto-select your stored PAT — no login pop-up.
+> **Note**: The `.sh` scripts require [Node.js](https://nodejs.org) 22+. The `.bat` scripts (Windows) are the legacy path — both call the same `.mjs` launcher under the hood.
 
 **If you get a GitHub login pop-up after `git submodule sync`**, the submodule remote got reset. Fix it:
 
@@ -46,11 +59,14 @@ Glitch is split into three layers:
 
 ### Launch Flow
 
-1. `launch-glitch.bat` calls `scripts/launch.ps1`
-2. Launch script detects your user profile (`user/main-memory.md` or `user/{name}/main-memory.md`)
-3. Generates a runtime `opencode.json` with engine + user instruction paths (string-level regex, never re-serializes JSON — preserves escaping)
-4. Starts OpenCode with the generated config
-5. On exit, restores the engine-only base config
+1. `launch-glitch.bat` (Windows) or `launch-glitch.sh` (Mac/Linux) calls `scripts/launch.mjs`
+2. The `.mjs` launcher detects your user profile (`user/main-memory.md` or `user/{name}/main-memory.md`)
+3. Generates a runtime `opencode.json` with engine + user instruction paths from the `config/` template
+4. Validates the generated config with `JSON.parse()`
+5. Starts OpenCode with the generated config
+6. On exit, the session ends — config is regenerated fresh on next launch
+
+> **Legacy**: The original `.ps1` scripts still work on Windows for backward compatibility.
 
 ## Access from Anywhere (Phone / Other PC)
 
@@ -79,15 +95,22 @@ glitch-ai/                    ← This repo (public)
 │   ├── daily-diary/          ← Session diary
 │   └── projects/             ← Active projects
 │
-├── scripts/                  ← Internal PowerShell scripts
-│   ├── launch.ps1            ← User-aware launcher
-│   ├── serve-glitch.ps1      ← Web server mode config generator
+├── scripts/                  ← Launch & utility scripts
+│   ├── launch.mjs            ← Cross-platform launcher (primary)
+│   ├── launch-free.mjs       ← Free mode launcher
+│   ├── launch-safe.mjs       ← Safe mode launcher
+│   ├── serve.mjs             ← Web server mode
+│   ├── validate-config.mjs   ← Config + syntax validator
+│   ├── launch.ps1            ← Legacy Windows launcher
+│   ├── serve-glitch.ps1      ← Legacy Windows server mode
 │   ├── bootstrap.ps1         ← Downloads dependencies
 │   ├── setup.ps1             ← Profile wizard
-│   ├── validate-config.ps1   ← Config + syntax validator
 │   ├── check-updates.ps1     ← Dependency update checker
 │   ├── check-models.ps1      ← New model discovery
-│   ├── fix-paths.ps1/.mjs    ← SQLite path normalizer
+│   ├── switch-branch.ps1     ← Git branch manager
+│   ├── switch-model.ps1      ← Free model selector
+│   ├── sync-user.ps1         ← User data sync helper
+│   ├── fix-paths.mjs         ← SQLite path normalizer
 │   └── query-opencode-db.*   ← Session DB query tools
 │
 ├── config/                   ← Configuration files
@@ -101,11 +124,15 @@ glitch-ai/                    ← This repo (public)
 │   ├── skills-lock.json
 │   └── screenshots/          ← Vision agent screenshots
 │
-├── setup.bat                 ← First-time setup (double-click)
-├── launch-glitch.bat         ← Local terminal mode
-├── launch-glitch-free.bat    ← Free model emergency mode
-├── launch-glitch-safe.bat    ← Safe mode for troubleshooting
-├── serve-glitch.bat          ← Web server mode
+├── setup.bat                 ← First-time setup (Windows)
+├── launch-glitch.bat         ← Local terminal mode (Windows)
+├── launch-glitch.sh          ← Local terminal mode (Mac/Linux)
+├── launch-glitch-free.bat    ← Free model mode (Windows)
+├── launch-glitch-free.sh     ← Free model mode (Mac/Linux)
+├── launch-glitch-safe.bat    ← Safe mode (Windows)
+├── launch-glitch-safe.sh     ← Safe mode (Mac/Linux)
+├── serve-glitch.bat          ← Web server mode (Windows)
+├── serve-glitch.sh           ← Web server mode (Mac/Linux)
 ├── opencode.json             ← Engine-only base config
 ├── .env.example              ← Domain/port configuration template
 ├── plugins/                  ← Auth proxy, helpers
@@ -121,14 +148,14 @@ glitch-ai/                    ← This repo (public)
 |------|-------------|
 | `glitch-memorycore/` | Engine submodule — Glitch identity, rules, skills, plugins |
 | `user/` | Your personal memory, diary, projects (gitignored) |
-| `scripts/` | Launch, setup, validation, and utility scripts |
+| `scripts/` | Launch, setup, validation, and utility scripts (.mjs cross-platform, .ps1 legacy) |
 | `config/` | Terminal UI config, Cloudflare Tunnel config |
 | `data/` | Auto-generated status files (gitignored) |
-| `setup.bat` | First-time setup — inits engine + profile wizard |
-| `launch-glitch.bat` | Local terminal mode |
-| `launch-glitch-free.bat` | Emergency fallback using free models |
-| `launch-glitch-safe.bat` | Minimal config for troubleshooting |
-| `serve-glitch.bat` | Web server mode with Cloudflare Tunnel |
+| `setup.bat` | First-time setup (Windows) |
+| `launch-glitch.bat` / `.sh` | Local terminal mode |
+| `launch-glitch-free.bat` / `.sh` | Emergency fallback using free models |
+| `launch-glitch-safe.bat` / `.sh` | Minimal config for troubleshooting |
+| `serve-glitch.bat` / `.sh` | Web server mode with Cloudflare Tunnel |
 | `opencode.json` | Engine-only base config (user data added at runtime) |
 | `.env.example` | Domain/port configuration template |
 | `handy-voice/` | [Handy](https://handy-voice.org) — offline voice-to-text |
@@ -137,17 +164,20 @@ glitch-ai/                    ← This repo (public)
 
 ## Modifying Config / Launch Scripts
 
-Changes to `opencode.json`, `launch.ps1`, `serve-glitch.ps1`, or any `.bat` launcher require:
+Changes to `opencode.json`, `scripts/launch.mjs`, `scripts/serve.mjs`, `config/` templates, or any launch script require:
 1. A review pass (@reviewer) before applying
-2. `validate-config.ps1` passing after the change
+2. `validate-config.mjs` passing after the change
 3. A restart of OpenCode to pick up the new config
 
 This is enforced by **R14** in `glitch-memorycore/prompt-rules.md` (immutable rule).
 
 ## Requirements
 
-- Windows 10 or 11
-- API key for an LLM provider (configured via OpenCode's `/connect` or env vars)
-- GitHub account (for cloning)
-- NVIDIA GPU with CUDA (recommended for Handy speed)
-- [Cloudflare](https://cloudflare.com) account (free) — for remote access
+- **Windows** 10 or 11, **macOS** 13+, or **Linux** (x86_64)
+- **Node.js** 22+ (required for the cross-platform launcher)
+- **API key** for an LLM provider (configured via OpenCode's `/connect` or env vars)
+- **GitHub account** (for cloning)
+- **NVIDIA GPU with CUDA** (recommended for Handy speed on Windows)
+- **[Cloudflare](https://cloudflare.com)** account (free) — for remote access
+
+> **Windows-only features**: Handy voice input, automatic binary sync from npm. All core features work cross-platform.

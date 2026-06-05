@@ -1,4 +1,10 @@
-﻿$ErrorActionPreference = "Stop"
+﻿# ---- Prepend bundled Node to PATH if available ----
+$BundledNode = "$PSScriptRoot\..\data\node"
+if (Test-Path "$BundledNode\node.exe") {
+  $env:PATH = "$BundledNode;$env:PATH"
+}
+
+$ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $PSCommandPath
 $RootDir = Split-Path -Parent $ScriptDir
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
