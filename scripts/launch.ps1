@@ -323,8 +323,28 @@ if (-not $handyProcess) {
   Write-Host "  Handy already running" -ForegroundColor DarkGreen
 }
 
-# ---- Auto-sync local opencode binary ----
+# ---- Auto-update opencode to latest (minor/patch) + sync local binary ----
 try {
+    # Check if global npm opencode-ai is outdated
+    $currentGlobal = ""
+    $latestGlobal = ""
+    try { $currentGlobal = (& "opencode" "--version" 2>$null).Trim() } catch { $currentGlobal = "unknown" }
+    try { $latestGlobal = (& "npm" "view" "opencode-ai" "version" 2>$null).Trim() } catch { $latestGlobal = "unknown" }
+
+    $globalNeedsUpdate = ($currentGlobal -ne "unknown" -and $latestGlobal -ne "unknown" -and $currentGlobal -ne $latestGlobal)
+    if ($globalNeedsUpdate) {
+        $cvParts = $currentGlobal.Split('.')
+        $lvParts = $latestGlobal.Split('.')
+        $autoSafe = ($cvParts[0] -eq $lvParts[0])  # same major version = safe to auto-update
+        if ($autoSafe) {
+            Write-Host "  Updating opencode ($currentGlobal -> $latestGlobal)..." -ForegroundColor Cyan
+            $null = & "npm" "install" "-g" "opencode-ai@latest" 2>&1
+            try { $currentGlobal = (& "opencode" "--version" 2>$null).Trim() } catch {}
+            Write-Host "  Done. Version: $currentGlobal" -ForegroundColor Green
+        }
+    }
+
+    # Sync local binary from updated global install
     $npmRoot = & "npm" "root" "-g" 2>$null
     if ($npmRoot) {
         $globalBin = Join-Path ($npmRoot.Trim()) "opencode-ai\bin\opencode.exe"
