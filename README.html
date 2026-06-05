@@ -496,33 +496,63 @@
     font-size: 0.8125rem;
   }
 
-  /* Tabs */
+  /* Tabs as Cards */
   .tab-wrap { margin: 1rem 0; }
   .tab-wrap input[type="radio"] { display: none; }
   .tab-bar {
-    display: flex;
-    gap: 0;
-    border-bottom: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
     margin-bottom: 1.5rem;
   }
   .tab-bar label {
-    padding: 0.625rem 1.25rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
     cursor: pointer;
-    font-size: 0.875rem;
-    font-weight: 600;
-    color: var(--text-dim);
-    border-bottom: 2px solid transparent;
-    margin-bottom: -1px;
-    transition: color 0.15s, border-color 0.15s;
+    transition: border-color 0.2s, background 0.2s;
     user-select: none;
   }
-  .tab-bar label:hover { color: var(--text-muted); }
-  .tab-wrap .tab-panel { display: none; }
+  .tab-bar label:hover { border-color: var(--text-dim); }
+  .tab-bar label .tab-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .tab-bar label .tab-desc {
+    font-size: 0.8125rem;
+    color: var(--text-dim);
+    margin-top: 0.35rem;
+    line-height: 1.4;
+  }
+  .tab-bar label .tab-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    background: var(--text-dim);
+    transition: background 0.2s, box-shadow 0.2s;
+  }
   #tab-new:checked ~ .tab-bar label[for="tab-new"],
   #tab-old:checked ~ .tab-bar label[for="tab-old"] {
-    color: var(--accent);
-    border-bottom-color: var(--accent);
+    border-color: var(--accent);
+    background: var(--accent-soft);
   }
+  #tab-new:checked ~ .tab-bar label[for="tab-new"] .tab-dot,
+  #tab-old:checked ~ .tab-bar label[for="tab-old"] .tab-dot {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+  }
+  #tab-new:checked ~ .tab-bar label[for="tab-new"] .tab-desc,
+  #tab-old:checked ~ .tab-bar label[for="tab-old"] .tab-desc {
+    color: var(--text-muted);
+  }
+  .tab-wrap .tab-panel { display: none; }
   #tab-new:checked ~ .tab-new { display: block; }
   #tab-old:checked ~ .tab-old { display: block; }
 
@@ -1003,8 +1033,20 @@
   <input type="radio" name="qs" id="tab-old">
 
   <div class="tab-bar">
-    <label for="tab-new">New User</label>
-    <label for="tab-old">Returning User</label>
+    <label for="tab-new">
+      <div class="tab-title">
+        <span class="tab-dot"></span>
+        New User
+      </div>
+      <div class="tab-desc">Start here if it's your first time — setup scripts for Windows or Mac/Linux</div>
+    </label>
+    <label for="tab-old">
+      <div class="tab-title">
+        <span class="tab-dot"></span>
+        Returning User
+      </div>
+      <div class="tab-desc">Restore full memory with your private user repo — cross-platform steps</div>
+    </label>
   </div>
 
   <div class="tab-panel tab-new">
