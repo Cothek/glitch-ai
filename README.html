@@ -496,6 +496,66 @@
     font-size: 0.8125rem;
   }
 
+  /* Tabs as Cards */
+  .tab-wrap { margin: 1rem 0; }
+  .tab-wrap input[type="radio"] { display: none; }
+  .tab-bar {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+  .tab-bar label {
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.25rem;
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+    user-select: none;
+  }
+  .tab-bar label:hover { border-color: var(--text-dim); }
+  .tab-bar label .tab-title {
+    font-weight: 600;
+    font-size: 1rem;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+  .tab-bar label .tab-desc {
+    font-size: 0.8125rem;
+    color: var(--text-dim);
+    margin-top: 0.35rem;
+    line-height: 1.4;
+  }
+  .tab-bar label .tab-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+    flex-shrink: 0;
+    background: var(--text-dim);
+    transition: background 0.2s, box-shadow 0.2s;
+  }
+  #tab-new:checked ~ .tab-bar label[for="tab-new"],
+  #tab-old:checked ~ .tab-bar label[for="tab-old"] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+  }
+  #tab-new:checked ~ .tab-bar label[for="tab-new"] .tab-dot,
+  #tab-old:checked ~ .tab-bar label[for="tab-old"] .tab-dot {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+  }
+  #tab-new:checked ~ .tab-bar label[for="tab-new"] .tab-desc,
+  #tab-old:checked ~ .tab-bar label[for="tab-old"] .tab-desc {
+    color: var(--text-muted);
+  }
+  .tab-wrap .tab-panel { display: none; }
+  #tab-new:checked ~ .tab-new { display: block; }
+  #tab-old:checked ~ .tab-old { display: block; }
+
   /* Responsive */
   @media (max-width: 640px) {
     header { padding: 3rem 1.25rem 2rem; }
@@ -932,7 +992,7 @@
       <div class="header-stats">
         <span class="header-stat"><span class="stat-dot green"></span> 23 skills</span>
         <span class="header-stat"><span class="stat-dot purple"></span> 3-layer architecture</span>
-        <span class="header-stat"><span class="stat-dot cyan"></span> Windows 10+</span>
+        <span class="header-stat"><span class="stat-dot cyan"></span> Win / Mac / Linux</span>
       </div>
     </div>
   </div>
@@ -968,49 +1028,83 @@
   Quick Start
 </h2>
 
-<div class="card-grid">
-  <div class="card">
-    <span class="badge-layer badge-public">New user</span>
-    <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> For New Users</div>
-    <div class="desc">
-      Clone, run setup, and launch. No configuration needed.
-    </div>
+<div class="tab-wrap">
+  <input type="radio" name="qs" id="tab-new" checked>
+  <input type="radio" name="qs" id="tab-old">
+
+  <div class="tab-bar">
+    <label for="tab-new">
+      <div class="tab-title">
+        <span class="tab-dot"></span>
+        New User
+      </div>
+      <div class="tab-desc">Start here if it's your first time — setup scripts for Windows or Mac/Linux</div>
+    </label>
+    <label for="tab-old">
+      <div class="tab-title">
+        <span class="tab-dot"></span>
+        Troy's Setup
+      </div>
+      <div class="tab-desc">Restore full memory with your private user repo — cross-platform steps</div>
+    </label>
   </div>
-  <div class="card">
-    <span class="badge-layer badge-private">Returning</span>
-    <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> For Troy</div>
-    <div class="desc">
-      Clone engine + private user repo for full memory restoration.
+
+  <div class="tab-panel tab-new">
+    <div class="card-grid">
+      <div class="card">
+        <span class="badge-layer badge-public">Windows</span>
+        <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/></svg> New Users</div>
+        <div class="desc">
+          <ol class="steps" style="margin:0">
+            <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
+            <li><code>cd glitch-ai</code></li>
+            <li><code>.\setup.bat</code></li>
+            <li><code>.\launch-glitch.bat</code></li>
+          </ol>
+        </div>
+      </div>
+      <div class="card">
+        <span class="badge-layer badge-public">Mac / Linux</span>
+        <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M4 20h16"/></svg> New Users</div>
+        <div class="desc">
+          <ol class="steps" style="margin:0">
+            <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
+            <li><code>cd glitch-ai</code></li>
+            <li><code>git submodule update --init --recursive</code></li>
+            <li><code>node scripts/launch.mjs</code></li>
+          </ol>
+        </div>
+      </div>
     </div>
+    <p style="color:var(--text-dim);font-size:0.8rem;margin-top:0.75rem">Prerequisites: <a href="https://git-scm.com/downloads" style="color:var(--accent)">Git</a> and <a href="https://nodejs.org" style="color:var(--accent)">Node.js 22+</a>. No Git? Grab the <a href="https://github.com/Cothek/glitch-ai/archive/refs/heads/main.zip" style="color:var(--accent)">ZIP from GitHub</a> — you'll need Git later for updates.</p>
   </div>
-</div>
 
-<h3>New Users</h3>
-<ol class="steps">
-  <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
-  <li><code>cd glitch-ai</code></li>
-  <li><code>.\setup.bat</code> — initializes engine + launches profile wizard</li>
-  <li><code>.\launch-glitch.bat</code> — start using Glitch</li>
-</ol>
-<p style="color:var(--text-muted);font-size:0.875rem">Your data stays local under <code>user/</code> — nothing shared.</p>
+  <div class="tab-panel tab-old">
+    <div class="card-grid">
+      <div class="card">
+        <span class="badge-layer badge-private">Returning</span>
+        <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="2"><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg> Troy (cross-platform)</div>
+        <div class="desc">
+          <ol class="steps" style="margin:0">
+            <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
+            <li><code>cd glitch-ai</code></li>
+            <li><code>git submodule update --init --recursive</code></li>
+            <li><code>git clone https://cothek@github.com/Cothek/glitch-user-troy.git user/</code></li>
+            <li><code>./launch-glitch.sh</code></li>
+          </ol>
+        </div>
+      </div>
+    </div>
 
-<hr class="divider">
-
-<h3>Troy (Returning User)</h3>
-<ol class="steps">
-  <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
-  <li><code>cd glitch-ai</code></li>
-  <li><code>git submodule update --init --recursive</code></li>
-  <li><code>git clone https://cothek@github.com/Cothek/glitch-user-troy.git user/</code></li>
-  <li><code>.\launch-glitch.bat</code></li>
-</ol>
-<p style="color:var(--text-muted);font-size:0.875rem">The <code>cothek@</code> prefix tells Windows Credential Manager to auto-select your stored PAT — no login pop-up.</p>
-
-<div class="note cyan">
-  <strong>GitHub login pop-up?</strong> If you get one after <code>git submodule sync</code>, the submodule remote got reset. Fix it:<br>
-  <pre style="margin-top:0.5rem"><code>cd glitch-memorycore
+    <div class="note cyan">
+      <strong>GitHub login pop-up?</strong> If you get one after <code>git submodule sync</code>, the submodule remote got reset. Fix it:<br>
+      <pre style="margin-top:0.5rem"><code>cd glitch-memorycore
 git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</code></pre>
+    </div>
+  </div>
 </div>
+
+<p style="color:var(--text-muted);font-size:0.875rem">Your data stays local under <code>user/</code> — nothing shared. Requires <strong>Node.js 22+</strong> and <strong>Git</strong>. Works cross-platform on Windows, macOS, and Linux.</p>
 
 </section>
 
@@ -1072,14 +1166,18 @@ git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</co
     <span class="file">├── daily-diary/</span> <span class="comment">Session diary</span><br>
     <span class="file">└── projects/</span> <span class="comment">Active projects</span>
   </div>
-  <span class="dir">├── scripts/</span> <span class="comment">Internal PowerShell scripts</span><br>
+  <span class="dir">├── scripts/</span> <span class="comment">Launch scripts (.mjs cross-platform, .ps1 legacy)</span><br>
   <span class="dir">├── config/</span> <span class="comment">Configuration files</span><br>
   <span class="dir">├── data/</span> <span class="comment">Auto-generated runtime data (gitignored)</span><br>
-  <span class="file">├── setup.bat</span> <span class="comment">First-time setup (double-click)</span><br>
-  <span class="file">├── launch-glitch.bat</span> <span class="comment">Local terminal mode</span><br>
+  <span class="file">├── setup.bat</span> <span class="comment">First-time setup (Windows)</span><br>
+  <span class="file">├── launch-glitch.bat</span> <span class="comment">Terminal mode (Windows)</span><br>
+  <span class="file">├── launch-glitch.sh</span> <span class="comment">Terminal mode (Mac/Linux)</span><br>
   <span class="file">├── launch-glitch-free.bat</span> <span class="comment">Free model emergency mode</span><br>
-  <span class="file">├── launch-glitch-safe.bat</span> <span class="comment">Safe mode for troubleshooting</span><br>
-  <span class="file highlight">├── serve-glitch.bat</span> <span class="comment">Web server mode</span><br>
+  <span class="file">├── launch-glitch-free.sh</span> <span class="comment">Free model mode (Mac/Linux)</span><br>
+  <span class="file">├── launch-glitch-safe.bat</span> <span class="comment">Safe mode (Windows)</span><br>
+  <span class="file">├── launch-glitch-safe.sh</span> <span class="comment">Safe mode (Mac/Linux)</span><br>
+  <span class="file highlight">├── serve-glitch.bat</span> <span class="comment">Web server mode (Windows)</span><br>
+  <span class="file highlight">├── serve-glitch.sh</span> <span class="comment">Web server mode (Mac/Linux)</span><br>
   <span class="file">├── opencode.json</span> <span class="comment">Engine-only base config</span><br>
   <span class="file">├── .env.example</span> <span class="comment">Domain/port configuration template</span><br>
   <span class="file">├── plugins/</span> <span class="comment">Auth proxy, helpers</span><br>
@@ -1098,10 +1196,11 @@ git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</co
   <tbody>
     <tr><td><code>glitch-memorycore/</code></td><td>Engine submodule — identity, rules, skills, plugins</td></tr>
     <tr><td><code>user/</code></td><td>Your personal memory, diary, projects (gitignored)</td></tr>
-    <tr><td><code>scripts/</code></td><td>Launch, setup, validation, and utility scripts</td></tr>
-    <tr><td><code>setup.bat</code></td><td>First-time setup — inits engine + profile wizard</td></tr>
-    <tr><td><code>launch-glitch.bat</code></td><td>Local terminal mode</td></tr>
-    <tr><td><code>serve-glitch.bat</code></td><td>Web server mode with Cloudflare Tunnel</td></tr>
+    <tr><td><code>scripts/</code></td><td>Launch scripts (.mjs cross-platform, .ps1 legacy)</td></tr>
+    <tr><td><code>launch-glitch.bat</code></td><td>Terminal mode (Windows)</td></tr>
+    <tr><td><code>launch-glitch.sh</code></td><td>Terminal mode (Mac/Linux)</td></tr>
+    <tr><td><code>serve-glitch.bat</code></td><td>Web server mode (Windows)</td></tr>
+    <tr><td><code>serve-glitch.sh</code></td><td>Web server mode (Mac/Linux)</td></tr>
     <tr><td><code>opencode.json</code></td><td>Engine-only base config (user data added at runtime)</td></tr>
     <tr><td><code>.env.example</code></td><td>Domain/port configuration template</td></tr>
   </tbody>
@@ -1128,8 +1227,13 @@ git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</co
   <span class="code-dot green"></span>
   <span style="margin-left:0.5rem">Terminal</span>
 </div>
-<pre><code>.\scripts\setup-tunnel.ps1    # One-time: authenticate + create tunnel
-.\serve-glitch.bat            # Each session: starts server + tunnel</code></pre>
+<pre><code># Windows:
+.\scripts\setup-tunnel.ps1    # One-time: authenticate + create tunnel
+.\serve-glitch.bat            # Each session: starts server + tunnel
+
+# Mac/Linux:
+node scripts/setup-tunnel.mjs # One-time: authenticate + create tunnel
+./serve-glitch.sh             # Each session: starts server + tunnel</code></pre>
 
 <p>Login with username <code>opencode</code> and the auto-generated password shown in the terminal. Configure your domain via <code>.env</code>:</p>
 
@@ -1148,11 +1252,11 @@ GLITCH_DOMAIN=glitch.yourdomain.com</code></pre>
   Modifying Config / Launch Scripts
 </h2>
 
-<p>Changes to <code>opencode.json</code>, <code>launch.ps1</code>, <code>serve-glitch.ps1</code>, or any <code>.bat</code> launcher require:</p>
+<p>Changes to <code>opencode.json</code>, <code>config/</code> templates, or any launch script require:</p>
 
 <ol class="steps">
   <li>A review pass (@reviewer) before applying</li>
-  <li><code>validate-config.ps1</code> passing after the change</li>
+  <li><code>validate-config.mjs</code> passing after the change</li>
   <li>A restart of OpenCode to pick up the new config</li>
 </ol>
 
@@ -1161,7 +1265,8 @@ GLITCH_DOMAIN=glitch.yourdomain.com</code></pre>
 </div>
 
 <p>To validate the config at any time:</p>
-<pre><code>.\scripts\validate-config.ps1</code></pre>
+<pre><code>node scripts\validate-config.mjs          # Windows
+node scripts/validate-config.mjs           # Mac/Linux</code></pre>
 </section>
 
 <hr class="divider">
@@ -1176,12 +1281,14 @@ GLITCH_DOMAIN=glitch.yourdomain.com</code></pre>
 </h2>
 
 <ul>
-  <li><strong>Windows 10 or 11</strong></li>
+  <li><strong>Windows 10+</strong>, <strong>macOS 13+</strong>, or <strong>Linux</strong> (x86_64)</li>
+  <li><strong>Node.js 22+</strong> (required for the cross-platform launcher)</li>
   <li><strong>API key</strong> for an LLM provider (configured via OpenCode's <code>/connect</code> or env vars)</li>
   <li><strong>GitHub account</strong> (for cloning)</li>
-  <li><strong>NVIDIA GPU</strong> with CUDA (recommended for Handy voice-to-text speed)</li>
+  <li><strong>NVIDIA GPU</strong> with CUDA (recommended for faster Handy voice-to-text)</li>
   <li><strong>Cloudflare account</strong> (free) — for remote access via tunnel</li>
 </ul>
+<p style="color:var(--text-dim);font-size:0.8rem">The <code>.sh</code> launchers require a bash shell. The <code>.bat</code> launchers are maintained for backward compatibility.</p>
 </section>
 
 </div>

@@ -12,7 +12,7 @@ echo.
 echo Press any key to continue...
 pause > nul
 
-powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\launch-safe.ps1"
+node "%~dp0scripts\launch-safe.mjs"
 if %errorlevel% neq 0 (
     echo.
     echo Safe mode exited.
