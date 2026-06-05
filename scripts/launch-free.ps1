@@ -364,6 +364,35 @@ try {
     Write-Host "  Model check skipped (non-critical): $_" -ForegroundColor DarkYellow
 }
 
+# ---- Sync user memory data from private repo ----
+$userDir = "$RootDir\user"
+if (Test-Path "$userDir\.git") {
+  try {
+    Push-Location $userDir
+    $null = & "git" "fetch" "origin" "main" 2>&1
+    $behindRaw = & "git" "rev-list" "--count" "HEAD..origin/main" 2>&1
+    $behindInt = 0
+    if ($behindRaw -match '^\d+$') { $behindInt = [int]$behindRaw.Trim() }
+
+    if ($behindInt -gt 0) {
+      $dirtyRaw = & "git" "status" "--porcelain" 2>&1
+      $dirtyCount = ($dirtyRaw | Where-Object { $_ -match '.' }).Count
+      if ($dirtyCount -eq 0) {
+        Write-Host "  Syncing user data ($behindInt commit(s) behind)..." -ForegroundColor Cyan
+        $null = & "git" "pull" "origin" "main" 2>&1
+        Write-Host "  User data synced" -ForegroundColor Green
+      } else {
+        Write-Host "  User data: $behindInt commit(s) behind, but working tree has $dirtyCount dirty file(s)" -ForegroundColor Yellow
+        Write-Host "  Run '.\scripts\sync-user.ps1 -Pull' manually or commit changes first." -ForegroundColor Yellow
+      }
+    }
+    Pop-Location
+  } catch {
+    Write-Host "  User data sync skipped (non-critical): $_" -ForegroundColor DarkYellow
+    try { Pop-Location } catch {}
+  }
+}
+
 # ---- Auto-sync local opencode binary ----
 try {
     $npmRoot = & "npm" "root" "-g" 2>$null
