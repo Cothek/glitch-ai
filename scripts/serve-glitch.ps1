@@ -77,10 +77,10 @@ $userBase = "$RootDir\user"
 if (-not $userFound) {
   # Auto-detect: check flat layout first, then subdirectory layout
   if (Test-Path "$userBase\main-memory.md") {
-    $UserName = ""  # flat layout — no subdirectory name
+    $UserName = ""  # flat layout -- no subdirectory name
     $UserDir = $userBase
     $userFound = $true
-    Write-Host "  User profile: (flat — user/main-memory.md)" -ForegroundColor Cyan
+    Write-Host "  User profile: (flat -- user/main-memory.md)" -ForegroundColor Cyan
   } elseif (Test-Path $userBase) {
     $profiles = Get-ChildItem -Directory $userBase | Where-Object {
       Test-Path "$($_.FullName)\main-memory.md"
@@ -273,6 +273,25 @@ $fixJob = Start-Job -ScriptBlock {
   }
 }
 Write-Host "  Path fixer job running (every 5 min)" -ForegroundColor Cyan
+
+# ---- Auto-sync local opencode binary ----
+try {
+    $npmRoot = & "npm" "root" "-g" 2>$null
+    if ($npmRoot) {
+        $globalBin = Join-Path ($npmRoot.Trim()) "opencode-ai\bin\opencode.exe"
+        if (Test-Path $globalBin -and (Test-Path $OpenCodeBin)) {
+            $globalVer = (& $globalBin "--version" 2>$null)
+            $localVer = (& $OpenCodeBin "--version" 2>$null)
+            if ($globalVer -and $localVer -and ($localVer.Trim() -ne $globalVer.Trim())) {
+                Write-Host "  Syncing local opencode.exe ($($localVer.Trim()) -> $($globalVer.Trim()))..." -ForegroundColor Cyan
+                Copy-Item -Path $globalBin -Destination $OpenCodeBin -Force
+                Write-Host "  Done." -ForegroundColor Green
+            }
+        }
+    }
+} catch {
+    Write-Host "  Binary sync skipped (non-critical): $_" -ForegroundColor DarkYellow
+}
 
 # ---- Launch OpenCode Web ----
 Push-Location $RootDir

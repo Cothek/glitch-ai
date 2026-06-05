@@ -72,7 +72,7 @@ $UserDir = ""
 $userFound = $false
 
 if ($UserName) {
-  # Explicit user via env var — check both flat and subdirectory layouts
+  # Explicit user via env var -- check both flat and subdirectory layouts
   $UserDir = "$RootDir\user\$UserName"
   if (Test-Path "$UserDir\main-memory.md") {
     $userFound = $true
@@ -82,7 +82,7 @@ if ($UserName) {
     $UserName = ""  # signals flat layout
     $UserDir = "$RootDir\user"
     $userFound = $true
-    Write-Host "  User profile: (flat — user/main-memory.md)" -ForegroundColor Cyan
+    Write-Host "  User profile: (flat -- user/main-memory.md)" -ForegroundColor Cyan
   } else {
     Write-Host "  WARNING: User '$UserName' specified but no profile found at user\$UserName" -ForegroundColor Yellow
     Write-Host "  Run: .\setup.ps1 --user $UserName" -ForegroundColor Yellow
@@ -94,10 +94,10 @@ if (-not $userFound) {
   # Auto-detect: check flat layout first, then subdirectory layout
   $userBase = "$RootDir\user"
   if (Test-Path "$userBase\main-memory.md") {
-    $UserName = ""  # flat layout — no subdirectory name
+    $UserName = ""  # flat layout -- no subdirectory name
     $UserDir = $userBase
     $userFound = $true
-    Write-Host "  User profile: (flat — user/main-memory.md)" -ForegroundColor Cyan
+    Write-Host "  User profile: (flat -- user/main-memory.md)" -ForegroundColor Cyan
   } elseif (Test-Path $userBase) {
     $profiles = Get-ChildItem -Directory $userBase | Where-Object {
       Test-Path "$($_.FullName)\main-memory.md"
@@ -254,6 +254,25 @@ if (-not $handyProcess) {
   }
 } else {
   Write-Host "  Handy already running" -ForegroundColor DarkGreen
+}
+
+# ---- Auto-sync local opencode binary ----
+try {
+    $npmRoot = & "npm" "root" "-g" 2>$null
+    if ($npmRoot) {
+        $globalBin = Join-Path ($npmRoot.Trim()) "opencode-ai\bin\opencode.exe"
+        if (Test-Path $globalBin -and (Test-Path $OpenCodeBin)) {
+            $globalVer = (& $globalBin "--version" 2>$null)
+            $localVer = (& $OpenCodeBin "--version" 2>$null)
+            if ($globalVer -and $localVer -and ($localVer.Trim() -ne $globalVer.Trim())) {
+                Write-Host "  Syncing local opencode.exe ($($localVer.Trim()) -> $($globalVer.Trim()))..." -ForegroundColor Cyan
+                Copy-Item -Path $globalBin -Destination $OpenCodeBin -Force
+                Write-Host "  Done." -ForegroundColor Green
+            }
+        }
+    }
+} catch {
+    Write-Host "  Binary sync skipped (non-critical): $_" -ForegroundColor DarkYellow
 }
 
 # ---- Launch OpenCode ----

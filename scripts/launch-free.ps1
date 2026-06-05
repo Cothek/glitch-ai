@@ -326,6 +326,25 @@ try {
     Write-Host "  Model check skipped (non-critical): $_" -ForegroundColor DarkYellow
 }
 
+# ---- Auto-sync local opencode binary ----
+try {
+    $npmRoot = & "npm" "root" "-g" 2>$null
+    if ($npmRoot) {
+        $globalBin = Join-Path ($npmRoot.Trim()) "opencode-ai\bin\opencode.exe"
+        if (Test-Path $globalBin -and (Test-Path $OpenCodeBin)) {
+            $globalVer = (& $globalBin "--version" 2>$null)
+            $localVer = (& $OpenCodeBin "--version" 2>$null)
+            if ($globalVer -and $localVer -and ($localVer.Trim() -ne $globalVer.Trim())) {
+                Write-Host "  Syncing local opencode.exe ($($localVer.Trim()) -> $($globalVer.Trim()))..." -ForegroundColor Cyan
+                Copy-Item -Path $globalBin -Destination $OpenCodeBin -Force
+                Write-Host "  Done." -ForegroundColor Green
+            }
+        }
+    }
+} catch {
+    Write-Host "  Binary sync skipped (non-critical): $_" -ForegroundColor DarkYellow
+}
+
 # Launch opencode
 Write-Host ""
 Write-Host " Starting OpenCode in free mode..." -ForegroundColor Cyan
