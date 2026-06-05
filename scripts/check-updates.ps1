@@ -7,7 +7,8 @@ param(
 $ErrorActionPreference = "Continue"
 
 # --- Config ---
-$RootDir = "E:\Glitch AI\glitch-ai"
+$ScriptDir = Split-Path -Parent $PSCommandPath
+$RootDir = Split-Path -Parent $ScriptDir
 $SubmoduleDir = Join-Path $RootDir "glitch-memorycore"
 $LocalOpenCodeDir = Join-Path $RootDir "opencode"
 $LocalOpenCodeBin = Join-Path $LocalOpenCodeDir "opencode.exe"

@@ -256,7 +256,8 @@ try {
     }
   }
 } catch {
-  Write-Host "  Update check skipped (non-critical): $_" -ForegroundColor DarkYellow
+  Write-Host "  Update check skipped: $_" -ForegroundColor DarkYellow
+  Write-Host "  (Error type: $($_.GetType().Name))" -ForegroundColor DarkGray
 }
 
 # ---- Check for new models ----
