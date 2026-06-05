@@ -3,12 +3,14 @@ $RootDir = Split-Path -Parent $ScriptDir
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $HandyBin = "$RootDir\handy-voice\Handy\handy.exe"
 $ConfigPath = "$RootDir\opencode.json"
-$BackupPath = "$RootDir\opencode.json.bak"
+$TemplatePath = "$RootDir\config\opencode-normal.json"
+$BackupDir = "$RootDir\data\backups"
+$ModeFile = "$BackupDir\.last-mode"
 
 $ErrorActionPreference = "Continue"
 
 Write-Host ""
-Write-Host " Glitch AI - Launching..." -ForegroundColor Magenta
+Write-Host " Glitch AI - Normal Mode" -ForegroundColor Magenta
 Write-Host ""
 
 # ---- Auto-bootstrap: download OpenCode if missing ----
@@ -48,24 +50,20 @@ if (-not (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md")) {
   Write-Host "  Engine found" -ForegroundColor DarkGreen
 }
 
-# ---- Detect leftover safe mode backup ----
-if (Test-Path $BackupPath) {
-  try {
-    $currentConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
-    $agentCount = @($currentConfig.agent.PSObject.Properties).Count
-    $isSafeModeConfig = ($agentCount -le 1)
-  } catch {
-    $isSafeModeConfig = $false
-  }
+# ---- Timestamped backup (preserved, never overwritten) ----
+if (Test-Path $ConfigPath) {
+  if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null }
+  $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $backupFile = "$BackupDir\opencode-$timestamp.json"
+  Copy-Item $ConfigPath $backupFile -Force
+  Write-Host "  Previous config backed up -> data\backups\opencode-$timestamp.json" -ForegroundColor DarkGray
+}
 
-  if ($isSafeModeConfig) {
-    Write-Host "  Detected leftover safe mode config -- restoring opencode.json.bak..." -ForegroundColor Yellow
-    Copy-Item $BackupPath $ConfigPath -Force
-    Write-Host "  Backup restored." -ForegroundColor Green
-  } else {
-    Write-Host "  Cleaning up leftover backup from previous safe mode." -ForegroundColor DarkYellow
-  }
-  Remove-Item $BackupPath -Force
+# ---- Check template exists ----
+if (-not (Test-Path $TemplatePath)) {
+  Write-Host "  ERROR: Normal mode template not found at config\opencode-normal.json" -ForegroundColor Red
+  Write-Host "  Try launching with launch-glitch-safe.bat to repair." -ForegroundColor Yellow
+  exit 1
 }
 
 # ---- User Profile Detection ----
@@ -134,10 +132,13 @@ if (-not $userFound) {
   Write-Host "  Starting with engine defaults (no user profile loaded)." -ForegroundColor DarkYellow
 }
 
-# ---- Generate runtime config with user profile ----
-Write-Host "  Generating runtime config..." -ForegroundColor Cyan
+# ---- Generate runtime config from template ----
+Write-Host "  Generating runtime config from template..." -ForegroundColor Cyan
 
-# Build instruction list
+# Read template
+$templateText = Get-Content $TemplatePath -Raw
+
+# Build instruction list (engine files + user files)
 $engineInstructions = @(
   "glitch-memorycore/prompt-rules.md",
   "glitch-memorycore/CLAUDE.md",
@@ -165,44 +166,31 @@ if ($UserName -and $UserName -ne "") {
 
 $allInstructions = $engineInstructions + $userInstructions
 
-# Build instruction JSON array string (preserve escaping — never parse/re-serialize JSON)
+# Build instruction JSON array string
 $instrJson = ($allInstructions | ForEach-Object { "    `"$_`"" }) -join ",`n"
 $instrBlock = "`"instructions`": [`n$instrJson`n  ]"
 
-# Read base config as text, replace instructions line by regex
-$baseText = Get-Content $ConfigPath -Raw
-$runtimeJson = $baseText -replace '"[Ii]nstructions"\s*:\s*\[[^\]]*\]', $instrBlock
+# Inject user instructions into template (replace the engine-only instructions array)
+$runtimeJson = $templateText -replace '"[Ii]nstructions"\s*:\s*\[[^\]]*\]', $instrBlock
 
-# Back up current config
-Copy-Item $ConfigPath $BackupPath -Force
-
+# Validate and write
 try {
-  $null = $runtimeJson | ConvertFrom-Json  # validate
+  $null = $runtimeJson | ConvertFrom-Json
   $runtimeJson | Out-File -FilePath $ConfigPath -Encoding utf8 -Force
-  Write-Host "  Runtime config generated ($($allInstructions.Count) instruction files)" -ForegroundColor DarkGreen
+  Write-Host "  Config written ($($allInstructions.Count) instruction files)" -ForegroundColor DarkGreen
 } catch {
   Write-Host "  ERROR: Generated config is invalid JSON!" -ForegroundColor Red
   Write-Host "  $_" -ForegroundColor Red
-  if (Test-Path $BackupPath) {
-    Move-Item $BackupPath $ConfigPath -Force
-  }
   exit 1
 }
 
-# ---- Validate opencode.json ----
-Write-Host "  Validating config..." -ForegroundColor Cyan
-try {
-    $configContent = Get-Content $ConfigPath -Raw
-    $null = $configContent | ConvertFrom-Json
-    Write-Host "  Config is valid JSON" -ForegroundColor DarkGreen
-} catch {
-    Write-Host "  ERROR: Config is not valid JSON!" -ForegroundColor Red
-    Write-Host "  $_" -ForegroundColor Red
-    if (Test-Path $BackupPath) {
-      Move-Item $BackupPath $ConfigPath -Force
-    }
-    exit 1
-}
+# ---- Write mode marker ----
+$modeInfo = @{
+  mode = "normal"
+  timestamp = (Get-Date).ToString("o")
+  model = "opencode-go/deepseek-v4-flash"
+} | ConvertTo-Json
+$modeInfo | Out-File -FilePath $ModeFile -Encoding utf8 -Force
 
 # ---- Ensure Handy portable flag ----
 $portableFlag = "$RootDir\handy-voice\Handy\portable"
@@ -279,14 +267,6 @@ try {
   Write-Host "  OpenCode exited with error: $_" -ForegroundColor Red
 } finally {
   Pop-Location
-}
-
-# ---- Restore engine-only config ----
-if (Test-Path $BackupPath) {
-  Write-Host ""
-  Write-Host "  Restoring base config..." -ForegroundColor Yellow
-  Move-Item $BackupPath $ConfigPath -Force
-  Write-Host "  Base config restored." -ForegroundColor Green
 }
 
 # ---- Done ----

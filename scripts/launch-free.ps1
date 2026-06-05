@@ -2,7 +2,9 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
 $RootDir = Split-Path -Parent $ScriptDir
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $ConfigPath = "$RootDir\opencode.json"
-$BackupPath = "$RootDir\opencode.json.bak"
+$TemplatePath = "$RootDir\config\opencode-free.json"
+$BackupDir = "$RootDir\data\backups"
+$ModeFile = "$BackupDir\.last-mode"
 $PrefFile = "$RootDir\user\free-model-preference.json"
 $FreeModelsFile = "$RootDir\data\free-models.json"
 
@@ -205,13 +207,22 @@ if (-not (Test-Path $OpenCodeBin)) {
     exit 1
 }
 
-# Back up current config
+# Backup previous config (timestamped, never overwritten)
 if (Test-Path $ConfigPath) {
-    Write-Host " Backing up opencode.json -> opencode.json.bak" -ForegroundColor Yellow
-    Copy-Item $ConfigPath $BackupPath -Force
+    if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null }
+    $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+    $backupFile = "$BackupDir\opencode-$timestamp.json"
+    Copy-Item $ConfigPath $backupFile -Force
+    Write-Host "  Previous config backed up -> data\backups\opencode-$timestamp.json" -ForegroundColor DarkGray
 }
 
-# Generate free mode config
+# Check template exists
+if (-not (Test-Path $TemplatePath)) {
+    Write-Host "  ERROR: Free mode template not found at config\opencode-free.json" -ForegroundColor Red
+    exit 1
+}
+
+# Build the free mode prompt
 $freePrompt = @"
 You are Glitch running in FREE MODE. All agents are using the free model `"$FreeModel`" ($ModelName).
 
@@ -238,121 +249,33 @@ You are Glitch running in FREE MODE. All agents are using the free model `"$Free
 No premium agents (@coder, @vision, @reviewer, @general-paid, @build-paid) are available in free mode.
 "@
 
-$freeConfig = @"
-{
-"`$schema": "https://opencode.ai/config.json",
-"instructions": [
-"glitch-memorycore/prompt-rules.md",
-"glitch-memorycore/CLAUDE.md",
-"glitch-memorycore/master-memory.md",
-"glitch-memorycore/core/identity.md",
-"glitch-memorycore/plugins/glitch-skills/skills-registry.md",
-"user/main-memory.md",
-"user/current-session.md",
-"user/reminders.md",
-"user/session-dashboard.md"
-],
-"agent": {
-"delegator": {
-"model": "$FreeModel",
-"mode": "primary",
-"description": "Free mode orchestrates tasks using only free models ($ModelName).",
-"color": "#22c55e",
-"temperature": 0.2,
-"permission": {
-"read": "allow",
-"edit": "allow",
-"glob": "allow",
-"grep": "allow",
-"list": "allow",
-"webfetch": "allow",
-"websearch": "allow",
-"question": "allow",
-"skill": "allow",
-"todowrite": "allow",
-"bash": { "git *": "allow", "*": "deny" },
-"external_directory": "deny",
-"task": "allow"
-},
-"prompt": "$($freePrompt.Replace('\', '\\').Replace('"', '\"').Replace("`n", '\n').Replace("`r", ''))"
-},
-"general": {
-"model": "$FreeModel",
-"mode": "subagent",
-"description": "General-purpose agent bash commands, file ops, simple edits, standard code.",
-"permission": {
-"read": "allow",
-"edit": "allow",
-"bash": "allow",
-"glob": "allow",
-"grep": "allow",
-"list": "allow",
-"webfetch": "allow",
-"websearch": "deny",
-"question": "allow",
-"todowrite": "allow"
-},
-"temperature": 0.2
-},
-"explore": {
-"model": "$FreeModel",
-"mode": "subagent",
-"description": "Codebase research find files, search code, answer questions about the codebase. Read-only.",
-"temperature": 0.2
-},
-"plan": {
-"model": "$FreeModel",
-"mode": "primary",
-"description": "Planning mode reason about architecture and designs without executing code.",
-"temperature": 0.2
-},
-"build": {
-"model": "$FreeModel",
-"mode": "subagent",
-"description": "Code scaffolding generates code from prompts.",
-"temperature": 0.2
-}
-},
-"attachment": {
-"image": {
-"auto_resize": true,
-"max_width": 2000,
-"max_height": 2000,
-"max_base64_bytes": 5242880
-}
-},
-"experimental": {
-"disable_paste_summary": true
-},
-"server": {
-"port": 4100,
-"hostname": "0.0.0.0"
-},
-"default_agent": "delegator",
-"compaction": {
-"auto": true,
-"tail_turns": 8
-}
-}
-"@
+# Read template, replace placeholders
+$templateText = Get-Content $TemplatePath -Raw
+$configWithModel = $templateText.Replace('__MODEL__', $FreeModel)
+$escapedPrompt = $freePrompt.Replace('\', '\\').Replace('"', '\"').Replace("`n", '\n').Replace("`r", '')
+$finalConfig = $configWithModel.Replace('__PROMPT__', $escapedPrompt)
 
-# Validate generated config
-Write-Host " Validating generated config..." -ForegroundColor Cyan
+# Validate
 try {
-    $null = $freeConfig | ConvertFrom-Json
-    Write-Host " Config is valid JSON" -ForegroundColor DarkGreen
+    $null = $finalConfig | ConvertFrom-Json
+    Write-Host "  Free mode config is valid JSON" -ForegroundColor DarkGreen
 } catch {
-    Write-Host " ERROR: Generated free mode config is not valid JSON!" -ForegroundColor Red
-    Write-Host " $_" -ForegroundColor Red
-    if (Test-Path $BackupPath) {
-        Write-Host " Restoring original config..." -ForegroundColor Yellow
-        Move-Item $BackupPath $ConfigPath -Force
-    }
+    Write-Host "  ERROR: Generated free mode config is invalid JSON!" -ForegroundColor Red
+    Write-Host "  $_" -ForegroundColor Red
     exit 1
 }
 
-Write-Host " Writing free mode config..." -ForegroundColor Cyan
-$freeConfig | Out-File -FilePath $ConfigPath -Encoding utf8 -Force
+# Write config
+Write-Host "  Writing free mode config..." -ForegroundColor Cyan
+$finalConfig | Out-File -FilePath $ConfigPath -Encoding utf8 -Force
+
+# ---- Write mode marker ----
+$modeInfo = @{
+    mode = "free"
+    timestamp = (Get-Date).ToString("o")
+    model = $FreeModel
+} | ConvertTo-Json
+$modeInfo | Out-File -FilePath $ModeFile -Encoding utf8 -Force
 
 # Initialize submodules if needed
 if (-not (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md")) {
@@ -368,7 +291,6 @@ if (-not (Test-Path "$RootDir\glitch-memorycore\prompt-rules.md")) {
 Write-Host ""
 Write-Host " Starting OpenCode in free mode..." -ForegroundColor Cyan
 Write-Host " Model: $FreeModel ($ModelName)" -ForegroundColor Green
-Write-Host " When done, exit normally and the original config will be restored." -ForegroundColor DarkGray
 Write-Host " Switch models: .\scripts\switch-model.ps1  |  Relaunch with: .\launch-glitch-free.bat --pick" -ForegroundColor Gray
 Write-Host ""
 
@@ -379,14 +301,6 @@ try {
     Write-Host " OpenCode exited with error: $_" -ForegroundColor Red
 } finally {
     Pop-Location
-}
-
-# Restore original config
-if (Test-Path $BackupPath) {
-    Write-Host ""
-    Write-Host " Restoring original opencode.json..." -ForegroundColor Yellow
-    Move-Item $BackupPath $ConfigPath -Force
-    Write-Host " Original config restored." -ForegroundColor Green
 }
 
 Write-Host ""

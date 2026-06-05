@@ -1,0 +1,91 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "glitch-memorycore/prompt-rules.md",
+    "glitch-memorycore/CLAUDE.md",
+    "glitch-memorycore/master-memory.md",
+    "glitch-memorycore/core/identity.md",
+    "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+  ],
+  "agent": {
+    "delegator": {
+      "model": "__MODEL__",
+      "mode": "primary",
+      "description": "Free mode orchestrates tasks using only free models.",
+      "color": "#22c55e",
+      "temperature": 0.2,
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "allow",
+        "skill": "allow",
+        "todowrite": "allow",
+        "bash": { "git *": "allow", "*": "deny" },
+        "external_directory": "deny",
+        "task": "allow"
+      },
+      "prompt": "__PROMPT__"
+    },
+    "general": {
+      "model": "__MODEL__",
+      "mode": "subagent",
+      "description": "General-purpose agent -- bash, file ops, simple edits, standard code.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow"
+      },
+      "temperature": 0.2
+    },
+    "explore": {
+      "model": "__MODEL__",
+      "mode": "subagent",
+      "description": "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
+      "temperature": 0.2
+    },
+    "plan": {
+      "model": "__MODEL__",
+      "mode": "primary",
+      "description": "Planning mode -- reason about architecture and designs without executing code.",
+      "temperature": 0.2
+    },
+    "build": {
+      "model": "__MODEL__",
+      "mode": "subagent",
+      "description": "Code scaffolding -- generates code from prompts.",
+      "temperature": 0.2
+    }
+  },
+  "attachment": {
+    "image": {
+      "auto_resize": true,
+      "max_width": 2000,
+      "max_height": 2000,
+      "max_base64_bytes": 5242880
+    }
+  },
+  "experimental": {
+    "disable_paste_summary": true
+  },
+  "server": {
+    "port": 4100,
+    "hostname": "0.0.0.0"
+  },
+  "default_agent": "delegator",
+  "compaction": {
+    "auto": true,
+    "tail_turns": 8
+  }
+}

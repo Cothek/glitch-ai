@@ -4,7 +4,9 @@ $RootDir = Split-Path -Parent $ScriptDir
 $OpenCodeBin = "$RootDir\opencode\opencode.exe"
 $Cloudflared = "$RootDir\cloudflared.exe"
 $ConfigPath = "$RootDir\opencode.json"
-$BackupPath = "$RootDir\opencode.json.bak"
+$TemplatePath = "$RootDir\config\opencode-normal.json"
+$BackupDir = "$RootDir\data\backups"
+$ModeFile = "$BackupDir\.last-mode"
 
 Write-Host ""
 Write-Host "Glitch AI - Server Mode" -ForegroundColor Magenta
@@ -50,23 +52,20 @@ try {
 } catch {}
 Write-Host "  Port $TargetPort is free" -ForegroundColor Cyan
 
-# Detect leftover safe mode backup
-if (Test-Path $BackupPath) {
-  try {
-    $currentConfig = Get-Content $ConfigPath -Raw | ConvertFrom-Json
-    $agentCount = @($currentConfig.agent.PSObject.Properties).Count
-    $isSafeModeConfig = ($agentCount -le 1)
-  } catch {
-    $isSafeModeConfig = $false
-  }
-  if ($isSafeModeConfig) {
-    Write-Host "  Detected leftover safe mode config -- restoring backup..." -ForegroundColor Yellow
-    Copy-Item $BackupPath $ConfigPath -Force
-    Write-Host "  Backup restored." -ForegroundColor Green
-  } else {
-    Write-Host "  Cleaning up leftover backup from previous safe mode." -ForegroundColor DarkYellow
-  }
-  Remove-Item $BackupPath -Force
+# ---- Timestamped backup (preserved, never overwritten) ----
+if (Test-Path $ConfigPath) {
+  if (-not (Test-Path $BackupDir)) { New-Item -ItemType Directory -Path $BackupDir -Force | Out-Null }
+  $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
+  $backupFile = "$BackupDir\opencode-$timestamp.json"
+  Copy-Item $ConfigPath $backupFile -Force
+  Write-Host "  Previous config backed up -> data\backups\opencode-$timestamp.json" -ForegroundColor DarkGray
+}
+
+# ---- Check template exists ----
+if (-not (Test-Path $TemplatePath)) {
+  Write-Host "  ERROR: Normal mode template not found at config\opencode-normal.json" -ForegroundColor Red
+  Write-Host "  Try running .\scripts\launch-safe.ps1 to repair." -ForegroundColor Yellow
+  exit 1
 }
 
 # ---- User Profile Detection ----
@@ -95,7 +94,7 @@ if (-not $userFound) {
   }
 }
 
-# ---- Generate runtime config with user profile ----
+# ---- Generate runtime config from template ----
 Write-Host "  Generating runtime config..." -ForegroundColor Cyan
 
 $engineInstructions = @(
@@ -127,33 +126,26 @@ $allInstructions = $engineInstructions + $userInstructions
 $instrJson = ($allInstructions | ForEach-Object { "    `"$_`"" }) -join ",`n"
 $instrBlock = "`"instructions`": [`n$instrJson`n  ]"
 
-$baseText = Get-Content $ConfigPath -Raw
-$runtimeJson = $baseText -replace '"[Ii]nstructions"\s*:\s*\[[^\]]*\]', $instrBlock
-
-Copy-Item $ConfigPath $BackupPath -Force
+# Read template and inject user instructions
+$templateText = Get-Content $TemplatePath -Raw
+$runtimeJson = $templateText -replace '"[Ii]nstructions"\s*:\s*\[[^\]]*\]', $instrBlock
 
 try {
   $null = $runtimeJson | ConvertFrom-Json
   $runtimeJson | Out-File -FilePath $ConfigPath -Encoding utf8 -Force
-  Write-Host "  Runtime config generated" -ForegroundColor DarkGreen
+  Write-Host "  Config generated from template" -ForegroundColor DarkGreen
 } catch {
   Write-Host "  ERROR: Generated config is invalid JSON!" -ForegroundColor Red
-  if (Test-Path $BackupPath) {
-    Move-Item $BackupPath $ConfigPath -Force
-  }
   exit 1
 }
 
-# ---- Validate config ----
-Write-Host "  Validating config..." -ForegroundColor Cyan
-try {
-    $null = Get-Content $ConfigPath -Raw | ConvertFrom-Json
-    Write-Host "  Config is valid JSON" -ForegroundColor DarkGreen
-} catch {
-    Write-Host "  ERROR: opencode.json is not valid JSON!" -ForegroundColor Red
-    Write-Host "  $_" -ForegroundColor Red
-    exit 1
-}
+# Write mode marker
+$modeInfo = @{
+    mode = "normal"
+    timestamp = (Get-Date).ToString("o")
+    model = "opencode-go/deepseek-v4-flash"
+} | ConvertTo-Json
+$modeInfo | Out-File -FilePath $ModeFile -Encoding utf8 -Force
 
 # ---- Check for dependency updates ----
 Write-Host "  Checking dependency updates..." -ForegroundColor Cyan
@@ -288,13 +280,6 @@ try {
   & $OpenCodeBin web --port $TargetPort --hostname 0.0.0.0
 } finally {
   Pop-Location
-  # Restore base config
-  if (Test-Path $BackupPath) {
-    Write-Host ""
-    Write-Host "  Restoring base config..." -ForegroundColor Yellow
-    Move-Item $BackupPath $ConfigPath -Force
-    Write-Host "  Base config restored." -ForegroundColor Green
-  }
   # Clean up cloudflared when OpenCode exits
   if ($cloudflaredProcess -and -not $cloudflaredProcess.HasExited) {
     $cloudflaredProcess.Kill()
