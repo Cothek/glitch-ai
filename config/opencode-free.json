@@ -8,7 +8,7 @@
     "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
   ],
   "agent": {
-    "delegator": {
+    "glitch": {
       "model": "__MODEL__",
       "mode": "primary",
       "description": "Free mode orchestrates tasks using only free models.",
@@ -17,6 +17,7 @@
       "permission": {
         "read": "allow",
         "edit": "allow",
+        "bash": "allow",
         "glob": "allow",
         "grep": "allow",
         "list": "allow",
@@ -25,8 +26,6 @@
         "question": "allow",
         "skill": "allow",
         "todowrite": "allow",
-        "bash": { "git *": "allow", "*": "deny" },
-        "external_directory": "deny",
         "task": "allow"
       },
       "prompt": "__PROMPT__"
@@ -83,7 +82,7 @@
     "port": 4100,
     "hostname": "0.0.0.0"
   },
-  "default_agent": "delegator",
+  "default_agent": "glitch",
   "compaction": {
     "auto": true,
     "tail_turns": 8
