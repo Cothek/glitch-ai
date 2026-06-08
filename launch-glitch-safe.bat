@@ -1,6 +1,8 @@
 @echo off
 title Glitch AI - SAFE MODE
 echo.
+type "%~dp0glitch-head.txt"
+echo.
 echo 🛟 Glitch AI - Safe Mode
 echo.
 echo This starts Glitch with a minimal configuration so you can
