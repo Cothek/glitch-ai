@@ -58,7 +58,11 @@ const WHITE = '\x1b[37m';
 const RESET = '\x1b[0m';
 
 function log(color, msg) {
-  console.log(`${color}${msg}${RESET}`);
+  if (msg === undefined) {
+    console.log(color);
+  } else {
+    console.log(`${color}${msg}${RESET}`);
+  }
 }
 
 function timestamp() {
