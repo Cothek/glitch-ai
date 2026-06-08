@@ -1,7 +1,6 @@
 @echo off
 title Glitch AI
-chcp 65001 >nul
-type "%~dp0glitch-head.txt"
+powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
 echo.
 node "%~dp0scripts\launch.mjs"
 if %errorlevel% neq 0 (

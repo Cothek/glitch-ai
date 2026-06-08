@@ -1,7 +1,6 @@
 @echo off
 title Glitch AI - FREE MODE
-chcp 65001 >nul
-type "%~dp0glitch-head.txt"
+powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
 echo.
 echo FREE TIER MODE
 echo.

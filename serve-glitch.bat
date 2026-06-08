@@ -1,7 +1,6 @@
 @echo off
 title Glitch AI Server
-chcp 65001 >nul
-type "%~dp0glitch-head.txt"
+powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
 echo.
 echo Starting server...
 echo.
