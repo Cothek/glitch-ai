@@ -111,6 +111,19 @@ const FallbackModelGroups = [
       { ID: 'nvidia/stepfun-ai/step-3.7-flash', Name: 'Step 3.7 Flash', Tag: '' },
       { ID: 'nvidia/mistralai/mistral-large-3-675b-instruct-2512', Name: 'Mistral Large 3', Tag: '' }
     ]
+  },
+  {
+    Name: 'OpenRouter (free models, requires /connect)',
+    Models: [
+      { ID: 'openrouter/moonshotai/kimi-k2.6:free', Name: 'Kimi K2.6', Tag: '' },
+      { ID: 'openrouter/qwen/qwen3-coder:free', Name: 'Qwen3 Coder', Tag: '' },
+      { ID: 'openrouter/meta-llama/llama-3.3-70b-instruct:free', Name: 'Llama 3.3 70B', Tag: '' },
+      { ID: 'openrouter/google/gemma-4-31b-it:free', Name: 'Gemma 4 31B', Tag: '' },
+      { ID: 'openrouter/openai/gpt-oss-120b:free', Name: 'GPT-OSS 120B', Tag: '' },
+      { ID: 'openrouter/nvidia/nemotron-3-ultra-550b-a55b:free', Name: 'Nemotron 3 Ultra', Tag: '' },
+      { ID: 'openrouter/qwen/qwen3-next-80b-a3b-instruct:free', Name: 'Qwen3 Next 80B', Tag: '' },
+      { ID: 'openrouter/nousresearch/hermes-3-llama-3.1-405b:free', Name: 'Hermes 3 405B', Tag: '' }
+    ]
   }
 ];
 
@@ -181,7 +194,7 @@ function buildFreePrompt(modelId, modelName) {
 2. ALL agents use "${modelId}" there are NO paid fallback models available.
 3. Premium features are generally UNAVAILABLE in OpenCode Zen free models, but some NVIDIA free endpoint models may support image/vision analysis and stronger coding capability depends on the specific model.
 4. If the free model exhausts its quota, close this session and relaunch with a different model:
-- Set \`$env:GLITCH_FREE_MODEL\` to one of the valid model IDs (opencode/... or nvidia/...)
+- Set \`$env:GLITCH_FREE_MODEL\` to one of the valid model IDs (opencode/..., nvidia/..., or openrouter/...)
 - Or run node scripts/launch-free.mjs to pick a new model
 - Then run node scripts/launch-free.mjs --pick again
 5. Tell the user which model is active on session start so they know what to expect.
