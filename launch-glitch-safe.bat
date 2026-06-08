@@ -1,5 +1,6 @@
 @echo off
 title Glitch AI - SAFE MODE
+powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
 echo.
 echo 🛟 Glitch AI - Safe Mode
 echo.
