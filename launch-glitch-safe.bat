@@ -1,6 +1,6 @@
 @echo off
 title Glitch AI - SAFE MODE
-echo.
+chcp 65001 >nul
 type "%~dp0glitch-head.txt"
 echo.
 echo 🛟 Glitch AI - Safe Mode

@@ -1,5 +1,6 @@
 @echo off
 title Glitch AI - FREE MODE
+chcp 65001 >nul
 type "%~dp0glitch-head.txt"
 echo.
 echo FREE TIER MODE

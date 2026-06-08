@@ -1,5 +1,6 @@
 @echo off
 title Glitch AI Server
+chcp 65001 >nul
 type "%~dp0glitch-head.txt"
 echo.
 echo Starting server...
