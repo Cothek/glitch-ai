@@ -452,6 +452,13 @@ try {
     Write-Host "  WARNING: Binary sync failed: $_" -ForegroundColor Yellow
 }
 
+# ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
+$tuiConfigPath = "$RootDir\user\tui.json"
+if (Test-Path $tuiConfigPath) {
+  $env:OPENCODE_TUI_CONFIG = $tuiConfigPath
+  Write-Host "  TUI config loaded" -ForegroundColor DarkGreen
+}
+
 # Launch opencode
 Write-Host ""
 Write-Host " Starting OpenCode in free mode..." -ForegroundColor Cyan

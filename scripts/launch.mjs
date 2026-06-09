@@ -345,6 +345,13 @@ async function main() {
     log(CYAN, '  Starting with engine defaults (no user profile loaded).');
   }
 
+  // ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
+  const TuiConfigPath = join(ROOT_DIR, 'user', 'tui.json');
+  if (existsSync(TuiConfigPath)) {
+    process.env.OPENCODE_TUI_CONFIG = TuiConfigPath;
+    log(DARK_GREEN, '  TUI config loaded');
+  }
+
   // ---- Generate runtime config from template ----
   log(CYAN, '  Generating runtime config from template...');
 

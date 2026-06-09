@@ -574,6 +574,13 @@ async function main() {
     log(YELLOW, `  WARNING: Binary sync failed: ${e.message || e}`);
   }
 
+  // ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
+  const TuiConfigPath = join(ROOT_DIR, 'user', 'tui.json');
+  if (existsSync(TuiConfigPath)) {
+    process.env.OPENCODE_TUI_CONFIG = TuiConfigPath;
+    log(DARK_GREEN, '  TUI config loaded');
+  }
+
   // ---- Launch OpenCode ----
   log('');
   log(CYAN, ' Starting OpenCode in free mode...');
