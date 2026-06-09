@@ -1,5 +1,5 @@
 ﻿{
-    "generated_at":  "2026-06-08T09:46:54.8303010-05:00",
+    "generated_at":  "2026-06-09T08:00:24.3381350-05:00",
     "providers":  [
                       {
                           "models":  [
@@ -37,6 +37,10 @@
                       },
                       {
                           "models":  [
+                                         {
+                                             "id":  "openrouter/nex-agi/nex-n2-pro:free",
+                                             "name":  "Nex N2 Pro"
+                                         },
                                          {
                                              "id":  "openrouter/nvidia/nemotron-3.5-content-safety:free",
                                              "name":  "Nemotron 3.5 Content Safety"

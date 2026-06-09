@@ -100,6 +100,13 @@ if (-not $userFound) {
   }
 }
 
+# ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
+$tuiConfigPath = "$RootDir\user\tui.json"
+if (Test-Path $tuiConfigPath) {
+  $env:OPENCODE_TUI_CONFIG = $tuiConfigPath
+  Write-Host "  TUI config loaded" -ForegroundColor DarkGreen
+}
+
 # ---- Generate runtime config from template ----
 Write-Host "  Generating runtime config..." -ForegroundColor Cyan
 

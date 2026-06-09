@@ -38,7 +38,11 @@ const WHITE = '\x1b[37m';
 const RESET = '\x1b[0m';
 
 function log(color, msg) {
-  console.log(`${color}${msg}${RESET}`);
+  if (msg === undefined) {
+    console.log(color);
+  } else {
+    console.log(`${color}${msg}${RESET}`);
+  }
 }
 
 function timestamp() {
@@ -568,6 +572,13 @@ async function main() {
     }
   } catch (e) {
     log(YELLOW, `  WARNING: Binary sync failed: ${e.message || e}`);
+  }
+
+  // ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
+  const TuiConfigPath = join(ROOT_DIR, 'user', 'tui.json');
+  if (existsSync(TuiConfigPath)) {
+    process.env.OPENCODE_TUI_CONFIG = TuiConfigPath;
+    log(DARK_GREEN, '  TUI config loaded');
   }
 
   // ---- Launch OpenCode ----
