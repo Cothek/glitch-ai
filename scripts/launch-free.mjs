@@ -243,6 +243,35 @@ async function ensureHandy() {
   return false;
 }
 
+// ---- Branch check: warn if not on main and offer to switch ----
+async function checkAndSwitchToMain() {
+  const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
+  if (!branch.success) return;
+  const current = branch.stdout.trim();
+  if (current === 'main') return;
+
+  log(YELLOW, '');
+  log(YELLOW, `  ⚠ Currently on branch '${current}', not 'main'`);
+  log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
+  log(WHITE, '  [y] Switch to main now (recommended)');
+  log(WHITE, '  [n] Continue on current branch');
+  const choice = await askQuestion('  > ');
+
+  if (choice.trim().toLowerCase() === 'y') {
+    log(CYAN, '  Switching to main...');
+    const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
+    if (checkout.success) {
+      log(GREEN, '  Switched to main');
+    } else {
+      log(RED, `  Failed to switch: ${checkout.stderr || checkout.error}`);
+      log(YELLOW, '  Continuing on current branch...');
+    }
+  } else {
+    log(DARK_YELLOW, '  Continuing on current branch (may have unstable config)');
+  }
+  log('');
+}
+
 // ---- Sync glitch-ai repo from remote (fetch + ff-only pull with conflict handling) ----
 async function syncMainRepo() {
   log(CYAN, '  Checking for repo updates...');
@@ -288,8 +317,8 @@ async function syncMainRepo() {
   const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
   if (pull.success) {
     log(GREEN, '  glitch-ai repo synced');
-    // Re-init submodules in case the pull updated the submodule pointer
-    run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+    // Re-init submodules to match the parent repo's pinned commit (no --remote)
+    run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
     return true;
   }
 
@@ -322,8 +351,8 @@ async function syncMainRepo() {
     const pull2 = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
     if (pull2.success) {
       log(GREEN, '  glitch-ai repo synced (local changes discarded)');
-      // Re-init submodules in case the pull updated the submodule pointer
-      run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+      // Re-init submodules to match the parent repo's pinned commit (no --remote)
+      run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
       return true;
     }
     log(RED, '  Pull still failed after discarding changes. Check git status manually.');
@@ -583,21 +612,47 @@ if (args.includes('--help')) {
 }
 
 async function main() {
+  // ---- Branch check (runs first) ----
+  await checkAndSwitchToMain();
+
   log(GREEN, '');
   log(GREEN, ' Glitch Free Mode');
   log(GREEN, '');
 
-  // ---- Validate opencode binary ----
+  // ---- Auto-bootstrap: download OpenCode if missing ----
   if (!existsSync(OpenCodeBin)) {
-    log(RED, ' OpenCode not found. Run bootstrap first.');
-    process.exit(1);
+    log(YELLOW, '  OpenCode not found. Running bootstrap to download...');
+    if (isWin) {
+      const bootstrapScript = join(ROOT_DIR, 'scripts', 'bootstrap.ps1');
+      if (existsSync(bootstrapScript)) {
+        const result = pwsh(['-File', bootstrapScript], { stdio: 'inherit', timeout: 120000 });
+        if (!result.success) {
+          log(RED, `  ERROR: Bootstrap failed: ${result.error}`);
+          log(YELLOW, '  Try running manually: .\\scripts\\bootstrap.ps1');
+          process.exit(1);
+        }
+      } else {
+        log(RED, '  ERROR: bootstrap.ps1 not found.');
+        process.exit(1);
+      }
+    } else {
+      log(YELLOW, '  On Unix/macOS, please install opencode manually: npm install -g opencode-ai');
+      log(YELLOW, '  Then copy the binary to opencode/opencode in the project root.');
+      process.exit(1);
+    }
+    if (!existsSync(OpenCodeBin)) {
+      log(RED, '  ERROR: Bootstrap finished but OpenCode still not found.');
+      log(YELLOW, '  Try running manually: .\\scripts\\bootstrap.ps1');
+      process.exit(1);
+    }
+    log(GREEN, '  OpenCode downloaded successfully.');
   }
 
   // ---- Initialize submodules if needed ----
   if (!existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
     log(CYAN, '  Initializing glitch-memorycore submodule...');
     try {
-      run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+      run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
     } catch {
       log(RED, '  Could not initialize submodules');
     }
@@ -787,13 +842,111 @@ async function main() {
     process.exit(1);
   }
 
+  // ---- User Profile Detection ----
+  let UserName = process.env.GLITCH_FREE_USER || process.env.GLITCH_USER || null;
+  let userFound = false;
+
+  if (UserName) {
+    const subdirPath = join(ROOT_DIR, 'user', UserName);
+    if (existsSync(join(subdirPath, 'main-memory.md'))) {
+      userFound = true;
+      log(CYAN, `  User profile: ${UserName}`);
+    } else if (existsSync(join(ROOT_DIR, 'user', 'main-memory.md'))) {
+      UserName = '';
+      userFound = true;
+      log(CYAN, '  User profile: (flat -- user/main-memory.md)');
+    } else {
+      log(YELLOW, `  WARNING: User '${UserName}' specified but no profile found at user/${UserName}`);
+      log(YELLOW, `  Run: node setup.mjs --user ${UserName}`);
+      UserName = null;
+    }
+  }
+
+  if (!userFound) {
+    const userBase = join(ROOT_DIR, 'user');
+    if (existsSync(join(userBase, 'main-memory.md'))) {
+      UserName = '';
+      userFound = true;
+      log(CYAN, '  User profile: (flat -- user/main-memory.md)');
+    } else if (existsSync(userBase)) {
+      const { readdirSync } = await import('fs');
+      let profiles;
+      try {
+        const entries = readdirSync(userBase, { withFileTypes: true });
+        profiles = entries
+          .filter(e => e.isDirectory())
+          .map(e => e.name)
+          .filter(name => existsSync(join(userBase, name, 'main-memory.md')));
+      } catch {
+        profiles = [];
+      }
+
+      if (profiles.length === 1) {
+        UserName = profiles[0];
+        userFound = true;
+        log(CYAN, `  User profile: ${UserName}`);
+      } else if (profiles.length > 1) {
+        log(YELLOW, '  Multiple user profiles found:');
+        profiles.forEach((name, i) => {
+          log(CYAN, `    [${i + 1}] ${name}`);
+        });
+        log(DARK_GRAY, '  Set $env:GLITCH_USER=<name> or $env:GLITCH_FREE_USER=<name> to auto-select.');
+        UserName = profiles[0];
+        userFound = true;
+        log(CYAN, `  Using: ${UserName}`);
+      }
+    }
+  }
+
+  if (!userFound) {
+    log(YELLOW, '  No user profile found.');
+    log(CYAN, '  Starting with engine defaults (no user profile loaded).');
+  }
+
+  // ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
+  const TuiConfigPath = join(ROOT_DIR, 'user', 'tui.json');
+  if (existsSync(TuiConfigPath)) {
+    process.env.OPENCODE_TUI_CONFIG = TuiConfigPath;
+    log(DARK_GREEN, '  TUI config loaded');
+  }
+
   // ---- Generate runtime config from template ----
   log(CYAN, '  Generating free mode config...');
 
   const templateText = readFileSync(TemplatePath, 'utf-8');
+
+  const engineInstructions = [
+    'glitch-memorycore/prompt-rules.md',
+    'glitch-memorycore/CLAUDE.md',
+    'glitch-memorycore/master-memory.md',
+    'glitch-memorycore/core/identity.md',
+    'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
+  ];
+
+  let userInstructions = [];
+  if (UserName && UserName !== '') {
+    userInstructions = [
+      `user/${UserName}/main-memory.md`,
+      `user/${UserName}/current-session.md`,
+      `user/${UserName}/reminders.md`,
+      `user/${UserName}/session-dashboard.md`
+    ];
+  } else if (existsSync(join(ROOT_DIR, 'user', 'main-memory.md'))) {
+    userInstructions = [
+      'user/main-memory.md',
+      'user/current-session.md',
+      'user/reminders.md',
+      'user/session-dashboard.md'
+    ];
+  }
+
+  const allInstructions = [...engineInstructions, ...userInstructions];
+  const instrJson = allInstructions.map(s => `    "${s}"`).join(',\n');
+  const instrBlock = `"instructions": [\n${instrJson}\n  ]`;
   let withModels = templateText.replace(/__MODEL__/g, primaryModel);
   withModels = withModels.replace(/__VISION_MODEL__/g, visionModel);
-  const configObj = JSON.parse(withModels);
+  const runtimeJson = withModels.replace(/"[Ii]nstructions"\s*:\s*\[[^\]]*\]/, instrBlock);
+  const configObj = JSON.parse(runtimeJson);
 
   // Set the free mode prompt directly on the parsed object (avoids string escaping)
   configObj.agent.glitch.prompt = buildFreePrompt(primaryModel, primaryName, visionModel, visionName);
@@ -802,7 +955,7 @@ async function main() {
   const finalJson = JSON.stringify(configObj, null, 2);
   try {
     JSON.parse(finalJson);
-    log(DARK_GREEN, '  Free mode config is valid JSON');
+    log(DARK_GREEN, `  Config written (${allInstructions.length} instruction files)`);
   } catch (e) {
     log(RED, `  ERROR: Generated config is invalid JSON!`);
     log(RED, `  ${e.message}`);
@@ -819,6 +972,19 @@ async function main() {
     primary_model: primaryModel,
     vision_model: visionModel
   }, null, 2), 'utf-8');
+
+  // ---- Normalize backslash paths ----
+  try {
+    if (isWin) {
+      const fixPs1 = join(ROOT_DIR, 'scripts', 'fix-paths.ps1');
+      if (existsSync(fixPs1)) pwsh(['-File', fixPs1], { timeout: 15000, stdio: 'ignore' });
+    } else {
+      const fixMjs = join(ROOT_DIR, 'scripts', 'fix-paths.mjs');
+      if (existsSync(fixMjs)) run('node', [fixMjs], { timeout: 15000, stdio: 'ignore' });
+    }
+  } catch {
+    // non-critical
+  }
 
   // ---- Check dependency updates & offer interactive update ----
   if (POWERSHELL) {
@@ -989,13 +1155,6 @@ async function main() {
     log(YELLOW, `  WARNING: Binary sync failed: ${e.message || e}`);
     logUpdate(`UNCAUGHT EXCEPTION: ${e.message}`);
     logUpdate(`stack: ${e.stack}`);
-  }
-
-  // ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
-  const TuiConfigPath = join(ROOT_DIR, 'user', 'tui.json');
-  if (existsSync(TuiConfigPath)) {
-    process.env.OPENCODE_TUI_CONFIG = TuiConfigPath;
-    log(DARK_GREEN, '  TUI config loaded');
   }
 
   // ---- Check + install Handy if missing ----

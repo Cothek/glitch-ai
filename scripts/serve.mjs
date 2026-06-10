@@ -4,6 +4,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, readd
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync, spawn } from 'child_process';
+import { createInterface } from 'readline';
 import net from 'net';
 import crypto from 'crypto';
 import { get as httpsGet } from 'https';
@@ -96,6 +97,45 @@ function readJson(path) {
   } catch {
     return null;
   }
+}
+
+function askQuestion(query) {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(query, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+// ---- Branch check: warn if not on main and offer to switch ----
+async function checkAndSwitchToMain() {
+  const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
+  if (!branch.success) return;
+  const current = branch.stdout.trim();
+  if (current === 'main') return;
+
+  log(YELLOW, '');
+  log(YELLOW, `  ⚠ Currently on branch '${current}', not 'main'`);
+  log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
+  log(WHITE, '  [y] Switch to main now (recommended)');
+  log(WHITE, '  [n] Continue on current branch');
+  const choice = await askQuestion('  > ');
+
+  if (choice.trim().toLowerCase() === 'y') {
+    log(CYAN, '  Switching to main...');
+    const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
+    if (checkout.success) {
+      log(GREEN, '  Switched to main');
+    } else {
+      log(RED, `  Failed to switch: ${checkout.stderr || checkout.error}`);
+      log(YELLOW, '  Continuing on current branch...');
+    }
+  } else {
+    log(DARK_YELLOW, '  Continuing on current branch (may have unstable config)');
+  }
+  log('');
 }
 
 function downloadFile(url, destPath) {
@@ -211,7 +251,7 @@ function syncMainRepoSilent() {
   const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
   if (pull.success) {
     log(DARK_GREEN, '  Server: repo synced');
-    run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+    run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
   }
 }
 
@@ -336,6 +376,9 @@ process.on('SIGTERM', () => process.exit(143));
 // ==========================================================
 
 async function main() {
+  // ---- Branch check (runs first) ----
+  await checkAndSwitchToMain();
+
   log(MAGENTA, '');
   log(MAGENTA, ' Glitch AI - Server Mode');
   log(MAGENTA, '');
@@ -352,7 +395,7 @@ async function main() {
   // ---- Self-heal: initialize git submodules if needed ----
   if (!existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
     log(CYAN, '  Initializing glitch-memorycore submodule...');
-    const result = run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+    const result = run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
     if (result.success && existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
       log(GREEN, '  Engine ready!');
     } else {

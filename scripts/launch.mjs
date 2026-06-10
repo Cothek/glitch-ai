@@ -280,8 +280,8 @@ async function syncMainRepo() {
   const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
   if (pull.success) {
     log(GREEN, '  glitch-ai repo synced');
-    // Re-init submodules in case the pull updated the submodule pointer
-    run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+    // Re-init submodules to match the parent repo's pinned commit (no --remote)
+    run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
     return true;
   }
 
@@ -314,8 +314,8 @@ async function syncMainRepo() {
     const pull2 = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
     if (pull2.success) {
       log(GREEN, '  glitch-ai repo synced (local changes discarded)');
-      // Re-init submodules in case the pull updated the submodule pointer
-      run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+      // Re-init submodules to match the parent repo's pinned commit (no --remote)
+      run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
       return true;
     }
     log(RED, '  Pull still failed after discarding changes. Check git status manually.');
@@ -376,6 +376,35 @@ async function syncUserRepo() {
   return false;
 }
 
+// ---- Branch check: warn if not on main and offer to switch ----
+async function checkAndSwitchToMain() {
+  const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
+  if (!branch.success) return;
+  const current = branch.stdout.trim();
+  if (current === 'main') return;
+
+  log(YELLOW, '');
+  log(YELLOW, `  ⚠ Currently on branch '${current}', not 'main'`);
+  log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
+  log(WHITE, '  [y] Switch to main now (recommended)');
+  log(WHITE, '  [n] Continue on current branch');
+  const choice = await askQuestion('  > ');
+
+  if (choice.trim().toLowerCase() === 'y') {
+    log(CYAN, '  Switching to main...');
+    const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
+    if (checkout.success) {
+      log(GREEN, '  Switched to main');
+    } else {
+      log(RED, `  Failed to switch: ${checkout.stderr || checkout.error}`);
+      log(YELLOW, '  Continuing on current branch...');
+    }
+  } else {
+    log(DARK_YELLOW, '  Continuing on current branch (may have unstable config)');
+  }
+  log('');
+}
+
 const HELP_TEXT = `
   Glitch AI - Normal Mode (cross-platform)
 
@@ -395,6 +424,8 @@ if (args.includes('--help')) {
 }
 
 async function main() {
+  // ---- Branch check (runs first) ----
+  await checkAndSwitchToMain();
   log(MAGENTA, '');
   log(MAGENTA, ' Glitch AI - Normal Mode');
   log(MAGENTA, '');
@@ -431,7 +462,7 @@ async function main() {
   // ---- Self-heal: initialize git submodules if needed ----
   if (!existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
     log(CYAN, '  Initializing glitch-memorycore submodule...');
-    const result = run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+    const result = run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
     if (result.success && existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
       log(GREEN, '  Engine ready!');
     } else {
