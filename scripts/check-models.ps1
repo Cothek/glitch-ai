@@ -27,11 +27,14 @@ function Fetch-Models($url) {
 }
 
 # --- Helper: fetch NVIDIA models (needs API key) --------------------------------
+# API key sources (checked in order):
+#   1. NVIDIA_API_KEY environment variable
+#   2. OpenCode auth store: ~/.local/share/opencode/auth.json (set via /connect in the TUI)
 function Fetch-NvidiaModels {
   # Try environment variable first
   $apiKey = $env:NVIDIA_API_KEY
 
-  # Fall back to opencode auth store
+  # Fall back to opencode auth store (where /connect saves provider keys)
   if (-not $apiKey) {
     $authFile = "$env:USERPROFILE\.local\share\opencode\auth.json"
     if (Test-Path $authFile) {
@@ -47,7 +50,7 @@ function Fetch-NvidiaModels {
   }
 
   if (-not $apiKey) {
-    if (-not $Silent) { Write-Host " [WARN] NVIDIA_API_KEY not found (env or opencode auth) - skipping NVIDIA models" -ForegroundColor Yellow }
+    if (-not $Silent) { Write-Host " [WARN] NVIDIA_API_KEY not found. Set env var or run `/connect nvidia` in OpenCode TUI to store key in auth.json" -ForegroundColor Yellow }
     return $null
   }
 
