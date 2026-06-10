@@ -164,9 +164,23 @@ try {
 
       $newBin = Join-Path $ocUpdateDir "node_modules\opencode-ai\bin\opencode.exe"
       if (Test-Path $newBin) {
-        Copy-Item -Path $newBin -Destination $LocalOpenCodeBin -Force
-        Write-ColorHost "  Updated local binary: $currentVer -> $latestVer" "Green"
-        try { $currentVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
+        # Rename old binary aside (works on Windows even while in use),
+        # then copy new binary in place
+        $oldBin = "$LocalOpenCodeBin.old"
+        if (Test-Path $oldBin) { Remove-Item $oldBin -Force -ErrorAction SilentlyContinue }
+        try {
+          Rename-Item -Path $LocalOpenCodeBin -NewName "opencode.exe.old" -Force -ErrorAction Stop
+          Copy-Item -Path $newBin -Destination $LocalOpenCodeBin -Force -ErrorAction Stop
+          Remove-Item $oldBin -Force -ErrorAction SilentlyContinue
+          Write-ColorHost "  Updated local binary: $currentVer -> $latestVer" "Green"
+          try { $currentVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
+        } catch {
+          Write-ColorHost "  Update failed: $($_.Exception.Message)" "Red"
+          # Restore old binary if copy failed
+          if (Test-Path $oldBin -and -not (Test-Path $LocalOpenCodeBin)) {
+            Rename-Item -Path $oldBin -NewName "opencode.exe" -Force -ErrorAction SilentlyContinue
+          }
+        }
       } else {
         Write-ColorHost "  Download failed -- binary not found at $newBin" "Red"
       }
@@ -220,9 +234,22 @@ try {
       $newBin = Join-Path $ocUpdateDir "node_modules\opencode-ai\bin\opencode.exe"
       if (Test-Path $newBin) {
         if (-not (Test-Path $LocalOpenCodeDir)) { New-Item -ItemType Directory -Path $LocalOpenCodeDir -Force | Out-Null }
-        Copy-Item -Path $newBin -Destination $LocalOpenCodeBin -Force
-        Write-ColorHost "  Done." "Green"
-        try { $curVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
+        # Rename old binary aside (works on Windows even while in use),
+        # then copy new binary in place
+        $oldBin = "$LocalOpenCodeBin.old"
+        if (Test-Path $oldBin) { Remove-Item $oldBin -Force -ErrorAction SilentlyContinue }
+        try {
+          Rename-Item -Path $LocalOpenCodeBin -NewName "opencode.exe.old" -Force -ErrorAction Stop
+          Copy-Item -Path $newBin -Destination $LocalOpenCodeBin -Force -ErrorAction Stop
+          Remove-Item $oldBin -Force -ErrorAction SilentlyContinue
+          Write-ColorHost "  Done." "Green"
+          try { $curVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
+        } catch {
+          Write-ColorHost "  Update failed: $($_.Exception.Message)" "Red"
+          if (Test-Path $oldBin -and -not (Test-Path $LocalOpenCodeBin)) {
+            Rename-Item -Path $oldBin -NewName "opencode.exe" -Force -ErrorAction SilentlyContinue
+          }
+        }
       } else {
         Write-ColorHost "  Download failed -- binary not found at $newBin" "Red"
       }

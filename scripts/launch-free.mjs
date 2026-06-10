@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, rmSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, renameSync, rmSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync } from 'child_process';
@@ -568,8 +568,21 @@ async function main() {
 
         const newBin = join(updateDir, 'node_modules', 'opencode-ai', 'bin', OPENCODE_BIN_NAME);
         if (installResult.success && existsSync(newBin)) {
-          copyFileSync(newBin, OpenCodeBin);
-          log(GREEN, '  Done.');
+          // Rename old binary aside (works on Windows even while in use),
+          // then copy new binary in place
+          const oldBin = OpenCodeBin + '.old';
+          try { if (existsSync(oldBin)) unlinkSync(oldBin); } catch {}
+          try {
+            renameSync(OpenCodeBin, oldBin);
+            copyFileSync(newBin, OpenCodeBin);
+            // Clean up old binary (no longer needed)
+            try { unlinkSync(oldBin); } catch {}
+            log(GREEN, '  Done.');
+          } catch (e) {
+            // Copy failed, try to restore old binary
+            log(YELLOW, `  Update failed: ${e.message}`);
+            try { if (existsSync(oldBin)) renameSync(oldBin, OpenCodeBin); } catch {}
+          }
 
           // Clean up temp
           try { rmSync(updateDir, { recursive: true, force: true }); } catch {}
