@@ -235,6 +235,79 @@ function pwsh(args, opts = {}) {
   return run(POWERSHELL, ['-NoProfile', '-ExecutionPolicy', 'Bypass', ...args], opts);
 }
 
+// ---- Sync glitch-ai repo from remote (fetch + ff-only pull with conflict handling) ----
+async function syncMainRepo() {
+  log(CYAN, '  Checking for repo updates...');
+
+  // Fetch latest remote info
+  const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
+  if (!fetch.success) {
+    log(DARK_YELLOW, '  Could not fetch updates (offline?)');
+    return false;
+  }
+
+  // Check how far behind we are
+  const behind = run(GIT_BIN, ['rev-list', '--count', 'HEAD..origin/main'], { cwd: ROOT_DIR, timeout: 10000 });
+  if (!behind.success || !/^\d+$/.test(behind.stdout)) return false;
+
+  const count = parseInt(behind.stdout, 10);
+  if (count === 0) {
+    log(DARK_GREEN, '  glitch-ai repo up-to-date');
+    return true;
+  }
+
+  log(YELLOW, `  glitch-ai repo: ${count} commit(s) behind origin/main`);
+
+  // Try fast-forward pull (succeeds if working tree is clean and no divergence)
+  const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
+  if (pull.success) {
+    log(GREEN, '  glitch-ai repo synced');
+    // Re-init submodules in case the pull updated the submodule pointer
+    run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+    return true;
+  }
+
+  // Fast-forward failed — local changes are blocking
+  log(YELLOW, '  Could not fast-forward (local changes may be blocking).');
+
+  // Show what tracked files are modified so the user can decide
+  const modified = run(GIT_BIN, ['diff', '--name-only'], { cwd: ROOT_DIR, timeout: 10000 });
+  if (modified.success && modified.stdout) {
+    const files = modified.stdout.split('\n').filter(l => l.trim().length > 0);
+    if (files.length > 0) {
+      log(YELLOW, `  ${files.length} tracked file(s) modified locally:`);
+      for (const f of files.slice(0, 10)) {
+        log(DARK_GRAY, `    ${f}`);
+      }
+      if (files.length > 10) {
+        log(DARK_GRAY, `    ... and ${files.length - 10} more`);
+      }
+    }
+  }
+
+  log(WHITE, '  [d] Discard local changes and pull (reverts tracked files only)');
+  log(WHITE, '  [s] Skip update (stay on current version, you can pull later)');
+  const choice = await askQuestion('  > ');
+
+  if (choice.trim().toLowerCase() === 'd') {
+    log(CYAN, '  Discarding local changes to tracked files...');
+    run(GIT_BIN, ['restore', '.'], { cwd: ROOT_DIR, timeout: 15000 });
+
+    const pull2 = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
+    if (pull2.success) {
+      log(GREEN, '  glitch-ai repo synced (local changes discarded)');
+      // Re-init submodules in case the pull updated the submodule pointer
+      run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+      return true;
+    }
+    log(RED, '  Pull still failed after discarding changes. Check git status manually.');
+  } else {
+    log(DARK_YELLOW, '  Skipping repo update.');
+  }
+
+  return false;
+}
+
 const HELP_TEXT = `
   Glitch AI - Normal Mode (cross-platform)
 
@@ -290,7 +363,7 @@ async function main() {
   // ---- Self-heal: initialize git submodules if needed ----
   if (!existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
     log(CYAN, '  Initializing glitch-memorycore submodule...');
-    const result = run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
+    const result = run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
     if (result.success && existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
       log(GREEN, '  Engine ready!');
     } else {
@@ -300,6 +373,9 @@ async function main() {
   } else {
     log(DARK_GREEN, '  Engine found');
   }
+
+  // ---- Sync glitch-ai repo from remote (fetch + auto-pull) ----
+  await syncMainRepo();
 
   // ---- Auto-install Handy if missing ----
   log(CYAN, '  Checking Handy voice input...');
