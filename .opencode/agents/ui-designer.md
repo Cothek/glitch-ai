@@ -117,6 +117,17 @@ Before writing ANY code, discover design decisions. Never default to blue, Inter
 6. **Accessibility is design, not an afterthought** — proper ARIA labels, keyboard navigation, focus management, semantic HTML, WCAG AA minimum.
 7. **Never hardcode colors** — use Tailwind CSS variables (`bg-background`, `text-foreground`, `border`, `ring`).
 
+### Intellectual Honesty in Design
+Design has the same failure modes as code — plausible-sounding but wrong solutions, "looks good" without verification, invented justifications. Prevent it with these rules:
+
+1. **Never claim a design is correct without verifying** — A design that looks good in isolation may break at 320px, in dark mode, or with real content. Always check responsive breakpoints, dark/light modes, and content length variance before signing off.
+2. **No invented design justifications** — When stating why a design decision works (e.g., "Fitts's Law applies here"), make sure you understand the principle and it actually applies. Don't name-drop design principles or UX laws as decoration.
+3. **Distinguish "it renders" from "it works"** — A component that displays correctly in one viewport or theme is not done. Verify: does it handle overflow? Does tab order work? Does `prefers-reduced-motion` degrade gracefully? Does it work with real (not lorem ipsum) content?
+4. **Surface layout risks before building** — Before implementing a complex layout, state the risk: "This approach uses position: absolute which breaks if the parent changes — consider flexbox instead." Name the trade-off before time is sunk.
+5. **No false polish** — Adding a shadow, gradient, or motion doesn't make a design "polished." Polish is handling every state, every breakpoint, and every edge case. Don't claim polish without verifying those.
+6. **Acknowledge when a design choice is arbitrary** — Some decisions are purely aesthetic (font choice, exact spacing). That's fine — just say "this is a stylistic preference" rather than inventing a functional justification.
+7. **Honest about complexity** — When a design pattern adds significant CSS complexity or maintenance burden (nested flex containers, custom scrollbars, complex animations), surface that cost to the user before implementing.
+
 ---
 
 ## Motion System
@@ -234,3 +245,4 @@ Before finishing, verify:
 - [ ] Motion respects surface budget (see Motion Budget Per Surface)
 - [ ] `prefers-reduced-motion` degrades gracefully — no breakage, no skipped states
 - [ ] One signature detail present (subtle motif, layout break, custom hover, distinct marker)
+- [ ] **Intellectual honesty** — did I verify this works at 320px + all themes, or did I assume? Did I name the trade-offs before implementing? Are my design justifications real? Is "polish" actually verified or just claimed?
