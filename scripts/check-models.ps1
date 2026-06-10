@@ -29,12 +29,13 @@ function Fetch-Models($url) {
 # --- Helper: fetch NVIDIA models (needs API key) --------------------------------
 # API key sources (checked in order):
 #   1. NVIDIA_API_KEY environment variable
-#   2. OpenCode auth store: ~/.local/share/opencode/auth.json (set via /connect in the TUI)
+#   2. OpenCode auth store: ~/.local/share/opencode/auth.json (legacy, set via /connect)
+#   3. OpenCode account store: ~/.local/share/opencode/account.json (modern, set via /connect)
 function Fetch-NvidiaModels {
   # Try environment variable first
   $apiKey = $env:NVIDIA_API_KEY
 
-  # Fall back to opencode auth store (where /connect saves provider keys)
+  # Fall back to opencode auth store (legacy format: auth.json)
   if (-not $apiKey) {
     $authFile = "$env:USERPROFILE\.local\share\opencode\auth.json"
     if (Test-Path $authFile) {
@@ -44,6 +45,30 @@ function Fetch-NvidiaModels {
         $nvidiaAuth = $auth.PSObject.Properties | Where-Object { $_.Name -like "*nvidia*" } | Select-Object -First 1
         if ($nvidiaAuth) {
           $apiKey = $nvidiaAuth.Value.key
+        }
+      } catch { }
+    }
+  }
+
+  # Fall back to opencode account store (modern format: account.json)
+  if (-not $apiKey) {
+    $accountFile = "$env:USERPROFILE\.local\share\opencode\account.json"
+    if (Test-Path $accountFile) {
+      try {
+        $account = Get-Content $accountFile -Raw | ConvertFrom-Json
+        # account.json has structure: { accounts: { id: { serviceID: "nvidia", credential: { key: "..." } } }, active: { nvidia: "id" } }
+        if ($account.accounts) {
+          # Find the active NVIDIA account
+          $activeNvidiaId = $account.active.nvidia
+          if ($activeNvidiaId -and $account.accounts.$activeNvidiaId) {
+            $apiKey = $account.accounts.$activeNvidiaId.credential.key
+          } else {
+            # No active account found, try to find any NVIDIA account
+            $nvidiaAccount = $account.accounts.PSObject.Properties | Where-Object { $_.Value.serviceID -eq "nvidia" } | Select-Object -First 1
+            if ($nvidiaAccount) {
+              $apiKey = $nvidiaAccount.Value.credential.key
+            }
+          }
         }
       } catch { }
     }
