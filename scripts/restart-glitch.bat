@@ -21,5 +21,5 @@ timeout /t 2 /nobreak >nul
 
 :LAUNCH
 echo Launching new Glitch session...
-start "" powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Normal -File "scripts\launch-free.ps1"
+start "" "launch-glitch-free.bat"
 echo New session launched.

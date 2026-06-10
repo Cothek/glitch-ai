@@ -116,7 +116,7 @@ if ($config.agent) {
 # Non-ASCII chars in .ps1 files (em dashes, box drawing, emojis) break
 # PowerShell 5.1 on Windows because it reads BOM-less UTF-8 as Windows-1252,
 # where byte 0x94 (part of em dash U+2014) becomes a quote character.
-$psScripts = @('launch.ps1', 'launch-safe.ps1', 'launch-free.ps1', 'serve-glitch.ps1', 'validate-config.ps1')
+$psScripts = @('validate-config.ps1')
 $encodingErrors = @()
 foreach ($script in $psScripts) {
     $scriptPath = Join-Path $RootDir $script
