@@ -245,3 +245,4 @@ Before finishing, verify:
 - [ ] Motion respects surface budget (see Motion Budget Per Surface)
 - [ ] `prefers-reduced-motion` degrades gracefully — no breakage, no skipped states
 - [ ] One signature detail present (subtle motif, layout break, custom hover, distinct marker)
+- [ ] **Intellectual honesty** — did I verify this works at 320px + all themes, or did I assume? Did I name the trade-offs before implementing? Are my design justifications real? Is "polish" actually verified or just claimed?
