@@ -215,6 +215,30 @@ function syncMainRepoSilent() {
   }
 }
 
+function syncUserRepoSilent() {
+  const userGitDir = join(ROOT_DIR, 'user', '.git');
+  if (!existsSync(userGitDir)) return;
+
+  const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: join(ROOT_DIR, 'user'), timeout: 15000 });
+  if (!fetch.success) return;
+
+  const behind = run(GIT_BIN, ['rev-list', '--count', 'HEAD..origin/main'], { cwd: join(ROOT_DIR, 'user'), timeout: 10000 });
+  if (!behind.success || !/^\d+$/.test(behind.stdout)) return;
+
+  const count = parseInt(behind.stdout, 10);
+  if (count === 0) return;
+
+  const ahead = run(GIT_BIN, ['rev-list', '--count', 'origin/main..HEAD'], { cwd: join(ROOT_DIR, 'user'), timeout: 10000 });
+  if (ahead.success && /^\d+$/.test(ahead.stdout) && parseInt(ahead.stdout, 10) > 0) return;
+
+  log(DARK_GRAY, `  Server: user data ${count} commit(s) behind, syncing...`);
+
+  const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: join(ROOT_DIR, 'user'), timeout: 30000 });
+  if (pull.success) {
+    log(DARK_GREEN, '  Server: user data synced');
+  }
+}
+
 function isProcessRunning(name) {
   try {
     if (isWin) {
@@ -341,6 +365,9 @@ async function main() {
 
   // ---- Sync glitch-ai repo from remote (silent, best-effort) ----
   syncMainRepoSilent();
+
+  // ---- Sync user data repo (silent, best-effort) ----
+  syncUserRepoSilent();
 
   // ---- Auto-install Handy if missing ----
   log(CYAN, '  Checking Handy voice input...');

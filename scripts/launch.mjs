@@ -326,6 +326,56 @@ async function syncMainRepo() {
   return false;
 }
 
+// ---- Sync user/ repo from remote (fetch + ff-only pull) ----
+async function syncUserRepo() {
+  const userGitDir = join(ROOT_DIR, 'user', '.git');
+  if (!existsSync(userGitDir)) return false;
+
+  log(CYAN, '  Checking user data updates...');
+
+  const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: join(ROOT_DIR, 'user'), timeout: 15000 });
+  if (!fetch.success) {
+    log(DARK_YELLOW, '  Could not fetch user data updates (offline?)');
+    return false;
+  }
+
+  const behind = run(GIT_BIN, ['rev-list', '--count', 'HEAD..origin/main'], { cwd: join(ROOT_DIR, 'user'), timeout: 10000 });
+  if (!behind.success || !/^\d+$/.test(behind.stdout)) return false;
+
+  const count = parseInt(behind.stdout, 10);
+  if (count === 0) {
+    log(DARK_GREEN, '  user data up-to-date');
+    return true;
+  }
+
+  log(YELLOW, `  user data: ${count} commit(s) behind`);
+
+  const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: join(ROOT_DIR, 'user'), timeout: 30000 });
+  if (pull.success) {
+    log(GREEN, '  user data synced');
+    return true;
+  }
+
+  log(YELLOW, '  Could not fast-forward user data (local changes may be blocking).');
+  log(WHITE, '  [d] Discard local user data changes and pull');
+  log(WHITE, '  [s] Skip update');
+  const choice = await askQuestion('  > ');
+
+  if (choice.trim().toLowerCase() === 'd') {
+    run(GIT_BIN, ['restore', '.'], { cwd: join(ROOT_DIR, 'user'), timeout: 15000 });
+    const pull2 = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: join(ROOT_DIR, 'user'), timeout: 30000 });
+    if (pull2.success) {
+      log(GREEN, '  user data synced (local changes discarded)');
+      return true;
+    }
+    log(RED, '  Pull still failed after discarding user data changes.');
+  } else {
+    log(DARK_YELLOW, '  Skipping user data update.');
+  }
+
+  return false;
+}
+
 const HELP_TEXT = `
   Glitch AI - Normal Mode (cross-platform)
 
@@ -394,6 +444,9 @@ async function main() {
 
   // ---- Sync glitch-ai repo from remote (fetch + auto-pull) ----
   await syncMainRepo();
+
+  // ---- Sync user data repo (separate nested git repo) ----
+  await syncUserRepo();
 
   // ---- Auto-install Handy if missing ----
   log(CYAN, '  Checking Handy voice input...');
