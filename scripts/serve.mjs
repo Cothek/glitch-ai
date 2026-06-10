@@ -189,6 +189,10 @@ function pwsh(args, opts = {}) {
 
 // ---- Silent repo sync for server mode (non-interactive, best-effort only) ----
 function syncMainRepoSilent() {
+  // Only sync when on main branch
+  const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
+  if (!branch.success || branch.stdout.trim() !== 'main') return;
+
   const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
   if (!fetch.success) return;
 
@@ -197,6 +201,10 @@ function syncMainRepoSilent() {
 
   const count = parseInt(behind.stdout, 10);
   if (count === 0) return;
+
+  // Check for divergence before attempting pull
+  const ahead = run(GIT_BIN, ['rev-list', '--count', 'origin/main..HEAD'], { cwd: ROOT_DIR, timeout: 10000 });
+  if (ahead.success && /^\d+$/.test(ahead.stdout) && parseInt(ahead.stdout, 10) > 0) return;
 
   log(DARK_GRAY, `  Server: glitch-ai repo ${count} commit(s) behind, syncing...`);
 

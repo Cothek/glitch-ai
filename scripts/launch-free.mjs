@@ -247,6 +247,14 @@ async function ensureHandy() {
 async function syncMainRepo() {
   log(CYAN, '  Checking for repo updates...');
 
+  // Check current branch — sync only applies on main
+  const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
+  if (!branch.success || branch.stdout.trim() !== 'main') {
+    const current = branch.success ? branch.stdout.trim() : 'unknown';
+    log(DARK_YELLOW, `  On branch '${current}' — auto-sync only applies when on 'main'`);
+    return false;
+  }
+
   // Fetch latest remote info
   const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
   if (!fetch.success) {
@@ -264,6 +272,16 @@ async function syncMainRepo() {
     return true;
   }
 
+  // Check if branches have diverged (local is also ahead of remote)
+  const ahead = run(GIT_BIN, ['rev-list', '--count', 'origin/main..HEAD'], { cwd: ROOT_DIR, timeout: 10000 });
+  const diverged = ahead.success && /^\d+$/.test(ahead.stdout) && parseInt(ahead.stdout, 10) > 0;
+
+  if (diverged) {
+    log(YELLOW, `  'main' has diverged from origin/main (${parseInt(ahead.stdout, 10)} ahead, ${count} behind).`);
+    log(YELLOW, '  Run manually: git checkout main && git pull');
+    return false;
+  }
+
   log(YELLOW, `  glitch-ai repo: ${count} commit(s) behind origin/main`);
 
   // Try fast-forward pull (succeeds if working tree is clean and no divergence)
@@ -275,7 +293,7 @@ async function syncMainRepo() {
     return true;
   }
 
-  // Fast-forward failed — local changes are blocking
+  // Fast-forward failed — likely dirty working tree
   log(YELLOW, '  Could not fast-forward (local changes may be blocking).');
 
   // Show what tracked files are modified so the user can decide
@@ -529,14 +547,29 @@ async function main() {
   // ---- Sync glitch-ai repo from remote (fetch + auto-pull) ----
   await syncMainRepo();
 
-  // ---- Run check-models.ps1 silently to refresh cache (Win only) ----
+  // ---- Fetch available free models (visible, before model picker) ----
+  log(CYAN, '  Fetching available free models...');
   if (POWERSHELL) {
     const checkModelsScript = join(ROOT_DIR, 'scripts', 'check-models.ps1');
     if (existsSync(checkModelsScript)) {
       try {
-        pwsh(['-File', checkModelsScript, '-CheckOnly', '-Silent'], { timeout: 30000, stdio: 'ignore' });
-      } catch {}
+        pwsh(['-File', checkModelsScript, '-CheckOnly', '-Silent'], { timeout: 60000, stdio: 'ignore' });
+        // Check if the cache was successfully written
+        const freshModels = readJson(FreeModelsFile);
+        if (freshModels && freshModels.providers && freshModels.providers.length > 0) {
+          const totalModels = freshModels.providers.reduce((sum, p) => sum + (p.models ? p.models.length : 0), 0);
+          const providerNames = freshModels.providers.map(p => p.name).join(', ');
+          log(DARK_GREEN, `  Model list refreshed: ${totalModels} models from ${freshModels.providers.length} providers`);
+          log(DARK_GRAY, `    ${providerNames}`);
+        } else {
+          log(DARK_GREEN, '  Model list refreshed from provider APIs');
+        }
+      } catch {
+        log(DARK_YELLOW, '  Model fetch unavailable — using cached/fallback list');
+      }
     }
+  } else {
+    log(DARK_YELLOW, '  Live model fetch requires Windows — using cached/fallback list');
   }
 
   // ---- Load model groups (live cache > fallback) ----
@@ -792,36 +825,6 @@ async function main() {
     }
   } else {
     log(DARK_GRAY, '  Dependency update check skipped (Windows-only PS1 scripts)');
-  }
-
-  // ---- Check for new models ----
-  if (POWERSHELL) {
-    try {
-      const checkModelsScript = join(ROOT_DIR, 'scripts', 'check-models.ps1');
-      if (existsSync(checkModelsScript)) {
-        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 60000, stdio: 'inherit' });
-
-        const modelStatusFile = join(ROOT_DIR, 'data', 'model-update-status.json');
-        if (existsSync(modelStatusFile)) {
-          const modelStatus = readJson(modelStatusFile);
-          if (modelStatus && modelStatus.new_models_count > 0) {
-            log(YELLOW, `  ${modelStatus.new_models_count} new model(s) available`);
-            if (modelStatus.new_models) {
-              for (const nm of modelStatus.new_models) {
-                log(GREEN, `    + ${nm.model}`);
-              }
-            }
-            if (modelStatus.related_to_current_agents && modelStatus.related_to_current_agents.length > 0) {
-              log(DARK_YELLOW, '  (some may be relevant to current agents -- check session brief)');
-            }
-          } else {
-            log(DARK_GREEN, '  Models up-to-date');
-          }
-        }
-      }
-    } catch {
-      log(DARK_YELLOW, '  Model check skipped (non-critical)');
-    }
   }
 
   // ---- Sync user memory data from private repo ----
