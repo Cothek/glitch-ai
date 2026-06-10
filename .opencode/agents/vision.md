@@ -2,8 +2,7 @@
 name: vision
 model: opencode-go/qwen3.6-plus
 mode: subagent
-temperature: 0.2
-max_steps: 20
+temperature: 0.2
 description: >-
   Image and visual content analysis. Analyzes screenshots, UI mockups,
   diagrams, and other visual content using the read tool.

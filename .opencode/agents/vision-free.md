@@ -2,8 +2,7 @@
 name: vision-free
 model: opencode/qwen3.6-plus-free
 mode: subagent
-temperature: 0.2
-max_steps: 20
+temperature: 0.2
 description: >-
   Image and visual content analysis — free variant of @vision.
   Same capabilities (analyzing screenshots, UI mockups, diagrams)

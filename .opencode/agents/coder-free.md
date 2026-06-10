@@ -2,8 +2,7 @@
 name: coder-free
 model: opencode/qwen3.6-plus-free
 mode: subagent
-temperature: 0.2
-max_steps: 100
+temperature: 0.2
 description: >-
   Senior full-stack engineer — free variant of @coder. Same capabilities
   as @coder (building features, complex logic, server actions, data layers,

@@ -2,8 +2,7 @@
 name: build-paid
 model: opencode-go/deepseek-v4-flash
 mode: subagent
-temperature: 0.2
-max_steps: 30
+temperature: 0.2
 description: >-
   Code scaffolding — paid fallback for @build. Generates code from
   prompts and structure. Use when @build (free) returns empty results.

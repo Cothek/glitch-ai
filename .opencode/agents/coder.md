@@ -3,7 +3,6 @@ name: coder
 model: opencode-go/kimi-k2.6
 mode: subagent
 temperature: 0.2
-max_steps: 100
 description: >-
   Senior full-stack engineer for production-quality implementation.
   Use when the task involves building features, complex logic, server actions,
