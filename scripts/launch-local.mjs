@@ -23,6 +23,13 @@ const NPM_BIN = isWin ? 'npm.cmd' : 'npm';
 const GIT_BIN = 'git';
 const POWERSHELL = isWin ? 'powershell.exe' : null;
 
+// ---- Prepend bundled Node to PATH if available ----
+const BundledNodeDir = join(ROOT_DIR, 'data', 'node');
+const BundledNodeBin = join(BundledNodeDir, isWin ? 'node.exe' : 'node');
+if (existsSync(BundledNodeBin)) {
+  process.env.PATH = (isWin ? ';' : ':') + BundledNodeDir + process.env.PATH;
+}
+
 const DEFAULT_LOCAL_MODEL = 'google/gemma-4-12b';
 
 const MAGENTA = '\x1b[35m';

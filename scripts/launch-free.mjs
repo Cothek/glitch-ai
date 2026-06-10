@@ -38,6 +38,13 @@ const DARK_GRAY = '\x1b[90m';
 const WHITE = '\x1b[37m';
 const RESET = '\x1b[0m';
 
+// ---- Prepend bundled Node to PATH if available ----
+const BundledNodeDir = join(ROOT_DIR, 'data', 'node');
+const BundledNodeBin = join(BundledNodeDir, isWin ? 'node.exe' : 'node');
+if (existsSync(BundledNodeBin)) {
+  process.env.PATH = (isWin ? ';' : ':') + BundledNodeDir + process.env.PATH;
+}
+
 function log(color, msg) {
   if (msg === undefined) {
     console.log(color);
