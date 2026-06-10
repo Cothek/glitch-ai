@@ -26,8 +26,8 @@ permission:
   list: allow
   webfetch: allow
   websearch: deny
-   question: allow
-   todowrite: allow
+  question: allow
+  todowrite: allow
 ---
 
 # @ui-designer — Senior UI Designer

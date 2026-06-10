@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, renameSync, rmSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, renameSync, appendFileSync, rmSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync } from 'child_process';
@@ -37,6 +37,16 @@ const DARK_YELLOW = '\x1b[33;2m';
 const DARK_GRAY = '\x1b[90m';
 const WHITE = '\x1b[37m';
 const RESET = '\x1b[0m';
+
+const UpdateLogPath = join(ROOT_DIR, 'data', 'opencode-update.log');
+
+function logUpdate(msg) {
+  try {
+    const n = new Date();
+    const ts = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')} ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
+    appendFileSync(UpdateLogPath, `[${ts}] ${msg}\n`, 'utf-8');
+  } catch {}
+}
 
 // ---- Prepend bundled Node to PATH if available ----
 const BundledNodeDir = join(ROOT_DIR, 'data', 'node');
@@ -543,57 +553,82 @@ async function main() {
   // ---- Auto-update opencode to latest (minor/patch) + sync local binary ----
   // Uses temp dir (no admin needed) -- avoids npm install -g permissions issue
   try {
+    logUpdate('=== opencode update check started ===');
     const currentLocal = run(OpenCodeBin, ['--version'], { timeout: 10000 });
     const currentVer = currentLocal.success ? currentLocal.stdout : 'unknown';
+    logUpdate(`local binary version: ${currentVer} (success=${currentLocal.success})`);
 
     const npmView = run(NPM_BIN, ['view', 'opencode-ai', 'version'], { timeout: 15000 });
     const latestVer = npmView.success ? npmView.stdout : 'unknown';
+    logUpdate(`npm latest version: ${latestVer} (success=${npmView.success})`);
 
     const needsUpdate = currentVer !== 'unknown' && latestVer !== 'unknown' && currentVer !== latestVer;
+    logUpdate(`needsUpdate=${needsUpdate}`);
 
     if (needsUpdate) {
       const cvParts = currentVer.split('.');
       const lvParts = latestVer.split('.');
       const autoSafe = cvParts[0] === lvParts[0];
+      logUpdate(`autoSafe=${autoSafe} (major versions: ${cvParts[0]} vs ${lvParts[0]})`);
 
       if (autoSafe) {
         log(CYAN, `  Updating opencode (${currentVer} -> ${latestVer})...`);
         const updateDir = join(tmpdir(), 'glitch-oc-update');
+        logUpdate(`temp dir: ${updateDir}`);
 
         // Clean any previous attempt
         if (existsSync(updateDir)) rmSync(updateDir, { recursive: true, force: true });
         mkdirSync(updateDir, { recursive: true });
 
+        logUpdate('starting npm install...');
         const installResult = run(NPM_BIN, ['install', 'opencode-ai@latest', '--no-save', '--prefix', updateDir], { timeout: 60000 });
+        logUpdate(`npm install complete: success=${installResult.success}, stdout=${installResult.stdout}, stderr=${installResult.stderr}`);
 
         const newBin = join(updateDir, 'node_modules', 'opencode-ai', 'bin', OPENCODE_BIN_NAME);
-        if (installResult.success && existsSync(newBin)) {
+        const newBinExists = existsSync(newBin);
+        logUpdate(`new binary exists at ${newBin}: ${newBinExists}`);
+
+        if (installResult.success && newBinExists) {
           // Rename old binary aside (works on Windows even while in use),
           // then copy new binary in place
           const oldBin = OpenCodeBin + '.old';
           try { if (existsSync(oldBin)) unlinkSync(oldBin); } catch {}
           try {
+            logUpdate(`renaming ${OpenCodeBin} -> ${oldBin}`);
             renameSync(OpenCodeBin, oldBin);
+            logUpdate(`copying ${newBin} -> ${OpenCodeBin}`);
             copyFileSync(newBin, OpenCodeBin);
             // Clean up old binary (no longer needed)
-            try { unlinkSync(oldBin); } catch {}
-            log(GREEN, '  Done.');
+            try { unlinkSync(oldBin); logUpdate('old binary cleaned up'); } catch {}
+            const updatedVer = run(OpenCodeBin, ['--version'], { timeout: 5000 });
+            logUpdate(`update complete, version now: ${updatedVer.success ? updatedVer.stdout : 'unknown'}`);
+            log(CYAN, '  Done.');
           } catch (e) {
-            // Copy failed, try to restore old binary
             log(YELLOW, `  Update failed: ${e.message}`);
-            try { if (existsSync(oldBin)) renameSync(oldBin, OpenCodeBin); } catch {}
+            logUpdate(`copy failed: ${e.message}`);
+            // Try to restore old binary
+            try { if (existsSync(oldBin)) { renameSync(oldBin, OpenCodeBin); logUpdate('restored old binary'); } } catch {}
           }
 
           // Clean up temp
           try { rmSync(updateDir, { recursive: true, force: true }); } catch {}
+          logUpdate('=== opencode update check finished ===');
         } else {
           log(YELLOW, '  Update failed (npm install returned non-zero).');
+          logUpdate(`npm install reported failure -- stdout: ${installResult.stdout}, stderr: ${installResult.stderr}`);
           try { rmSync(updateDir, { recursive: true, force: true }); } catch {}
+          logUpdate('=== opencode update check finished (failed) ===');
         }
+      } else {
+        logUpdate('autoSafe=false -- major version change, skipping auto-update');
       }
+    } else {
+      logUpdate('no update needed');
     }
   } catch (e) {
     log(YELLOW, `  WARNING: Binary sync failed: ${e.message || e}`);
+    logUpdate(`UNCAUGHT EXCEPTION: ${e.message}`);
+    logUpdate(`stack: ${e.stack}`);
   }
 
   // ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
