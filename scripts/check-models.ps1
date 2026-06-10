@@ -349,6 +349,82 @@ if ($openrouterModels -ne $null -and $openrouterModels.Count -gt 0) {
   $freeModelsData.providers += $orGroup
 }
 
+# --- Helper: filter NVIDIA models to keep only useful ones -----------------------
+# Keeps: general chat/reasoning, code models, vision models, MoE/experimental
+# Excludes: embedding, retriever, safety/guard, translate, parse, detector, small (<7B non-MoE)
+# Input models are raw IDs from API (e.g., "baai/bge-m3", "01-ai/yi-large")
+function Filter-NvidiaModels($models) {
+  $excludedPatterns = @(
+    # Embedding/retrieval models
+    '^baai/bge-', '^nvidia/baai/bge-',
+    'nemoretriever',  # catches llama-3.2-nemoretriever-* and nvidia/nemoretriever/*
+    '^snowflake/arctic-embed', '^nvidia/snowflake/arctic-embed',
+    '^nvidia/nv-embed', '^nvidia/nvclip', '^nvidia/nv-embedcode', '^nvidia/nv-embedqa',
+    '^nvidia/embed-qa',  # embed-qa-4
+    '^nvidia/llama-.*-embed',  # llama-nemotron-embed-*, llama-3.2-nv-embedqa-*
+    
+    # Safety/guard models
+    'guard', 'safety', 'nemoguard', 'llama-guard',
+    'content-safety',
+    
+    # Translation
+    'translate', 'riva-translate',
+    
+    # Parsing/extraction
+    'parse', 'nemotron-parse',
+    
+    # Detectors/specialized
+    'detector', 'synthetic-video',
+    'gliner', 'pii',
+    'ising-calibration',
+    'deplot',
+    
+    # Reward models
+    'reward', 'nemotron-4-340b-reward',
+    
+    # Too small (<7B non-MoE)
+    'nemotron-mini-4b',
+    'nemotron-nano-3-30b$',  # base nano (keep -omni and -reasoning variants)
+    'nemotron-nano-9b$',  # base nano
+    'nvidia-nemotron-nano-9b',
+    'nemotron-3-nano-30b-a3b$',  # base nano (keep -omni and -reasoning variants)
+    'nemotron-nano-3-30b-a3b$',  # base nano variant
+    
+    # Small models from specific providers
+    '^adept/fuyu-8b$',  # vision-only, small
+    '^bigcode/starcoder2-15b$',  # code-only, but keeping per user request
+    '^databricks/dbrx-instruct$',  # keeping
+    '^ibm/granite-3\.0-3b',  # too small
+    '^ibm/granite-8b-code-instruct$',  # code-only, keeping per user request
+    '^ibm/granite-34b-code-instruct$',  # code-only, keeping per user request
+    '^microsoft/phi-3-vision',  # vision, keeping per user request
+    '^microsoft/phi-4-mini',  # too small
+    '^microsoft/phi-4-multimodal',  # multimodal, keeping per user request
+    '^meta/llama-3\.2-(1b|3b)-instruct$',  # too small
+    '^google/(gemma-2b|gemma-3n|recurrentgemma|codegemma-1\.1|codegemma-7b|deplot|diffusiongemma)'
+    '^google/gemma-2-2b'
+    '^google/gemma-3-4b'
+    
+    # Small/distilled models
+    'mistral-nemo-minitron'
+  )
+
+  $kept = @()
+  foreach ($m in $models) {
+    $exclude = $false
+    foreach ($pattern in $excludedPatterns) {
+      if ($m -match $pattern) {
+        $exclude = $true
+        break
+      }
+    }
+    if (-not $exclude) {
+      $kept += $m
+    }
+  }
+  return $kept
+}
+
 # NVIDIA: all models on the free endpoint are free (listed last)
 # If API is available, use live list; otherwise use known fallback
 $nvidiaGroup = @{
@@ -358,7 +434,9 @@ $nvidiaGroup = @{
 }
 
 if ($nvidiaModels -ne $null) {
-  foreach ($m in $nvidiaModels) {
+  # Filter to keep only useful models
+  $filteredModels = Filter-NvidiaModels $nvidiaModels
+  foreach ($m in $filteredModels) {
     $fullId = "nvidia/$($m.Replace('nvidia/', ''))"
     $parts = $m -split '/'
     $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
