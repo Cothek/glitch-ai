@@ -65,6 +65,19 @@
       "mode": "subagent",
       "description": "Code scaffolding -- generates code from prompts.",
       "temperature": 0.2
+    },
+    "vision": {
+      "model": "__VISION_MODEL__",
+      "mode": "subagent",
+      "description": "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
+      "permission": {
+        "read": "allow",
+        "bash": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "edit": "deny"
+      },
+      "temperature": 0.2
     }
   },
   "attachment": {
