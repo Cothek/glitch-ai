@@ -224,6 +224,14 @@ function pwsh(args, opts = {}) {
 async function syncMainRepo() {
   log(CYAN, '  Checking for repo updates...');
 
+  // Check current branch — sync only applies on main
+  const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
+  if (!branch.success || branch.stdout.trim() !== 'main') {
+    const current = branch.success ? branch.stdout.trim() : 'unknown';
+    log(DARK_YELLOW, `  On branch '${current}' — auto-sync only applies when on 'main'`);
+    return false;
+  }
+
   // Fetch latest remote info
   const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
   if (!fetch.success) {
@@ -241,6 +249,16 @@ async function syncMainRepo() {
     return true;
   }
 
+  // Check if branches have diverged (local is also ahead of remote)
+  const ahead = run(GIT_BIN, ['rev-list', '--count', 'origin/main..HEAD'], { cwd: ROOT_DIR, timeout: 10000 });
+  const diverged = ahead.success && /^\d+$/.test(ahead.stdout) && parseInt(ahead.stdout, 10) > 0;
+
+  if (diverged) {
+    log(YELLOW, `  'main' has diverged from origin/main (${parseInt(ahead.stdout, 10)} ahead, ${count} behind).`);
+    log(YELLOW, '  Run manually: git checkout main && git pull');
+    return false;
+  }
+
   log(YELLOW, `  glitch-ai repo: ${count} commit(s) behind origin/main`);
 
   // Try fast-forward pull (succeeds if working tree is clean and no divergence)
@@ -252,7 +270,7 @@ async function syncMainRepo() {
     return true;
   }
 
-  // Fast-forward failed — local changes are blocking
+  // Fast-forward failed — likely dirty working tree
   log(YELLOW, '  Could not fast-forward (local changes may be blocking).');
 
   // Show what tracked files are modified so the user can decide
