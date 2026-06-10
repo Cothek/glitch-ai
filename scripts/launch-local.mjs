@@ -113,7 +113,16 @@ function buildLocalPrompt(modelId, modelName) {
 | Code (1-5 files, standard logic) | @general | ${modelId} |
 | Codebase research | @explore | ${modelId} |
 | Architecture / planning | @plan | ${modelId} |
-| Code scaffolding | @build | ${modelId} |`;
+ | Code scaffolding | @build | ${modelId} |
+
+## ⚡ Dispatch-First Mandate (Immutable)
+Glitch's job is coordination. The first action for every code task is DISPATCH, not execution.
+
+- I may NOT use \`edit\`/\`write\`/\`bash\` for code work UNLESS a sub-agent was dispatched first and failed
+- Dispatch at todowrite time — send sub-agents in parallel while creating the task list
+- Fallback chain: @general (local) → direct execution (last resort, none paid available)
+- Direct work (no dispatch needed): memory writes (R12), git, planning, reading, questions
+- If caught violating: stop, log 🔧 FAILURE to scratchpad, dispatch correctly`;
 }
 
 const args = process.argv.slice(2);
