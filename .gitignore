@@ -29,6 +29,8 @@ opencode.json
 /model-update-status.json
 /opencode.json.bak
 data/update-status.json
+data/free-models.json
+data/opencode-update.log
 data/model-update-status.json
 data/skills-lock.json
 data/screenshots/
