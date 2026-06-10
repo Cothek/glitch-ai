@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, renameSync, appendFileSync, rmSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, renameSync, appendFileSync, rmSync, createWriteStream, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
+import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -12,9 +13,18 @@ const __dirname = dirname(__filename);
 const SCRIPT_DIR = __dirname;
 const ROOT_DIR = resolve(SCRIPT_DIR, '..');
 const isWin = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
+const isLinux = process.platform === 'linux';
 
 const OPENCODE_BIN_NAME = isWin ? 'opencode.exe' : 'opencode';
 const OpenCodeBin = join(ROOT_DIR, 'opencode', OPENCODE_BIN_NAME);
+const HANDY_VERSION = '0.8.3';
+const HandyBin = isWin
+  ? join(ROOT_DIR, 'handy-voice', 'Handy', 'handy.exe')
+  : isMac
+    ? join(ROOT_DIR, 'handy-voice', 'Handy.app', 'Contents', 'MacOS', 'Handy')
+    : join(ROOT_DIR, 'handy-voice', 'Handy.AppImage');
+
 const ConfigPath = join(ROOT_DIR, 'opencode.json');
 const TemplatePath = join(ROOT_DIR, 'config', 'opencode-free.json');
 const BackupDir = join(ROOT_DIR, 'data', 'backups');
@@ -114,6 +124,123 @@ function readJson(path) {
 function pwsh(args, opts = {}) {
   if (!POWERSHELL) return { success: false, stdout: '', status: -1, error: 'No PowerShell on this platform' };
   return run(POWERSHELL, ['-NoProfile', '-ExecutionPolicy', 'Bypass', ...args], opts);
+}
+
+// ---- Glitch utilities (shared across launch scripts) ----
+function isProcessRunning(name) {
+  try {
+    if (isWin) {
+      const out = execFileSync('tasklist', ['/NH', '/FI', `IMAGENAME eq ${name}.exe`], { encoding: 'utf-8', timeout: 5000 });
+      return out.includes(`${name}.exe`);
+    } else if (isMac) {
+      execFileSync('pgrep', ['-x', name], { encoding: 'utf-8', timeout: 3000 });
+      return true;
+    } else {
+      execFileSync('pgrep', ['-f', 'Handy'], { encoding: 'utf-8', timeout: 3000 });
+      return true;
+    }
+  } catch {
+    return false;
+  }
+}
+
+function downloadFile(url, destPath) {
+  return new Promise((resolve, reject) => {
+    const file = createWriteStream(destPath);
+    httpsGet(url, (response) => {
+      if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+        file.close();
+        try { unlinkSync(destPath); } catch {}
+        downloadFile(response.headers.location, destPath).then(resolve).catch(reject);
+        return;
+      }
+      if (response.statusCode !== 200) {
+        file.close();
+        try { unlinkSync(destPath); } catch {}
+        reject(new Error(`HTTP ${response.statusCode}`));
+        return;
+      }
+      response.pipe(file);
+      file.on('finish', () => { file.close(); resolve(); });
+    }).on('error', (err) => {
+      file.close();
+      try { unlinkSync(destPath); } catch {}
+      reject(err);
+    });
+  });
+}
+
+async function ensureHandy() {
+  if (existsSync(HandyBin)) return true;
+
+  log(YELLOW, '  Handy not found. Downloading...');
+  const handyVoiceDir = join(ROOT_DIR, 'handy-voice');
+  if (!existsSync(handyVoiceDir)) mkdirSync(handyVoiceDir, { recursive: true });
+
+  try {
+    if (isWin) {
+      log(CYAN, '  Running bootstrap to install Handy...');
+      const bootstrapScript = join(ROOT_DIR, 'scripts', 'bootstrap.ps1');
+      if (existsSync(bootstrapScript)) {
+        const result = pwsh(['-File', bootstrapScript], { stdio: 'inherit', timeout: 120000 });
+        if (!result.success) {
+          log(YELLOW, '  Bootstrap failed. Install Handy manually: .\\scripts\\bootstrap.ps1');
+          return false;
+        }
+      } else {
+        log(YELLOW, '  bootstrap.ps1 not found. Install Handy manually.');
+        return false;
+      }
+      if (existsSync(HandyBin)) {
+        log(GREEN, '  Handy installed!');
+        return true;
+      }
+      return false;
+    } else if (isMac) {
+      const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
+      const url = `https://github.com/cjpais/Handy/releases/download/v${HANDY_VERSION}/Handy_${arch}.app.tar.gz`;
+      const tarPath = join(handyVoiceDir, 'Handy.app.tar.gz');
+
+      log(CYAN, `  Downloading Handy v${HANDY_VERSION} for macOS (${arch})...`);
+      await downloadFile(url, tarPath);
+
+      log(CYAN, '  Extracting...');
+      const result = run('tar', ['-xzf', tarPath, '-C', handyVoiceDir], { timeout: 30000 });
+      if (!result.success) throw new Error('Extraction failed: ' + (result.stderr || result.error));
+
+      try { unlinkSync(tarPath); } catch {}
+
+      if (existsSync(HandyBin)) {
+        log(GREEN, '  Handy installed!');
+        return true;
+      }
+    } else if (isLinux) {
+      const arch = process.arch === 'arm64' ? 'aarch64' : 'amd64';
+      const url = `https://github.com/cjpais/Handy/releases/download/v${HANDY_VERSION}/Handy_${HANDY_VERSION}_${arch}.AppImage`;
+      const appImagePath = join(handyVoiceDir, 'Handy.AppImage');
+
+      log(CYAN, `  Downloading Handy v${HANDY_VERSION} for Linux (${arch})...`);
+      await downloadFile(url, appImagePath);
+
+      log(CYAN, '  Making executable...');
+      const chmod = run('chmod', ['+x', appImagePath], { timeout: 5000 });
+      if (!chmod.success) throw new Error('chmod failed: ' + (chmod.stderr || chmod.error));
+
+      if (existsSync(HandyBin)) {
+        log(GREEN, '  Handy installed!');
+        return true;
+      }
+    }
+  } catch (e) {
+    log(RED, `  ERROR downloading Handy: ${e.message || e}`);
+    return false;
+  }
+
+  if (existsSync(HandyBin)) {
+    log(GREEN, '  Handy installed!');
+    return true;
+  }
+  return false;
 }
 
 // ---- Sync glitch-ai repo from remote (fetch + ff-only pull with conflict handling) ----
@@ -287,47 +414,89 @@ function getPreference() {
   if (!existsSync(PrefFile)) return null;
   try {
     const pref = readJson(PrefFile);
-    return (pref && pref.model) ? pref.model : null;
+    // Backward compat: old format had single 'model' field
+    if (pref && pref.primary_model) return pref.primary_model;
+    if (pref && pref.model) return pref.model; // old single-model format
+    return null;
   } catch {
     return null;
   }
 }
 
-function setPreference(modelId, modelName) {
+function getVisionPreference() {
+  if (!existsSync(PrefFile)) return null;
+  try {
+    const pref = readJson(PrefFile);
+    // Backward compat: old format had single 'model' field (vision = same as primary)
+    if (pref && pref.vision_model) return pref.vision_model;
+    if (pref && pref.model) return pref.model; // old single-model format → primary used for vision
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function setPreference(primaryId, primaryName, visionId, visionName) {
   const dir = dirname(PrefFile);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(PrefFile, JSON.stringify({
-    model: modelId,
-    name: modelName,
+    primary_model: primaryId,
+    primary_name: primaryName,
+    vision_model: visionId,
+    vision_name: visionName,
     set_at: new Date().toISOString()
   }, null, 2), 'utf-8');
 }
 
+function showModelMenu(modelGroups, allModels, savedId, promptLabel) {
+  const choices = [];
+  let idx = 1;
+  for (const group of modelGroups) {
+    log(YELLOW, ` ${group.Name}`);
+    for (const m of group.Models) {
+      const marker = m.ID === savedId ? ' *' : '';
+      const tagStr = m.Tag ? ` (${m.Tag})` : '';
+      const nameColor = m.ID === savedId ? GREEN : WHITE;
+      log(nameColor, `   [${idx}] ${m.Name}${tagStr}${marker}`);
+      log(DARK_GRAY, `       ${m.ID}`);
+      choices.push(m);
+      idx++;
+    }
+    log('');
+  }
+  return choices;
+}
+
 // --- Build free mode prompt text ---
-function buildFreePrompt(modelId, modelName) {
-  return `You are Glitch running in FREE MODE. All agents are using the free model "${modelId}" (${modelName}).
+function buildFreePrompt(primaryId, primaryName, visionId, visionName) {
+  const same = primaryId === visionId;
+  const visionStr = same ? primaryId : visionId;
+  const visionNameStr = same ? primaryName : visionName;
+  return `You are Glitch running in FREE MODE. All agents use free models.
 
 ## Free Mode Rules
 1. You have FULL permissions same capabilities as normal mode.
-2. ALL agents use "${modelId}" there are NO paid fallback models available.
+2. All agents use free models — there are NO paid fallback models available.
 3. Premium features are generally UNAVAILABLE in OpenCode Zen free models, but some NVIDIA free endpoint models may support image/vision analysis and stronger coding capability depends on the specific model.
-4. If the free model exhausts its quota, close this session and relaunch with a different model:
-- Set \`$env:GLITCH_FREE_MODEL\` to one of the valid model IDs (opencode/..., nvidia/..., or openrouter/...)
-- Or run node scripts/launch-free.mjs to pick a new model
-- Then run node scripts/launch-free.mjs --pick again
-5. Tell the user which model is active on session start so they know what to expect.
+4. If a free model exhausts its quota, close this session and relaunch with a different model:
+   - Set \`$env:GLITCH_FREE_MODEL\` for the primary model, or \`$env:GLITCH_FREE_VISION_MODEL\` for the vision model
+   - Valid model IDs: opencode/..., nvidia/..., or openrouter/...
+   - Or run \`node scripts/launch-free.mjs\` to pick new models
+   - Then run \`node scripts/launch-free.mjs --pick\` again
+5. Tell the user which models are active on session start so they know what to expect.
 6. NVIDIA models require NVIDIA provider to be connected via /connect in the TUI first.
 
 ## Agent Selection (All Free)
 | Task Type | Agent | Model |
 |-----------|-------|-------|
-| Bash, file ops, simple edits | @general | ${modelId} |
-| Code (1-5 files, standard logic) | @general | ${modelId} |
-| Codebase research | @explore | ${modelId} |
-| Architecture / planning | @plan | ${modelId} |
-| Code scaffolding | @build | ${modelId} |
+| Bash, file ops, simple edits | @general | ${primaryId} (${primaryName}) |
+| Code (1-5 files, standard logic) | @general | ${primaryId} (${primaryName}) |
+| Codebase research | @explore | ${primaryId} (${primaryName}) |
+| Architecture / planning | @plan | ${primaryId} (${primaryName}) |
+| Code scaffolding | @build | ${primaryId} (${primaryName}) |
+${same ? '' : `| Image / visual analysis | @vision | ${visionId} (${visionName}) |`}
 
-No premium agents (@coder, @vision, @reviewer, @general-paid, @build-paid) are available in free mode.`;
+No premium agents (@coder, @reviewer, @general-paid, @build-paid) are available in free mode.`;
 }
 
 const HELP_TEXT = `
@@ -340,7 +509,8 @@ const HELP_TEXT = `
     --help              Show this help
 
   Environment:
-    GLITCH_FREE_MODEL   Set free model ID directly (overrides all)
+    GLITCH_FREE_MODEL          Set PRIMARY free model ID (for @general, @explore, @plan, @build)
+    GLITCH_FREE_VISION_MODEL   Set VISION free model ID (for @vision agent only; default = primary)
 
   Priority: env var > --pick flag > saved preference > interactive menu
   `;
@@ -413,91 +583,139 @@ async function main() {
     }
   }
 
-  // ---- Determine model (priority: env var > --pick flag > menu with default) ----
+  // ---- Determine models (priority: env var > --pick flag > menu with defaults) ----
   const forcePick = args.includes('--pick');
-  let freeModel = null;
+  let primaryModel = null;
+  let visionModel = null;
 
-  // 1. Environment variable overrides everything (no menu)
-  if (process.env.GLITCH_FREE_MODEL) {
-    freeModel = process.env.GLITCH_FREE_MODEL;
-    log(CYAN, ` Model from env var: ${freeModel}`);
-  }
-
-  // 2. If --pick flag, force interactive menu (ignore saved preference)
-  if (forcePick && !process.env.GLITCH_FREE_MODEL) {
-    freeModel = null;
-  }
-
-  // 3. If no model yet, show interactive menu (with saved preference as default)
-  if (!freeModel) {
-    const saved = getPreference();
-    const hasDefault = saved && allModels[saved];
-
+  // Helper: pick a single model interactively
+  async function pickSingleModel(label, savedId, isVision) {
     log('');
-    log(GREEN, ' Glitch Free Mode -- Model Picker');
+    log(GREEN, ` ${label}`);
+    const hasDefault = savedId && allModels[savedId];
     if (hasDefault) {
-      log(CYAN, ` Current: ${saved} (${allModels[saved].Name})`);
+      log(CYAN, ` Current: ${savedId} (${allModels[savedId].Name})`);
       log(DARK_GRAY, ' Press Enter to keep current, or pick a number:');
     } else {
       log(DARK_GRAY, ' No saved preference. Pick a model:');
     }
     log('');
 
-    const choices = [];
-    let idx = 1;
-    for (const group of modelGroups) {
-      log(YELLOW, ` ${group.Name}`);
-      for (const m of group.Models) {
-        const marker = m.ID === saved ? ' *' : '';
-        const tagStr = m.Tag ? ` (${m.Tag})` : '';
-        const nameColor = m.ID === saved ? GREEN : WHITE;
-        log(nameColor, `   [${idx}] ${m.Name}${tagStr}${marker}`);
-        log(DARK_GRAY, `       ${m.ID}`);
-        choices.push(m);
-        idx++;
-      }
-      log('');
-    }
+    const choices = showModelMenu(modelGroups, allModels, savedId);
 
     const selection = await askQuestion(`Pick a model (1-${choices.length}, or Enter for current): `);
 
     if (!selection.trim() && hasDefault) {
-      freeModel = saved;
       log('');
-      log(GREEN, ` Keeping current: ${freeModel} (${allModels[freeModel].Name})`);
-    } else {
-      const num = parseInt(selection.trim(), 10);
-      if (!isNaN(num) && num >= 1 && num <= choices.length) {
-        freeModel = choices[num - 1].ID;
-        setPreference(freeModel, allModels[freeModel].Name);
-        log('');
-        log(GREEN, ` Saved preference: ${freeModel} (${allModels[freeModel].Name})`);
-      } else {
-        log('');
-        log(RED, ' Invalid selection. Exiting.');
-        process.exit(1);
-      }
+      log(GREEN, ` Keeping current: ${savedId} (${allModels[savedId].Name})`);
+      return savedId;
+    }
+
+    const num = parseInt(selection.trim(), 10);
+    if (!isNaN(num) && num >= 1 && num <= choices.length) {
+      const picked = choices[num - 1].ID;
+      log('');
+      log(GREEN, ` Selected: ${picked} (${allModels[picked].Name})`);
+      return picked;
+    }
+
+    log('');
+    log(RED, ' Invalid selection. Exiting.');
+    process.exit(1);
+  }
+
+  // ═══════════════════════════════════════════
+  // PRIMARY MODEL (for @general, @explore, @plan, @build)
+  // Priority: GLITCH_FREE_MODEL env var > --pick flag > saved preference > interactive menu
+  // ═══════════════════════════════════════════
+
+  if (process.env.GLITCH_FREE_MODEL) {
+    primaryModel = process.env.GLITCH_FREE_MODEL;
+    log(CYAN, ` Primary model from env var: ${primaryModel}`);
+  } else if (forcePick) {
+    primaryModel = null; // force interactive
+  } else {
+    const saved = getPreference();
+    if (saved && allModels[saved]) {
+      primaryModel = saved;
+      log(CYAN, ` Primary model from saved preference: ${primaryModel} (${allModels[primaryModel].Name})`);
     }
   }
 
-  // ---- Validate model ----
-  if (!allModels[freeModel]) {
+  if (!primaryModel) {
+    primaryModel = await pickSingleModel('Primary Model (for @general, @explore, @plan, @build)', getPreference(), false);
+  }
+
+  // ---- Validate primary model ----
+  if (!allModels[primaryModel]) {
     log('');
-    log(RED, ` ERROR: Unknown free model '${freeModel}'`);
+    log(RED, ` ERROR: Unknown primary model '${primaryModel}'`);
     log(YELLOW, ' Valid models:');
     for (const id of Object.keys(allModels).sort()) {
       log(YELLOW, `   ${id} - ${allModels[id].Name}`);
     }
     log('');
-    log(CYAN, ' Set GLITCH_FREE_MODEL, run with --pick, or use switch-model.ps1');
     process.exit(1);
   }
 
-  const modelName = allModels[freeModel].Name;
+  const primaryName = allModels[primaryModel].Name;
+
+  // ═══════════════════════════════════════════
+  // VISION MODEL (for @vision agent only)
+  // Priority: GLITCH_FREE_VISION_MODEL env var > interactive prompt (default = primary model)
+  // ═══════════════════════════════════════════
+
+  if (process.env.GLITCH_FREE_VISION_MODEL) {
+    visionModel = process.env.GLITCH_FREE_VISION_MODEL;
+    log(CYAN, ` Vision model from env var: ${visionModel}`);
+  }
+
+  if (!visionModel) {
+    const savedVision = getVisionPreference();
+    const visionDefault = (savedVision && allModels[savedVision]) ? savedVision : primaryModel;
+
+    log('');
+    log(DARK_GRAY, ' ── Vision Model (for @vision agent only) ──');
+    log(DARK_GRAY, ' Press Enter to use primary model for vision, or pick a separate model.');
+    log(DARK_GRAY, ` Default: ${visionDefault} (${allModels[visionDefault].Name})`);
+    log('');
+
+    const visionChoices = showModelMenu(modelGroups, allModels, visionDefault);
+    const visionSelection = await askQuestion(`Pick vision model (1-${visionChoices.length}, or Enter for default): `);
+
+    if (!visionSelection.trim()) {
+      visionModel = visionDefault;
+      log('');
+      log(GREEN, ` Using ${visionModel === primaryModel ? 'primary' : 'saved vision'} model for @vision: ${visionModel} (${allModels[visionModel].Name})`);
+    } else {
+      const num = parseInt(visionSelection.trim(), 10);
+      if (!isNaN(num) && num >= 1 && num <= visionChoices.length) {
+        visionModel = visionChoices[num - 1].ID;
+        log('');
+        log(GREEN, ` Vision model selected: ${visionModel} (${allModels[visionModel].Name})`);
+      } else {
+        log('');
+        log(RED, ' Invalid selection. Using primary model for vision.');
+        visionModel = primaryModel;
+      }
+    }
+  }
+
+  // ---- Validate vision model ----
+  if (!allModels[visionModel]) {
+    log(YELLOW, ` Unknown vision model '${visionModel}', falling back to primary model.`);
+    visionModel = primaryModel;
+  }
+
+  const visionName = allModels[visionModel].Name;
+
+  // ---- Save both preferences ----
+  setPreference(primaryModel, primaryName, visionModel, visionName);
 
   log('');
   log(GREEN, ` Glitch Free Mode`);
-  log(CYAN, ` Model: ${freeModel} (${modelName})`);
+  log(CYAN, ` Primary: ${primaryModel} (${primaryName})`);
+  log(CYAN, ` Vision:  ${visionModel} (${visionName})`);
   log('');
 
   // ---- Backup previous config (timestamped, never overwritten) ----
@@ -519,11 +737,12 @@ async function main() {
   log(CYAN, '  Generating free mode config...');
 
   const templateText = readFileSync(TemplatePath, 'utf-8');
-  const withModel = templateText.replace(/__MODEL__/g, freeModel);
-  const configObj = JSON.parse(withModel);
+  let withModels = templateText.replace(/__MODEL__/g, primaryModel);
+  withModels = withModels.replace(/__VISION_MODEL__/g, visionModel);
+  const configObj = JSON.parse(withModels);
 
   // Set the free mode prompt directly on the parsed object (avoids string escaping)
-  configObj.agent.glitch.prompt = buildFreePrompt(freeModel, modelName);
+  configObj.agent.glitch.prompt = buildFreePrompt(primaryModel, primaryName, visionModel, visionName);
 
   // Validate and write
   const finalJson = JSON.stringify(configObj, null, 2);
@@ -543,7 +762,8 @@ async function main() {
   writeFileSync(ModeFile, JSON.stringify({
     mode: 'free',
     timestamp: new Date().toISOString(),
-    model: freeModel
+    primary_model: primaryModel,
+    vision_model: visionModel
   }, null, 2), 'utf-8');
 
   // ---- Check dependency updates & offer interactive update ----
@@ -724,10 +944,52 @@ async function main() {
     log(DARK_GREEN, '  TUI config loaded');
   }
 
+  // ---- Check + install Handy if missing ----
+  log(CYAN, '  Checking Handy voice input...');
+  await ensureHandy();
+
+  // ---- Ensure Handy portable flag ----
+  if (isWin && existsSync(HandyBin)) {
+    const portableFlag = join(ROOT_DIR, 'handy-voice', 'Handy', 'portable');
+    if (!existsSync(portableFlag)) {
+      writeFileSync(portableFlag, '', 'utf-8');
+    }
+  }
+
+  // ---- Start Handy (if not already running) ----
+  const handyProcName = isWin ? 'handy' : 'Handy';
+  if (!isProcessRunning(handyProcName)) {
+    if (existsSync(HandyBin)) {
+      log(CYAN, '  Starting Handy voice input...');
+      if (isMac) {
+        const handyApp = join(ROOT_DIR, 'handy-voice', 'Handy.app');
+        if (existsSync(handyApp)) {
+          spawn('open', [handyApp], { detached: true, stdio: 'ignore' }).unref();
+        } else {
+          const proc = spawn(HandyBin, [], { detached: true, stdio: 'ignore' });
+          proc.unref();
+        }
+      } else {
+        const proc = spawn(HandyBin, [], { detached: true, stdio: 'ignore', windowsHide: true });
+        proc.unref();
+      }
+      await new Promise(r => setTimeout(r, 1000));
+    } else {
+      log(DARK_YELLOW, '  Handy not found (optional). Voice input disabled.');
+    }
+  } else {
+    log(DARK_GREEN, '  Handy already running');
+  }
+
   // ---- Launch OpenCode ----
   log('');
   log(CYAN, ' Starting OpenCode in free mode...');
-  log(GREEN, ` Model: ${freeModel} (${modelName})`);
+  log(GREEN, ` Primary: ${primaryModel} (${primaryName})`);
+  if (primaryModel !== visionModel) {
+    log(GREEN, ` Vision:  ${visionModel} (${visionName})`);
+  } else {
+    log(DARK_GREEN, ` Vision:  same as primary`);
+  }
   log(DARK_GRAY, ' Switch models: node scripts/switch-model.mjs  |  Relaunch with: node scripts/launch-free.mjs --pick');
   log('');
 

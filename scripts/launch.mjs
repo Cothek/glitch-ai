@@ -167,7 +167,22 @@ async function ensureHandy() {
 
   try {
     if (isWin) {
-      log(YELLOW, '  On Windows, run .\\scripts\\bootstrap.ps1 to install Handy.');
+      log(CYAN, '  Running bootstrap to install Handy...');
+      const bootstrapScript = join(ROOT_DIR, 'scripts', 'bootstrap.ps1');
+      if (existsSync(bootstrapScript)) {
+        const result = pwsh(['-File', bootstrapScript], { stdio: 'inherit', timeout: 120000 });
+        if (!result.success) {
+          log(YELLOW, '  Bootstrap failed. Install Handy manually: .\\scripts\\bootstrap.ps1');
+          return false;
+        }
+      } else {
+        log(YELLOW, '  bootstrap.ps1 not found. Install Handy manually.');
+        return false;
+      }
+      if (existsSync(HandyBin)) {
+        log(GREEN, '  Handy installed!');
+        return true;
+      }
       return false;
     } else if (isMac) {
       const arch = process.arch === 'arm64' ? 'aarch64' : 'x64';
