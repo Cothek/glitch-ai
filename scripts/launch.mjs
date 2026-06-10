@@ -451,7 +451,7 @@ async function main() {
     const checkUpdatesScript = join(ROOT_DIR, 'scripts', 'check-updates.ps1');
     if (existsSync(checkUpdatesScript)) {
       try {
-        pwsh(['-File', checkUpdatesScript, '-CheckOnly'], { timeout: 60000, stdio: 'ignore' });
+        pwsh(['-File', checkUpdatesScript, '-CheckOnly'], { timeout: 60000, stdio: 'inherit' });
 
         const statusFile = join(ROOT_DIR, 'data', 'update-status.json');
         if (existsSync(statusFile)) {
@@ -512,7 +512,7 @@ async function main() {
     try {
       const checkModelsScript = join(ROOT_DIR, 'scripts', 'check-models.ps1');
       if (existsSync(checkModelsScript)) {
-        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 60000, stdio: 'ignore' });
+        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 60000, stdio: 'inherit' });
 
         const modelStatusFile = join(ROOT_DIR, 'data', 'model-update-status.json');
         if (existsSync(modelStatusFile)) {
