@@ -187,6 +187,26 @@ function pwsh(args, opts = {}) {
   return run(POWERSHELL, ['-NoProfile', '-ExecutionPolicy', 'Bypass', ...args], opts);
 }
 
+// ---- Silent repo sync for server mode (non-interactive, best-effort only) ----
+function syncMainRepoSilent() {
+  const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
+  if (!fetch.success) return;
+
+  const behind = run(GIT_BIN, ['rev-list', '--count', 'HEAD..origin/main'], { cwd: ROOT_DIR, timeout: 10000 });
+  if (!behind.success || !/^\d+$/.test(behind.stdout)) return;
+
+  const count = parseInt(behind.stdout, 10);
+  if (count === 0) return;
+
+  log(DARK_GRAY, `  Server: glitch-ai repo ${count} commit(s) behind, syncing...`);
+
+  const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
+  if (pull.success) {
+    log(DARK_GREEN, '  Server: repo synced');
+    run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
+  }
+}
+
 function isProcessRunning(name) {
   try {
     if (isWin) {
@@ -300,7 +320,7 @@ async function main() {
   // ---- Self-heal: initialize git submodules if needed ----
   if (!existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
     log(CYAN, '  Initializing glitch-memorycore submodule...');
-    const result = run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
+    const result = run(GIT_BIN, ['submodule', 'update', '--init', '--recursive', '--remote'], { cwd: ROOT_DIR, timeout: 60000 });
     if (result.success && existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
       log(GREEN, '  Engine ready!');
     } else {
@@ -310,6 +330,9 @@ async function main() {
   } else {
     log(DARK_GREEN, '  Engine found');
   }
+
+  // ---- Sync glitch-ai repo from remote (silent, best-effort) ----
+  syncMainRepoSilent();
 
   // ---- Auto-install Handy if missing ----
   log(CYAN, '  Checking Handy voice input...');
