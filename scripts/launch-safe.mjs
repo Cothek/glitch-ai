@@ -4,6 +4,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { existsSync, copyFileSync, mkdirSync, writeFileSync, createWriteStream, unlinkSync, rmSync, readFileSync } from 'fs';
 import { execFileSync, spawn } from 'child_process';
+import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { platform } from 'os';
 
@@ -62,6 +63,45 @@ function pwsh(args, opts = {}) {
       status: e.status
     };
   }
+}
+
+function askQuestion(query) {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(query, (answer) => {
+      rl.close();
+      resolve(answer);
+    });
+  });
+}
+
+// ---- Branch check: warn if not on main and offer to switch ----
+async function checkAndSwitchToMain() {
+  const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: rootDir, timeout: 5000 });
+  if (!branch.success) return;
+  const current = branch.stdout.trim();
+  if (current === 'main') return;
+
+  log(YELLOW, '');
+  log(YELLOW, `  ⚠ Currently on branch '${current}', not 'main'`);
+  log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
+  log(WHITE, '  [y] Switch to main now (recommended)');
+  log(WHITE, '  [n] Continue on current branch');
+  const choice = await askQuestion('  > ');
+
+  if (choice.trim().toLowerCase() === 'y') {
+    log(CYAN, '  Switching to main...');
+    const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: rootDir, timeout: 15000 });
+    if (checkout.success) {
+      log(GREEN, '  Switched to main');
+    } else {
+      log(RED, `  Failed to switch: ${checkout.stderr || checkout.error}`);
+      log(YELLOW, '  Continuing on current branch...');
+    }
+  } else {
+    log(DARK_YELLOW, '  Continuing on current branch (may have unstable config)');
+  }
+  log('');
 }
 
 function downloadFile(url, destPath) {
@@ -195,6 +235,9 @@ if (existsSync(BundledNodeBin)) {
 }
 
 async function main() {
+  // ---- Branch check (runs first) ----
+  await checkAndSwitchToMain();
+
   console.log('');
   console.log(' Glitch AI - Safe Mode');
   console.log('');

@@ -842,13 +842,111 @@ async function main() {
     process.exit(1);
   }
 
+  // ---- User Profile Detection ----
+  let UserName = process.env.GLITCH_FREE_USER || process.env.GLITCH_USER || null;
+  let userFound = false;
+
+  if (UserName) {
+    const subdirPath = join(ROOT_DIR, 'user', UserName);
+    if (existsSync(join(subdirPath, 'main-memory.md'))) {
+      userFound = true;
+      log(CYAN, `  User profile: ${UserName}`);
+    } else if (existsSync(join(ROOT_DIR, 'user', 'main-memory.md'))) {
+      UserName = '';
+      userFound = true;
+      log(CYAN, '  User profile: (flat -- user/main-memory.md)');
+    } else {
+      log(YELLOW, `  WARNING: User '${UserName}' specified but no profile found at user/${UserName}`);
+      log(YELLOW, `  Run: node setup.mjs --user ${UserName}`);
+      UserName = null;
+    }
+  }
+
+  if (!userFound) {
+    const userBase = join(ROOT_DIR, 'user');
+    if (existsSync(join(userBase, 'main-memory.md'))) {
+      UserName = '';
+      userFound = true;
+      log(CYAN, '  User profile: (flat -- user/main-memory.md)');
+    } else if (existsSync(userBase)) {
+      const { readdirSync } = await import('fs');
+      let profiles;
+      try {
+        const entries = readdirSync(userBase, { withFileTypes: true });
+        profiles = entries
+          .filter(e => e.isDirectory())
+          .map(e => e.name)
+          .filter(name => existsSync(join(userBase, name, 'main-memory.md')));
+      } catch {
+        profiles = [];
+      }
+
+      if (profiles.length === 1) {
+        UserName = profiles[0];
+        userFound = true;
+        log(CYAN, `  User profile: ${UserName}`);
+      } else if (profiles.length > 1) {
+        log(YELLOW, '  Multiple user profiles found:');
+        profiles.forEach((name, i) => {
+          log(CYAN, `    [${i + 1}] ${name}`);
+        });
+        log(DARK_GRAY, '  Set $env:GLITCH_USER=<name> or $env:GLITCH_FREE_USER=<name> to auto-select.');
+        UserName = profiles[0];
+        userFound = true;
+        log(CYAN, `  Using: ${UserName}`);
+      }
+    }
+  }
+
+  if (!userFound) {
+    log(YELLOW, '  No user profile found.');
+    log(CYAN, '  Starting with engine defaults (no user profile loaded).');
+  }
+
+  // ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
+  const TuiConfigPath = join(ROOT_DIR, 'user', 'tui.json');
+  if (existsSync(TuiConfigPath)) {
+    process.env.OPENCODE_TUI_CONFIG = TuiConfigPath;
+    log(DARK_GREEN, '  TUI config loaded');
+  }
+
   // ---- Generate runtime config from template ----
   log(CYAN, '  Generating free mode config...');
 
   const templateText = readFileSync(TemplatePath, 'utf-8');
+
+  const engineInstructions = [
+    'glitch-memorycore/prompt-rules.md',
+    'glitch-memorycore/CLAUDE.md',
+    'glitch-memorycore/master-memory.md',
+    'glitch-memorycore/core/identity.md',
+    'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
+  ];
+
+  let userInstructions = [];
+  if (UserName && UserName !== '') {
+    userInstructions = [
+      `user/${UserName}/main-memory.md`,
+      `user/${UserName}/current-session.md`,
+      `user/${UserName}/reminders.md`,
+      `user/${UserName}/session-dashboard.md`
+    ];
+  } else if (existsSync(join(ROOT_DIR, 'user', 'main-memory.md'))) {
+    userInstructions = [
+      'user/main-memory.md',
+      'user/current-session.md',
+      'user/reminders.md',
+      'user/session-dashboard.md'
+    ];
+  }
+
+  const allInstructions = [...engineInstructions, ...userInstructions];
+  const instrJson = allInstructions.map(s => `    "${s}"`).join(',\n');
+  const instrBlock = `"instructions": [\n${instrJson}\n  ]`;
   let withModels = templateText.replace(/__MODEL__/g, primaryModel);
   withModels = withModels.replace(/__VISION_MODEL__/g, visionModel);
-  const configObj = JSON.parse(withModels);
+  const runtimeJson = withModels.replace(/"[Ii]nstructions"\s*:\s*\[[^\]]*\]/, instrBlock);
+  const configObj = JSON.parse(runtimeJson);
 
   // Set the free mode prompt directly on the parsed object (avoids string escaping)
   configObj.agent.glitch.prompt = buildFreePrompt(primaryModel, primaryName, visionModel, visionName);
@@ -857,7 +955,7 @@ async function main() {
   const finalJson = JSON.stringify(configObj, null, 2);
   try {
     JSON.parse(finalJson);
-    log(DARK_GREEN, '  Free mode config is valid JSON');
+    log(DARK_GREEN, `  Config written (${allInstructions.length} instruction files)`);
   } catch (e) {
     log(RED, `  ERROR: Generated config is invalid JSON!`);
     log(RED, `  ${e.message}`);
@@ -1057,13 +1155,6 @@ async function main() {
     log(YELLOW, `  WARNING: Binary sync failed: ${e.message || e}`);
     logUpdate(`UNCAUGHT EXCEPTION: ${e.message}`);
     logUpdate(`stack: ${e.stack}`);
-  }
-
-  // ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
-  const TuiConfigPath = join(ROOT_DIR, 'user', 'tui.json');
-  if (existsSync(TuiConfigPath)) {
-    process.env.OPENCODE_TUI_CONFIG = TuiConfigPath;
-    log(DARK_GREEN, '  TUI config loaded');
   }
 
   // ---- Check + install Handy if missing ----
