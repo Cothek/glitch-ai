@@ -14,6 +14,13 @@ const templatePath = join(rootDir, 'config', 'opencode-safe.json');
 const backupDir = join(rootDir, 'data', 'backups');
 const modeFile = join(backupDir, '.last-mode');
 
+// ---- Prepend bundled Node to PATH if available ----
+const BundledNodeDir = join(rootDir, 'data', 'node');
+const BundledNodeBin = join(BundledNodeDir, platform() === 'win32' ? 'node.exe' : 'node');
+if (existsSync(BundledNodeBin)) {
+  process.env.PATH = (platform() === 'win32' ? ';' : ':') + BundledNodeDir + process.env.PATH;
+}
+
 console.log('');
 console.log(' Glitch AI - Safe Mode');
 console.log('');

@@ -101,8 +101,6 @@ glitch-ai/                    ← This repo (public)
 │   ├── launch-safe.mjs       ← Safe mode launcher
 │   ├── serve.mjs             ← Web server mode
 │   ├── validate-config.mjs   ← Config + syntax validator
-│   ├── launch.ps1            ← Legacy Windows launcher
-│   ├── serve-glitch.ps1      ← Legacy Windows server mode
 │   ├── bootstrap.ps1         ← Downloads dependencies
 │   ├── setup.ps1             ← Profile wizard
 │   ├── check-updates.ps1     ← Dependency update checker

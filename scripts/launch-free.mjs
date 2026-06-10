@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, rmSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync } from 'child_process';
 import { createInterface } from 'readline';
+import { tmpdir } from 'os';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -36,6 +37,13 @@ const DARK_YELLOW = '\x1b[33;2m';
 const DARK_GRAY = '\x1b[90m';
 const WHITE = '\x1b[37m';
 const RESET = '\x1b[0m';
+
+// ---- Prepend bundled Node to PATH if available ----
+const BundledNodeDir = join(ROOT_DIR, 'data', 'node');
+const BundledNodeBin = join(BundledNodeDir, isWin ? 'node.exe' : 'node');
+if (existsSync(BundledNodeBin)) {
+  process.env.PATH = (isWin ? ';' : ':') + BundledNodeDir + process.env.PATH;
+}
 
 function log(color, msg) {
   if (msg === undefined) {
@@ -533,40 +541,41 @@ async function main() {
   }
 
   // ---- Auto-update opencode to latest (minor/patch) + sync local binary ----
+  // Uses temp dir (no admin needed) -- avoids npm install -g permissions issue
   try {
-    const globalVerCmd = OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode';
-    const globalVer = run(globalVerCmd, ['--version'], { timeout: 10000 });
-    const currentGlobal = globalVer.success ? globalVer.stdout : 'unknown';
+    const currentLocal = run(OpenCodeBin, ['--version'], { timeout: 10000 });
+    const currentVer = currentLocal.success ? currentLocal.stdout : 'unknown';
 
     const npmView = run(NPM_BIN, ['view', 'opencode-ai', 'version'], { timeout: 15000 });
-    const latestGlobal = npmView.success ? npmView.stdout : 'unknown';
+    const latestVer = npmView.success ? npmView.stdout : 'unknown';
 
-    const globalNeedsUpdate = currentGlobal !== 'unknown' && latestGlobal !== 'unknown' && currentGlobal !== latestGlobal;
+    const needsUpdate = currentVer !== 'unknown' && latestVer !== 'unknown' && currentVer !== latestVer;
 
-    if (globalNeedsUpdate) {
-      const cvParts = currentGlobal.split('.');
-      const lvParts = latestGlobal.split('.');
+    if (needsUpdate) {
+      const cvParts = currentVer.split('.');
+      const lvParts = latestVer.split('.');
       const autoSafe = cvParts[0] === lvParts[0];
 
       if (autoSafe) {
-        log(CYAN, `  Updating opencode (${currentGlobal} -> ${latestGlobal})...`);
-        run(NPM_BIN, ['install', '-g', 'opencode-ai@latest'], { stdio: 'inherit', timeout: 60000 });
-        const updatedVer = run(globalVerCmd, ['--version'], { timeout: 10000 });
-        log(GREEN, `  Done. Version: ${updatedVer.success ? updatedVer.stdout : currentGlobal}`);
-      }
-    }
+        log(CYAN, `  Updating opencode (${currentVer} -> ${latestVer})...`);
+        const updateDir = join(tmpdir(), 'glitch-oc-update');
 
-    // Sync local binary from updated global install
-    const npmRoot = run(NPM_BIN, ['root', '-g'], { timeout: 10000 });
-    if (npmRoot.success) {
-      const globalBin = join(npmRoot.stdout.trim(), 'opencode-ai', 'bin', OPENCODE_BIN_NAME);
-      if (existsSync(globalBin) && existsSync(OpenCodeBin)) {
-        const gv = run(globalBin, ['--version'], { timeout: 5000 });
-        const lv = run(OpenCodeBin, ['--version'], { timeout: 5000 });
-        if (gv.success && lv.success && lv.stdout.trim() !== gv.stdout.trim()) {
-          log(CYAN, `  Syncing local opencode binary (${lv.stdout.trim()} -> ${gv.stdout.trim()})...`);
-          copyFileSync(globalBin, OpenCodeBin);
+        // Clean any previous attempt
+        if (existsSync(updateDir)) rmSync(updateDir, { recursive: true, force: true });
+        mkdirSync(updateDir, { recursive: true });
+
+        const installResult = run(NPM_BIN, ['install', 'opencode-ai@latest', '--no-save', '--prefix', updateDir], { timeout: 60000 });
+
+        const newBin = join(updateDir, 'node_modules', 'opencode-ai', 'bin', OPENCODE_BIN_NAME);
+        if (installResult.success && existsSync(newBin)) {
+          copyFileSync(newBin, OpenCodeBin);
           log(GREEN, '  Done.');
+
+          // Clean up temp
+          try { rmSync(updateDir, { recursive: true, force: true }); } catch {}
+        } else {
+          log(YELLOW, '  Update failed (npm install returned non-zero).');
+          try { rmSync(updateDir, { recursive: true, force: true }); } catch {}
         }
       }
     }

@@ -156,9 +156,23 @@ try {
       $proceed = $true
     }
     if ($proceed) {
-      $null = Invoke-WithSpinner -Label "Upgrading opencode-ai from $currentVer to $latestVer" -ScriptBlock { & "npm" "install" "-g" "opencode-ai@latest" 2>&1 | Out-Null }
-      try { $currentVer = (& "opencode" "--version" 2>$null).Trim() } catch {}
-      Write-ColorHost "  Done. Version: $currentVer" "Green"
+      $ocUpdateDir = Join-Path $env:TEMP "glitch-oc-update"
+      if (Test-Path $ocUpdateDir) { Remove-Item $ocUpdateDir -Recurse -Force -ErrorAction SilentlyContinue }
+      New-Item -ItemType Directory -Path $ocUpdateDir -Force | Out-Null
+
+      $null = Invoke-WithSpinner -Label "Downloading opencode-ai@$latestVer" -ScriptBlock { & "npm" "install" "opencode-ai@latest" "--no-save" "--prefix" $ocUpdateDir 2>&1 | Out-Null }
+
+      $newBin = Join-Path $ocUpdateDir "node_modules\opencode-ai\bin\opencode.exe"
+      if (Test-Path $newBin) {
+        Copy-Item -Path $newBin -Destination $LocalOpenCodeBin -Force
+        Write-ColorHost "  Updated local binary: $currentVer -> $latestVer" "Green"
+        try { $currentVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
+      } else {
+        Write-ColorHost "  Download failed -- binary not found at $newBin" "Red"
+      }
+
+      # Clean up temp
+      Remove-Item $ocUpdateDir -Recurse -Force -ErrorAction SilentlyContinue
     }
   }
 
@@ -195,26 +209,27 @@ try {
   }
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "opencode (local)")) {
-    Write-ColorHost "  Syncing local opencode.exe from global install..." "Cyan"
+    Write-ColorHost "  Downloading opencode-ai@$latestVer to update local binary..." "Cyan"
     try {
-      $globalRoot = (& "npm" "root" "-g" 2>$null).Trim()
-      $sourceBin = [System.IO.Path]::Combine($globalRoot, "opencode-ai", "bin", "opencode.exe")
-      if (-not (Test-Path $sourceBin)) {
-        Write-ColorHost "  Installing opencode-ai globally first..." "Yellow"
-        $null = Invoke-WithSpinner -Label "Installing opencode-ai@latest globally" -ScriptBlock { & "npm" "install" "-g" "opencode-ai@latest" 2>&1 | Out-Null }
-        $globalRoot = (& "npm" "root" "-g" 2>$null).Trim()
-        $sourceBin = [System.IO.Path]::Combine($globalRoot, "opencode-ai", "bin", "opencode.exe")
-      }
-      if (Test-Path $sourceBin) {
+      $ocUpdateDir = Join-Path $env:TEMP "glitch-oc-update"
+      if (Test-Path $ocUpdateDir) { Remove-Item $ocUpdateDir -Recurse -Force -ErrorAction SilentlyContinue }
+      New-Item -ItemType Directory -Path $ocUpdateDir -Force | Out-Null
+
+      $null = Invoke-WithSpinner -Label "Downloading opencode-ai@$latestVer" -ScriptBlock { & "npm" "install" "opencode-ai@latest" "--no-save" "--prefix" $ocUpdateDir 2>&1 | Out-Null }
+
+      $newBin = Join-Path $ocUpdateDir "node_modules\opencode-ai\bin\opencode.exe"
+      if (Test-Path $newBin) {
         if (-not (Test-Path $LocalOpenCodeDir)) { New-Item -ItemType Directory -Path $LocalOpenCodeDir -Force | Out-Null }
-        Copy-Item -Path $sourceBin -Destination $LocalOpenCodeBin -Force
+        Copy-Item -Path $newBin -Destination $LocalOpenCodeBin -Force
         Write-ColorHost "  Done." "Green"
         try { $curVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
       } else {
-        Write-ColorHost "  Source binary not found at $sourceBin" "Red"
+        Write-ColorHost "  Download failed -- binary not found at $newBin" "Red"
       }
+
+      Remove-Item $ocUpdateDir -Recurse -Force -ErrorAction SilentlyContinue
     } catch {
-      Write-ColorHost "  Failed to copy: $_" "Red"
+      Write-ColorHost "  Failed to update local binary: $_" "Red"
     }
   }
 

@@ -72,7 +72,7 @@ function Test-BranchConfigs($branchName) {
         "config/opencode-safe.json",
         "config/opencode-local.json",
         "glitch-memorycore/prompt-rules.md",
-        "scripts/launch.ps1"
+        "scripts/launch.mjs"
     )
 
     foreach ($file in $filesToCheck) {

@@ -109,7 +109,7 @@ if (config.agent) {
 }
 
 const scriptsDir = join(ROOT_DIR, 'scripts');
-const psScripts = ['launch.ps1', 'launch-safe.ps1', 'launch-free.ps1', 'serve-glitch.ps1', 'validate-config.ps1'];
+const psScripts = ['validate-config.ps1'];
 
 for (const script of psScripts) {
   const scriptPath = join(scriptsDir, script);

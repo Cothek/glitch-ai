@@ -27,54 +27,45 @@ Write-Host ""
 
 $failures = @()
 
-# ── Step 1: Node.js (portable if not on PATH) ──
+# ── Step 1: Node.js (portable bundled — always installed) ──
 $BundledNodeDir = "$RootDir\data\node"
 $NodeBin = "$BundledNodeDir\node.exe"
 
-Write-Host "[1/5] Checking Node.js..." -ForegroundColor Cyan
+Write-Host "[1/5] Installing bundled Node.js..." -ForegroundColor Cyan
 
-$systemNode = Get-Command "node" -ErrorAction SilentlyContinue
-if ($systemNode) {
-  $systemVerRaw = & $systemNode.Source "--version" 2>$null
-  $systemVer = if ($systemVerRaw) { $systemVerRaw.Trim() } else { "unknown" }
-  Write-Host "  Node found on PATH: $systemVer" -ForegroundColor Green
+$needsDownload = (-not (Test-Path $NodeBin)) -or $Force
+$currentBundledVer = ""
 
-  if ($Force) {
-    try {
-      Write-Host "  Checking latest LTS version..." -ForegroundColor Yellow
-      $json = Invoke-WebRequest -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
-      $releases = $json | ConvertFrom-Json
-      $latestLTS = ($releases | Where-Object { $_.lts -ne $false } | Select-Object -First 1)
-      if ($latestLTS -and $latestLTS.version) {
-        if ($systemVer -ne $latestLTS.version) {
-          Write-Host "  Latest LTS: $($latestLTS.version) (system has $systemVer)" -ForegroundColor Yellow
-          Write-Host "  Run check-updates.ps1 -Update if you want to upgrade." -ForegroundColor Yellow
-        } else {
-          Write-Host "  System Node is up-to-date." -ForegroundColor DarkGreen
-        }
-      }
-    } catch {
-      Write-Host "  Could not check latest LTS version (offline?)" -ForegroundColor DarkYellow
-    }
+if (-not $needsDownload) {
+  try {
+    $currentBundledVer = (& $NodeBin "--version" 2>$null).Trim()
+    Write-Host "  Bundled Node.js found: $currentBundledVer" -ForegroundColor DarkGreen
+  } catch {
+    $needsDownload = $true
   }
-} else {
-  Write-Host "  Node.js not found on PATH." -ForegroundColor Yellow
-  if (-not (Test-Path $NodeBin) -or $Force) {
-    Write-Host "  Downloading portable Node.js..." -ForegroundColor Yellow
-    try {
-      $latestVer = "v22.14.0"
-      try {
-        $json = Invoke-WebRequest -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
-        $releases = $json | ConvertFrom-Json
-        $latestLTS = ($releases | Where-Object { $_.lts -ne $false } | Select-Object -First 1)
-        if ($latestLTS -and $latestLTS.version) { $latestVer = $latestLTS.version }
-      } catch { }
+}
 
+if ($needsDownload) {
+  Write-Host "  Checking latest LTS version..." -ForegroundColor Yellow
+  try {
+    $json = Invoke-WebRequest -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+    $releases = $json | ConvertFrom-Json
+    $latestLTS = ($releases | Where-Object { $_.lts -ne $false } | Select-Object -First 1)
+    $latestVer = if ($latestLTS -and $latestLTS.version) { $latestLTS.version } else { "v22.14.0" }
+  } catch {
+    $latestVer = "v22.14.0"
+  }
+
+  # Skip if current bundled version matches latest
+  if ($currentBundledVer -eq $latestVer -and -not $Force) {
+    Write-Host "  Bundled Node.js is up-to-date ($currentBundledVer)" -ForegroundColor DarkGreen
+  } else {
+    Write-Host "  Downloading Node.js $latestVer (portable)..." -ForegroundColor Yellow
+    try {
       $nodeArch = if ($isArm) { "arm64" } else { "x64" }
       $zipUrl = "https://nodejs.org/dist/$latestVer/node-$latestVer-win-$nodeArch.zip"
       $zipPath = "$env:TEMP\node-portable.zip"
 
-      Write-Host "  Downloading $latestVer..." -ForegroundColor Yellow
       Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
 
       Write-Host "  Extracting..." -ForegroundColor Yellow
@@ -98,15 +89,13 @@ if ($systemNode) {
       Write-Host "  ERROR downloading Node.js: $_" -ForegroundColor Red
       $failures += "Step 1: Node.js -- $_"
     }
-  } else {
-    Write-Host "  Bundled Node.js found at data/node/" -ForegroundColor DarkGreen
   }
 }
 
 if (Test-Path $NodeBin) {
   $ver = & $NodeBin "--version" 2>$null
   Write-Host "  Node.js ready: $(if ($ver) { $ver.Trim() } else { 'unknown version' })" -ForegroundColor Green
-} elseif ($systemNode) {
+} else {
   Write-Host "  (using system Node.js)" -ForegroundColor DarkGreen
 }
 
