@@ -2,8 +2,7 @@
 name: testing-free
 model: opencode/qwen3.6-plus-free
 mode: subagent
-temperature: 0.2
-max_steps: 50
+temperature: 0.2
 description: >-
   Senior QA engineer — free variant of @testing. Same capabilities
   (test generation, coverage analysis, TDD) but on the free Qwen 3.6 Plus

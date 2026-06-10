@@ -1,0 +1,5 @@
+[2026-06-10 11:39:46] === opencode update check started ===
+[2026-06-10 11:39:47] local binary version: 1.16.2 (success=true)
+[2026-06-10 11:39:47] npm latest version: unknown (success=false)
+[2026-06-10 11:39:47] needsUpdate=false
+[2026-06-10 11:39:47] no update needed

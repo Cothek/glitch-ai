@@ -3,7 +3,6 @@ name: ui-designer
 model: opencode-go/kimi-k2.6
 mode: subagent
 temperature: 0.2
-max_steps: 80
 description: >-
   Senior UI designer specializing in modern React interfaces with shadcn/ui,
   Radix primitives, and Tailwind CSS v4.

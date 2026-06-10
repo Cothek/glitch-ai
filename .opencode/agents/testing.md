@@ -3,7 +3,6 @@ name: testing
 model: opencode-go/kimi-k2.6
 mode: subagent
 temperature: 0.2
-max_steps: 50
 description: >-
   Senior QA engineer specializing in test generation, coverage analysis,
   and test-driven development (TDD). Writes unit, integration, and E2E tests

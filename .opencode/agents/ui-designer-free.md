@@ -2,8 +2,7 @@
 name: ui-designer-free
 model: opencode/qwen3.6-plus-free
 mode: subagent
-temperature: 0.2
-max_steps: 80
+temperature: 0.2
 description: >-
   Senior UI designer — free variant of @ui-designer. Same capabilities
   (visual design, component creation, layout, styling, responsive design,

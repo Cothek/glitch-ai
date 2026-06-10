@@ -71,6 +71,11 @@ function timestamp() {
 
 function run(cmd, args, opts = {}) {
   try {
+    // On Windows, .cmd/.bat must run through cmd.exe explicitly
+    if (isWin && (cmd.endsWith('.cmd') || cmd.endsWith('.bat'))) {
+      args = ['/d', '/s', '/c', cmd, ...args];
+      cmd = 'cmd.exe';
+    }
     const out = execFileSync(cmd, args, {
       encoding: 'utf-8',
       maxBuffer: 10 * 1024 * 1024,
