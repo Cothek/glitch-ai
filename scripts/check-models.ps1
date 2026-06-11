@@ -309,6 +309,21 @@ $freeModelsData = @{
   providers = @()
 }
 
+# --- Helper: check if a raw model ID is vision/image capable --------------------
+# Used by Zen, OpenRouter, and NVIDIA sections below
+function Is-VisionModel($modelId) {
+    if ($modelId -match 'vision') { return $true }
+    if ($modelId -match 'multimodal') { return $true }
+    if ($modelId -match '-vl[-]|-vl$') { return $true }
+    if ($modelId -match 'omni') { return $true }
+    if ($modelId -match 'cosmos') { return $true }
+    if ($modelId -match 'kimi-k2') { return $true }
+    if ($modelId -match 'step-3\.7') { return $true }
+    if ($modelId -match 'gemma-[34]') { return $true }
+    if ($modelId -match 'llama-4-maverick') { return $true }
+    return $false
+}
+
 # OpenCode Zen: models ending in -free or named big-pickle
 if ($zenModels -ne $null) {
   $zenGroup = @{
@@ -321,25 +336,11 @@ if ($zenModels -ne $null) {
       # Derive display name: strip -free suffix, capitalize words
       $displayName = $m -replace '-free$', ''
       $displayName = ($displayName -split '-' | ForEach-Object { $_.Substring(0,1).ToUpper() + $_.Substring(1) }) -join ' '
+      if (Is-VisionModel $m) { $displayName += ' (image)' }
       $zenGroup.models += @{ id = "opencode/$m"; name = $displayName }
     }
   }
   $freeModelsData.providers += $zenGroup
-}
-
-# --- Helper: check if a raw model ID is vision/image capable --------------------
-# Used by both OpenRouter and NVIDIA sections below
-function Is-VisionModel($modelId) {
-    if ($modelId -match 'vision') { return $true }
-    if ($modelId -match 'multimodal') { return $true }
-    if ($modelId -match '-vl[-]|-vl$') { return $true }
-    if ($modelId -match 'omni') { return $true }
-    if ($modelId -match 'cosmos') { return $true }
-    if ($modelId -match 'kimi-k2') { return $true }
-    if ($modelId -match 'step-3\.7') { return $true }
-    if ($modelId -match 'gemma-[34]') { return $true }
-    if ($modelId -match 'llama-4-maverick') { return $true }
-    return $false
 }
 
 # OpenRouter: already filtered to free-only by Fetch-OpenRouterFreeModels
