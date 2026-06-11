@@ -671,23 +671,14 @@ async function main() {
     const checkModelsScript = join(ROOT_DIR, 'scripts', 'check-models.ps1');
     if (existsSync(checkModelsScript)) {
       try {
-        pwsh(['-File', checkModelsScript, '-CheckOnly', '-Silent'], { timeout: 60000, stdio: 'ignore' });
-        // Check if the cache was successfully written
-        const freshModels = readJson(FreeModelsFile);
-        if (freshModels && freshModels.providers && freshModels.providers.length > 0) {
-          const totalModels = freshModels.providers.reduce((sum, p) => sum + (p.models ? p.models.length : 0), 0);
-          const providerNames = freshModels.providers.map(p => p.name).join(', ');
-          log(DARK_GREEN, `  Model list refreshed: ${totalModels} models from ${freshModels.providers.length} providers`);
-          log(DARK_GRAY, `    ${providerNames}`);
-        } else {
-          log(DARK_GREEN, '  Model list refreshed from provider APIs');
-        }
+        // Show raw PS1 output (no -Silent, stdio: inherit) so user sees any errors
+        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 60000, stdio: 'inherit' });
       } catch {
-        log(DARK_YELLOW, '  Model fetch failed — some providers may be unavailable');
+        log(DARK_YELLOW, '  Model fetch script failed');
       }
     }
   } else {
-    log(DARK_YELLOW, '  Live model fetch requires Windows — some providers may be unavailable');
+    log(DARK_YELLOW, '  Live model fetch requires Windows');
   }
 
   // ---- Load model groups (live cache > fallback) ----
