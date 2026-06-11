@@ -429,52 +429,8 @@ const FallbackModelGroups = [
   {
     Name: 'NVIDIA (free endpoint, requires /connect)',
     Models: [
-      // --- Mistral ---
-      { ID: 'nvidia/mistralai/mistral-large-3-675b-instruct-2512', Name: 'Mistral Large 3 675B', Tag: '' },
-      { ID: 'nvidia/mistralai/mistral-small-4-119b-2603', Name: 'Mistral Small 4 119B', Tag: '' },
-      { ID: 'nvidia/mistralai/mistral-medium-3.5-128b', Name: 'Mistral Medium 3.5 128B', Tag: '' },
-      { ID: 'nvidia/mistralai/mistral-large-2-instruct', Name: 'Mistral Large 2', Tag: '' },
-      { ID: 'nvidia/mistralai/mistral-nemotron', Name: 'Mistral Nemotron', Tag: '' },
-      { ID: 'nvidia/mistralai/mixtral-8x22b-v0.1', Name: 'Mixtral 8x22B', Tag: '' },
-      { ID: 'nvidia/mistralai/codestral-22b-instruct-v0.1', Name: 'Codestral 22B', Tag: '' },
-      { ID: 'nvidia/nv-mistralai/mistral-nemo-12b-instruct', Name: 'Mistral NeMo 12B', Tag: '' },
-      // --- Llama / Meta ---
-      { ID: 'nvidia/meta/llama-3.3-70b-instruct', Name: 'Llama 3.3 70B', Tag: '' },
-      { ID: 'nvidia/meta/llama-3.1-70b-instruct', Name: 'Llama 3.1 70B', Tag: '' },
-      { ID: 'nvidia/meta/llama-3.1-8b-instruct', Name: 'Llama 3.1 8B', Tag: '' },
-      { ID: 'nvidia/meta/llama-3.2-11b-vision-instruct', Name: 'Llama 3.2 11B Vision (image)', Tag: '' },
-      { ID: 'nvidia/meta/llama-3.2-90b-vision-instruct', Name: 'Llama 3.2 90B Vision (image)', Tag: '' },
-      { ID: 'nvidia/meta/llama-4-maverick-17b-128e-instruct', Name: 'Llama 4 Maverick 17B (image)', Tag: '' },
-      { ID: 'nvidia/meta/codellama-70b', Name: 'CodeLlama 70B', Tag: '' },
-      // --- Nemotron family ---
-      { ID: 'nvidia/nemotron-3-ultra-550b-a55b', Name: 'Nemotron 3 Ultra 550B', Tag: '' },
-      { ID: 'nvidia/nemotron-3-super-120b-a12b', Name: 'Nemotron 3 Super 120B', Tag: '' },
-      { ID: 'nvidia/nemotron-4-340b-instruct', Name: 'Nemotron 4 340B', Tag: '' },
-      { ID: 'nvidia/nemotron-3-nano-omni-30b-a3b-reasoning', Name: 'Nemotron 3 Nano Omni 30B Reasoning (image)', Tag: '' },
-      { ID: 'nvidia/nemotron-nano-12b-v2-vl', Name: 'Nemotron Nano 12B VL (image)', Tag: '' },
-      { ID: 'nvidia/llama-3.1-nemotron-70b-instruct', Name: 'Llama 3.1 Nemotron 70B', Tag: '' },
-      { ID: 'nvidia/llama-3.1-nemotron-51b-instruct', Name: 'Llama 3.1 Nemotron 51B', Tag: '' },
-      { ID: 'nvidia/llama-3.1-nemotron-ultra-253b-v1', Name: 'Llama 3.1 Nemotron Ultra 253B', Tag: '' },
-      { ID: 'nvidia/llama-3.3-nemotron-super-49b-v1', Name: 'Llama 3.3 Nemotron Super 49B', Tag: '' },
-      { ID: 'nvidia/llama-3.1-nemotron-nano-8b-v1', Name: 'Llama 3.1 Nemotron Nano 8B', Tag: '' },
-      { ID: 'nvidia/llama-3.1-nemotron-nano-vl-8b-v1', Name: 'Llama 3.1 Nemotron Nano VL 8B (image)', Tag: '' },
-      // --- DeepSeek / Qwen ---
-      { ID: 'nvidia/deepseek-ai/deepseek-v4-flash', Name: 'DeepSeek V4 Flash', Tag: '' },
-      { ID: 'nvidia/deepseek-ai/deepseek-v4-pro', Name: 'DeepSeek V4 Pro', Tag: '' },
-      { ID: 'nvidia/qwen/qwen3.5-397b-a17b', Name: 'Qwen 3.5 397B', Tag: '' },
-      { ID: 'nvidia/qwen/qwen3.5-122b-a10b', Name: 'Qwen 3.5 122B', Tag: '' },
-      { ID: 'nvidia/qwen/qwen3-coder-480b-a35b-instruct', Name: 'Qwen 3 Coder 480B', Tag: '' },
-      { ID: 'nvidia/qwen/qwen3-next-80b-a3b-instruct', Name: 'Qwen 3 Next 80B', Tag: '' },
-      // --- Google / Moonshot / Step ---
-      { ID: 'nvidia/google/gemma-3-12b-it', Name: 'Gemma 3 12B (image)', Tag: '' },
-      { ID: 'nvidia/google/gemma-4-31b-it', Name: 'Gemma 4 31B (image)', Tag: '' },
-      { ID: 'nvidia/moonshotai/kimi-k2.6', Name: 'Kimi K2.6 (image)', Tag: '' },
-      { ID: 'nvidia/stepfun-ai/step-3.7-flash', Name: 'Step 3.7 Flash (image)', Tag: '' },
-      // --- Others ---
-      { ID: 'nvidia/z-ai/glm-5.1', Name: 'GLM 5.1', Tag: 'default' },
-      { ID: 'nvidia/minimaxai/minimax-m2.7', Name: 'MiniMax M2.7', Tag: '' },
-      { ID: 'nvidia/microsoft/phi-3.5-moe-instruct', Name: 'Phi 3.5 MoE', Tag: '' },
-      { ID: 'nvidia/cosmos-reason2-8b', Name: 'Cosmos Reason2 8B (image)', Tag: '' }
+      // No static fallback models — the live list from check-models.ps1 is always used.
+      // If NVIDIA isn't connected, this section stays empty and the user gets a message.
     ]
   },
   {
@@ -736,6 +692,12 @@ async function main() {
 
   // ---- Load model groups (live cache > fallback) ----
   const modelGroups = getModelGroups();
+
+  // ---- Check if NVIDIA models are available (user needs /connect) ----
+  const nvidiaGroup = modelGroups.find(g => g.Name && g.Name.includes('NVIDIA'));
+  if (!nvidiaGroup || !nvidiaGroup.Models || nvidiaGroup.Models.length === 0) {
+    log(DARK_YELLOW, '  NVIDIA: (no models available — run /connect nvidia in OpenCode TUI)');
+  }
 
   // ---- Build flat lookup table ----
   const allModels = {};

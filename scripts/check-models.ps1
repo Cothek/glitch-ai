@@ -444,15 +444,9 @@ if ($nvidiaModels -ne $null) {
     $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
   }
 } else {
-  # Fallback: known NVIDIA free endpoint models (used when API key unavailable)
-  $nvidiaFallback = @(
-    @{ id = "nvidia/z-ai/glm-5.1"; name = "GLM-5.1" }
-    @{ id = "nvidia/qwen/qwen3-coder-480b-a35b-instruct"; name = "Qwen3-Coder 480B" }
-    @{ id = "nvidia/minimaxai/minimax-m2.7"; name = "MiniMax M2.7" }
-    @{ id = "nvidia/stepfun-ai/step-3.7-flash"; name = "Step 3.7 Flash" }
-    @{ id = "nvidia/mistralai/mistral-large-3-675b-instruct-2512"; name = "Mistral Large 3" }
-  )
-  $nvidiaGroup.models = $nvidiaFallback
+  # No API key or API unavailable — don't write a static fallback list.
+  # The picker will show "(no models available)" and the user gets a clear message.
+  Write-Host " [WARN] NVIDIA models unavailable - connect via /connect nvidia in OpenCode TUI" -ForegroundColor Yellow
 }
 $freeModelsData.providers += $nvidiaGroup
 
