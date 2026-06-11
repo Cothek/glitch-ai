@@ -449,8 +449,6 @@ if ($nvidiaModels -ne $null) {
   Write-Host " [WARN] NVIDIA models unavailable - connect via /connect nvidia in OpenCode TUI" -ForegroundColor Yellow
 }
 $freeModelsData.providers += $nvidiaGroup
-Write-Host " [DEBUG] NVIDIA models written to JSON: $($nvidiaGroup.models.Count)" -ForegroundColor DarkGray
-
 # Write free-models.json
 $freeModelsDir = Split-Path -Parent $FreeModelsFile
 if (-not (Test-Path $freeModelsDir)) { New-Item -ItemType Directory -Path $freeModelsDir -Force | Out-Null }

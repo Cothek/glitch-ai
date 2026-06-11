@@ -115,7 +115,12 @@ function askQuestion(query) {
 
 function readJson(path) {
   try {
-    return JSON.parse(readFileSync(path, 'utf-8'));
+    let content = readFileSync(path, 'utf-8');
+    // Strip UTF-8 BOM (PowerShell Out-File writes BOM even with -Encoding utf8)
+    if (content.charCodeAt(0) === 0xFEFF) {
+      content = content.slice(1);
+    }
+    return JSON.parse(content);
   } catch {
     return null;
   }
@@ -683,12 +688,6 @@ async function main() {
 
   // ---- Load model groups (live cache > fallback) ----
   const modelGroups = getModelGroups();
-
-  // ---- Log model groups loaded (diagnostic) ----
-  for (const g of modelGroups) {
-    const count = g.Models ? g.Models.length : 0;
-    log(DARK_GRAY, `  Loaded: ${g.Name} (${count} models)`);
-  }
 
   // ---- Check if NVIDIA models are available (user needs /connect) ----
   const nvidiaGroup = modelGroups.find(g => g.Name && g.Name.includes('NVIDIA'));

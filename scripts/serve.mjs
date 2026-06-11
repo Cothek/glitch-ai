@@ -93,7 +93,12 @@ function run(cmd, args, opts = {}) {
 
 function readJson(path) {
   try {
-    return JSON.parse(readFileSync(path, 'utf-8'));
+    let content = readFileSync(path, 'utf-8');
+    // Strip UTF-8 BOM (PowerShell Out-File writes BOM even with -Encoding utf8)
+    if (content.charCodeAt(0) === 0xFEFF) {
+      content = content.slice(1);
+    }
+    return JSON.parse(content);
   } catch {
     return null;
   }
