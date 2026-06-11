@@ -119,6 +119,176 @@ function Get-VersionTagFromRedirect {
   return $null
 }
 
+function Update-OpenCodeBinary {
+  param(
+    [string]$TargetVersion,
+    [string]$LocalBinaryPath
+  )
+  
+  $LocalBinaryDir = Split-Path -Parent $LocalBinaryPath
+  $OpenCodeBinName = "opencode.exe"
+  $updateDir = Join-Path $env:TEMP "glitch-oc-update"
+  
+  # Clean any previous attempt
+  if (Test-Path $updateDir) { Remove-Item $updateDir -Recurse -Force -ErrorAction SilentlyContinue }
+  New-Item -ItemType Directory -Path $updateDir -Force | Out-Null
+  
+  $newBinPath = $null
+  $updateSource = "npm"
+  
+  # --- Attempt 1: npm install ---
+  Write-ColorHost "  Trying npm install..." "Cyan"
+  $null = Invoke-WithSpinner -Label "Downloading opencode-ai@$TargetVersion" -ScriptBlock { & "npm" "install" "opencode-ai@latest" "--no-save" "--prefix" $updateDir 2>&1 | Out-Null }
+  
+  if ($LASTEXITCODE -eq 0) {
+    # Search multiple possible binary locations in the npm package
+    $possiblePaths = @(
+      Join-Path $updateDir "node_modules\opencode-ai\bin\$OpenCodeBinName",
+      Join-Path $updateDir "node_modules\opencode-ai\$OpenCodeBinName",
+      Join-Path $updateDir "node_modules\opencode-ai\dist\$OpenCodeBinName",
+      Join-Path $updateDir "node_modules\opencode-ai\build\$OpenCodeBinName"
+    )
+    
+    foreach ($p in $possiblePaths) {
+      if (Test-Path $p) {
+        $newBinPath = $p
+        Write-ColorHost "  Found binary at: $p" "DarkGreen"
+        break
+      }
+    }
+    
+    if (-not $newBinPath) {
+      Write-ColorHost "  Binary not found in standard locations, searching recursively..." "Yellow"
+      # Recursive search as last resort
+      try {
+        function Find-BinaryRecursive {
+          param([string]$Dir)
+          $entries = Get-ChildItem -Path $Dir -Recurse -File -ErrorAction SilentlyContinue
+          foreach ($entry in $entries) {
+            if ($entry.Name -eq $OpenCodeBinName) {
+              return $entry.FullName
+            }
+          }
+          return $null
+        }
+        $found = Find-BinaryRecursive -Dir (Join-Path $updateDir "node_modules\opencode-ai")
+        if ($found) {
+          $newBinPath = $found
+          Write-ColorHost "  Found binary via recursive search: $found" "DarkGreen"
+        }
+      } catch {
+        Write-ColorHost "  Recursive search failed: $_" "Yellow"
+      }
+    }
+  } else {
+    Write-ColorHost "  npm install failed (exit code: $LASTEXITCODE)" "Yellow"
+  }
+  
+  # --- Attempt 2: GitHub releases fallback ---
+  if (-not $newBinPath) {
+    Write-ColorHost "  npm approach failed, trying GitHub releases fallback..." "Cyan"
+    $updateSource = "github"
+    
+    try {
+      # Fetch latest release from GitHub
+      $githubApiUrl = 'https://api.github.com/repos/opencode-ai/opencode/releases/latest'
+      $releaseData = Invoke-WebRequest -Uri $githubApiUrl -UseBasicParsing -TimeoutSec 15 -Headers @{ 'User-Agent' = 'Glitch-AI' } | ConvertFrom-Json
+      
+      $tagName = $releaseData.tag_name  # e.g., "v1.17.3"
+      Write-ColorHost "  GitHub latest release: $tagName" "Cyan"
+      
+      # Find Windows asset
+      $assets = $releaseData.assets
+      $isArm = (Get-CimInstance Win32_Processor).Architecture -eq 5
+      $archSuffix = if ($isArm) { "arm64" } else { "x64" }
+      $assetUrl = $null
+      
+      $asset = $assets | Where-Object { $_.name -eq "opencode-windows-$archSuffix.zip" } | Select-Object -First 1
+      if ($asset) { $assetUrl = $asset.browser_download_url }
+      
+      if ($assetUrl) {
+        Write-ColorHost "  Downloading from GitHub: $assetUrl" "Cyan"
+        $zipPath = Join-Path $updateDir "opencode-github.zip"
+        Invoke-WebRequest -Uri $assetUrl -OutFile $zipPath -UseBasicParsing -TimeoutSec 60
+        
+        Write-ColorHost "  Extracting..." "Cyan"
+        Expand-Archive -Path $zipPath -DestinationPath $updateDir -Force
+        
+        # Search for binary in extracted files
+        $possiblePaths = @(
+          Join-Path $updateDir $OpenCodeBinName,
+          Join-Path $updateDir "opencode\$OpenCodeBinName",
+          Join-Path $updateDir "bin\$OpenCodeBinName"
+        )
+        
+        foreach ($p in $possiblePaths) {
+          if (Test-Path $p) {
+            $newBinPath = $p
+            Write-ColorHost "  Found binary at: $p" "DarkGreen"
+            break
+          }
+        }
+        
+        # Recursive search if not found
+        if (-not $newBinPath) {
+          try {
+            function Find-BinaryRecursive {
+              param([string]$Dir)
+              $entries = Get-ChildItem -Path $Dir -Recurse -File -ErrorAction SilentlyContinue
+              foreach ($entry in $entries) {
+                if ($entry.Name -eq $OpenCodeBinName) {
+                  return $entry.FullName
+                }
+              }
+              return $null
+            }
+            $found = Find-BinaryRecursive -Dir $updateDir
+            if ($found) {
+              $newBinPath = $found
+              Write-ColorHost "  Found binary via recursive search: $found" "DarkGreen"
+            }
+          } catch {
+            Write-ColorHost "  Recursive search failed: $_" "Yellow"
+          }
+        }
+      } else {
+        Write-ColorHost "  No matching GitHub release asset found for architecture: $archSuffix" "Yellow"
+      }
+    } catch {
+      Write-ColorHost "  GitHub fallback failed: $_" "Red"
+    }
+  }
+  
+  # --- Apply update if binary found ---
+  if ($newBinPath) {
+    Write-ColorHost "  Using binary from ${updateSource}: $newBinPath" "Green"
+    
+    # Rename old binary aside (works on Windows even while in use),
+    # then copy new binary in place
+    $oldBin = "$LocalBinaryPath.old"
+    if (Test-Path $oldBin) { Remove-Item $oldBin -Force -ErrorAction SilentlyContinue }
+    try {
+      Rename-Item -Path $LocalBinaryPath -NewName "opencode.exe.old" -Force -ErrorAction Stop
+      Copy-Item -Path $newBinPath -Destination $LocalBinaryPath -Force -ErrorAction Stop
+      Remove-Item $oldBin -Force -ErrorAction SilentlyContinue
+      return $newBinPath
+    } catch {
+      Write-ColorHost "  Update failed: $($_.Exception.Message)" "Red"
+      # Try to restore old binary
+      if (Test-Path $oldBin -and -not (Test-Path $LocalBinaryPath)) {
+        Rename-Item -Path $oldBin -NewName "opencode.exe" -Force -ErrorAction SilentlyContinue
+      }
+      return $null
+    }
+  } else {
+    Write-ColorHost "  Update failed: could not locate opencode binary in npm package or GitHub release." "Red"
+    return $null
+  }
+  
+  # Clean up temp
+  try { Remove-Item $updateDir -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+}
+
 # --- Results accumulator ---
 $results = @()
 $updatesAvailable = 0
@@ -156,37 +326,11 @@ try {
       $proceed = $true
     }
     if ($proceed) {
-      $ocUpdateDir = Join-Path $env:TEMP "glitch-oc-update"
-      if (Test-Path $ocUpdateDir) { Remove-Item $ocUpdateDir -Recurse -Force -ErrorAction SilentlyContinue }
-      New-Item -ItemType Directory -Path $ocUpdateDir -Force | Out-Null
-
-      $null = Invoke-WithSpinner -Label "Downloading opencode-ai@$latestVer" -ScriptBlock { & "npm" "install" "opencode-ai@latest" "--no-save" "--prefix" $ocUpdateDir 2>&1 | Out-Null }
-
-      $newBin = Join-Path $ocUpdateDir "node_modules\opencode-ai\bin\opencode.exe"
-      if (Test-Path $newBin) {
-        # Rename old binary aside (works on Windows even while in use),
-        # then copy new binary in place
-        $oldBin = "$LocalOpenCodeBin.old"
-        if (Test-Path $oldBin) { Remove-Item $oldBin -Force -ErrorAction SilentlyContinue }
-        try {
-          Rename-Item -Path $LocalOpenCodeBin -NewName "opencode.exe.old" -Force -ErrorAction Stop
-          Copy-Item -Path $newBin -Destination $LocalOpenCodeBin -Force -ErrorAction Stop
-          Remove-Item $oldBin -Force -ErrorAction SilentlyContinue
-          Write-ColorHost "  Updated local binary: $currentVer -> $latestVer" "Green"
-          try { $currentVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
-        } catch {
-          Write-ColorHost "  Update failed: $($_.Exception.Message)" "Red"
-          # Restore old binary if copy failed
-          if (Test-Path $oldBin -and -not (Test-Path $LocalOpenCodeBin)) {
-            Rename-Item -Path $oldBin -NewName "opencode.exe" -Force -ErrorAction SilentlyContinue
-          }
-        }
-      } else {
-        Write-ColorHost "  Download failed -- binary not found at $newBin" "Red"
+      $newBinPath = Update-OpenCodeBinary -TargetVersion $latestVer -LocalBinaryPath $LocalOpenCodeBin
+      if ($newBinPath) {
+        Write-ColorHost "  Updated local binary: $currentVer -> $latestVer" "Green"
+        try { $currentVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
       }
-
-      # Clean up temp
-      Remove-Item $ocUpdateDir -Recurse -Force -ErrorAction SilentlyContinue
     }
   }
 
@@ -209,8 +353,8 @@ try {
 # ========== 2. opencode local binary ==========
 try {
   $curVer = "unknown"
-  # Use npm latest version as target (fallback if global npm install not found)
-  $targetVer = if ($currentVer -ne "unknown" -and $currentVer -ne "") { $currentVer } else { $latestVer }
+  # Use npm latest version as target
+  $targetVer = $latestVer
   $updateNeeded = $false
 
   try {
@@ -224,39 +368,10 @@ try {
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "opencode (local)")) {
     Write-ColorHost "  Downloading opencode-ai@$latestVer to update local binary..." "Cyan"
-    try {
-      $ocUpdateDir = Join-Path $env:TEMP "glitch-oc-update"
-      if (Test-Path $ocUpdateDir) { Remove-Item $ocUpdateDir -Recurse -Force -ErrorAction SilentlyContinue }
-      New-Item -ItemType Directory -Path $ocUpdateDir -Force | Out-Null
-
-      $null = Invoke-WithSpinner -Label "Downloading opencode-ai@$latestVer" -ScriptBlock { & "npm" "install" "opencode-ai@latest" "--no-save" "--prefix" $ocUpdateDir 2>&1 | Out-Null }
-
-      $newBin = Join-Path $ocUpdateDir "node_modules\opencode-ai\bin\opencode.exe"
-      if (Test-Path $newBin) {
-        if (-not (Test-Path $LocalOpenCodeDir)) { New-Item -ItemType Directory -Path $LocalOpenCodeDir -Force | Out-Null }
-        # Rename old binary aside (works on Windows even while in use),
-        # then copy new binary in place
-        $oldBin = "$LocalOpenCodeBin.old"
-        if (Test-Path $oldBin) { Remove-Item $oldBin -Force -ErrorAction SilentlyContinue }
-        try {
-          Rename-Item -Path $LocalOpenCodeBin -NewName "opencode.exe.old" -Force -ErrorAction Stop
-          Copy-Item -Path $newBin -Destination $LocalOpenCodeBin -Force -ErrorAction Stop
-          Remove-Item $oldBin -Force -ErrorAction SilentlyContinue
-          Write-ColorHost "  Done." "Green"
-          try { $curVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
-        } catch {
-          Write-ColorHost "  Update failed: $($_.Exception.Message)" "Red"
-          if (Test-Path $oldBin -and -not (Test-Path $LocalOpenCodeBin)) {
-            Rename-Item -Path $oldBin -NewName "opencode.exe" -Force -ErrorAction SilentlyContinue
-          }
-        }
-      } else {
-        Write-ColorHost "  Download failed -- binary not found at $newBin" "Red"
-      }
-
-      Remove-Item $ocUpdateDir -Recurse -Force -ErrorAction SilentlyContinue
-    } catch {
-      Write-ColorHost "  Failed to update local binary: $_" "Red"
+    $newBinPath = Update-OpenCodeBinary -TargetVersion $latestVer -LocalBinaryPath $LocalOpenCodeBin
+    if ($newBinPath) {
+      Write-ColorHost "  Done." "Green"
+      try { $curVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
     }
   }
 

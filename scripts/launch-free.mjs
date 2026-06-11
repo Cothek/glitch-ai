@@ -1125,6 +1125,7 @@ async function main() {
 
   // ---- Auto-update opencode to latest (minor/patch) + sync local binary ----
   // Uses temp dir (no admin needed) -- avoids npm install -g permissions issue
+  // Falls back to GitHub releases if npm package structure changes
   try {
     logUpdate('=== opencode update check started ===');
     const currentLocal = run(OpenCodeBin, ['--version'], { timeout: 10000 });
@@ -1146,6 +1147,12 @@ async function main() {
 
       if (autoSafe) {
         log(CYAN, `  Updating opencode (${currentVer} -> ${latestVer})...`);
+        
+        // Try npm first, then fall back to GitHub releases
+        let newBinPath = null;
+        let updateSource = 'npm';
+        
+        // --- Attempt 1: npm install ---
         const updateDir = join(tmpdir(), 'glitch-oc-update');
         logUpdate(`temp dir: ${updateDir}`);
 
@@ -1157,11 +1164,158 @@ async function main() {
         const installResult = run(NPM_BIN, ['install', 'opencode-ai@latest', '--no-save', '--prefix', updateDir], { timeout: 60000 });
         logUpdate(`npm install complete: success=${installResult.success}, stdout=${installResult.stdout}, stderr=${installResult.stderr}`);
 
-        const newBin = join(updateDir, 'node_modules', 'opencode-ai', 'bin', OPENCODE_BIN_NAME);
-        const newBinExists = existsSync(newBin);
-        logUpdate(`new binary exists at ${newBin}: ${newBinExists}`);
+        if (installResult.success) {
+          // Search multiple possible binary locations in the npm package
+          const possiblePaths = [
+            join(updateDir, 'node_modules', 'opencode-ai', 'bin', OPENCODE_BIN_NAME),
+            join(updateDir, 'node_modules', 'opencode-ai', OPENCODE_BIN_NAME),
+            join(updateDir, 'node_modules', 'opencode-ai', 'dist', OPENCODE_BIN_NAME),
+            join(updateDir, 'node_modules', 'opencode-ai', 'build', OPENCODE_BIN_NAME),
+          ];
+          
+          for (const p of possiblePaths) {
+            if (existsSync(p)) {
+              newBinPath = p;
+              logUpdate(`found binary at: ${p}`);
+              break;
+            }
+          }
+          
+          if (!newBinPath) {
+            logUpdate('binary not found in standard locations, searching recursively...');
+            // Recursive search as last resort
+            try {
+              const { readdirSync } = await import('fs');
+              function findBinary(dir) {
+                const entries = readdirSync(dir, { withFileTypes: true });
+                for (const entry of entries) {
+                  const fullPath = join(dir, entry.name);
+                  if (entry.isDirectory()) {
+                    const found = findBinary(fullPath);
+                    if (found) return found;
+                  } else if (entry.name === OPENCODE_BIN_NAME) {
+                    return fullPath;
+                  }
+                }
+                return null;
+              }
+              const found = findBinary(join(updateDir, 'node_modules', 'opencode-ai'));
+              if (found) {
+                newBinPath = found;
+                logUpdate(`found binary via recursive search: ${found}`);
+              }
+            } catch (e) {
+              logUpdate(`recursive search failed: ${e.message}`);
+            }
+          }
+        }
 
-        if (installResult.success && newBinExists) {
+        // --- Attempt 2: GitHub releases fallback ---
+        if (!newBinPath) {
+          logUpdate('npm approach failed, trying GitHub releases fallback...');
+          updateSource = 'github';
+          
+          try {
+            // Fetch latest release from GitHub
+            const { get: httpsGet } = await import('https');
+            const githubApiUrl = 'https://api.github.com/repos/opencode-ai/opencode/releases/latest';
+            
+            const releaseData = await new Promise((resolve, reject) => {
+              httpsGet(githubApiUrl, { headers: { 'User-Agent': 'Glitch-AI' } }, (res) => {
+                let data = '';
+                res.on('data', chunk => data += chunk);
+                res.on('end', () => {
+                  try { resolve(JSON.parse(data)); } catch { reject(new Error('Invalid JSON')); }
+                });
+              }).on('error', reject);
+            });
+            
+            const tagName = releaseData.tag_name; // e.g., "v1.17.3"
+            const version = tagName.replace(/^v/, '');
+            logUpdate(`GitHub latest release: ${tagName}`);
+            
+            // Find Windows asset
+            const assets = releaseData.assets || [];
+            const archSuffix = isWin ? (process.arch === 'arm64' ? 'arm64' : 'x64') : null;
+            let assetUrl = null;
+            
+            if (isWin && archSuffix) {
+              // Look for opencode-windows-{arch}.zip
+              const asset = assets.find(a => a.name === `opencode-windows-${archSuffix}.zip`);
+              if (asset) assetUrl = asset.browser_download_url;
+            }
+            
+            if (assetUrl) {
+              logUpdate(`downloading from GitHub: ${assetUrl}`);
+              const zipPath = join(updateDir, 'opencode-github.zip');
+              await downloadFile(assetUrl, zipPath);
+              
+              logUpdate('extracting...');
+              // Use PowerShell to extract on Windows
+              if (isWin) {
+                const extractResult = run('powershell.exe', [
+                  '-NoProfile', '-Command',
+                  `Expand-Archive -Path '${zipPath}' -DestinationPath '${updateDir}' -Force`
+                ], { timeout: 30000 });
+                logUpdate(`extract result: success=${extractResult.success}`);
+              } else {
+                const extractResult = run('unzip', ['-o', zipPath, '-d', updateDir], { timeout: 30000 });
+                logUpdate(`extract result: success=${extractResult.success}`);
+              }
+              
+              // Search for binary in extracted files
+              const possiblePaths = [
+                join(updateDir, OPENCODE_BIN_NAME),
+                join(updateDir, 'opencode', OPENCODE_BIN_NAME),
+                join(updateDir, 'bin', OPENCODE_BIN_NAME),
+              ];
+              
+              for (const p of possiblePaths) {
+                if (existsSync(p)) {
+                  newBinPath = p;
+                  logUpdate(`found binary at: ${p}`);
+                  break;
+                }
+              }
+              
+              // Recursive search if not found
+              if (!newBinPath) {
+                try {
+                  const { readdirSync } = await import('fs');
+                  function findBinary(dir) {
+                    const entries = readdirSync(dir, { withFileTypes: true });
+                    for (const entry of entries) {
+                      const fullPath = join(dir, entry.name);
+                      if (entry.isDirectory()) {
+                        const found = findBinary(fullPath);
+                        if (found) return found;
+                      } else if (entry.name === OPENCODE_BIN_NAME) {
+                        return fullPath;
+                      }
+                    }
+                    return null;
+                  }
+                  const found = findBinary(updateDir);
+                  if (found) {
+                    newBinPath = found;
+                    logUpdate(`found binary via recursive search: ${found}`);
+                  }
+                } catch (e) {
+                  logUpdate(`recursive search failed: ${e.message}`);
+                }
+              }
+            } else {
+              logUpdate('no matching GitHub release asset found');
+            }
+          } catch (e) {
+            logUpdate(`GitHub fallback failed: ${e.message}`);
+          }
+        }
+
+        // --- Apply update if binary found ---
+        if (newBinPath) {
+          logUpdate(`using binary from ${updateSource}: ${newBinPath}`);
+          
           // Rename old binary aside (works on Windows even while in use),
           // then copy new binary in place
           const oldBin = OpenCodeBin + '.old';
@@ -1169,8 +1323,8 @@ async function main() {
           try {
             logUpdate(`renaming ${OpenCodeBin} -> ${oldBin}`);
             renameSync(OpenCodeBin, oldBin);
-            logUpdate(`copying ${newBin} -> ${OpenCodeBin}`);
-            copyFileSync(newBin, OpenCodeBin);
+            logUpdate(`copying ${newBinPath} -> ${OpenCodeBin}`);
+            copyFileSync(newBinPath, OpenCodeBin);
             // Clean up old binary (no longer needed)
             try { unlinkSync(oldBin); logUpdate('old binary cleaned up'); } catch {}
             const updatedVer = run(OpenCodeBin, ['--version'], { timeout: 5000 });
@@ -1182,16 +1336,14 @@ async function main() {
             // Try to restore old binary
             try { if (existsSync(oldBin)) { renameSync(oldBin, OpenCodeBin); logUpdate('restored old binary'); } } catch {}
           }
-
-          // Clean up temp
-          try { rmSync(updateDir, { recursive: true, force: true }); } catch {}
-          logUpdate('=== opencode update check finished ===');
         } else {
-          log(YELLOW, '  Update failed (npm install returned non-zero).');
-          logUpdate(`npm install reported failure -- stdout: ${installResult.stdout}, stderr: ${installResult.stderr}`);
-          try { rmSync(updateDir, { recursive: true, force: true }); } catch {}
-          logUpdate('=== opencode update check finished (failed) ===');
+          log(YELLOW, '  Update failed: could not locate opencode binary in npm package or GitHub release.');
+          logUpdate('binary not found in any source');
         }
+
+        // Clean up temp
+        try { rmSync(updateDir, { recursive: true, force: true }); } catch {}
+        logUpdate('=== opencode update check finished ===');
       } else {
         logUpdate('autoSafe=false -- major version change, skipping auto-update');
       }
