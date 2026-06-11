@@ -684,6 +684,12 @@ async function main() {
   // ---- Load model groups (live cache > fallback) ----
   const modelGroups = getModelGroups();
 
+  // ---- Log model groups loaded (diagnostic) ----
+  for (const g of modelGroups) {
+    const count = g.Models ? g.Models.length : 0;
+    log(DARK_GRAY, `  Loaded: ${g.Name} (${count} models)`);
+  }
+
   // ---- Check if NVIDIA models are available (user needs /connect) ----
   const nvidiaGroup = modelGroups.find(g => g.Name && g.Name.includes('NVIDIA'));
   if (!nvidiaGroup || !nvidiaGroup.Models || nvidiaGroup.Models.length === 0) {
