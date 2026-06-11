@@ -12,6 +12,9 @@ const isWin = platform() === 'win32';
 const isMac = platform() === 'darwin';
 const isLinux = platform() === 'linux';
 
+const RED = '\x1b[31m';
+const WHITE = '\x1b[37m';
+const GIT_BIN = 'git';
 const YELLOW = '\x1b[33m';
 const CYAN = '\x1b[36m';
 const GREEN = '\x1b[32m';
