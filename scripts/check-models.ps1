@@ -327,6 +327,21 @@ if ($zenModels -ne $null) {
   $freeModelsData.providers += $zenGroup
 }
 
+# --- Helper: check if a raw model ID is vision/image capable --------------------
+# Used by both OpenRouter and NVIDIA sections below
+function Is-VisionModel($modelId) {
+    if ($modelId -match 'vision') { return $true }
+    if ($modelId -match 'multimodal') { return $true }
+    if ($modelId -match '-vl[-]|-vl$') { return $true }
+    if ($modelId -match 'omni') { return $true }
+    if ($modelId -match 'cosmos') { return $true }
+    if ($modelId -match 'kimi-k2') { return $true }
+    if ($modelId -match 'step-3\.7') { return $true }
+    if ($modelId -match 'gemma-[34]') { return $true }
+    if ($modelId -match 'llama-4-maverick') { return $true }
+    return $false
+}
+
 # OpenRouter: already filtered to free-only by Fetch-OpenRouterFreeModels
 if ($openrouterModels -ne $null -and $openrouterModels.Count -gt 0) {
   $orGroup = @{
@@ -344,6 +359,8 @@ if ($openrouterModels -ne $null -and $openrouterModels.Count -gt 0) {
       $displayName = ($displayName -split '/')[-1]
     }
     $displayName = ($displayName -split '-' | ForEach-Object { $_.Substring(0,1).ToUpper() + $_.Substring(1) }) -join ' '
+    # Tag vision/image models
+    if (Is-VisionModel $rawId) { $displayName += ' (image)' }
     $orGroup.models += @{ id = $m; name = $displayName }
   }
   $freeModelsData.providers += $orGroup
@@ -441,6 +458,7 @@ if ($nvidiaModels -ne $null) {
     $parts = $m -split '/'
     $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
     $displayName = $shortName -replace '-instruct-\d+$', '' -replace '-a\d+b$', ''
+    if (Is-VisionModel $m) { $displayName += ' (image)' }
     $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
   }
 } else {
