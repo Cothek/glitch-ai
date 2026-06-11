@@ -1,9 +1,14 @@
 ---
 name: reviewer
-model: opencode-go/qwen3.6-plus
+model: opencode/qwen3.6-plus-free
 mode: subagent
 temperature: 0.2
-description: Third-party code quality and security reviewer. Reviews code for efficiency, simplicity, best practices, and security vulnerabilities. Prioritizes simple, concise code over complex, verbose solutions. Acts as an independent quality gate — reads code, finds issues, produces structured reports. NEVER modifies code.
+description: >-
+  Independent code quality and security reviewer.
+  Reviews code for efficiency, simplicity, best practices, and security.
+  Prioritizes simple, concise code over complex, verbose solutions.
+  Acts as an independent quality gate — reads code, finds issues,
+  produces structured reports. NEVER modifies code.
 permission:
   read: allow
   edit: deny

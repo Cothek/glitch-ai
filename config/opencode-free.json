@@ -56,7 +56,7 @@
     },
     "plan": {
       "model": "__MODEL__",
-      "mode": "primary",
+      "mode": "subagent",
       "description": "Planning mode -- reason about architecture and designs without executing code.",
       "temperature": 0.2
     },

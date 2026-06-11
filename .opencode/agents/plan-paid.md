@@ -1,7 +1,7 @@
 ---
 name: plan-paid
 model: opencode-go/deepseek-v4-flash
-mode: primary
+mode: subagent
 temperature: 0.2
 description: >-
   Architecture & planning — paid fallback for @plan. Reason about

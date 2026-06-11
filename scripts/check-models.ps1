@@ -309,6 +309,21 @@ $freeModelsData = @{
   providers = @()
 }
 
+# --- Helper: check if a raw model ID is vision/image capable --------------------
+# Used by Zen, OpenRouter, and NVIDIA sections below
+function Is-VisionModel($modelId) {
+    if ($modelId -match 'vision') { return $true }
+    if ($modelId -match 'multimodal') { return $true }
+    if ($modelId -match '-vl[-]|-vl$') { return $true }
+    if ($modelId -match 'omni') { return $true }
+    if ($modelId -match 'cosmos') { return $true }
+    if ($modelId -match 'kimi-k2') { return $true }
+    if ($modelId -match 'step-3\.7') { return $true }
+    if ($modelId -match 'gemma-[34]') { return $true }
+    if ($modelId -match 'llama-4-maverick') { return $true }
+    return $false
+}
+
 # OpenCode Zen: models ending in -free or named big-pickle
 if ($zenModels -ne $null) {
   $zenGroup = @{
@@ -321,6 +336,7 @@ if ($zenModels -ne $null) {
       # Derive display name: strip -free suffix, capitalize words
       $displayName = $m -replace '-free$', ''
       $displayName = ($displayName -split '-' | ForEach-Object { $_.Substring(0,1).ToUpper() + $_.Substring(1) }) -join ' '
+      if (Is-VisionModel $m) { $displayName += ' (image)' }
       $zenGroup.models += @{ id = "opencode/$m"; name = $displayName }
     }
   }
@@ -344,6 +360,8 @@ if ($openrouterModels -ne $null -and $openrouterModels.Count -gt 0) {
       $displayName = ($displayName -split '/')[-1]
     }
     $displayName = ($displayName -split '-' | ForEach-Object { $_.Substring(0,1).ToUpper() + $_.Substring(1) }) -join ' '
+    # Tag vision/image models
+    if (Is-VisionModel $rawId) { $displayName += ' (image)' }
     $orGroup.models += @{ id = $m; name = $displayName }
   }
   $freeModelsData.providers += $orGroup
@@ -441,21 +459,15 @@ if ($nvidiaModels -ne $null) {
     $parts = $m -split '/'
     $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
     $displayName = $shortName -replace '-instruct-\d+$', '' -replace '-a\d+b$', ''
+    if (Is-VisionModel $m) { $displayName += ' (image)' }
     $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
   }
 } else {
-  # Fallback: known NVIDIA free endpoint models (used when API key unavailable)
-  $nvidiaFallback = @(
-    @{ id = "nvidia/z-ai/glm-5.1"; name = "GLM-5.1" }
-    @{ id = "nvidia/qwen/qwen3-coder-480b-a35b-instruct"; name = "Qwen3-Coder 480B" }
-    @{ id = "nvidia/minimaxai/minimax-m2.7"; name = "MiniMax M2.7" }
-    @{ id = "nvidia/stepfun-ai/step-3.7-flash"; name = "Step 3.7 Flash" }
-    @{ id = "nvidia/mistralai/mistral-large-3-675b-instruct-2512"; name = "Mistral Large 3" }
-  )
-  $nvidiaGroup.models = $nvidiaFallback
+  # No API key or API unavailable - don't write a static fallback list.
+  # The picker will show "(no models available)" and the user gets a clear message.
+  Write-Host " [WARN] NVIDIA models unavailable - connect via /connect nvidia in OpenCode TUI" -ForegroundColor Yellow
 }
 $freeModelsData.providers += $nvidiaGroup
-
 # Write free-models.json
 $freeModelsDir = Split-Path -Parent $FreeModelsFile
 if (-not (Test-Path $freeModelsDir)) { New-Item -ItemType Directory -Path $freeModelsDir -Force | Out-Null }
