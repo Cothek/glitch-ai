@@ -683,11 +683,11 @@ async function main() {
           log(DARK_GREEN, '  Model list refreshed from provider APIs');
         }
       } catch {
-        log(DARK_YELLOW, '  Model fetch unavailable — using cached/fallback list');
+        log(DARK_YELLOW, '  Model fetch failed — some providers may be unavailable');
       }
     }
   } else {
-    log(DARK_YELLOW, '  Live model fetch requires Windows — using cached/fallback list');
+    log(DARK_YELLOW, '  Live model fetch requires Windows — some providers may be unavailable');
   }
 
   // ---- Load model groups (live cache > fallback) ----
