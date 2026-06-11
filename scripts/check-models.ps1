@@ -444,7 +444,7 @@ if ($nvidiaModels -ne $null) {
     $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
   }
 } else {
-  # No API key or API unavailable — don't write a static fallback list.
+  # No API key or API unavailable - don't write a static fallback list.
   # The picker will show "(no models available)" and the user gets a clear message.
   Write-Host " [WARN] NVIDIA models unavailable - connect via /connect nvidia in OpenCode TUI" -ForegroundColor Yellow
 }
