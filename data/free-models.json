@@ -1,5 +1,5 @@
 ﻿{
-    "generated_at":  "2026-06-11T09:04:26.6148394-05:00",
+    "generated_at":  "2026-06-11T09:49:44.9533944-05:00",
     "providers":  [
                       {
                           "models":  [
@@ -51,7 +51,7 @@
                                          },
                                          {
                                              "id":  "openrouter/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-                                             "name":  "Nemotron 3 Nano Omni 30b A3b Reasoning"
+                                             "name":  "Nemotron 3 Nano Omni 30b A3b Reasoning (image)"
                                          },
                                          {
                                              "id":  "openrouter/poolside/laguna-xs.2:free",
@@ -63,11 +63,11 @@
                                          },
                                          {
                                              "id":  "openrouter/google/gemma-4-26b-a4b-it:free",
-                                             "name":  "Gemma 4 26b A4b It"
+                                             "name":  "Gemma 4 26b A4b It (image)"
                                          },
                                          {
                                              "id":  "openrouter/google/gemma-4-31b-it:free",
-                                             "name":  "Gemma 4 31b It"
+                                             "name":  "Gemma 4 31b It (image)"
                                          },
                                          {
                                              "id":  "openrouter/nvidia/nemotron-3-super-120b-a12b:free",
@@ -165,11 +165,11 @@
                                          },
                                          {
                                              "id":  "nvidia/google/gemma-3-12b-it",
-                                             "name":  "gemma-3-12b-it"
+                                             "name":  "gemma-3-12b-it (image)"
                                          },
                                          {
                                              "id":  "nvidia/google/gemma-4-31b-it",
-                                             "name":  "gemma-4-31b-it"
+                                             "name":  "gemma-4-31b-it (image)"
                                          },
                                          {
                                              "id":  "nvidia/ibm/granite-3.0-8b-instruct",
@@ -189,11 +189,11 @@
                                          },
                                          {
                                              "id":  "nvidia/meta/llama-3.2-11b-vision-instruct",
-                                             "name":  "llama-3.2-11b-vision-instruct"
+                                             "name":  "llama-3.2-11b-vision-instruct (image)"
                                          },
                                          {
                                              "id":  "nvidia/meta/llama-3.2-90b-vision-instruct",
-                                             "name":  "llama-3.2-90b-vision-instruct"
+                                             "name":  "llama-3.2-90b-vision-instruct (image)"
                                          },
                                          {
                                              "id":  "nvidia/meta/llama-3.3-70b-instruct",
@@ -201,7 +201,7 @@
                                          },
                                          {
                                              "id":  "nvidia/meta/llama-4-maverick-17b-128e-instruct",
-                                             "name":  "llama-4-maverick-17b-128e-instruct"
+                                             "name":  "llama-4-maverick-17b-128e-instruct (image)"
                                          },
                                          {
                                              "id":  "nvidia/meta/llama2-70b",
@@ -265,7 +265,7 @@
                                          },
                                          {
                                              "id":  "nvidia/moonshotai/kimi-k2.6",
-                                             "name":  "kimi-k2.6"
+                                             "name":  "kimi-k2.6 (image)"
                                          },
                                          {
                                              "id":  "nvidia/nv-mistralai/mistral-nemo-12b-instruct",
@@ -273,7 +273,7 @@
                                          },
                                          {
                                              "id":  "nvidia/cosmos-reason2-8b",
-                                             "name":  "cosmos-reason2-8b"
+                                             "name":  "cosmos-reason2-8b (image)"
                                          },
                                          {
                                              "id":  "nvidia/llama-3.1-nemotron-51b-instruct",
@@ -289,7 +289,7 @@
                                          },
                                          {
                                              "id":  "nvidia/llama-3.1-nemotron-nano-vl-8b-v1",
-                                             "name":  "llama-3.1-nemotron-nano-vl-8b-v1"
+                                             "name":  "llama-3.1-nemotron-nano-vl-8b-v1 (image)"
                                          },
                                          {
                                              "id":  "nvidia/llama-3.1-nemotron-ultra-253b-v1",
@@ -309,7 +309,7 @@
                                          },
                                          {
                                              "id":  "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-                                             "name":  "nemotron-3-nano-omni-30b-a3b-reasoning"
+                                             "name":  "nemotron-3-nano-omni-30b-a3b-reasoning (image)"
                                          },
                                          {
                                              "id":  "nvidia/nemotron-3-super-120b-a12b",
@@ -325,7 +325,7 @@
                                          },
                                          {
                                              "id":  "nvidia/nemotron-nano-12b-v2-vl",
-                                             "name":  "nemotron-nano-12b-v2-vl"
+                                             "name":  "nemotron-nano-12b-v2-vl (image)"
                                          },
                                          {
                                              "id":  "nvidia/neva-22b",
@@ -365,7 +365,7 @@
                                          },
                                          {
                                              "id":  "nvidia/stepfun-ai/step-3.7-flash",
-                                             "name":  "step-3.7-flash"
+                                             "name":  "step-3.7-flash (image)"
                                          },
                                          {
                                              "id":  "nvidia/stockmark/stockmark-2-100b-instruct",

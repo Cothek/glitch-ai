@@ -253,20 +253,66 @@ async function checkAndSwitchToMain() {
   const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
   if (!branch.success) return;
   const current = branch.stdout.trim();
-  if (current === 'main') return;
+  if (current === 'main') {
+    // Check for stashed changes from a previous auto-stash
+    const stashList = run(GIT_BIN, ['stash', 'list'], { cwd: ROOT_DIR, timeout: 5000 });
+    if (stashList.success) {
+      const autoStashes = stashList.stdout.split('\n').filter(l => l.includes('glitch-auto-stash:'));
+      if (autoStashes.length > 0) {
+        log(YELLOW, '');
+        autoStashes.forEach(s => log(YELLOW, `  📦 ${s}`));
+        log(YELLOW, `  Run \`git stash pop\` to restore when ready.`);
+        log('');
+      }
+    }
+    return;
+  }
 
   log(YELLOW, '');
   log(YELLOW, `  ⚠ Currently on branch '${current}', not 'main'`);
   log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
-  log(WHITE, '  [y] Switch to main now (recommended)');
-  log(WHITE, '  [n] Continue on current branch');
-  const choice = await askQuestion('  > ');
+  log(WHITE, '  [Y/n] Switch to main now (recommended)');
+  let choice = await askQuestion('  > ');
 
-  if (choice.trim().toLowerCase() === 'y') {
+  // Validate input
+  const raw = (choice ?? '').trim().toLowerCase();
+  let wantsSwitch = true;
+  if (raw === 'n' || raw === 'no') {
+    wantsSwitch = false;
+  } else if (raw !== '' && raw !== 'y' && raw !== 'yes') {
+    log(YELLOW, '  Type y (or press Enter) to switch, or n to stay on current branch.');
+    choice = await askQuestion('  > ');
+    wantsSwitch = (choice ?? '').trim().toLowerCase() !== 'n' && (choice ?? '').trim().toLowerCase() !== 'no';
+  }
+
+  if (wantsSwitch) {
     log(CYAN, '  Switching to main...');
-    const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
+
+    // Check for local changes that would block checkout
+    const status = run(GIT_BIN, ['status', '--porcelain'], { cwd: ROOT_DIR, timeout: 5000 });
+    const isDirty = status.success && status.stdout.trim().length > 0;
+    if (isDirty) {
+      log(YELLOW, '  Local changes detected, stashing before switch...');
+      const stashMsg = `glitch-auto-stash: ${current}`;
+      const stash = run(GIT_BIN, ['stash', 'push', '-m', stashMsg], { cwd: ROOT_DIR, timeout: 15000 });
+      if (stash.success) {
+        log(GREEN, `  Changes stashed. Run \`git stash pop\` when back on '${current}' to restore.`);
+      } else {
+        log(RED, `  Failed to stash: ${stash.stderr || stash.error}`);
+        log(YELLOW, '  Continuing on current branch...');
+        log('');
+        return;
+      }
+    }
+
+    const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
     if (checkout.success) {
       log(GREEN, '  Switched to main');
+      // Verify clean tree after checkout
+      const postStatus = run(GIT_BIN, ['status', '--porcelain'], { cwd: ROOT_DIR, timeout: 5000 });
+      if (postStatus.success && postStatus.stdout.trim().length > 0) {
+        log(YELLOW, '  ⚠ Working tree has uncommitted changes after checkout.');
+      }
     } else {
       log(RED, `  Failed to switch: ${checkout.stderr || checkout.error}`);
       log(YELLOW, '  Continuing on current branch...');
