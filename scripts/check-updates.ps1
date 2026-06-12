@@ -70,7 +70,7 @@ function Get-NvmActiveVersion {
     }
   }
   if ($activeAlias) {
-    $nodePath = Join-Path $nvmRoot $activeAlias "node.exe"
+    $nodePath = Join-Path (Join-Path $nvmRoot $activeAlias) "node.exe"
     if (-not (Test-Path $nodePath)) {
       $dirs = Get-ChildItem -Path $nvmRoot -Directory -ErrorAction SilentlyContinue | Where-Object { $_.Name -match '^v\d+' }
       if ($dirs) {
@@ -91,6 +91,7 @@ function Confirm-Update {
     return $false
   }
   $response = Read-Host "Update $Name from $FromVer to $ToVer? [y/N]"
+  if ($null -eq $response) { return $false }
   return $response.Trim().ToLower() -eq "y"
 }
 
@@ -125,28 +126,40 @@ function Update-OpenCodeBinary {
     [string]$LocalBinaryPath
   )
   
-  $LocalBinaryDir = Split-Path -Parent $LocalBinaryPath
-  $OpenCodeBinName = "opencode.exe"
-  $updateDir = Join-Path $env:TEMP "glitch-oc-update"
-  
-  # Clean any previous attempt
-  if (Test-Path $updateDir) { Remove-Item $updateDir -Recurse -Force -ErrorAction SilentlyContinue }
-  New-Item -ItemType Directory -Path $updateDir -Force | Out-Null
+  try {
+    $LocalBinaryDir = Split-Path -Parent $LocalBinaryPath
+    $OpenCodeBinName = "opencode.exe"
+    # Ensure $env:TEMP is a string (defensive)
+    $tempPath = $env:TEMP
+    if ($tempPath -is [System.Collections.IEnumerable] -and -not ($tempPath -is [string])) {
+      $tempPath = ($tempPath | Select-Object -First 1)
+    }
+    $updateDir = [string]([IO.Path]::Combine($tempPath, "glitch-oc-update"))
+    
+    # Clean any previous attempt
+    if (Test-Path $updateDir) { Remove-Item $updateDir -Recurse -Force -ErrorAction SilentlyContinue }
+    New-Item -ItemType Directory -Path $updateDir -Force | Out-Null
+  } catch {
+    Write-ColorHost "  Update-OpenCodeBinary init failed: $($_.Exception.Message)" "Red"
+    return $null
+  }
   
   $newBinPath = $null
   $updateSource = "npm"
-  
-  # --- Attempt 1: npm install ---
-  Write-ColorHost "  Trying npm install..." "Cyan"
-  $null = Invoke-WithSpinner -Label "Downloading opencode-ai@$TargetVersion" -ScriptBlock { & "npm" "install" "opencode-ai@latest" "--no-save" "--prefix" $updateDir 2>&1 | Out-Null }
-  
-  if ($LASTEXITCODE -eq 0) {
-    # Search multiple possible binary locations in the npm package
+    
+    # --- Attempt 1: npm install ---
+    Write-ColorHost "  Trying npm install..." "Cyan"
+    $npmSuccess = Invoke-WithSpinner -Label "Downloading opencode-ai@$TargetVersion" -ScriptBlock { & "npm" "install" "opencode-ai@latest" "--no-save" "--prefix" $using:updateDir 2>&1 | Out-Null }
+    
+    if ($npmSuccess) {
+    # Ensure $updateDir is a string (defensive against background job scope issues)
+    $updateDir = [string]$updateDir
+    # Search multiple possible binary locations in the npm package - use .NET Path.Combine to avoid Join-Path bug
     $possiblePaths = @(
-      Join-Path $updateDir "node_modules\opencode-ai\bin\$OpenCodeBinName",
-      Join-Path $updateDir "node_modules\opencode-ai\$OpenCodeBinName",
-      Join-Path $updateDir "node_modules\opencode-ai\dist\$OpenCodeBinName",
-      Join-Path $updateDir "node_modules\opencode-ai\build\$OpenCodeBinName"
+      [IO.Path]::Combine($updateDir, "node_modules", "opencode-ai", "bin", $OpenCodeBinName),
+      [IO.Path]::Combine($updateDir, "node_modules", "opencode-ai", $OpenCodeBinName),
+      [IO.Path]::Combine($updateDir, "node_modules", "opencode-ai", "dist", $OpenCodeBinName),
+      [IO.Path]::Combine($updateDir, "node_modules", "opencode-ai", "build", $OpenCodeBinName)
     )
     
     foreach ($p in $possiblePaths) {
@@ -171,7 +184,7 @@ function Update-OpenCodeBinary {
           }
           return $null
         }
-        $found = Find-BinaryRecursive -Dir (Join-Path $updateDir "node_modules\opencode-ai")
+        $found = Find-BinaryRecursive -Dir ([IO.Path]::Combine($updateDir, "node_modules", "opencode-ai"))
         if ($found) {
           $newBinPath = $found
           Write-ColorHost "  Found binary via recursive search: $found" "DarkGreen"
@@ -181,7 +194,7 @@ function Update-OpenCodeBinary {
       }
     }
   } else {
-    Write-ColorHost "  npm install failed (exit code: $LASTEXITCODE)" "Yellow"
+    Write-ColorHost "  npm install failed (background job failed)" "Yellow"
   }
   
   # --- Attempt 2: GitHub releases fallback ---
@@ -208,7 +221,7 @@ function Update-OpenCodeBinary {
       
       if ($assetUrl) {
         Write-ColorHost "  Downloading from GitHub: $assetUrl" "Cyan"
-        $zipPath = Join-Path $updateDir "opencode-github.zip"
+        $zipPath = [IO.Path]::Combine($updateDir, "opencode-github.zip")
         Invoke-WebRequest -Uri $assetUrl -OutFile $zipPath -UseBasicParsing -TimeoutSec 60
         
         Write-ColorHost "  Extracting..." "Cyan"
@@ -216,9 +229,9 @@ function Update-OpenCodeBinary {
         
         # Search for binary in extracted files
         $possiblePaths = @(
-          Join-Path $updateDir $OpenCodeBinName,
-          Join-Path $updateDir "opencode\$OpenCodeBinName",
-          Join-Path $updateDir "bin\$OpenCodeBinName"
+          [IO.Path]::Combine($updateDir, $OpenCodeBinName),
+          [IO.Path]::Combine($updateDir, "opencode", $OpenCodeBinName),
+          [IO.Path]::Combine($updateDir, "bin", $OpenCodeBinName)
         )
         
         foreach ($p in $possiblePaths) {
@@ -263,21 +276,37 @@ function Update-OpenCodeBinary {
   if ($newBinPath) {
     Write-ColorHost "  Using binary from ${updateSource}: $newBinPath" "Green"
     
-    # Rename old binary aside (works on Windows even while in use),
-    # then copy new binary in place
+    # Robust binary replacement: use system temp for staging, then atomic rename
+    $stagingBin = [IO.Path]::Combine($env:TEMP, "opencode-staging-$PID.exe")
     $oldBin = "$LocalBinaryPath.old"
-    if (Test-Path $oldBin) { Remove-Item $oldBin -Force -ErrorAction SilentlyContinue }
+    
+    # Use unique backup name to avoid conflicts
+    $oldBin = "$LocalBinaryPath.old.$PID"
+    
+    # Clean up any previous staging file
+    if (Test-Path $stagingBin) { try { Remove-Item $stagingBin -Force -ErrorAction Stop } catch {} }
+    
     try {
-      Rename-Item -Path $LocalBinaryPath -NewName "opencode.exe.old" -Force -ErrorAction Stop
-      Copy-Item -Path $newBinPath -Destination $LocalBinaryPath -Force -ErrorAction Stop
+      # Copy new binary to staging location (system temp)
+      Copy-Item -Path $newBinPath -Destination $stagingBin -Force -ErrorAction Stop
+      
+      # Rename current binary to unique .old name (Windows allows renaming in-use executables)
+      Rename-Item -Path $LocalBinaryPath -NewName $oldBin -Force -ErrorAction Stop
+      
+      # Move staging to target (atomic on same volume, or copy+delete across volumes)
+      Move-Item -Path $stagingBin -Destination $LocalBinaryPath -Force -ErrorAction Stop
+      
+      # Clean up old binary
       Remove-Item $oldBin -Force -ErrorAction SilentlyContinue
+      
       return $newBinPath
     } catch {
       Write-ColorHost "  Update failed: $($_.Exception.Message)" "Red"
-      # Try to restore old binary
+      # Attempt rollback
       if (Test-Path $oldBin -and -not (Test-Path $LocalBinaryPath)) {
-        Rename-Item -Path $oldBin -NewName "opencode.exe" -Force -ErrorAction SilentlyContinue
+        Rename-Item -Path $oldBin -NewName $LocalBinaryPath -Force -ErrorAction SilentlyContinue
       }
+      if (Test-Path $stagingBin) { Remove-Item $stagingBin -Force -ErrorAction SilentlyContinue }
       return $null
     }
   } else {
@@ -286,7 +315,9 @@ function Update-OpenCodeBinary {
   }
   
   # Clean up temp
-  try { Remove-Item $updateDir -Recurse -Force -ErrorAction SilentlyContinue } catch {}
+  try {
+    Remove-Item $updateDir -Recurse -Force -ErrorAction SilentlyContinue
+  } catch {}
 }
 
 # --- Results accumulator ---
@@ -326,11 +357,17 @@ try {
       $proceed = $true
     }
     if ($proceed) {
+      # Update global npm package
+      Write-ColorHost "  Updating global npm package..." "Cyan"
+      & "npm" "install" "-g" "opencode-ai@latest" 2>&1 | Out-Null
+      # Update local binary
       $newBinPath = Update-OpenCodeBinary -TargetVersion $latestVer -LocalBinaryPath $LocalOpenCodeBin
       if ($newBinPath) {
         Write-ColorHost "  Updated local binary: $currentVer -> $latestVer" "Green"
-        try { $currentVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim() } catch {}
+        try { $currentVer = (& "opencode" "--version" 2>$null).Trim() } catch {}
       }
+      # Recalculate hasUpdate after update
+      $hasUpdate = ($currentVer -ne "unknown" -and $latestVer -ne "unknown" -and $currentVer -ne $latestVer)
     }
   }
 
@@ -587,7 +624,31 @@ try {
     if ($outdatedCount -gt 0) { $updatesAvailable++ }
 
     if ($IsUpdate -and $outdatedCount -gt 0 -and ($Filter.Count -eq 0 -or $Filter -contains "@opencode-ai/plugin (.opencode)")) {
-      $null = Invoke-WithSpinner -Label "Updating $outdatedCount package(s) in .opencode" -ScriptBlock ([scriptblock]::Create("Push-Location '$PluginDir'; & 'npm' 'update' 2>&1 | Out-Null; Pop-Location"))
+      Write-ColorHost "  Updating $outdatedCount package(s) in .opencode..." "Cyan"
+      Push-Location $PluginDir
+      try {
+        # Use npm install @latest to get latest major versions, not just semver-compatible
+        foreach ($pkg in $outdatedInfo) {
+          & "npm" "install" "$($pkg.package)@latest" "--save" 2>&1 | Out-Null
+        }
+        Write-ColorHost "  Done." "Green"
+        # Re-check versions after update
+        $raw = & "npm" "outdated" "--json" 2>&1
+        if ($raw) {
+          $parsed = $raw | ConvertFrom-Json -ErrorAction SilentlyContinue
+          if ($parsed -and $parsed.PSObject.Properties) {
+            $outdatedInfo = @()
+            $outdatedCount = 0
+            foreach ($prop in $parsed.PSObject.Properties) {
+              $outdatedInfo += @{ package = $prop.Name; current = $prop.Value.current; latest = $prop.Value.latest }
+              $outdatedCount++
+            }
+          }
+        }
+      } catch {
+        Write-ColorHost "  npm install failed: $_" "Red"
+      }
+      Pop-Location
     }
   } else {
     Write-ColorHost "  [SKIP] No package.json found in .opencode" "Gray"
@@ -625,10 +686,12 @@ try {
   if (Test-Path $CloudflaredBin) {
     try {
       $verRaw = (& $CloudflaredBin "--version" 2>$null)
-      if ($verRaw -match '(\d+\.\d+\.\d+)') {
+      if ($verRaw -and $verRaw -match '(\d+\.\d+\.\d+)') {
         $curVer = $matches[1]
-      } else {
+      } elseif ($verRaw) {
         $curVer = $verRaw.Trim()
+      } else {
+        $curVer = "unknown"
       }
     } catch { $curVer = "unknown" }
   } else {
@@ -693,25 +756,38 @@ try {
   $curInfo = "unknown"
   $latestVer = "unknown"
   $updateNeeded = $false
+  $releaseDate = $null
 
+  # Get current version info (file date as proxy since no --version flag)
   if (Test-Path $HandyBin) {
-    try {
-      $fileInfo = Get-Item $HandyBin
+    $fileInfo = Get-Item $HandyBin
+    if ($fileInfo) {
       $fileSizeKB = [math]::Round($fileInfo.Length / 1KB, 1)
-      $fileDate = $fileInfo.LastWriteTime.ToString("yyyy-MM-dd")
-      $curInfo = '{0} ({1} KB)' -f $fileDate, $fileSizeKB
-    } catch { $curInfo = "exists (size unknown)" }
+      $fileDate = $fileInfo.LastWriteTime
+      $curInfo = '{0} ({1} KB)' -f $fileDate.ToString("yyyy-MM-dd"), $fileSizeKB
+    } else {
+      $curInfo = "exists (size unknown)"
+    }
   } else {
     $curInfo = "not installed"
   }
 
+  # Get latest version and release date from GitHub
   try {
     $json = Invoke-WebRequest -Uri "https://api.github.com/repos/cjpais/Handy/releases/latest" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
     $data = $json | ConvertFrom-Json
-    $latestVer = $data.tag_name.Trim()
+    if ($data -and $data.tag_name) { $latestVer = $data.tag_name.Trim() }
+    if ($data -and $data.published_at) { $releaseDate = [datetime]$data.published_at }
   } catch {}
 
-  if ($latestVer -ne "unknown" -and $latestVer -ne "" -and $latestVer -ne $curInfo) {
+  # Compare file date with release date (since no version flag available)
+  if ($releaseDate -and (Test-Path $HandyBin)) {
+    $fileInfo = Get-Item $HandyBin
+    if ($fileInfo.LastWriteTime -lt $releaseDate) {
+      $updateNeeded = $true
+      $updatesAvailable++
+    }
+  } elseif ($latestVer -ne "unknown" -and $latestVer -ne "" -and $curInfo -eq "not installed") {
     $updateNeeded = $true
     $updatesAvailable++
   }
@@ -719,11 +795,81 @@ try {
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "Handy voice")) {
     $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "Handy voice" -FromVer $curInfo -ToVer $latestVer)
     if ($proceed) {
-      Write-ColorHost "  Handy uses an NSIS installer (not a zip). Run .\bootstrap.ps1 -Force to update it." "Yellow"
-      Write-ColorHost "  This ensures proper extraction via the same logic used during initial setup." "Yellow"
-      Write-ColorHost "  Manual: https://github.com/cjpais/Handy/releases" "DarkYellow"
-      $updateNeeded = $false  # Mark as handled so results don't show false pending
-      $updatesAvailable--   # Adjust total count
+      Write-ColorHost "  Downloading latest Handy release..." "Cyan"
+      try {
+        # Determine architecture
+        $isArm = (Get-CimInstance Win32_Processor).Architecture -eq 5
+        $archSuffix = if ($isArm) { "arm64" } else { "x64" }
+        
+        # Find the setup.exe asset for this architecture
+        $json = Invoke-WebRequest -Uri "https://api.github.com/repos/cjpais/Handy/releases/latest" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+        $data = $json | ConvertFrom-Json
+        $assets = $data.assets
+        $asset = $assets | Where-Object { $_.name -like "Handy_*_${archSuffix}-setup.exe" } | Select-Object -First 1
+        
+        if ($asset) {
+          $setupUrl = $asset.browser_download_url
+          $setupPath = Join-Path $env:TEMP "Handy_setup.exe"
+          $extractDir = Join-Path $env:TEMP "Handy_tmp"
+          
+          Write-ColorHost "  Downloading: $setupUrl" "Cyan"
+          Invoke-WebRequest -Uri $setupUrl -OutFile $setupPath -UseBasicParsing -TimeoutSec 60
+          
+          # Extract using 7-Zip if available, otherwise silent install
+          $7z = Get-Command "7z" -ErrorAction SilentlyContinue
+          if ($7z) {
+            Write-ColorHost "  Extracting with 7-Zip..." "Cyan"
+            if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
+            New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+            & $7z.Source x "$setupPath" -o"$extractDir" -y 2>&1 | Out-Null
+          } else {
+            Write-ColorHost "  Installing silently..." "Cyan"
+            $proc = Start-Process -FilePath $setupPath -ArgumentList "/S", "/D=$extractDir" -Wait -PassThru
+            if ($proc.ExitCode -ne 0) {
+              Write-ColorHost "  Silent install failed." "Yellow"
+            }
+          }
+          
+          # Find and copy handy.exe
+          $foundExe = Get-ChildItem -Path $extractDir -Recurse -Filter "handy.exe" | Select-Object -First 1
+          if ($foundExe) {
+            $src = $foundExe.Directory.FullName
+            $HandyDir = Split-Path -Parent $HandyBin
+            if (Test-Path $HandyDir) { Remove-Item $HandyDir -Recurse -Force -ErrorAction SilentlyContinue }
+            New-Item -ItemType Directory -Path $HandyDir -Force | Out-Null
+            Copy-Item "$src\*" $HandyDir -Recurse -Force
+            # Update file timestamp to now (Copy-Item preserves source timestamp)
+            if (Test-Path $HandyBin) {
+              (Get-Item $HandyBin).LastWriteTime = Get-Date
+            }
+            Write-ColorHost "  Handy updated to $latestVer" "Green"
+            
+            # Refresh version info
+            if (Test-Path $HandyBin) {
+              $fileInfo = Get-Item $HandyBin
+              if ($fileInfo) {
+                $fileSizeKB = [math]::Round($fileInfo.Length / 1KB, 1)
+                $fileDate = $fileInfo.LastWriteTime
+                $curInfo = '{0} ({1} KB)' -f $fileDate.ToString("yyyy-MM-dd"), $fileSizeKB
+                $updateNeeded = $false
+                $updatesAvailable--
+              }
+            }
+          } else {
+            Write-ColorHost "  Failed to extract Handy." "Red"
+          }
+          
+          # Cleanup
+          Remove-Item $setupPath -Force -ErrorAction SilentlyContinue
+          Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+        } else {
+          Write-ColorHost "  No matching asset found for architecture: $archSuffix" "Yellow"
+          Write-ColorHost "  Manual: https://github.com/cjpais/Handy/releases" "DarkYellow"
+        }
+      } catch {
+        Write-ColorHost "  Download failed: $_" "Red"
+        Write-ColorHost "  Manual: https://github.com/cjpais/Handy/releases" "DarkYellow"
+      }
     }
   }
 

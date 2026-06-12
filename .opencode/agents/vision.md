@@ -1,6 +1,6 @@
 ---
 name: vision
-model: opencode/qwen3.6-plus-free
+model: opencode/nemotron-3-ultra-free
 mode: subagent
 temperature: 0.2
 

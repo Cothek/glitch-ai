@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, renameSync, appendFileSync, rmSync, createWriteStream, unlinkSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, renameSync, appendFileSync, rmSync, createWriteStream, unlinkSync, readdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync, spawn } from 'child_process';
@@ -1405,6 +1405,43 @@ async function main() {
   log(DARK_GRAY, ' Switch models: node scripts/switch-model.mjs  |  Relaunch with: node scripts/launch-free.mjs --pick');
   log('');
 
+  // ---- Move .opencode/agents/ files to temp dir (free mode: no auto-discovered agents) ----
+  const AgentsDir = join(ROOT_DIR, '.opencode', 'agents');
+  const AgentsBackupDir = join(tmpdir(), 'glitch-free-agents');
+
+  function backupAgentFiles() {
+    try {
+      if (!existsSync(AgentsDir)) return;
+      if (existsSync(AgentsBackupDir)) rmSync(AgentsBackupDir, { recursive: true, force: true });
+      mkdirSync(AgentsBackupDir, { recursive: true });
+      const files = readdirSync(AgentsDir).filter(f => f.endsWith('.md'));
+      for (const f of files) {
+        copyFileSync(join(AgentsDir, f), join(AgentsBackupDir, f));
+        unlinkSync(join(AgentsDir, f));
+      }
+      log(DARK_GRAY, `  Backed up ${files.length} agent file(s) to temp dir`);
+    } catch (e) {
+      log(YELLOW, `  WARNING: Could not backup agent files: ${e.message}`);
+    }
+  }
+
+  function restoreAgentFiles() {
+    try {
+      if (!existsSync(AgentsBackupDir)) return;
+      if (!existsSync(AgentsDir)) mkdirSync(AgentsDir, { recursive: true });
+      const files = readdirSync(AgentsBackupDir).filter(f => f.endsWith('.md'));
+      for (const f of files) {
+        copyFileSync(join(AgentsBackupDir, f), join(AgentsDir, f));
+      }
+      rmSync(AgentsBackupDir, { recursive: true, force: true });
+      log(DARK_GRAY, `  Restored ${files.length} agent file(s)`);
+    } catch (e) {
+      log(YELLOW, `  WARNING: Could not restore agent files: ${e.message}`);
+    }
+  }
+
+  backupAgentFiles();
+
   try {
     const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
     if (!result.success && result.status !== null) {
@@ -1413,6 +1450,9 @@ async function main() {
   } catch (e) {
     log(RED, ` OpenCode exited with error: ${e.message || e}`);
   }
+
+  // ---- Restore agent files ----
+  restoreAgentFiles();
 
   log('');
   log(GREEN, 'Free mode ended.');
