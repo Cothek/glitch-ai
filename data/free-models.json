@@ -1,5 +1,5 @@
 ﻿{
-    "generated_at":  "2026-06-11T17:21:28.7914058-05:00",
+    "generated_at":  "2026-06-15T10:58:22.6638748-05:00",
     "providers":  [
                       {
                           "models":  [
@@ -218,6 +218,10 @@
                                          {
                                              "id":  "nvidia/minimaxai/minimax-m2.7",
                                              "name":  "minimax-m2.7"
+                                         },
+                                         {
+                                             "id":  "nvidia/minimaxai/minimax-m3",
+                                             "name":  "minimax-m3"
                                          },
                                          {
                                              "id":  "nvidia/mistralai/codestral-22b-instruct-v0.1",
