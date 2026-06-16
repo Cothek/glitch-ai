@@ -324,86 +324,26 @@ function Update-OpenCodeBinary {
 $results = @()
 $updatesAvailable = 0
 
-# ========== 1. opencode global npm ==========
+# ========== 1. opencode local binary ==========
 try {
-  $currentVer = ""
+  $curVer = "unknown"
   $latestVer = ""
   try {
-    $currentVer = (& "opencode" "--version" 2>$null).Trim()
-  } catch { $currentVer = "unknown" }
+    $curVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim()
+  } catch { $curVer = "unknown" }
 
   try {
     $latestVer = (& "npm" "view" "opencode-ai" "version" 2>$null).Trim()
   } catch { $latestVer = "unknown" }
 
-  $hasUpdate = ($currentVer -ne "unknown" -and $latestVer -ne "unknown" -and $currentVer -ne $latestVer)
-  $updateType = "unknown"
-  $autoSafe = $false
-
-  if ($hasUpdate) {
-    $cvParts = $currentVer.Split('.')
-    $lvParts = $latestVer.Split('.')
-    if ($cvParts[0] -ne $lvParts[0]) { $updateType = "major" }
-    elseif ($cvParts[1] -ne $lvParts[1]) { $updateType = "minor"; $autoSafe = $true }
-    else { $updateType = "patch"; $autoSafe = $true }
-  }
-
-  if ($hasUpdate) { $updatesAvailable++ }
-
-  if ($IsUpdate -and $hasUpdate) {
-    if ($updateType -eq "major") {
-      $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "opencode (global)" -FromVer $currentVer -ToVer $latestVer)
-    } else {
-      $proceed = $true
-    }
-    if ($proceed) {
-      # Update global npm package
-      Write-ColorHost "  Updating global npm package..." "Cyan"
-      & "npm" "install" "-g" "opencode-ai@latest" 2>&1 | Out-Null
-      # Update local binary
-      $newBinPath = Update-OpenCodeBinary -TargetVersion $latestVer -LocalBinaryPath $LocalOpenCodeBin
-      if ($newBinPath) {
-        Write-ColorHost "  Updated local binary: $currentVer -> $latestVer" "Green"
-        try { $currentVer = (& "opencode" "--version" 2>$null).Trim() } catch {}
-      }
-      # Recalculate hasUpdate after update
-      $hasUpdate = ($currentVer -ne "unknown" -and $latestVer -ne "unknown" -and $currentVer -ne $latestVer)
-    }
-  }
-
-  $results += @{
-    name = "opencode (global)"
-    current = $currentVer
-    latest = $latestVer
-    update_available = $hasUpdate
-    update_type = $updateType
-    auto_safe = $autoSafe
-    status = "ok"
-  }
-
-  Write-ColorHost ("  [{0}] Current: {1} | Latest: {2}" -f $(if ($hasUpdate) {"UPDATE"} else {"OK"}), $currentVer, $latestVer) $(if ($hasUpdate) {"Yellow"} else {"Green"})
-} catch {
-  $results += @{ name = "opencode (global)"; status = "error"; error_message = $_.Exception.Message }
-  Write-ColorHost "  [ERROR] $_" "Red"
-}
-
-# ========== 2. opencode local binary ==========
-try {
-  $curVer = "unknown"
-  # Use npm latest version as target
-  $targetVer = $latestVer
   $updateNeeded = $false
 
-  try {
-    $curVer = (& $LocalOpenCodeBin "--version" 2>$null).Trim()
-  } catch { $curVer = "unknown" }
-
-  if ($targetVer -ne "unknown" -and $targetVer -ne "" -and $curVer -ne "unknown" -and $curVer -ne $targetVer) {
+  if ($latestVer -ne "unknown" -and $latestVer -ne "" -and $curVer -ne "unknown" -and $curVer -ne $latestVer) {
     $updateNeeded = $true
     $updatesAvailable++
   }
 
-  if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "opencode (local)")) {
+  if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "opencode")) {
     Write-ColorHost "  Downloading opencode-ai@$latestVer to update local binary..." "Cyan"
     $newBinPath = Update-OpenCodeBinary -TargetVersion $latestVer -LocalBinaryPath $LocalOpenCodeBin
     if ($newBinPath) {
@@ -413,18 +353,18 @@ try {
   }
 
   $results += @{
-    name = "opencode (local)"
+    name = "opencode"
     current = $curVer
-    latest = $targetVer
+    latest = $latestVer
     update_available = $updateNeeded
     update_type = if ($updateNeeded) {"sync"} else {"none"}
     auto_safe = $true
     status = "ok"
   }
 
-  Write-ColorHost ("  [{0}] Current: {1} | Latest: {2}" -f $(if ($updateNeeded) {"UPDATE"} else {"OK"}), $curVer, $targetVer) $(if ($updateNeeded) {"Yellow"} else {"Green"})
+  Write-ColorHost ("  [{0}] Current: {1} | Latest: {2}" -f $(if ($updateNeeded) {"UPDATE"} else {"OK"}), $curVer, $latestVer) $(if ($updateNeeded) {"Yellow"} else {"Green"})
 } catch {
-  $results += @{ name = "opencode (local)"; status = "error"; error_message = $_.Exception.Message }
+  $results += @{ name = "opencode"; status = "error"; error_message = $_.Exception.Message }
   Write-ColorHost "  [ERROR] $_" "Red"
 }
 
