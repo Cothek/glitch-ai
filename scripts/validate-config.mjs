@@ -163,8 +163,8 @@ if (exitCode === 0) {
     console.log(`\n${RED}[FAIL] Config validation FAILED - ${errors.length} error(s)${RESET}`);
     const isWin = platform() === 'win32';
     const safeModeMsg = isWin
-      ? '  Run launch-glitch-safe.bat to enter safe mode and fix issues.'
-      : '  Run node scripts/launch-safe.mjs to enter safe mode and fix issues.';
+      ? "  Run 'node scripts/glitch.mjs safe' or 'launch-glitch.bat' (select safe mode) to enter safe mode and fix issues."
+      : '  Run node scripts/glitch.mjs safe to enter safe mode and fix issues.';
     console.log(`${YELLOW}${safeModeMsg}${RESET}`);
   }
 }

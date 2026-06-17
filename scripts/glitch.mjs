@@ -16,10 +16,10 @@ const BackupDir = join(ROOT_DIR, 'data', 'backups');
 const ModeFile = join(BackupDir, '.last-mode');
 
 const MODES = {
-  normal: { name: 'Normal', description: 'Full featured mode with paid models and all agents', template: 'config/opencode-normal.json', launchScript: 'scripts/launch.mjs', launchBat: 'scripts/launch-glitch.bat', launchSh: 'scripts/launch-glitch.sh', color: '\x1b[35m', model: 'opencode-go/deepseek-v4-flash', hasPaidFallbacks: true, agents: ['glitch', 'general', 'explore', 'plan', 'build', 'coder', 'ui-designer', 'reviewer', 'testing', 'vision'] },
-  free: { name: 'Free', description: 'Free models only (OpenCode Zen, NVIDIA, OpenRouter) - no paid fallbacks', template: 'config/opencode-free.json', launchScript: 'scripts/launch-free.mjs', launchBat: 'scripts/launch-glitch-free.bat', launchSh: 'scripts/launch-glitch-free.sh', color: '\x1b[32m', model: 'opencode/deepseek-v4-flash-free', hasPaidFallbacks: false, agents: ['glitch', 'general', 'explore', 'plan', 'build', 'vision', 'glitch-omni'] },
-  local: { name: 'Local', description: 'Local models via LM Studio (192.168.86.139:1234)', template: 'config/opencode-local.json', launchScript: 'scripts/launch-local.mjs', launchBat: 'scripts/launch-glitch-local.bat', launchSh: 'scripts/launch-glitch-local.sh', color: '\x1b[36m', model: 'google/gemma-4-12b', hasPaidFallbacks: false, agents: ['glitch', 'general', 'explore', 'plan', 'build'] },
-  safe: { name: 'Safe', description: 'Minimal config for troubleshooting - restores normal on exit', template: 'config/opencode-safe.json', launchScript: 'scripts/launch-safe.mjs', launchBat: 'scripts/launch-glitch-safe.bat', launchSh: 'scripts/launch-glitch-safe.sh', color: '\x1b[31m', model: 'opencode-go/deepseek-v4-flash', hasPaidFallbacks: false, agents: ['glitch'] }
+  normal: { name: 'Normal', description: 'Full featured mode with paid models and all agents', template: 'config/opencode-normal.json', launchScript: 'scripts/launch.mjs', color: '\x1b[35m', model: 'opencode-go/deepseek-v4-flash', hasPaidFallbacks: true, agents: ['glitch', 'general', 'explore', 'plan', 'build', 'coder', 'ui-designer', 'reviewer', 'testing', 'vision'] },
+  free: { name: 'Free', description: 'Free models only (OpenCode Zen, NVIDIA, OpenRouter) - no paid fallbacks', template: 'config/opencode-free.json', launchScript: 'scripts/launch-free.mjs', color: '\x1b[32m', model: 'opencode/deepseek-v4-flash-free', hasPaidFallbacks: false, agents: ['glitch', 'general', 'explore', 'plan', 'build', 'vision', 'glitch-omni'] },
+  local: { name: 'Local', description: 'Local models via LM Studio (192.168.86.139:1234)', template: 'config/opencode-local.json', launchScript: 'scripts/launch-local.mjs', color: '\x1b[36m', model: 'google/gemma-4-12b', hasPaidFallbacks: false, agents: ['glitch', 'general', 'explore', 'plan', 'build'] },
+  safe: { name: 'Safe', description: 'Minimal config for troubleshooting - restores normal on exit', template: 'config/opencode-safe.json', launchScript: 'scripts/launch-safe.mjs', color: '\x1b[31m', model: 'opencode-go/deepseek-v4-flash', hasPaidFallbacks: false, agents: ['glitch'] }
 };
 
 const RESET = '\x1b[0m', CYAN = '\x1b[36m', GREEN = '\x1b[32m', YELLOW = '\x1b[33m', RED = '\x1b[31m', DARK_GRAY = '\x1b[90m', WHITE = '\x1b[37m', BOLD = '\x1b[1m';
@@ -28,7 +28,7 @@ function readJson(path) { try { let c = readFileSync(path, 'utf-8'); if (c.charC
 function getCurrentMode() { if (!existsSync(ModeFile)) return null; try { return readJson(ModeFile)?.mode || null; } catch { return null; } }
 function getCurrentConfig() { if (!existsSync(ConfigPath)) return null; try { return readJson(ConfigPath); } catch { return null; } }
 function isOpenCodeRunning() { try { if (isWin) { const out = execFileSync('tasklist', ['/NH', '/FI', 'IMAGENAME eq opencode.exe'], { encoding: 'utf-8', timeout: 5000 }); return out.includes('opencode.exe'); } else { const out = execFileSync('pgrep', ['-f', 'opencode'], { encoding: 'utf-8', timeout: 3000 }); return out.trim().length > 0; } } catch { return false; } }
-function getLaunchCommand(mode) { if (isWin) { const batPath = join(ROOT_DIR, mode.launchBat); if (existsSync(batPath)) return { type: 'bat', path: mode.launchBat }; return { type: 'node', path: mode.launchScript }; } else { const shPath = join(ROOT_DIR, mode.launchSh); if (existsSync(shPath)) return { type: 'sh', path: mode.launchSh }; return { type: 'node', path: mode.launchScript }; } }
+function getLaunchCommand(mode) { return { type: 'node', path: mode.launchScript }; }
 
 function killOpenCode() {
   try {

@@ -21,5 +21,5 @@ timeout /t 2 /nobreak >nul
 
 :LAUNCH
 echo Launching new Glitch session...
-start "" "launch-glitch-free.bat"
+start "" "launch-glitch.bat"
 echo New session launched.

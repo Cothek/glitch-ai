@@ -1,5 +1,5 @@
 #!/bin/bash
-DIR="$(cd "$(dirname "$0")" && pwd)"
+DIR="$(cd "$(dirname "$0)" && pwd)"
 
 # Prefer bundled Node.js; fall back to system
 if [ -f "$DIR/data/node/node" ]; then
@@ -12,4 +12,4 @@ else
   exit 1
 fi
 
-exec "$NODE_CMD" "$DIR/scripts/launch.mjs" "$@"
+exec "$NODE_CMD" "$DIR/scripts/launch-unified.mjs" "$@"

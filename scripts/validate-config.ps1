@@ -153,7 +153,7 @@ if ($exitCode -eq 0) {
     if (-not $Quiet) {
         Write-Host "
 [FAIL] Config validation FAILED - $($errors.Count) error(s)" -ForegroundColor Red
-        Write-Host "  Run launch-glitch-safe.bat to enter safe mode and fix issues." -ForegroundColor Yellow
+        Write-Host "  Run 'node scripts/glitch.mjs safe' or 'launch-glitch.bat' (select safe mode) to enter safe mode and fix issues." -ForegroundColor Yellow
     }
 }
 
