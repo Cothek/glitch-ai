@@ -9,7 +9,7 @@ Portable AI companion environment — one clone, one setup, Glitch is ready on W
 ```powershell
 git clone https://github.com/Cothek/glitch-ai.git
 cd glitch-ai
-.\setup.bat                    # First-time: init engine + profile wizard
+.\scripts\setup.ps1            # First-time: init engine + profile wizard
 .\launch-glitch.bat            # Start using Glitch
 ```
 
@@ -25,7 +25,7 @@ git clone https://github.com/Cothek/glitch-ai.git
 cd glitch-ai
 git submodule update --init --recursive
 node scripts/setup.mjs         # First-time setup
-./launch-glitch.sh             # Start using Glitch
+./launch-glitch.sh             # Start using Glitch (unified launcher)
 ```
 
 ### For Troy (Returning User, cross-platform)
@@ -72,7 +72,7 @@ Glitch is split into three layers:
 
 ```powershell
 .\scripts\setup-tunnel.ps1    # One-time: authenticate Cloudflare + create tunnel
-.\serve-glitch.bat            # Each session: starts server + tunnel
+.\launch-glitch.bat           # Each session: select server mode (option 4)
 ```
 
 This starts OpenCode as a web server proxied through Cloudflare Tunnel. No open ports, no VPN required. Login with username `opencode` and the auto-generated password shown in the terminal.
@@ -122,15 +122,8 @@ glitch-ai/                    ← This repo (public)
 │   ├── skills-lock.json
 │   └── screenshots/          ← Vision agent screenshots
 │
-├── setup.bat                 ← First-time setup (Windows)
-├── launch-glitch.bat         ← Local terminal mode (Windows)
-├── launch-glitch.sh          ← Local terminal mode (Mac/Linux)
-├── launch-glitch-free.bat    ← Free model mode (Windows)
-├── launch-glitch-free.sh     ← Free model mode (Mac/Linux)
-├── launch-glitch-safe.bat    ← Safe mode (Windows)
-├── launch-glitch-safe.sh     ← Safe mode (Mac/Linux)
-├── serve-glitch.bat          ← Web server mode (Windows)
-├── serve-glitch.sh           ← Web server mode (Mac/Linux)
+├── launch-glitch.bat         ← Unified launcher (Windows) — all modes
+├── launch-glitch.sh          ← Unified launcher (Mac/Linux) — all modes
 ├── opencode.json             ← Engine-only base config
 ├── .env.example              ← Domain/port configuration template
 ├── plugins/                  ← Auth proxy, helpers
@@ -149,11 +142,7 @@ glitch-ai/                    ← This repo (public)
 | `scripts/` | Launch, setup, validation, and utility scripts (.mjs cross-platform, .ps1 legacy) |
 | `config/` | Terminal UI config, Cloudflare Tunnel config |
 | `data/` | Auto-generated status files (gitignored) |
-| `setup.bat` | First-time setup (Windows) |
-| `launch-glitch.bat` / `.sh` | Local terminal mode |
-| `launch-glitch-free.bat` / `.sh` | Emergency fallback using free models |
-| `launch-glitch-safe.bat` / `.sh` | Minimal config for troubleshooting |
-| `serve-glitch.bat` / `.sh` | Web server mode with Cloudflare Tunnel |
+| `launch-glitch.bat` / `.sh` | Unified launcher — all modes (normal, free, local, safe, server) |
 | `opencode.json` | Engine-only base config (user data added at runtime) |
 | `.env.example` | Domain/port configuration template |
 | `handy-voice/` | [Handy](https://handy-voice.org) — offline voice-to-text |

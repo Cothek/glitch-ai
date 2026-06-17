@@ -254,7 +254,7 @@ if ($failures.Count -gt 0) {
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Cyan
 Write-Host "  .\launch-glitch.bat       - TUI mode (with Handy voice)" -ForegroundColor Cyan
-Write-Host "  .\serve-glitch.bat        - Web server mode (access from anywhere)" -ForegroundColor Cyan
+Write-Host "  .\launch-glitch.bat       - Web server mode (option 4 in unified launcher)" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "  For first-time Cloudflare Tunnel setup:" -ForegroundColor Yellow
 Write-Host "  .\setup-tunnel.ps1        - Authenticate + create tunnel + DNS record" -ForegroundColor Yellow

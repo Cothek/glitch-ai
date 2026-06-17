@@ -31,7 +31,7 @@ Write-Host ""
 Write-Host "Launching free mode..." -ForegroundColor Green
 Write-Host ""
 
-Start-Process -FilePath "$RootDir\launch-glitch-free.bat" -WindowStyle Normal
+Start-Process -FilePath "$RootDir\launch-glitch.bat" -WindowStyle Normal
 
 # --- Wait for new instance to bind -----------------------------------------------
 Write-Host "Waiting 5 seconds for new instance to start..." -ForegroundColor Yellow

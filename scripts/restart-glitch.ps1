@@ -15,4 +15,4 @@ foreach ($p in $procs) {
 Start-Sleep -Seconds 2
 
 # Launch free mode via .bat (uses .mjs launcher with portable Node support)
-Start-Process -FilePath "$RootDir\launch-glitch-free.bat" -WindowStyle Normal
+Start-Process -FilePath "$RootDir\launch-glitch.bat" -WindowStyle Normal

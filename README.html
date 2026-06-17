@@ -1058,7 +1058,7 @@
           <ol class="steps" style="margin:0">
             <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
             <li><code>cd glitch-ai</code></li>
-            <li><code>.\setup.bat</code></li>
+            <li><code>.\scripts\setup.ps1</code></li>
             <li><code>.\launch-glitch.bat</code></li>
           </ol>
         </div>
@@ -1169,15 +1169,8 @@ git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</co
   <span class="dir">├── scripts/</span> <span class="comment">Launch scripts (.mjs cross-platform, .ps1 legacy)</span><br>
   <span class="dir">├── config/</span> <span class="comment">Configuration files</span><br>
   <span class="dir">├── data/</span> <span class="comment">Auto-generated runtime data (gitignored)</span><br>
-  <span class="file">├── setup.bat</span> <span class="comment">First-time setup (Windows)</span><br>
-  <span class="file">├── launch-glitch.bat</span> <span class="comment">Terminal mode (Windows)</span><br>
-  <span class="file">├── launch-glitch.sh</span> <span class="comment">Terminal mode (Mac/Linux)</span><br>
-  <span class="file">├── launch-glitch-free.bat</span> <span class="comment">Free model emergency mode</span><br>
-  <span class="file">├── launch-glitch-free.sh</span> <span class="comment">Free model mode (Mac/Linux)</span><br>
-  <span class="file">├── launch-glitch-safe.bat</span> <span class="comment">Safe mode (Windows)</span><br>
-  <span class="file">├── launch-glitch-safe.sh</span> <span class="comment">Safe mode (Mac/Linux)</span><br>
-  <span class="file highlight">├── serve-glitch.bat</span> <span class="comment">Web server mode (Windows)</span><br>
-  <span class="file highlight">├── serve-glitch.sh</span> <span class="comment">Web server mode (Mac/Linux)</span><br>
+  <span class="file">├── launch-glitch.bat</span> <span class="comment">Unified launcher (Windows) — all modes</span><br>
+  <span class="file">├── launch-glitch.sh</span> <span class="comment">Unified launcher (Mac/Linux) — all modes</span><br>
   <span class="file">├── opencode.json</span> <span class="comment">Engine-only base config</span><br>
   <span class="file">├── .env.example</span> <span class="comment">Domain/port configuration template</span><br>
   <span class="file">├── plugins/</span> <span class="comment">Auth proxy, helpers</span><br>
@@ -1197,10 +1190,8 @@ git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</co
     <tr><td><code>glitch-memorycore/</code></td><td>Engine submodule — identity, rules, skills, plugins</td></tr>
     <tr><td><code>user/</code></td><td>Your personal memory, diary, projects (gitignored)</td></tr>
     <tr><td><code>scripts/</code></td><td>Launch scripts (.mjs cross-platform, .ps1 legacy)</td></tr>
-    <tr><td><code>launch-glitch.bat</code></td><td>Terminal mode (Windows)</td></tr>
-    <tr><td><code>launch-glitch.sh</code></td><td>Terminal mode (Mac/Linux)</td></tr>
-    <tr><td><code>serve-glitch.bat</code></td><td>Web server mode (Windows)</td></tr>
-    <tr><td><code>serve-glitch.sh</code></td><td>Web server mode (Mac/Linux)</td></tr>
+    <tr><td><code>launch-glitch.bat</code></td><td>Unified launcher (Windows) — all modes</td></tr>
+    <tr><td><code>launch-glitch.sh</code></td><td>Unified launcher (Mac/Linux) — all modes</td></tr>
     <tr><td><code>opencode.json</code></td><td>Engine-only base config (user data added at runtime)</td></tr>
     <tr><td><code>.env.example</code></td><td>Domain/port configuration template</td></tr>
   </tbody>
@@ -1229,11 +1220,11 @@ git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</co
 </div>
 <pre><code># Windows:
 .\scripts\setup-tunnel.ps1    # One-time: authenticate + create tunnel
-.\serve-glitch.bat            # Each session: starts server + tunnel
+.\launch-glitch.bat           # Each session: select server mode (option 4)
 
 # Mac/Linux:
 node scripts/setup-tunnel.mjs # One-time: authenticate + create tunnel
-./serve-glitch.sh             # Each session: starts server + tunnel</code></pre>
+./launch-glitch.sh            # Each session: select server mode (option 4)</code></pre>
 
 <p>Login with username <code>opencode</code> and the auto-generated password shown in the terminal. Configure your domain via <code>.env</code>:</p>
 

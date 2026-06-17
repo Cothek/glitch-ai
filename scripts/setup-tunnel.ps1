@@ -47,6 +47,6 @@ Write-Host ""
 Write-Host "Setup complete!" -ForegroundColor Green
 Write-Host ""
 Write-Host "Next steps:" -ForegroundColor Cyan
-Write-Host "  1. Run serve-glitch.ps1 to start the server + tunnel" -ForegroundColor Gray
+Write-Host "  1. Run launch-glitch.bat and select server mode (option 4) to start the server + tunnel" -ForegroundColor Gray
 Write-Host "  2. Visit https://$Hostname" -ForegroundColor Gray
 Write-Host ""
