@@ -4,6 +4,7 @@ cloudflared.exe
 handy-voice/Handy/handy.exe
 handy-voice/Handy/uninstall.exe
 handy-voice/Handy/resources/
+handy-voice/Handy/portable
 
 # IDE
 .vscode/
