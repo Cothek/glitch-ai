@@ -56,7 +56,7 @@
                               },
                   "plan":  {
                                "model":  "opencode/deepseek-v4-flash-free",
-                               "mode":  "primary",
+                               "mode":  "subagent",
                                "description":  "Planning mode -- reason about architecture and designs without executing code.",
                                "temperature":  0.2
                            },
@@ -65,7 +65,44 @@
                                 "mode":  "subagent",
                                 "description":  "Code scaffolding -- generates code from prompts.",
                                 "temperature":  0.2
-                            }
+                            },
+                  "coder":  {
+                                 "model":  "opencode/nemotron-3-ultra-free",
+                                 "mode":  "subagent",
+                                 "description":  "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
+                                 "temperature":  0.2
+                             },
+                  "ui-designer":  {
+                                       "model":  "opencode/nemotron-3-ultra-free",
+                                       "mode":  "subagent",
+                                       "description":  "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
+                                       "temperature":  0.2
+                                   },
+                  "reviewer":  {
+                                    "model":  "opencode/nemotron-3-ultra-free",
+                                    "mode":  "subagent",
+                                    "description":  "Independent code quality gate -- read-only, severity-rated reports",
+                                    "temperature":  0.2
+                                },
+                  "testing":  {
+                                   "model":  "opencode/nemotron-3-ultra-free",
+                                   "mode":  "subagent",
+                                   "description":  "Test writer -- TDD, framework detection, edge case coverage",
+                                   "temperature":  0.2
+                               },
+                  "vision":  {
+                                  "model":  "opencode/nemotron-3-ultra-free",
+                                  "mode":  "subagent",
+                                  "description":  "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
+                                  "permission":  {
+                                                      "read":  "allow",
+                                                      "bash":  "deny",
+                                                      "glob":  "deny",
+                                                      "grep":  "deny",
+                                                      "edit":  "deny"
+                                                  },
+                                  "temperature":  0.2
+                              }
               },
     "attachment":  {
                        "image":  {
