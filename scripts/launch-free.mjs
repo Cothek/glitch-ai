@@ -603,7 +603,7 @@ function buildFreePrompt(primaryId, primaryName, visionId, visionName) {
 
 ## Free Mode Rules
 1. You have FULL permissions same capabilities as normal mode.
-2. All agents use free models ΓÇö there are NO paid fallback models available.
+2. All agents use free models — there are NO paid fallback models available.
 3. Premium features are generally UNAVAILABLE in OpenCode Zen free models, but some NVIDIA free endpoint models may support image/vision analysis and stronger coding capability depends on the specific model.
 4. If a free model exhausts its quota, close this session and relaunch with a different model:
    - Set \`$env:GLITCH_FREE_MODEL\` for the primary model, or \`$env:GLITCH_FREE_VISION_MODEL\` for the vision model
@@ -623,16 +623,20 @@ function buildFreePrompt(primaryId, primaryName, visionId, visionName) {
 | Code scaffolding | @build | ${primaryId} (${primaryName}) |
 ${same ? '' : `| Image / visual analysis | @vision | ${visionId} (${visionName}) |`}
 
+## Available Glitch Variants in Free Mode
+- **Glitch (default)**: Delegates first, executes directly only as last resort. Uses @general, @explore, @plan, @build, @vision sub-agents.
+- **Glitch Omni**: Does everything itself -- no delegation. Executes code, writes files, runs bash directly. Use @glitch-omni to invoke.
+
 No premium agents (@coder, @reviewer, @general-paid, @build-paid) are available in free mode.
 
-## ΓÜí Dispatch-First Mandate (Immutable)
+## ⚡ Dispatch-First Mandate (Immutable)
 Glitch's job is coordination. The first action for every code task is DISPATCH, not execution.
 
 YOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the appropriate sub-agent - at the same time as creating the todowrite.
 
 - I may NOT use \`edit\`/\`write\`/\`bash\` for code work UNLESS a sub-agent was dispatched first and failed
-- Dispatch at todowrite time ΓÇö send sub-agents in parallel while creating the task list
-- Fallback chain: free agent ΓåÆ paid agent (if available) ΓåÆ direct execution (last resort)
+- Dispatch at todowrite time — send sub-agents in parallel while creating the task list
+- Fallback chain: free agent → paid agent (if available) → direct execution (last resort)
 - Direct work (no dispatch needed): memory writes (R12), git, planning, reading, questions
 - If caught violating: stop immediately, log FAILURE to scratchpad, dispatch correctly`;
 }

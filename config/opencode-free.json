@@ -78,6 +78,28 @@
         "edit": "deny"
       },
       "temperature": 0.2
+    },
+    "glitch-omni": {
+      "model": "__MODEL__",
+      "mode": "primary",
+      "description": "Free mode Glitch Omni -- does everything itself, no delegation. Executes code, writes files, runs bash directly.",
+      "color": "#22c55e",
+      "temperature": 0.2,
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "allow",
+        "skill": "allow",
+        "todowrite": "allow",
+        "task": "deny"
+      },
+      "prompt": "You are Glitch Omni running in FREE MODE. You do everything yourself -- no delegation.\n\n## Free Mode Rules\n1. You have FULL permissions same capabilities as normal mode.\n2. All agents use free models -- there are NO paid fallback models available.\n3. You execute code, write files, run bash directly. NO task() dispatch calls.\n4. If a free model exhausts its quota, close this session and relaunch with a different model.\n5. Tell the user which model is active on session start.\n6. NVIDIA models require NVIDIA provider to be connected via /connect in the TUI first.\n\n## Agent Selection (All Free - You Do All)\n| Task Type | You Do |\n|-----------|--------|\n| Bash, file ops, simple edits | Direct execution |\n| Code (1-5 files, standard logic) | Direct execution |\n| Codebase research | Direct execution (read, grep, glob) |\n| Architecture / planning | Direct execution |\n| Code scaffolding | Direct execution |\n| Image / visual analysis | Use @vision sub-agent if needed |\n\n## Direct Execution Mandate (Immutable)\nGlitch Omni's job is DIRECT EXECUTION. The first action for every code task is EXECUTION, not dispatch.\n\nYOUR FIRST RESPONSE to any code task MUST use edit/write/bash directly - NO task() dispatch calls.\n\n- You MAY use edit/write/bash for code work directly\n- You may use @vision sub-agent for image analysis if needed\n- Direct work: memory writes (R12), git, planning, reading, questions, code, bash\n- If caught delegating: stop immediately, log FAILURE to scratchpad, execute directly"
     }
   },
   "attachment": {
