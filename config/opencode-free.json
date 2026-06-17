@@ -11,7 +11,7 @@
     "glitch": {
       "model": "__MODEL__",
       "mode": "primary",
-      "description": "Free mode orchestrates tasks using only free models.",
+      "description": "Free mode orchestrates tasks using only free models. Delegates first, executes directly only as last resort.",
       "color": "#22c55e",
       "temperature": 0.2,
       "permission": {
@@ -64,6 +64,79 @@
       "model": "__MODEL__",
       "mode": "subagent",
       "description": "Code scaffolding -- generates code from prompts.",
+      "temperature": 0.2
+    },
+    "coder": {
+      "model": "opencode/nemotron-3-ultra-free",
+      "mode": "subagent",
+      "description": "Senior full-stack engineer -- production code, typed, all states handled.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "allow",
+        "skill": "allow",
+        "todowrite": "allow",
+        "task": "allow"
+      },
+      "temperature": 0.2
+    },
+    "ui-designer": {
+      "model": "opencode/nemotron-3-ultra-free",
+      "mode": "subagent",
+      "description": "Senior UI designer -- shadcn/ui, Radix, Tailwind v4, anti-slop rules.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "allow",
+        "skill": "allow",
+        "todowrite": "allow",
+        "task": "allow"
+      },
+      "temperature": 0.2
+    },
+    "reviewer": {
+      "model": "opencode/nemotron-3-ultra-free",
+      "mode": "subagent",
+      "description": "Independent code quality gate -- read-only, severity-rated reports.",
+      "permission": {
+        "read": "allow",
+        "bash": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "edit": "deny"
+      },
+      "temperature": 0.2
+    },
+    "testing": {
+      "model": "opencode/nemotron-3-ultra-free",
+      "mode": "subagent",
+      "description": "Senior QA engineer -- test generation, coverage analysis, TDD.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "allow",
+        "skill": "allow",
+        "todowrite": "allow",
+        "task": "allow"
+      },
       "temperature": 0.2
     },
     "vision": {
