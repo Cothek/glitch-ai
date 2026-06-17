@@ -461,8 +461,8 @@ function buildLocalPrompt(modelId, modelName) {
 2. ALL agents use the local model "${modelId}" (${modelName}).
 3. No external API calls are made -- everything runs through LM Studio at 192.168.86.139:1234.
 4. Local models are slower than cloud models but completely private and free.
-5. All agents (coder, ui-designer, reviewer, testing, etc.) use the same local model.
-6. If the local model is not responding, tell the user to check their LM Studio instance and make sure the model is loaded.
+5. The agents defined in .opencode/agents/ (coder, reviewer, vision, ui-designer, testing, etc.) are configured for paid cloud models -- do NOT dispatch to them.
+6. Stick to the 5 local agents below. If the local model is not responding, tell the user to check their LM Studio instance and make sure the model is loaded.
 7. Tell the user which model is active on session start so they know what to expect.
 
 ## Agent Selection (All Local)
@@ -473,10 +473,6 @@ function buildLocalPrompt(modelId, modelName) {
 | Codebase research | @explore | ${modelId} |
 | Architecture / planning | @plan | ${modelId} |
 | Code scaffolding | @build | ${modelId} |
-| Complex code (5+ files, auth, architecture) | @coder | ${modelId} |
-| UI/design system work | @ui-designer | ${modelId} |
-| Code review / quality gate | @reviewer | ${modelId} |
-| Test writing / TDD | @testing | ${modelId} |
 
 ## ⚡ Dispatch-First Mandate (Immutable)
 Glitch's job is coordination. The first action for every code task is DISPATCH, not execution.
