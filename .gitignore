@@ -54,6 +54,18 @@ test-results/
 # Old binary backups
 *.old
 
+# Temp launch scripts from debugging sessions
+scripts/fix-launch*.mjs
+scripts/launch*.bak
+scripts/launch*.new
+launch_fixed.mjs
+launch_original.mjs
+main_launch.mjs
+main_serve.mjs
+
+# New feature directories (not yet ready)
+audio-recorder/
+
 # Glitch website (deployable subdir)
 glitch-website/.next/
 glitch-website/node_modules/
@@ -64,3 +76,9 @@ glitch-website/scripts/screenshot.mjs
 # User data (separate git submodule for Troy, or local for others)
 user/
 !/user/.gitkeep
+
+# Runtime data directory (config backups, node bundle, model cache, screenshots)
+data/
+
+# Handy voice input (downloaded third-party binary)
+handy-voice/

@@ -388,7 +388,7 @@ async function checkAndSwitchToMain() {
       const autoStashes = stashList.stdout.split('\n').filter(l => l.includes('glitch-auto-stash:'));
       if (autoStashes.length > 0) {
         log(YELLOW, '');
-        autoStashes.forEach(s => log(YELLOW, `  📦 ${s}`));
+        autoStashes.forEach(s => log(YELLOW, `  [stash] ${s}`));
         log(YELLOW, `  Run \`git stash pop\` to restore when ready.`);
         log('');
       }
