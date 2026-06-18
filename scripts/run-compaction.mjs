@@ -120,6 +120,45 @@ async function checkCurriculum() {
   }
 }
 
+// --- Step 5: Image GC (opencode DB) ---
+async function checkImageGC() {
+  const scriptPath = path.join(CWD, "scripts", "cleanup-opencode-images.mjs");
+  try {
+    await stat(scriptPath);
+  } catch {
+    return "✓ Image GC: N/A (script not found)";
+  }
+
+  try {
+    const output = execSync(
+      `node "${scriptPath}" --stats`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], timeout: 15000 }
+    );
+    // Parse key lines
+    const lines = output.trim().split("\n");
+    const totalLine = lines.find(l => l.trim().startsWith("Total image parts:"));
+    const sizeLine = lines.find(l => l.trim().startsWith("Total image size:"));
+    const lastRunLine = lines.find(l => l.trim().startsWith("Last GC run:"));
+    const gcTargetLine = lines.find(l => l.trim().includes("90+ days"));
+
+    let msg = `✓ Image GC: ${totalLine ? totalLine.trim() : ""} | ${sizeLine ? sizeLine.trim() : ""}`;
+    if (lastRunLine) msg += ` | ${lastRunLine.trim()}`;
+
+    // Flag if any images are past the 90-day threshold
+    if (gcTargetLine) {
+      const match = gcTargetLine.match(/90\+\s+days:\s+(\d+)\s+parts/);
+      if (match && parseInt(match[1], 10) > 0) {
+        msg += `\n⚠️  IMAGE_GC_ALERT: ${match[1]} image(s) are 90+ days old — run with --apply to reclaim space`;
+      }
+    }
+
+    return msg;
+  } catch (e) {
+    warn(`Image GC check failed: ${e.message}`);
+    return `✗ Image GC: FAILED (${e.message})`;
+  }
+}
+
 // --- Step 4: Git status ---
 async function checkGit() {
   try {
@@ -141,8 +180,14 @@ async function main() {
     timestamp: await updateTimestamp(),
     diary: await checkDiaryStaleness(),
     curriculum: await checkCurriculum(),
+    gc: await checkImageGC(),
     git: await checkGit(),
   };
+
+  // Split GC result into main line + potential alert
+  const gcLines = results.gc.split("\n");
+  const gcMain = gcLines[0];
+  const gcAlert = gcLines.length > 1 ? gcLines.slice(1) : [];
 
   const lines = [
     "",
@@ -152,6 +197,7 @@ async function main() {
     results.timestamp,
     results.diary,
     results.curriculum,
+    gcMain,
     ...results.git.split("\n"),
     "",
     "=== Action Required ===",
@@ -159,6 +205,7 @@ async function main() {
     "⚠️ Step 7 — Self-review: Load self-review skill, scan system files",
     "⚠️ Step 8 — Curriculum: Verify next challenge or check cooldown",
     "⚠️ Step 9 — Staleness: Scan main-memory.md for stale refs",
+    ...gcAlert,
     "",
     "=== Suggested Command ===",
     `git add -A && git commit -m "memory: compaction ${todayStr}"`,
