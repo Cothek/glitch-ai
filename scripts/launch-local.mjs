@@ -761,67 +761,9 @@ async function main() {
     // non-critical
   }
 
-  // ---- Check dependency updates (Win only - uses PS1) ----
-  if (isWin) {
-    log(CYAN, '  Checking dependency updates...');
-    const checkUpdatesScript = join(ROOT_DIR, 'scripts', 'check-updates.ps1');
-    if (existsSync(checkUpdatesScript)) {
-      try {
-        pwsh(['-File', checkUpdatesScript, '-CheckOnly'], { timeout: 60000, stdio: 'inherit' });
-
-        const statusFile = join(ROOT_DIR, 'data', 'update-status.json');
-        if (existsSync(statusFile)) {
-          const status = readJson(statusFile);
-          if (status && status.updates_available > 0) {
-            const updateItems = (status.items || []).filter(i => i.update_available);
-            console.log('');
-            log(YELLOW, '  ===== Updates Available =====');
-
-            updateItems.forEach((item, i) => {
-              log(CYAN, `  [${i + 1}] ${item.name}`);
-              log(DARK_YELLOW, `      ${item.current} -> ${item.latest}`);
-            });
-
-            console.log('');
-            console.log(`${WHITE}  Enter numbers to select (e.g. '1,3'),${RESET}`);
-            console.log(`${WHITE}  press Enter to apply all, or type 's' to skip:${RESET}`);
-            const selection = await askQuestion('  > ');
-
-            if (selection.trim().toLowerCase() === 's') {
-              log(DARK_YELLOW, '  Skipping updates.');
-            } else {
-              const selectedNames = [];
-              if (selection.trim()) {
-                const indices = selection.split(',').map(s => parseInt(s.trim())).filter(n => !isNaN(n));
-                for (const idx of indices) {
-                  const num = idx - 1;
-                  if (num >= 0 && num < updateItems.length) {
-                    selectedNames.push(updateItems[num].name);
-                  }
-                }
-              }
-
-              if (selectedNames.length > 0) {
-                log(CYAN, '  Applying selected updates...');
-                const filterExpr = selectedNames.map(n => `'${n.replace(/'/g, "''")}'`).join(', ');
-                pwsh(['-Command', `& '${checkUpdatesScript.replace(/'/g, "''")}' -Update -Filter @(${filterExpr})`], { stdio: 'inherit', timeout: 120000 });
-              } else {
-                log(CYAN, '  Applying all updates...');
-                pwsh(['-File', checkUpdatesScript, '-Update'], { stdio: 'inherit', timeout: 120000 });
-              }
-              log(GREEN, '  Updates complete.');
-            }
-          } else {
-            log(DARK_GREEN, '  All dependencies up-to-date');
-          }
-        }
-      } catch {
-        log(DARK_YELLOW, '  Update check skipped (non-critical)');
-      }
-    }
-  } else {
-    log(DARK_GRAY, '  Dependency update check skipped (Windows-only PS1 scripts)');
-  }
+  // ---- Check dependency updates (shared module) ----
+  const { checkAndPromptUpdates } = await import('./check-updates.mjs');
+  await checkAndPromptUpdates({ skipIfNoPowerShell: !isWin });
 
   // ---- Check for new models (Win only) ----
   if (isWin) {
