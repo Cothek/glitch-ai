@@ -1,6 +1,6 @@
 ---
 name: vision
-model: opencode/minimax-m3-free
+model: opencode/deepseek-v4-flash-free
 mode: subagent
 temperature: 0.2
 

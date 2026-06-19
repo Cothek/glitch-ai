@@ -1,6 +1,6 @@
 ---
 name: ui-designer
-model: opencode/nemotron-3-ultra-free
+model: opencode/deepseek-v4-flash-free
 mode: subagent
 temperature: 0.2
 
