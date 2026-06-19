@@ -1,0 +1,222 @@
+#!/usr/bin/env node
+
+import { execSync } from "child_process";
+import { readFile, writeFile, readdir, stat } from "fs/promises";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CWD = path.resolve(__dirname, "..");
+const today = new Date();
+const todayStr = formatDate(today);
+
+function warn(msg) {
+  console.error(`[compaction] ${msg}`);
+}
+
+function formatDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function daysSince(d) {
+  const now = Date.now();
+  const then = d.getTime();
+  return Math.floor((now - then) / 86400000);
+}
+
+// --- Step 1: Update timestamp in current-session.md ---
+async function updateTimestamp() {
+  const fp = path.join(CWD, "user", "current-session.md");
+  try {
+    let content = await readFile(fp, "utf-8");
+    const ts = `${todayStr}T${String(today.getHours()).padStart(2, "0")}:${String(today.getMinutes()).padStart(2, "0")}:00Z`;
+    content = content.replace(
+      /^(\*\*Last Memory Update\*\*: ).*/m,
+      `$1${ts}`
+    );
+    await writeFile(fp, content, "utf-8");
+    return `✓ Last Memory Update: ${ts}`;
+  } catch (e) {
+    warn(`Failed to update timestamp: ${e.message}`);
+    return `✗ Last Memory Update: FAILED (${e.message})`;
+  }
+}
+
+// --- Step 2: Diary staleness check ---
+async function checkDiaryStaleness() {
+  const diaryDir = path.join(CWD, "user", "daily-diary", "current");
+  try {
+    await stat(diaryDir);
+  } catch {
+    return "✓ Diary staleness: N/A (no diary directory)";
+  }
+
+  try {
+    const files = await readdir(diaryDir);
+    const mdFiles = files.filter((f) => f.endsWith(".md"));
+
+    if (mdFiles.length === 0) {
+      return "✓ Diary staleness: N/A (no diary files)";
+    }
+
+    const oldEntries = [];
+    for (const f of mdFiles) {
+      const fstat = await stat(path.join(diaryDir, f));
+      const ageDays = daysSince(fstat.mtime);
+      if (ageDays > 30) {
+        oldEntries.push({ file: f, age: ageDays, month: `${fstat.mtime.getFullYear()}-${String(fstat.mtime.getMonth() + 1).padStart(2, "0")}` });
+      }
+    }
+
+    if (oldEntries.length === 0) {
+      return "✓ Diary staleness: OK (no entries >30 days old)";
+    }
+
+    const monthCounts = {};
+    for (const e of oldEntries) {
+      monthCounts[e.month] = (monthCounts[e.month] || 0) + 1;
+    }
+
+    const archiveFlags = Object.entries(monthCounts)
+      .filter(([, count]) => count >= 3)
+      .map(([month]) => `${month} (${monthCounts[month]} entries)`);
+
+    let msg = `⚠️ Diary staleness: ${oldEntries.length} entries >30 days old`;
+    if (archiveFlags.length > 0) {
+      msg += ` — archive candidates: ${archiveFlags.join(", ")}`;
+    }
+    return msg;
+  } catch (e) {
+    warn(`Diary check failed: ${e.message}`);
+    return `✗ Diary staleness: FAILED (${e.message})`;
+  }
+}
+
+// --- Step 3: Curriculum status ---
+async function checkCurriculum() {
+  const fp = path.join(CWD, "glitch-memorycore", "plugins", "curriculum", "curriculum-state.json");
+  try {
+    const content = await readFile(fp, "utf-8");
+    const data = JSON.parse(content);
+    const level = data.level ?? "N/A";
+    const completed = (data.completedChallenges ?? []).length;
+    const toolsCreated = data.toolsCreated ?? 0;
+    const startedAt = data.startedAt;
+    const toolsAtStart = data.toolsAtStart ?? 0;
+    const toolsNeeded = 3 - toolsCreated;
+    const promotionProgress = `tools: ${toolsCreated - toolsAtStart} new (${toolsCreated}/${toolsAtStart + 3} for promotion)`;
+
+    let startedStatus = startedAt !== null && startedAt !== undefined
+      ? `started: yes (${String(startedAt)})`
+      : "⚠️ started: NO — curriculum has never been started";
+
+    return `✓ Curriculum: Level ${level} | ${completed} challenges done | ${promotionProgress} | ${startedStatus}`;
+  } catch (e) {
+    warn(`Curriculum check failed: ${e.message}`);
+    return `✗ Curriculum: FAILED (${e.message})`;
+  }
+}
+
+// --- Step 5: Image GC (opencode DB) ---
+async function checkImageGC() {
+  const scriptPath = path.join(CWD, "scripts", "cleanup-opencode-images.mjs");
+  try {
+    await stat(scriptPath);
+  } catch {
+    return "✓ Image GC: N/A (script not found)";
+  }
+
+  try {
+    const output = execSync(
+      `node "${scriptPath}" --stats`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], timeout: 15000 }
+    );
+    // Parse key lines
+    const lines = output.trim().split("\n");
+    const totalLine = lines.find(l => l.trim().startsWith("Total image parts:"));
+    const sizeLine = lines.find(l => l.trim().startsWith("Total image size:"));
+    const lastRunLine = lines.find(l => l.trim().startsWith("Last GC run:"));
+    const gcTargetLine = lines.find(l => l.trim().includes("90+ days"));
+
+    let msg = `✓ Image GC: ${totalLine ? totalLine.trim() : ""} | ${sizeLine ? sizeLine.trim() : ""}`;
+    if (lastRunLine) msg += ` | ${lastRunLine.trim()}`;
+
+    // Flag if any images are past the 90-day threshold
+    if (gcTargetLine) {
+      const match = gcTargetLine.match(/90\+\s+days:\s+(\d+)\s+parts/);
+      if (match && parseInt(match[1], 10) > 0) {
+        msg += `\n⚠️  IMAGE_GC_ALERT: ${match[1]} image(s) are 90+ days old — run with --apply to reclaim space`;
+      }
+    }
+
+    return msg;
+  } catch (e) {
+    warn(`Image GC check failed: ${e.message}`);
+    return `✗ Image GC: FAILED (${e.message})`;
+  }
+}
+
+// --- Step 4: Git status ---
+async function checkGit() {
+  try {
+    const output = execSync("git status --short", { cwd: CWD, encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"] });
+    const lines = output.trim().split("\n").filter(Boolean);
+    if (lines.length === 0) {
+      return "✓ Git: clean";
+    }
+    return `⚠️ Git: ${lines.length} file(s) uncommitted\n${lines.map((l) => `   ${l}`).join("\n")}`;
+  } catch (e) {
+    warn(`Git check failed: ${e.message}`);
+    return `✗ Git: FAILED (${e.message})`;
+  }
+}
+
+// --- Main ---
+async function main() {
+  const results = {
+    timestamp: await updateTimestamp(),
+    diary: await checkDiaryStaleness(),
+    curriculum: await checkCurriculum(),
+    gc: await checkImageGC(),
+    git: await checkGit(),
+  };
+
+  // Split GC result into main line + potential alert
+  const gcLines = results.gc.split("\n");
+  const gcMain = gcLines[0];
+  const gcAlert = gcLines.length > 1 ? gcLines.slice(1) : [];
+
+  const lines = [
+    "",
+    `📋 Compaction Run — ${todayStr}`,
+    "",
+    "=== Auto-Completed ===",
+    results.timestamp,
+    results.diary,
+    results.curriculum,
+    gcMain,
+    ...results.git.split("\n"),
+    "",
+    "=== Action Required ===",
+    "⚠️ Step 6 — Pattern scan: Check scratchpad for 3x+ repeated workflows",
+    "⚠️ Step 7 — Self-review: Load self-review skill, scan system files",
+    "⚠️ Step 8 — Curriculum: Verify next challenge or check cooldown",
+    "⚠️ Step 9 — Staleness: Scan main-memory.md for stale refs",
+    ...gcAlert,
+    "",
+    "=== Suggested Command ===",
+    `git add -A && git commit -m "memory: compaction ${todayStr}"`,
+    "",
+  ];
+
+  console.log(lines.join("\n"));
+  process.exit(0);
+}
+
+main().catch((e) => {
+  warn(`Fatal: ${e.message}`);
+  process.exit(1);
+});
