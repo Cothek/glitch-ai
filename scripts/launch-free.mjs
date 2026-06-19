@@ -638,7 +638,7 @@ YOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the 
 
 - I may NOT use \`edit\`/\`write\`/\`bash\` for code work UNLESS a sub-agent was dispatched first and failed
 - Dispatch at todowrite time — send sub-agents in parallel while creating the task list
-- Fallback chain: free agent → paid agent (if available) → direct execution (last resort)
+- Fallback chain: free agent → direct execution (last resort — no paid fallbacks in free mode)
 - Direct work (no dispatch needed): memory writes (R12), git, planning, reading, questions
 - If caught violating: stop immediately, log FAILURE to scratchpad, dispatch correctly`;
 }
@@ -1170,7 +1170,46 @@ async function main() {
   log(DARK_GRAY, ' Switch models: node scripts/switch-model.mjs  |  Relaunch with: node scripts/launch-free.mjs --pick');
   log('');
 
-  // ---- Agent files stay in place (inline config definitions take precedence per R18) ----
+  // ---- Backup paid agent files (-paid.md) during free mode (no paid fallbacks available) ----
+  const AgentsDir = join(ROOT_DIR, '.opencode', 'agents');
+  const AgentsBackupDir = join(tmpdir(), 'glitch-free-agents');
+
+  function backupPaidAgentFiles() {
+    try {
+      if (!existsSync(AgentsDir)) return;
+      if (existsSync(AgentsBackupDir)) rmSync(AgentsBackupDir, { recursive: true, force: true });
+      mkdirSync(AgentsBackupDir, { recursive: true });
+      const files = readdirSync(AgentsDir).filter(f => f.endsWith('-paid.md'));
+      for (const f of files) {
+        copyFileSync(join(AgentsDir, f), join(AgentsBackupDir, f));
+        unlinkSync(join(AgentsDir, f));
+      }
+      if (files.length > 0) {
+        log(DARK_GRAY, `  Backed up ${files.length} paid agent file(s) (not available in free mode)`);
+      }
+    } catch (e) {
+      log(YELLOW, `  WARNING: Could not backup paid agent files: ${e.message}`);
+    }
+  }
+
+  function restorePaidAgentFiles() {
+    try {
+      if (!existsSync(AgentsBackupDir)) return;
+      if (!existsSync(AgentsDir)) mkdirSync(AgentsDir, { recursive: true });
+      const files = readdirSync(AgentsBackupDir).filter(f => f.endsWith('-paid.md'));
+      for (const f of files) {
+        copyFileSync(join(AgentsBackupDir, f), join(AgentsDir, f));
+      }
+      rmSync(AgentsBackupDir, { recursive: true, force: true });
+      if (files.length > 0) {
+        log(DARK_GRAY, `  Restored ${files.length} paid agent file(s)`);
+      }
+    } catch (e) {
+      log(YELLOW, `  WARNING: Could not restore paid agent files: ${e.message}`);
+    }
+  }
+
+  backupPaidAgentFiles();
 
   try {
     const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
@@ -1180,6 +1219,9 @@ async function main() {
   } catch (e) {
     log(RED, ` OpenCode exited with error: ${e.message || e}`);
   }
+
+  // ---- Restore paid agent files ----
+  restorePaidAgentFiles();
 
   log('');
   log(GREEN, 'Free mode ended.');

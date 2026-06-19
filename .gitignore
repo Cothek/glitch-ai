@@ -82,3 +82,5 @@ data/
 
 # Handy voice input (downloaded third-party binary)
 handy-voice/
+
+cloudflared.exe.tmp

@@ -1,6 +1,5 @@
 ---
 name: testing
-model: opencode/deepseek-v4-flash-free
 mode: subagent
 temperature: 0.2
 
