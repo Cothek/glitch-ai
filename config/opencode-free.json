@@ -66,6 +66,30 @@
       "description": "Code scaffolding -- generates code from prompts.",
       "temperature": 0.2
     },
+    "coder": {
+      "model": "__MODEL__",
+      "mode": "subagent",
+      "description": "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
+      "temperature": 0.2
+    },
+    "ui-designer": {
+      "model": "__MODEL__",
+      "mode": "subagent",
+      "description": "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
+      "temperature": 0.2
+    },
+    "reviewer": {
+      "model": "__MODEL__",
+      "mode": "subagent",
+      "description": "Independent code quality gate -- read-only, severity-rated reports",
+      "temperature": 0.2
+    },
+    "testing": {
+      "model": "__MODEL__",
+      "mode": "subagent",
+      "description": "Test writer -- TDD, framework detection, edge case coverage",
+      "temperature": 0.2
+    },
     "vision": {
       "model": "__VISION_MODEL__",
       "mode": "subagent",
