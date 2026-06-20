@@ -1,6 +1,5 @@
 ---
 name: vision
-model: opencode/minimax-m3-free
 mode: subagent
 temperature: 0.2
 

@@ -618,16 +618,18 @@ function buildFreePrompt(primaryId, primaryName, visionId, visionName) {
 |-----------|-------|-------|
 | Bash, file ops, simple edits | @general | ${primaryId} (${primaryName}) |
 | Code (1-5 files, standard logic) | @general | ${primaryId} (${primaryName}) |
+| Complex code (5+ files, auth, architecture) | @coder | ${primaryId} (${primaryName}) |
 | Codebase research | @explore | ${primaryId} (${primaryName}) |
 | Architecture / planning | @plan | ${primaryId} (${primaryName}) |
 | Code scaffolding | @build | ${primaryId} (${primaryName}) |
+| UI/design system work | @ui-designer | ${primaryId} (${primaryName}) |
+| Code review / quality gate | @reviewer | ${primaryId} (${primaryName}) |
+| Test writing / TDD | @testing | ${primaryId} (${primaryName}) |
 ${same ? '' : `| Image / visual analysis | @vision | ${visionId} (${visionName}) |`}
 
 ## Available Glitch Variants in Free Mode
-- **Glitch (default)**: Delegates first, executes directly only as last resort. Uses @general, @explore, @plan, @build, @vision sub-agents.
+- **Glitch (default)**: Delegates first, executes directly only as last resort. Uses @general, @explore, @plan, @build, @coder, @ui-designer, @reviewer, @testing, @vision sub-agents.
 - **Glitch Omni**: Does everything itself -- no delegation. Executes code, writes files, runs bash directly. Use @glitch-omni to invoke.
-
-No premium agents (@coder, @reviewer, @general-paid, @build-paid) are available in free mode.
 
 ## ⚡ Dispatch-First Mandate (Immutable)
 Glitch's job is coordination. The first action for every code task is DISPATCH, not execution.
@@ -636,7 +638,7 @@ YOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the 
 
 - I may NOT use \`edit\`/\`write\`/\`bash\` for code work UNLESS a sub-agent was dispatched first and failed
 - Dispatch at todowrite time — send sub-agents in parallel while creating the task list
-- Fallback chain: free agent → paid agent (if available) → direct execution (last resort)
+- Fallback chain: free agent → direct execution (last resort — no paid fallbacks in free mode)
 - Direct work (no dispatch needed): memory writes (R12), git, planning, reading, questions
 - If caught violating: stop immediately, log FAILURE to scratchpad, dispatch correctly`;
 }
@@ -1168,42 +1170,46 @@ async function main() {
   log(DARK_GRAY, ' Switch models: node scripts/switch-model.mjs  |  Relaunch with: node scripts/launch-free.mjs --pick');
   log('');
 
-  // ---- Move .opencode/agents/ files to temp dir (free mode: no auto-discovered agents) ----
+  // ---- Backup paid agent files (-paid.md) during free mode (no paid fallbacks available) ----
   const AgentsDir = join(ROOT_DIR, '.opencode', 'agents');
   const AgentsBackupDir = join(tmpdir(), 'glitch-free-agents');
 
-  function backupAgentFiles() {
+  function backupPaidAgentFiles() {
     try {
       if (!existsSync(AgentsDir)) return;
       if (existsSync(AgentsBackupDir)) rmSync(AgentsBackupDir, { recursive: true, force: true });
       mkdirSync(AgentsBackupDir, { recursive: true });
-      const files = readdirSync(AgentsDir).filter(f => f.endsWith('.md'));
+      const files = readdirSync(AgentsDir).filter(f => f.endsWith('-paid.md'));
       for (const f of files) {
         copyFileSync(join(AgentsDir, f), join(AgentsBackupDir, f));
         unlinkSync(join(AgentsDir, f));
       }
-      log(DARK_GRAY, `  Backed up ${files.length} agent file(s) to temp dir`);
+      if (files.length > 0) {
+        log(DARK_GRAY, `  Backed up ${files.length} paid agent file(s) (not available in free mode)`);
+      }
     } catch (e) {
-      log(YELLOW, `  WARNING: Could not backup agent files: ${e.message}`);
+      log(YELLOW, `  WARNING: Could not backup paid agent files: ${e.message}`);
     }
   }
 
-  function restoreAgentFiles() {
+  function restorePaidAgentFiles() {
     try {
       if (!existsSync(AgentsBackupDir)) return;
       if (!existsSync(AgentsDir)) mkdirSync(AgentsDir, { recursive: true });
-      const files = readdirSync(AgentsBackupDir).filter(f => f.endsWith('.md'));
+      const files = readdirSync(AgentsBackupDir).filter(f => f.endsWith('-paid.md'));
       for (const f of files) {
         copyFileSync(join(AgentsBackupDir, f), join(AgentsDir, f));
       }
       rmSync(AgentsBackupDir, { recursive: true, force: true });
-      log(DARK_GRAY, `  Restored ${files.length} agent file(s)`);
+      if (files.length > 0) {
+        log(DARK_GRAY, `  Restored ${files.length} paid agent file(s)`);
+      }
     } catch (e) {
-      log(YELLOW, `  WARNING: Could not restore agent files: ${e.message}`);
+      log(YELLOW, `  WARNING: Could not restore paid agent files: ${e.message}`);
     }
   }
 
-  backupAgentFiles();
+  backupPaidAgentFiles();
 
   try {
     const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
@@ -1214,8 +1220,8 @@ async function main() {
     log(RED, ` OpenCode exited with error: ${e.message || e}`);
   }
 
-  // ---- Restore agent files ----
-  restoreAgentFiles();
+  // ---- Restore paid agent files ----
+  restorePaidAgentFiles();
 
   log('');
   log(GREEN, 'Free mode ended.');
