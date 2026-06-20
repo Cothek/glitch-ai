@@ -400,6 +400,32 @@ async function main() {
   log(CYAN, '  Checking Handy voice input...');
   await ensureHandy();
 
+  // ---- Ensure security & tool binaries are present ----
+  log(CYAN, '  Checking external tool dependencies...');
+  try {
+    const toolResult = run('node', [join(ROOT_DIR, 'scripts', 'ensure-tools.mjs'), '--json', '--check-only'], { timeout: 30000 });
+    if (toolResult.success && toolResult.stdout) {
+      const report = JSON.parse(toolResult.stdout);
+      if (report.skipped && report.skipped.length > 0) {
+        log(YELLOW, `  ${report.skipped.length} tools need installation. Installing...`);
+        const installResult = run('node', [join(ROOT_DIR, 'scripts', 'ensure-tools.mjs'), '--json'], { timeout: 300000 });
+        if (installResult.success && installResult.stdout) {
+          const installReport = JSON.parse(installResult.stdout);
+          if (installReport.installed.length > 0) {
+            log(GREEN, `  Installed: ${installReport.installed.join(', ')}`);
+          }
+          if (installReport.failed.length > 0) {
+            log(YELLOW, `  Failed: ${installReport.failed.join(', ')}`);
+          }
+        }
+      } else {
+        log(DARK_GREEN, `  All tools ready (${report.checked} checked)`);
+      }
+    }
+  } catch (e) {
+    log(DARK_YELLOW, '  Tool check skipped (non-critical)');
+  }
+
   // ---- Timestamped backup (preserved, never overwritten) ----
   if (existsSync(ConfigPath)) {
     if (!existsSync(BackupDir)) {

@@ -1036,6 +1036,96 @@ try {
   Write-ColorHost "  [ERROR] $_" "Red"
 }
 
+# ========== 11. External tool dependencies (config/tools.json) ==========
+try {
+  $toolManifestPath = Join-Path $RootDir "config\tools.json"
+  if (Test-Path $toolManifestPath) {
+    $toolManifest = Get-Content $toolManifestPath -Raw | ConvertFrom-Json
+    foreach ($tool in $toolManifest.tools) {
+      $toolName = $tool.name
+      $curVer = "not installed"
+      $latestVer = $tool.version
+      $updateNeeded = $false
+      $status = "ok"
+
+      if ($tool.type -eq "npm") {
+        # npm-installed tool
+        try {
+          $npmOut = & "npm.cmd" "list" "-g" "--depth=0" $tool.package 2>&1
+          if ($LASTEXITCODE -eq 0 -and $npmOut -match "@?\S+@(\S+)") {
+            $curVer = $matches[1]
+            if ($curVer -ne $latestVer -and $latestVer -ne "latest") {
+              $updateNeeded = $true
+              $updatesAvailable++
+            }
+          } else {
+            $curVer = "not installed"
+            $updateNeeded = $true
+            $updatesAvailable++
+          }
+        } catch {
+          $curVer = "check failed"
+          $status = "error"
+        }
+
+        if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains $toolName)) {
+          $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "$toolName (npm)" -FromVer $curVer -ToVer $latestVer)
+          if ($proceed) {
+            Write-ColorHost "  Installing $($tool.package)..." "Cyan"
+            & "npm.cmd" "install" "-g" $tool.package 2>&1
+            Write-ColorHost "  Done." "Green"
+            $updateNeeded = $false
+          }
+        }
+      } else {
+        # Binary tool
+        $binaryPath = Join-Path $RootDir $tool.binary
+        if (Test-Path $binaryPath) {
+          try {
+            $verOut = & $binaryPath "--version" 2>&1
+            if ($LASTEXITCODE -eq 0 -and $verOut) {
+              $curVer = ($verOut | Select-Object -First 1).Trim()
+            } else {
+              $verOut = & $binaryPath "-version" 2>&1
+              if ($LASTEXITCODE -eq 0 -and $verOut) {
+                $curVer = ($verOut | Select-Object -First 1).Trim()
+              } else {
+                $curVer = "exists (version unknown)"
+              }
+            }
+          } catch {
+            $curVer = "exists (version check failed)"
+          }
+          # For now, don't auto-update binaries — could be destructive
+          $updateNeeded = $false
+        } else {
+          $curVer = "not installed"
+          $updateNeeded = $true
+          $updatesAvailable++
+        }
+      }
+
+      $results += @{
+        name = "tool: $toolName"
+        current = $curVer
+        latest = $latestVer
+        update_available = $updateNeeded
+        update_type = if ($updateNeeded) {"install/reinstall"} else {"none"}
+        auto_safe = ($tool.type -eq "npm")
+        status = $status
+      }
+
+      $statusDisplay = if ($status -eq "error") {"ERROR"} elseif ($updateNeeded) {"MISSING"} else {"OK"}
+      $statusColor = if ($status -eq "error") {"Red"} elseif ($updateNeeded) {"Yellow"} else {"Green"}
+      Write-ColorHost ("  [{0}] {1}: {2} (expected: {3})" -f $statusDisplay, $toolName, $curVer, $latestVer) $statusColor
+    }
+  } else {
+    Write-ColorHost "  [SKIP] tools manifest not found at config/tools.json" "Gray"
+  }
+} catch {
+  Write-ColorHost "  [ERROR] tool dependency check failed: $_" "Red"
+}
+
 # ========== Summary Table ==========
 Write-Host ""
 Write-Host ("=" * 75) -ForegroundColor White
