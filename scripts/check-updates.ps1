@@ -95,6 +95,34 @@ function Confirm-Update {
   return $response.Trim().ToLower() -eq "y"
 }
 
+function Get-CurrentBranch {
+  param([string]$WorkDir)
+  Push-Location $WorkDir
+  try {
+    $branch = (& "git" "rev-parse" "--abbrev-ref" "HEAD" 2>$null).Trim()
+    if ($branch -eq "HEAD") { $branch = "detached" }
+    return $branch
+  } catch { return $null }
+  finally { Pop-Location }
+}
+
+function Get-RemoteBehindCount {
+  param([string]$WorkDir, [string]$Branch)
+  Push-Location $WorkDir
+  try {
+    $null = & "git" "fetch" "origin" $Branch 2>&1
+    if ($LASTEXITCODE -ne 0) {
+      Write-ColorHost "  WARNING: git fetch failed for origin/$Branch" "Yellow"
+      return $null
+    }
+    $raw = & "git" "rev-list" "--count" "HEAD..origin/$Branch" 2>&1
+    $count = $raw.Trim()
+    if ($count -match '^\d+$') { return [int]$count }
+    return $null
+  } catch { return $null }
+  finally { Pop-Location }
+}
+
 function Get-VersionTagFromRedirect {
   param([string]$Url)
   try {
@@ -426,47 +454,52 @@ try {
 try {
   $behindCount = "?"
   $updateNeeded = $false
+  $branchName = "unknown"
+  $displayLatest = "origin/main"
 
-  Push-Location $RootDir
-  try {
-    $null = & "git" "fetch" "origin" "main" 2>&1
-    $behindRaw = & "git" "rev-list" "--count" "HEAD..origin/main" 2>&1
-    $behindCount = $behindRaw.Trim()
-    if ($behindCount -match '^\d+$') {
-      $behindInt = [int]$behindCount
-      if ($behindInt -gt 0) {
+  $branchName = Get-CurrentBranch -WorkDir $RootDir
+  if ($branchName -and $branchName -ne "detached") {
+    $behindRaw = Get-RemoteBehindCount -WorkDir $RootDir -Branch $branchName
+    if ($null -ne $behindRaw) {
+      $behindCount = $behindRaw
+      $displayLatest = "origin/$branchName"
+      if ($behindCount -gt 0) {
         $updateNeeded = $true
         $updatesAvailable++
       }
     }
-  } catch { $behindCount = "error" }
-  Pop-Location
+  }
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-ai repo")) {
-    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "glitch-ai repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main")
+    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "glitch-ai repo (git pull)" -FromVer "$behindCount behind" -ToVer $displayLatest)
     if ($proceed) {
       Push-Location $RootDir
-      Write-ColorHost "  Pulling from origin/main..." "Cyan"
-      $null = & "git" "pull" "origin" "main" 2>&1
+      Write-ColorHost "  Pulling from origin/$branchName..." "Cyan"
+      $pullOut = & "git" "pull" "origin" $branchName 2>&1
+      if ($LASTEXITCODE -eq 0) {
+        Write-ColorHost "  Done." "Green"
+        $updateNeeded = $false
+        $behindCount = "0"
+      } else {
+        Write-ColorHost "  Pull failed. Output: $pullOut" "Red"
+      }
       Pop-Location
-      Write-ColorHost "  Done." "Green"
-      $updateNeeded = $false
-      $behindCount = "0"
     }
   }
 
+  $statusDisplay = "${branchName}: $behindCount commit(s) behind $displayLatest"
   $results += @{
     name = "glitch-ai repo"
-    current = "$behindCount commit(s) behind origin/main"
-    latest = "origin/main"
+    current = $statusDisplay
+    latest = $displayLatest
     update_available = $updateNeeded
     update_type = if ($updateNeeded) {"git pull"} else {"none"}
     auto_safe = $false
-    status = if ($behindCount -eq "error") {"error"} else {"ok"}
-    error_message = if ($behindCount -eq "error") {"git fetch/rev-list failed"} else {$null}
+    status = "ok"
+    error_message = $null
   }
 
-  Write-ColorHost ("  [{0}] $behindCount commit(s) behind origin/main" -f $(if ($updateNeeded) {"UPDATE"} else {"OK"})) $(if ($updateNeeded) {"Yellow"} else {"Green"})
+  Write-ColorHost ("  [{0}] $statusDisplay" -f $(if ($updateNeeded) {"UPDATE"} else {"OK"})) $(if ($updateNeeded) {"Yellow"} else {"Green"})
 } catch {
   $results += @{ name = "glitch-ai repo"; status = "error"; error_message = $_.Exception.Message }
   Write-ColorHost "  [ERROR] $_" "Red"
@@ -835,51 +868,57 @@ try {
   $behindCount = "?"
   $dirtyCount = 0
   $updateNeeded = $false
+  $branchName = "unknown"
+  $displayLatest = "origin/main"
 
   if (Test-Path (Join-Path $UserDir ".git")) {
-    Push-Location $UserDir
-    try {
-      $null = & "git" "fetch" "origin" "main" 2>&1
-      $behindRaw = & "git" "rev-list" "--count" "HEAD..origin/main" 2>&1
-      $behindStr = $behindRaw.Trim()
-      if ($behindStr -match '^\d+$') {
-        $behindCount = [int]$behindStr
+    $branchName = Get-CurrentBranch -WorkDir $UserDir
+    if ($branchName -and $branchName -ne "detached") {
+      $behindRaw = Get-RemoteBehindCount -WorkDir $UserDir -Branch $branchName
+      if ($null -ne $behindRaw) {
+        $behindCount = $behindRaw
+        $displayLatest = "origin/$branchName"
         if ($behindCount -gt 0) {
           $updateNeeded = $true
           $updatesAvailable++
         }
-      } else {
-        $behindCount = "?"
       }
-      # Also count dirty files
+    }
+    # Also count dirty files
+    Push-Location $UserDir
+    try {
       $dirtyRaw = & "git" "status" "--porcelain" 2>&1
       $dirtyCount = ($dirtyRaw | Where-Object { $_ -match '.' }).Count
-    } catch { $behindCount = "error" }
+    } catch { }
     Pop-Location
   } else {
     $behindCount = "not a repo"
   }
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-user-troy (user/)")) {
-    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "glitch-user-troy repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main")
+    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "glitch-user-troy repo (git pull)" -FromVer "$behindCount behind" -ToVer $displayLatest)
     if ($proceed) {
       Push-Location $UserDir
-      Write-ColorHost "  Pulling from origin/main..." "Cyan"
-      $null = & "git" "pull" "origin" "main" 2>&1
+      Write-ColorHost "  Pulling from origin/$branchName..." "Cyan"
+      $pullOut = & "git" "pull" "origin" $branchName 2>&1
+      if ($LASTEXITCODE -eq 0) {
+        Write-ColorHost "  Done." "Green"
+        $updateNeeded = $false
+        $behindCount = "0"
+      } else {
+        Write-ColorHost "  Pull failed. Output: $pullOut" "Red"
+      }
       Pop-Location
-      Write-ColorHost "  Done." "Green"
-      $updateNeeded = $false
-      $behindCount = "0"
     }
   }
 
   $dirtySuffix = if ($dirtyCount -gt 0) { " ($dirtyCount dirty)" } else { "" }
-  $statusDisplay = if ($behindCount -eq "?") { "unknown" } elseif ($behindCount -eq "error") { "error" } else { "$behindCount commit(s) behind$dirtySuffix" }
+  $statusDisplay = if ($branchName -eq "detached") { "detached HEAD (skip)" } elseif ($null -eq $branchName) { "no branch (skip)" } elseif ($behindCount -eq "?") { "unknown" } elseif ($behindCount -eq "error") { "error" } else { "${branchName}: $behindCount commit(s) behind $displayLatest$dirtySuffix" }
 
   $results += @{
     name = "glitch-user-troy (user/)"
     current = $statusDisplay
-    latest = "origin/main"
+    latest = $displayLatest
     update_available = $updateNeeded
     update_type = if ($updateNeeded) {"git pull"} else {"none"}
     auto_safe = $false
