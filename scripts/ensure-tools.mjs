@@ -59,9 +59,18 @@ function psQuote(str) {
   return str.replace(/'/g, "''");
 }
 
+function runNpm(args, opts = {}) {
+  const cmd = npmBin();
+  const fullArgs = isWindows() && cmd.endsWith('.cmd')
+    ? ['/d', '/s', '/c', cmd, ...args]
+    : args;
+  const fullCmd = isWindows() && cmd.endsWith('.cmd') ? 'cmd.exe' : cmd;
+  return execFileSync(fullCmd, fullArgs, { ...opts, stdio: 'pipe' });
+}
+
 function checkNpm(packageName) {
   try {
-    execFileSync(npmBin(), ['list', '-g', '--depth=0', packageName], { shell: isWindows(), stdio: 'pipe' });
+    runNpm(['list', '-g', '--depth=0', packageName]);
     return true;
   } catch {
     return false;
@@ -69,12 +78,12 @@ function checkNpm(packageName) {
 }
 
 function installNpm(packageName) {
-  execFileSync(npmBin(), ['install', '-g', packageName], { shell: isWindows(), stdio: 'pipe' });
+  runNpm(['install', '-g', packageName]);
 }
 
 function npmListVersion(packageName) {
   try {
-    const out = execFileSync(npmBin(), ['list', '-g', '--depth=0', packageName], { shell: isWindows(), encoding: 'utf8', stdio: 'pipe' });
+    const out = runNpm(['list', '-g', '--depth=0', packageName], { encoding: 'utf8' });
     return out.trim();
   } catch {
     return null;
