@@ -395,7 +395,7 @@ try {
 
   if ($IsUpdate -and $hasUpdate) {
     if ($updateType -eq "major") {
-      $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "GitNexus" -FromVer $curVer -ToVer $latestVer)
+      $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "GitNexus" -FromVer $curVer -ToVer $latestVer)
     } else {
       $proceed = $true
     }
@@ -443,7 +443,7 @@ try {
   Pop-Location
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-ai repo")) {
-    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "glitch-ai repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main")
+    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "glitch-ai repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main")
     if ($proceed) {
       Push-Location $RootDir
       Write-ColorHost "  Pulling from origin/main..." "Cyan"
@@ -498,7 +498,7 @@ try {
   Pop-Location
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-memorycore submodule")) {
-    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "glitch-memorycore submodule" -FromVer "$currentSha" -ToVer "remote")
+    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "glitch-memorycore submodule" -FromVer "$currentSha" -ToVer "remote")
     if ($proceed) {
       Push-Location $RootDir
       Write-ColorHost "  Updating glitch-memorycore submodule..." "Cyan"
@@ -654,7 +654,7 @@ try {
   }
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "cloudflared")) {
-    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "cloudflared" -FromVer $curVer -ToVer $latestVer)
+    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "cloudflared" -FromVer $curVer -ToVer $latestVer)
     if ($proceed) {
       $cloudflaredUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
       try {
@@ -733,7 +733,7 @@ try {
   }
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "Handy voice")) {
-    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "Handy voice" -FromVer $curInfo -ToVer $latestVer)
+    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "Handy voice" -FromVer $curInfo -ToVer $latestVer)
     if ($proceed) {
       Write-ColorHost "  Downloading latest Handy release..." "Cyan"
       try {
@@ -861,7 +861,7 @@ try {
   }
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-user-troy (user/)")) {
-    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "glitch-user-troy repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main")
+    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "glitch-user-troy repo (git pull)" -FromVer "$behindCount behind" -ToVer "origin/main")
     if ($proceed) {
       Push-Location $UserDir
       Write-ColorHost "  Pulling from origin/main..." "Cyan"
@@ -946,7 +946,7 @@ try {
   }
 
   if ($IsUpdate -and $hasUpdate -and ($Filter.Count -eq 0 -or $Filter -contains "Node.js (bundled)")) {
-    $proceed = ($Filter.Count -gt 0) -or (Confirm-Update -Name "Node.js (bundled)" -FromVer $bundledVer -ToVer $latestVer)
+    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "Node.js (bundled)" -FromVer $bundledVer -ToVer $latestVer)
     if ($proceed) {
       $nodeArch = "x64"
       try {
