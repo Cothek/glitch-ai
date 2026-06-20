@@ -7,6 +7,7 @@ import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
+import { checkRepoUpdates, checkUserRepoUpdates } from './lib/git-sync.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -323,146 +324,9 @@ async function checkAndSwitchToMain() {
   log('');
 }
 
-// ---- Sync glitch-ai repo from remote (fetch + ff-only pull with conflict handling) ----
-async function syncMainRepo() {
-  log(CYAN, '  Checking for repo updates...');
-
-  // Check current branch ΓÇö sync only applies on main
-  const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
-  if (!branch.success || branch.stdout.trim() !== 'main') {
-    const current = branch.success ? branch.stdout.trim() : 'unknown';
-    log(DARK_YELLOW, `  On branch '${current}' ΓÇö auto-sync only applies when on 'main'`);
-    return false;
-  }
-
-  // Fetch latest remote info
-  const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
-  if (!fetch.success) {
-    log(DARK_YELLOW, '  Could not fetch updates (offline?)');
-    return false;
-  }
-
-  // Check how far behind we are
-  const behind = run(GIT_BIN, ['rev-list', '--count', 'HEAD..origin/main'], { cwd: ROOT_DIR, timeout: 10000 });
-  if (!behind.success || !/^\d+$/.test(behind.stdout)) return false;
-
-  const count = parseInt(behind.stdout, 10);
-  if (count === 0) {
-    log(DARK_GREEN, '  glitch-ai repo up-to-date');
-    return true;
-  }
-
-  // Check if branches have diverged (local is also ahead of remote)
-  const ahead = run(GIT_BIN, ['rev-list', '--count', 'origin/main..HEAD'], { cwd: ROOT_DIR, timeout: 10000 });
-  const diverged = ahead.success && /^\d+$/.test(ahead.stdout) && parseInt(ahead.stdout, 10) > 0;
-
-  if (diverged) {
-    log(YELLOW, `  'main' has diverged from origin/main (${parseInt(ahead.stdout, 10)} ahead, ${count} behind).`);
-    log(YELLOW, '  Run manually: git checkout main && git pull');
-    return false;
-  }
-
-  log(YELLOW, `  glitch-ai repo: ${count} commit(s) behind origin/main`);
-
-  // Try fast-forward pull (succeeds if working tree is clean and no divergence)
-  const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
-  if (pull.success) {
-    log(GREEN, '  glitch-ai repo synced');
-    // Re-init submodules to match the parent repo's pinned commit (no --remote)
-    run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
-    return true;
-  }
-
-  // Fast-forward failed ΓÇö likely dirty working tree
-  log(YELLOW, '  Could not fast-forward (local changes may be blocking).');
-
-  // Show what tracked files are modified so the user can decide
-  const modified = run(GIT_BIN, ['diff', '--name-only'], { cwd: ROOT_DIR, timeout: 10000 });
-  if (modified.success && modified.stdout) {
-    const files = modified.stdout.split('\n').filter(l => l.trim().length > 0);
-    if (files.length > 0) {
-      log(YELLOW, `  ${files.length} tracked file(s) modified locally:`);
-      for (const f of files.slice(0, 10)) {
-        log(DARK_GRAY, `    ${f}`);
-      }
-      if (files.length > 10) {
-        log(DARK_GRAY, `    ... and ${files.length - 10} more`);
-      }
-    }
-  }
-
-  log(WHITE, '  [d] Discard local changes and pull (reverts tracked files only)');
-  log(WHITE, '  [s] Skip update (stay on current version, you can pull later)');
-  const choice = await askQuestion('  > ');
-
-  if (choice.trim().toLowerCase() === 'd') {
-    log(CYAN, '  Discarding local changes to tracked files...');
-    run(GIT_BIN, ['restore', '.'], { cwd: ROOT_DIR, timeout: 15000 });
-
-    const pull2 = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
-    if (pull2.success) {
-      log(GREEN, '  glitch-ai repo synced (local changes discarded)');
-      // Re-init submodules to match the parent repo's pinned commit (no --remote)
-      run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
-      return true;
-    }
-    log(RED, '  Pull still failed after discarding changes. Check git status manually.');
-  } else {
-    log(DARK_YELLOW, '  Skipping repo update.');
-  }
-
-  return false;
-}
-
-// ---- Sync user/ repo from remote (fetch + ff-only pull) ----
-async function syncUserRepo() {
-  const userGitDir = join(ROOT_DIR, 'user', '.git');
-  if (!existsSync(userGitDir)) return false;
-
-  log(CYAN, '  Checking user data updates...');
-
-  const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: join(ROOT_DIR, 'user'), timeout: 15000 });
-  if (!fetch.success) {
-    log(DARK_YELLOW, '  Could not fetch user data updates (offline?)');
-    return false;
-  }
-
-  const behind = run(GIT_BIN, ['rev-list', '--count', 'HEAD..origin/main'], { cwd: join(ROOT_DIR, 'user'), timeout: 10000 });
-  if (!behind.success || !/^\d+$/.test(behind.stdout)) return false;
-
-  const count = parseInt(behind.stdout, 10);
-  if (count === 0) {
-    log(DARK_GREEN, '  user data up-to-date');
-    return true;
-  }
-
-  log(YELLOW, `  user data: ${count} commit(s) behind`);
-
-  const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: join(ROOT_DIR, 'user'), timeout: 30000 });
-  if (pull.success) {
-    log(GREEN, '  user data synced');
-    return true;
-  }
-
-  log(YELLOW, '  Could not fast-forward user data (local changes may be blocking).');
-  log(WHITE, '  [d] Discard local user data changes and pull');
-  log(WHITE, '  [s] Skip update');
-  const choice = await askQuestion('  > ');
-
-  if (choice.trim().toLowerCase() === 'd') {
-    run(GIT_BIN, ['restore', '.'], { cwd: join(ROOT_DIR, 'user'), timeout: 15000 });
-    const pull2 = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: join(ROOT_DIR, 'user'), timeout: 30000 });
-    if (pull2.success) {
-      log(GREEN, '  user data synced (local changes discarded)');
-      return true;
-    }
-    log(RED, '  Pull still failed after discarding user data changes.');
-  } else {
-    log(DARK_YELLOW, '  Skipping user data update.');
-  }
-
-  return false;
-}
+// ---- Sync glitch-ai repo from remote (branch-aware, shared module) ----
+// Uses scripts/lib/git-sync.mjs — handles any branch, prompts interactively
+// Replaces the old syncMainRepo() that only worked on 'main'
 
 // --- Hardcoded fallback model groups (used when free-models.json is missing/stale) ---
 const FallbackModelGroups = [
@@ -716,11 +580,14 @@ async function main() {
     log(DARK_GREEN, '  Engine found');
   }
 
-  // ---- Sync glitch-ai repo from remote (fetch + auto-pull) ----
-  await syncMainRepo();
+  // ---- Sync glitch-ai repo from remote (branch-aware, shared module) ----
+  await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
 
   // ---- Sync user data repo (separate nested git repo) ----
-  await syncUserRepo();
+  const userRepoDir = join(ROOT_DIR, 'user');
+  if (existsSync(join(userRepoDir, '.git'))) {
+    await checkUserRepoUpdates({ cwd: userRepoDir, interactive: true });
+  }
 
   // ---- Fetch available free models (visible, before model picker) ----
   log(CYAN, '  Fetching available free models...');
@@ -1043,34 +910,7 @@ async function main() {
   const { checkAndPromptUpdates } = await import('./check-updates.mjs');
   await checkAndPromptUpdates({ skipIfNoPowerShell: !POWERSHELL });
 
-  // ---- Sync user memory data from private repo ----
-  if (existsSync(join(UserDir, '.git'))) {
-    try {
-      run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: UserDir, timeout: 15000 });
-      const behind = run(GIT_BIN, ['rev-list', '--count', 'HEAD..origin/main'], { cwd: UserDir, timeout: 10000 });
-
-      if (behind.success && /^\d+$/.test(behind.stdout)) {
-        const behindInt = parseInt(behind.stdout, 10);
-        if (behindInt > 0) {
-          const dirty = run(GIT_BIN, ['status', '--porcelain'], { cwd: UserDir, timeout: 5000 });
-          const dirtyCount = dirty.success && dirty.stdout
-            ? dirty.stdout.split('\n').filter(l => l.trim().length > 0).length
-            : 0;
-
-          if (dirtyCount === 0) {
-            log(CYAN, `  Syncing user data (${behindInt} commit(s) behind)...`);
-            const pullRes = run(GIT_BIN, ['pull', 'origin', 'main'], { cwd: UserDir, stdio: 'inherit', timeout: 30000 });
-            if (pullRes.success) log(GREEN, '  User data synced');
-          } else {
-            log(YELLOW, `  User data: ${behindInt} commit(s) behind, but working tree has ${dirtyCount} dirty file(s)`);
-            log(YELLOW, "  Run 'node scripts/sync-user.ps1 -Pull' manually or commit changes first.");
-          }
-        }
-      }
-    } catch (e) {
-      log(DARK_YELLOW, `  User data sync skipped (non-critical): ${e.message || e}`);
-    }
-  }
+  // ---- Sync user memory data from private repo (handled by checkUserRepoUpdates above) ----
 
 // ---- Auto-update opencode to latest (minor/patch) + sync local binary ----
   // Uses global npm install, then syncs local binary from global install
