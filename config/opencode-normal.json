@@ -90,20 +90,27 @@
                                    "description":  "Test writer -- TDD, framework detection, edge case coverage",
                                    "temperature":  0.2
                                },
-                  "vision":  {
-                                  "model":  "opencode/nemotron-3-ultra-free",
-                                  "mode":  "subagent",
-                                  "description":  "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
-                                  "permission":  {
-                                                      "read":  "allow",
-                                                      "bash":  "deny",
-                                                      "glob":  "deny",
-                                                      "grep":  "deny",
-                                                      "edit":  "deny"
-                                                  },
-                                  "temperature":  0.2
-                              }
-              },
+                   "vision":  {
+                                   "model":  "opencode/nemotron-3-ultra-free",
+                                   "mode":  "subagent",
+                                   "description":  "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
+                                   "permission":  {
+                                                       "read":  "allow",
+                                                       "bash":  "deny",
+                                                       "glob":  "deny",
+                                                       "grep":  "deny",
+                                                       "edit":  "deny"
+                                                   },
+                                   "temperature":  0.2
+                               },
+                   "glitch-omni":  {
+                                       "model":  "opencode-go/deepseek-v4-flash",
+                                       "mode":  "primary",
+                                       "description":  "Direct-execution variant — does everything itself, no sub-agent delegation. Alternative primary selectable from agent switcher.",
+                                       "color":  "#a855f7",
+                                       "temperature":  0.2
+                                   }
+               },
     "attachment":  {
                        "image":  {
                                      "auto_resize":  true,
