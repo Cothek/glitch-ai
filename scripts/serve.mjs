@@ -8,6 +8,7 @@ import { createInterface } from 'readline';
 import net from 'net';
 import crypto from 'crypto';
 import { get as httpsGet } from 'https';
+import { checkRepoUpdates, checkUserRepoUpdates } from './lib/git-sync.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -279,56 +280,9 @@ function pwsh(args, opts = {}) {
 }
 
 // ---- Silent repo sync for server mode (non-interactive, best-effort only) ----
-function syncMainRepoSilent() {
-  // Only sync when on main branch
-  const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
-  if (!branch.success || branch.stdout.trim() !== 'main') return;
-
-  const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 15000 });
-  if (!fetch.success) return;
-
-  const behind = run(GIT_BIN, ['rev-list', '--count', 'HEAD..origin/main'], { cwd: ROOT_DIR, timeout: 10000 });
-  if (!behind.success || !/^\d+$/.test(behind.stdout)) return;
-
-  const count = parseInt(behind.stdout, 10);
-  if (count === 0) return;
-
-  // Check for divergence before attempting pull
-  const ahead = run(GIT_BIN, ['rev-list', '--count', 'origin/main..HEAD'], { cwd: ROOT_DIR, timeout: 10000 });
-  if (ahead.success && /^\d+$/.test(ahead.stdout) && parseInt(ahead.stdout, 10) > 0) return;
-
-  log(DARK_GRAY, `  Server: glitch-ai repo ${count} commit(s) behind, syncing...`);
-
-  const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
-  if (pull.success) {
-    log(DARK_GREEN, '  Server: repo synced');
-    run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
-  }
-}
-
-function syncUserRepoSilent() {
-  const userGitDir = join(ROOT_DIR, 'user', '.git');
-  if (!existsSync(userGitDir)) return;
-
-  const fetch = run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: join(ROOT_DIR, 'user'), timeout: 15000 });
-  if (!fetch.success) return;
-
-  const behind = run(GIT_BIN, ['rev-list', '--count', 'HEAD..origin/main'], { cwd: join(ROOT_DIR, 'user'), timeout: 10000 });
-  if (!behind.success || !/^\d+$/.test(behind.stdout)) return;
-
-  const count = parseInt(behind.stdout, 10);
-  if (count === 0) return;
-
-  const ahead = run(GIT_BIN, ['rev-list', '--count', 'origin/main..HEAD'], { cwd: join(ROOT_DIR, 'user'), timeout: 10000 });
-  if (ahead.success && /^\d+$/.test(ahead.stdout) && parseInt(ahead.stdout, 10) > 0) return;
-
-  log(DARK_GRAY, `  Server: user data ${count} commit(s) behind, syncing...`);
-
-  const pull = run(GIT_BIN, ['pull', '--ff-only', 'origin', 'main'], { cwd: join(ROOT_DIR, 'user'), timeout: 30000 });
-  if (pull.success) {
-    log(DARK_GREEN, '  Server: user data synced');
-  }
-}
+// Uses scripts/lib/git-sync.mjs -- branch-aware, but in non-interactive mode
+// only auto-pulls on 'main' to avoid unexpected changes on feature branches
+// Replaces the old syncMainRepoSilent() and syncUserRepoSilent()
 
 function isProcessRunning(name) {
   try {
@@ -457,15 +411,44 @@ async function main() {
     log(DARK_GREEN, '  Engine found');
   }
 
-  // ---- Sync glitch-ai repo from remote (silent, best-effort) ----
-  syncMainRepoSilent();
+  // ---- Sync glitch-ai repo from remote (silent, best-effort, branch-aware) ----
+  await checkRepoUpdates({ cwd: ROOT_DIR, interactive: false, allowBranchSwitch: false });
 
   // ---- Sync user data repo (silent, best-effort) ----
-  syncUserRepoSilent();
+  const userRepoDir = join(ROOT_DIR, 'user');
+  if (existsSync(join(userRepoDir, '.git'))) {
+    await checkUserRepoUpdates({ cwd: userRepoDir, interactive: false, quiet: true });
+  }
 
   // ---- Auto-install Handy if missing ----
   log(CYAN, '  Checking Handy voice input...');
   await ensureHandy();
+
+  // ---- Ensure security & tool binaries are present ----
+  log(CYAN, '  Checking external tool dependencies...');
+  try {
+    const toolResult = run('node', [join(ROOT_DIR, 'scripts', 'ensure-tools.mjs'), '--json', '--check-only'], { timeout: 30000 });
+    if (toolResult.success && toolResult.stdout) {
+      const report = JSON.parse(toolResult.stdout);
+      if (report.skipped && report.skipped.length > 0) {
+        log(YELLOW, `  ${report.skipped.length} tools need installation. Installing...`);
+        const installResult = run('node', [join(ROOT_DIR, 'scripts', 'ensure-tools.mjs'), '--json'], { timeout: 300000 });
+        if (installResult.success && installResult.stdout) {
+          const installReport = JSON.parse(installResult.stdout);
+          if (installReport.installed.length > 0) {
+            log(GREEN, `  Installed: ${installReport.installed.join(', ')}`);
+          }
+          if (installReport.failed.length > 0) {
+            log(YELLOW, `  Failed: ${installReport.failed.join(', ')}`);
+          }
+        }
+      } else {
+        log(DARK_GREEN, `  All tools ready (${report.checked} checked)`);
+      }
+    }
+  } catch (e) {
+    log(DARK_YELLOW, '  Tool check skipped (non-critical)');
+  }
 
   // ---- Normalize backslash paths (startup) ----
   try {
@@ -677,34 +660,7 @@ async function main() {
     }
   }
 
-  // ---- Sync user memory data from private repo ----
-  if (existsSync(join(UserDir, '.git'))) {
-    try {
-      run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: UserDir, timeout: 15000 });
-      const behind = run(GIT_BIN, ['rev-list', '--count', 'HEAD..origin/main'], { cwd: UserDir, timeout: 10000 });
-
-      if (behind.success && /^\d+$/.test(behind.stdout)) {
-        const behindInt = parseInt(behind.stdout, 10);
-        if (behindInt > 0) {
-          const dirty = run(GIT_BIN, ['status', '--porcelain'], { cwd: UserDir, timeout: 5000 });
-          const dirtyCount = dirty.success && dirty.stdout
-            ? dirty.stdout.split('\n').filter(l => l.trim().length > 0).length
-            : 0;
-
-          if (dirtyCount === 0) {
-            log(CYAN, `  Syncing user data (${behindInt} commit(s) behind)...`);
-            run(GIT_BIN, ['pull', 'origin', 'main'], { cwd: UserDir, stdio: 'inherit', timeout: 30000 });
-            log(GREEN, '  User data synced');
-          } else {
-            log(YELLOW, `  User data: ${behindInt} commit(s) behind, but working tree has ${dirtyCount} dirty file(s)`);
-            log(YELLOW, "  Run 'node scripts/sync-user.ps1 -Pull' manually or commit changes first.");
-          }
-        }
-      }
-    } catch (e) {
-      log(DARK_YELLOW, `  User data sync skipped (non-critical): ${e.message || e}`);
-    }
-  }
+  // ---- Sync user memory data from private repo (handled by checkUserRepoUpdates above) ----
 
   // ---- Auto-update opencode to latest (minor/patch) + sync local binary ----
   try {

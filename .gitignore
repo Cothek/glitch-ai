@@ -77,6 +77,11 @@ glitch-website/scripts/screenshot.mjs
 user/
 !/user/.gitkeep
 
+# Security testing binaries (downloaded by bootstrap)
+tools/security/*.exe
+tools/security/*.tar.gz
+tools/security/*.zip
+
 # Runtime data directory (config backups, node bundle, model cache, screenshots)
 data/
 
