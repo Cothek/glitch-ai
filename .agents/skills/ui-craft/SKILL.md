@@ -87,6 +87,28 @@ Detect the styling approach from signals: Tailwind (`tailwind.config.*`, `@tailw
 
 **Tailwind anti-slop:** avoid `bg-gradient-to-r from-purple-500 to-cyan-500`, `animate-bounce`, heavy glow shadows. Tailwind makes it easier to ship slop faster.
 
+## Design System Map (Brief → System)
+
+Once you have the design read, pick the right foundation. Do not invent CSS for things that have an official package.
+
+### When to reach for a real design system
+| Brief reads as… | Reach for |
+|---|---|
+| Microsoft / enterprise SaaS / dashboards | `@fluentui/react-components` or `@fluentui/web-components` |
+| Google-ish UI, Material-flavored product | `@material/web` + Material 3 tokens |
+| IBM-style B2B / enterprise analytics | `@carbon/react` + `@carbon/styles` |
+| Shopify app surfaces | Polaris React or web components |
+| Atlassian / Jira-style product | `@atlaskit/*` + `@atlaskit/tokens` |
+| GitHub-style devtool / community page | `@primer/css` or `@primer/react-brand` |
+| Public-sector UK service | `govuk-frontend` |
+| US public-sector / trust-first | `uswds` |
+| Fast local-business / agency MVP | Bootstrap 5.3 |
+| Modern accessible React foundation | `@radix-ui/themes` |
+| Modern SaaS where you own the components | shadcn/ui (`npx shadcn@latest add ...`); never ship default state |
+| Tailwind-based modern SaaS / AI marketing | Tailwind v4 utilities + `dark:` variant |
+
+**One system per project.** Do not mix Fluent with Carbon in the same tree. Do not import shadcn/ui components into a Material 3 app.
+
 ---
 
 ## Discovery Phase (Always Run First)
@@ -115,6 +137,32 @@ The project's own code becomes the source of truth — no external config file. 
 
 ---
 
+## Brief Inference (Read the Room Before Anything Else)
+
+Before touching code or tweaking design direction, infer what the user actually wants. Most LLM design output is bad because the model jumps to a default aesthetic instead of reading the room.
+
+### Signal Reading
+Read these signals first:
+1. **Page kind** - landing (SaaS / consumer / agency / event), portfolio (dev / designer / creative studio), redesign (preserve vs overhaul), editorial / blog, dashboard, product UI.
+2. **Vibe words** the user used - "minimalist", "calm", "Linear-style", "Awwwards", "brutalist", "premium consumer", "Apple-y", "playful", "serious B2B", "editorial", "agency-y", "glassy", "dark tech".
+3. **Reference signals** - URLs they linked, products they named, brands they're competing with.
+4. **Audience** - B2B procurement panel vs. design-conscious consumer vs. recruiter scanning a portfolio. The audience picks the aesthetic, not your taste.
+5. **Brand assets that already exist** - logo, color, type, photography. For redesigns, these are starting material, not optional input.
+6. **Quiet constraints** - accessibility-first audiences, public-sector, regulated industries, trust-first commerce, kids' products. These constraints OVERRIDE aesthetic preference.
+
+### Design Read (Required Before Generating)
+Before any code, state in one line: **"Reading this as: <page kind> for <audience>, with a <vibe> language, leaning toward <design system or aesthetic family>."**
+
+Example reads:
+- *"Reading this as: B2B SaaS landing for technical buyers, with a Linear-style minimalist language, leaning toward Tailwind utilities + Geist + restrained motion."*
+- *"Reading this as: solo designer portfolio for hiring managers, with an editorial / kinetic-type language, leaning toward native CSS + scroll-driven animation + custom typography."*
+- *"Reading this as: redesign of a public-sector service site, with a trust-first language, leaning toward GOV.UK Frontend or USWDS."*
+
+If the brief is ambiguous, ask one clarifying question (not a multi-question dump) and only when the design read genuinely diverges.
+
+### Anti-Default Discipline
+Do not default to: AI-purple gradients, centered hero over dark mesh, three equal feature cards, generic glassmorphism on everything, infinite-loop micro-animations everywhere, Inter + slate-900. These are the LLM defaults. Reach past them deliberately based on the design read.
+
 ## Core Rules (Always Apply)
 
 ### The Anti-Slop Test
@@ -128,6 +176,11 @@ Before shipping any UI, ask: "If someone said AI made this, would they believe i
 - Emoji as feature icons
 - Bounce/elastic easing curves
 - Glassmorphism on dark + neon accents
+- Em-dashes (`—`) used as design flourish — typographic quotes only
+- Inter as the default font every time (rotate: Geist, Outfit, Satoshi, Cabinet Grotesk)
+- The premium-consumer beige/brass/espresso palette for cookware/wellness/artisan briefs (banned hex families: `#f5f1ea`, `#efeae0`, `#b08947`, `#9a2436`, `#7d5621` — warm paper, brass, oxblood, ochre defaults)
+- Div-based fake screenshots (hand-built product previews with `<div>` rectangles)
+- "Used by" / "Trusted by" logo wall inside the hero
 
 **Major (designers notice):**
 - Colored pills on trend percentages — use plain secondary text
@@ -140,6 +193,10 @@ Before shipping any UI, ask: "If someone said AI made this, would they believe i
 - Soft blurry gradient blobs/orbs
 - Generic CTAs ("Learn more", "Click here") — be specific
 - Walls of text — no landing section > 2-3 sentences
+- Lucide icons by default — prefer Phosphor, Radix, or Tabler
+- `h-screen` instead of `min-h-[100dvh]` for full-viewport sections
+
+**The Em-Dash Rule:** ASCII em-dashes (`—`) are banned as design flourish in headlines, eyebrows, quotes, body text, and CTAs. They are the #1 typographic AI tell. Use an em-dash only for its grammatical purpose (interruption in a sentence). Never use it as a decorative pause or bullet. Never use it in quotes as a stylistic long-pause.
 
 **Minor** (polish that separates good from great — full list in [review.md](references/review.md) Polish Pass): no `tabular-nums` on data, missing `text-wrap: balance`, straight quotes, no `&nbsp;` in brand names, testimonial star ratings, hero metric without adjacent context.
 
@@ -175,6 +232,21 @@ Every rule above has a context where it inverts. Stating the rule is half the wo
 - **"Never gradient text on metrics"** — branded marketing pages can use gradient on a single hero metric where the gradient is the brand expression, not decoration. Inside-the-product metrics still follow the rule.
 
 **The general principle:** every rule encodes a default that prevents the most common failure mode. When the context inverts the failure mode, the rule may invert too. The work is recognizing the inversion, not memorizing exceptions.
+
+### Image & Visual Asset Strategy
+
+Landing pages and portfolios are visual products. Text-only pages with fake-screenshot divs are slop.
+
+**Priority order for visual assets:**
+1. **Image-generation tool first** — if any image-gen tool is available (MCP, IDE-integrated, API), use it to create section-specific assets. When generating frontend design comps, follow the **one-horizontal-image-per-section** rule from `imagegen-frontend-web` — never combine multiple sections into a single tall image.
+2. **Real web images second** — use `https://picsum.photos/seed/{descriptive-seed}/{w}/{h}` for placeholder photography, or actual brand URLs.
+3. **Last resort: tell the user** — leave clearly-labeled placeholder slots (`<!-- TODO: hero product photo, 1600x1200 -->`).
+
+**Div-based fake screenshots are banned.** A "hand-built product preview" rendered with `<div>` rectangles, fake task lists, fake dashboards, fake terminal windows is a Tell.
+
+**Real company logos for social proof.** Do not default to plain text wordmarks. Use real SVG logos from Simple Icons CDN (`https://cdn.simpleicons.org/{slug}/ffffff`) or generate simple SVG monograms for invented brands. Logo wall = logos only — no industry labels below logos.
+
+**Hero needs a real visual.** Text + gradient blob is not a hero — it's a placeholder.
 
 ### Animation Decision Ladder
 
