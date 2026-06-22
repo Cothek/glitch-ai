@@ -391,10 +391,33 @@ async function main() {
   // ---- Load .env ----
   loadEnv();
 
-  // ---- Check prerequisites ----
+  // ---- Auto-bootstrap: download OpenCode if missing ----
   if (!existsSync(OpenCodeBin)) {
-    log(RED, '  OpenCode not found. Run bootstrap.ps1 first.');
-    process.exit(1);
+    log(YELLOW, '  OpenCode not found. Running bootstrap to download...');
+    if (isWin) {
+      const bootstrapScript = join(ROOT_DIR, 'scripts', 'bootstrap.ps1');
+      if (existsSync(bootstrapScript)) {
+        const result = pwsh(['-File', bootstrapScript], { stdio: 'inherit', timeout: 120000 });
+        if (!result.success) {
+          log(RED, '  ERROR: Bootstrap failed: ' + (result.error));
+          log(YELLOW, '  Try running manually: .\\scripts\\bootstrap.ps1');
+          process.exit(1);
+        }
+      } else {
+        log(RED, '  ERROR: bootstrap.ps1 not found.');
+        process.exit(1);
+      }
+    } else {
+      log(YELLOW, '  On Unix/macOS, please install opencode manually: npm install -g opencode-ai');
+      log(YELLOW, '  Then copy the binary to opencode/opencode in the project root.');
+      process.exit(1);
+    }
+    if (!existsSync(OpenCodeBin)) {
+      log(RED, '  ERROR: Bootstrap finished but OpenCode still not found.');
+      log(YELLOW, '  Try running manually: .\\scripts\\bootstrap.ps1');
+      process.exit(1);
+    }
+    log(GREEN, '  OpenCode downloaded successfully.');
   }
 
   // ---- Self-heal: initialize git submodules if needed ----
@@ -450,12 +473,15 @@ async function main() {
     log(DARK_YELLOW, '  Tool check skipped (non-critical)');
   }
 
-  // ---- Normalize backslash paths (startup) ----
+  // ---- Normalize backslash paths ----
+  log(CYAN, '  Normalizing backslash paths...');
   try {
     if (existsSync(FixPathsMjs)) {
       run('node', [FixPathsMjs], { timeout: 15000, stdio: 'ignore' });
     }
-  } catch {}
+  } catch {
+    log(DARK_YELLOW, '  Path normalization failed (non-critical)');
+  }
 
   // ---- Port check (zombie socket prevention) ----
   const portFree = await checkPort(TARGET_PORT);
@@ -607,28 +633,22 @@ async function main() {
   if (!existsSync(BackupDir)) mkdirSync(BackupDir, { recursive: true });
   writeFileSync(ModeFile, modeInfo, 'utf-8');
 
-  // ---- Check dependency updates (Win only) ----
-  if (isWin) {
-    log(CYAN, '  Checking dependency updates...');
-    const checkUpdatesScript = join(ROOT_DIR, 'scripts', 'check-updates.ps1');
-    if (existsSync(checkUpdatesScript)) {
-      try {
-        pwsh(['-File', checkUpdatesScript, '-CheckOnly'], { timeout: 60000, stdio: 'ignore' });
-        const statusFile = join(ROOT_DIR, 'data', 'update-status.json');
-        if (existsSync(statusFile)) {
-          const status = readJson(statusFile);
-          if (status && status.updates_available > 0) {
-            log(YELLOW, `  ${status.updates_available} update(s) available -- run check-updates.ps1 -Update`);
-          } else {
-            log(DARK_GREEN, '  All dependencies up-to-date');
-          }
-        }
-      } catch {
-        log(DARK_YELLOW, '  Update check skipped (non-critical)');
+  // ---- Check dependency updates (shared module) ----
+  try {
+    const { checkUpdatesOnly } = await import('./check-updates.mjs');
+    const status = await checkUpdatesOnly();
+    if (status && status.updates_available > 0) {
+      log(YELLOW, '  ' + status.updates_available + ' update(s) available');
+      const updateItems = (status.items || []).filter(i => i.update_available);
+      for (const item of updateItems) {
+        log(DARK_YELLOW, '    ' + item.name + ': ' + item.current + ' -> ' + item.latest);
       }
+      log(DARK_YELLOW, '  Run: .\\scripts\\check-updates.ps1 -Update');
+    } else {
+      log(DARK_GREEN, '  All dependencies up-to-date');
     }
-  } else {
-    log(DARK_GRAY, '  Dependency update check skipped (Windows-only PS1 scripts)');
+  } catch (e) {
+    log(DARK_YELLOW, '  Update check skipped (non-critical)');
   }
 
   // ---- Check for new models (Win only) ----
@@ -636,7 +656,7 @@ async function main() {
     try {
       const checkModelsScript = join(ROOT_DIR, 'scripts', 'check-models.ps1');
       if (existsSync(checkModelsScript)) {
-        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 60000, stdio: 'ignore' });
+        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 60000, stdio: 'inherit' });
         const modelStatusFile = join(ROOT_DIR, 'data', 'model-update-status.json');
         if (existsSync(modelStatusFile)) {
           const modelStatus = readJson(modelStatusFile);
