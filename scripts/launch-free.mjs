@@ -514,9 +514,10 @@ const HELP_TEXT = `
 
   Options:
     --help              Show this help
+    --serve             Launch in server (web) mode instead of TUI
 
   Both model pickers (primary + vision) always appear in interactive mode.
-  Saved preferences are shown as the default ΓÇö press Enter to keep them.
+  Saved preferences are shown as the default — press Enter to keep them.
 
   Set either model via environment variable to skip its picker entirely.
 
@@ -530,6 +531,8 @@ if (args.includes('--help')) {
   console.log(HELP_TEXT);
   process.exit(0);
 }
+
+const isServe = args.includes('--serve');
 
 async function main() {
   // ---- Branch check (runs first) ----
@@ -998,7 +1001,7 @@ async function main() {
     log(DARK_GREEN, '  Handy already running');
   }
 
-  // ---- Launch OpenCode ----
+  // ---- Display model info ----
   log('');
   log(CYAN, ' Starting OpenCode in free mode...');
   log(GREEN, ` Primary: ${primaryModel} (${primaryName})`);
@@ -1051,20 +1054,30 @@ async function main() {
 
   backupPaidAgentFiles();
 
-  try {
-    const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
-    if (!result.success && result.status !== null) {
-      log(RED, ` OpenCode exited with error (code ${result.status})`);
+  if (isServe) {
+    // Server (web) mode
+    const { launchServer } = await import('./lib/server-mode.mjs');
+    await launchServer({ OpenCodeBin, ROOT_DIR, HandyBin });
+    restorePaidAgentFiles();
+    log('');
+    log(GREEN, 'Free mode ended.');
+  } else {
+    // TUI mode
+    try {
+      const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
+      if (!result.success && result.status !== null) {
+        log(RED, ` OpenCode exited with error (code ${result.status})`);
+      }
+    } catch (e) {
+      log(RED, ` OpenCode exited with error: ${e.message || e}`);
     }
-  } catch (e) {
-    log(RED, ` OpenCode exited with error: ${e.message || e}`);
+
+    // ---- Restore paid agent files ----
+    restorePaidAgentFiles();
+
+    log('');
+    log(GREEN, 'Free mode ended.');
   }
-
-  // ---- Restore paid agent files ----
-  restorePaidAgentFiles();
-
-  log('');
-  log(GREEN, 'Free mode ended.');
 }
 
 main().catch(e => {

@@ -994,7 +994,9 @@ try {
       } catch { }
 
       $zipUrl = "https://nodejs.org/dist/$latestVer/node-$latestVer-win-$nodeArch.zip"
-      $zipPath = "$env:TEMP\node-portable.zip"
+      $zipDir = Join-Path $RootDir "data\downloads"
+      if (-not (Test-Path $zipDir)) { New-Item -ItemType Directory -Path $zipDir -Force | Out-Null }
+      $zipPath = Join-Path $zipDir "node-portable.zip"
       try {
         $downloaded = Invoke-WithSpinner -Label "Downloading Node.js $latestVer" -ScriptBlock ([scriptblock]::Create("Invoke-WebRequest -Uri '$zipUrl' -OutFile '$zipPath' -UseBasicParsing -TimeoutSec 60 -ErrorAction Stop"))
         if ($downloaded -and (Test-Path $zipPath)) {
@@ -1005,9 +1007,16 @@ try {
           $exe = Get-ChildItem $extractDir -Recurse -Filter "node.exe" | Select-Object -First 1
           if ($exe) {
             $targetDir = Join-Path $RootDir "data\node"
-            if (Test-Path $targetDir) { Remove-Item $targetDir -Recurse -Force -ErrorAction SilentlyContinue }
+            $oldDir = Join-Path $RootDir "data\node.old"
+            # Rename old dir to .old first (rename works even with running executables on Windows)
+            if (Test-Path $targetDir) {
+              if (Test-Path $oldDir) { Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue }
+              Rename-Item $targetDir $oldDir -ErrorAction SilentlyContinue
+            }
             New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
             Copy-Item "$($exe.Directory.FullName)\*" $targetDir -Recurse -Force
+            # Cleanup .old - may fail if node.exe still running; cleaned on next update
+            Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue
             Write-ColorHost "  Node.js $latestVer extracted to data/node/" "Green"
           }
 

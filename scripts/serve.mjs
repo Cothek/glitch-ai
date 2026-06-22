@@ -5,8 +5,6 @@ import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
-import net from 'net';
-import crypto from 'crypto';
 import { get as httpsGet } from 'https';
 import { checkRepoUpdates, checkUserRepoUpdates } from './lib/git-sync.mjs';
 
@@ -20,9 +18,7 @@ const isLinux = process.platform === 'linux';
 
 const OPENCODE_BIN_NAME = isWin ? 'opencode.exe' : 'opencode';
 const OpenCodeBin = join(ROOT_DIR, 'opencode', OPENCODE_BIN_NAME);
-const CLOUDFLARED_BIN_NAME = isWin ? 'cloudflared.exe' : 'cloudflared';
-const CloudflaredBin = join(ROOT_DIR, CLOUDFLARED_BIN_NAME);
-const CloudflaredConfig = join(ROOT_DIR, 'config', 'cloudflared-config.yml');
+
 const HANDY_VERSION = '0.8.3';
 const HandyBin = isWin
   ? join(ROOT_DIR, 'handy-voice', 'Handy', 'handy.exe')
@@ -34,8 +30,6 @@ const TemplatePath = join(ROOT_DIR, 'config', 'opencode-normal.json');
 const BackupDir = join(ROOT_DIR, 'data', 'backups');
 const ModeFile = join(BackupDir, '.last-mode');
 const UserDir = join(ROOT_DIR, 'user');
-const PwFile = join(ROOT_DIR, '.server-password');
-const AuthProxyPath = join(ROOT_DIR, 'plugins', 'auth-proxy.mjs');
 const FixPathsMjs = join(ROOT_DIR, 'scripts', 'fix-paths.mjs');
 
 // ---- Prepend bundled Node to PATH if available ----
@@ -45,8 +39,7 @@ if (existsSync(BundledNodeBin)) {
   process.env.PATH = BundledNodeDir + (isWin ? ';' : ':') + process.env.PATH;
 }
 
-const TARGET_PORT = 4102;
-const AUTH_PROXY_PORT = 4100;
+
 
 const MAGENTA = '\x1b[35m';
 const CYAN = '\x1b[36m';
@@ -284,22 +277,7 @@ function pwsh(args, opts = {}) {
 // only auto-pulls on 'main' to avoid unexpected changes on feature branches
 // Replaces the old syncMainRepoSilent() and syncUserRepoSilent()
 
-function isProcessRunning(name) {
-  try {
-    if (isWin) {
-      const out = execFileSync('tasklist', ['/NH', '/FI', `IMAGENAME eq ${name}.exe`], { encoding: 'utf-8', timeout: 5000 });
-      return out.includes(`${name}.exe`);
-    } else if (isMac) {
-      execFileSync('pgrep', ['-x', name], { encoding: 'utf-8', timeout: 3000 });
-      return true;
-    } else {
-      execFileSync('pgrep', ['-f', 'Handy'], { encoding: 'utf-8', timeout: 3000 });
-      return true;
-    }
-  } catch {
-    return false;
-  }
-}
+
 
 // ---- Load .env if present ----
 function loadEnv() {
@@ -317,64 +295,11 @@ function loadEnv() {
   }
 }
 
-// ---- Port check (zombie socket prevention) ----
-function checkPort(port) {
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    socket.setTimeout(500);
-    socket.once('connect', () => {
-      socket.destroy();
-      resolve(false);
-    });
-    socket.once('timeout', () => {
-      socket.destroy();
-      resolve(true);
-    });
-    socket.once('error', () => {
-      socket.destroy();
-      resolve(true);
-    });
-    socket.connect(port, '127.0.0.1');
-  });
-}
 
-// ---- Password ACL management ----
-function setPasswordAcl(filePath) {
-  try {
-    if (isWin) {
-      const username = process.env.USERNAME || 'opencode';
-      run('icacls', [filePath, '/inheritance:r', '/grant', `${username}:R`], { stdio: 'ignore', timeout: 5000 });
-    } else {
-      run('chmod', ['600', filePath], { stdio: 'ignore', timeout: 5000 });
-    }
-  } catch {}
-}
 
-// ---- Background process tracking ----
-const backgroundProcesses = [];
-let fixerInterval = null;
 
-function trackProcess(proc) {
-  backgroundProcesses.push(proc);
-  return proc;
-}
 
-function cleanup() {
-  for (const proc of backgroundProcesses) {
-    try {
-      if (!proc.killed) proc.kill();
-    } catch {}
-  }
-  backgroundProcesses.length = 0;
-  if (fixerInterval) {
-    clearInterval(fixerInterval);
-    fixerInterval = null;
-  }
-}
 
-process.on('exit', cleanup);
-process.on('SIGINT', () => process.exit(130));
-process.on('SIGTERM', () => process.exit(143));
 
 // ==========================================================
 //                          MAIN
@@ -391,10 +316,33 @@ async function main() {
   // ---- Load .env ----
   loadEnv();
 
-  // ---- Check prerequisites ----
+  // ---- Auto-bootstrap: download OpenCode if missing ----
   if (!existsSync(OpenCodeBin)) {
-    log(RED, '  OpenCode not found. Run bootstrap.ps1 first.');
-    process.exit(1);
+    log(YELLOW, '  OpenCode not found. Running bootstrap to download...');
+    if (isWin) {
+      const bootstrapScript = join(ROOT_DIR, 'scripts', 'bootstrap.ps1');
+      if (existsSync(bootstrapScript)) {
+        const result = pwsh(['-File', bootstrapScript], { stdio: 'inherit', timeout: 120000 });
+        if (!result.success) {
+          log(RED, '  ERROR: Bootstrap failed: ' + (result.error));
+          log(YELLOW, '  Try running manually: .\\scripts\\bootstrap.ps1');
+          process.exit(1);
+        }
+      } else {
+        log(RED, '  ERROR: bootstrap.ps1 not found.');
+        process.exit(1);
+      }
+    } else {
+      log(YELLOW, '  On Unix/macOS, please install opencode manually: npm install -g opencode-ai');
+      log(YELLOW, '  Then copy the binary to opencode/opencode in the project root.');
+      process.exit(1);
+    }
+    if (!existsSync(OpenCodeBin)) {
+      log(RED, '  ERROR: Bootstrap finished but OpenCode still not found.');
+      log(YELLOW, '  Try running manually: .\\scripts\\bootstrap.ps1');
+      process.exit(1);
+    }
+    log(GREEN, '  OpenCode downloaded successfully.');
   }
 
   // ---- Self-heal: initialize git submodules if needed ----
@@ -450,25 +398,15 @@ async function main() {
     log(DARK_YELLOW, '  Tool check skipped (non-critical)');
   }
 
-  // ---- Normalize backslash paths (startup) ----
+  // ---- Normalize backslash paths ----
+  log(CYAN, '  Normalizing backslash paths...');
   try {
     if (existsSync(FixPathsMjs)) {
       run('node', [FixPathsMjs], { timeout: 15000, stdio: 'ignore' });
     }
-  } catch {}
-
-  // ---- Port check (zombie socket prevention) ----
-  const portFree = await checkPort(TARGET_PORT);
-  if (!portFree) {
-    log(RED, `  ERROR: Port ${TARGET_PORT} is in use (likely orphan TCP socket from previous crash).`);
-    if (isWin) {
-      log(YELLOW, '  Fix: Run PowerShell as Admin and execute: net stop winnat; net start winnat');
-    } else {
-      log(YELLOW, `  Fix: lsof -i :${TARGET_PORT} -t | xargs kill`);
-    }
-    process.exit(1);
+  } catch {
+    log(DARK_YELLOW, '  Path normalization failed (non-critical)');
   }
-  log(CYAN, `  Port ${TARGET_PORT} is free`);
 
   // ---- Timestamped backup (preserved, never overwritten) ----
   if (existsSync(ConfigPath)) {
@@ -607,28 +545,22 @@ async function main() {
   if (!existsSync(BackupDir)) mkdirSync(BackupDir, { recursive: true });
   writeFileSync(ModeFile, modeInfo, 'utf-8');
 
-  // ---- Check dependency updates (Win only) ----
-  if (isWin) {
-    log(CYAN, '  Checking dependency updates...');
-    const checkUpdatesScript = join(ROOT_DIR, 'scripts', 'check-updates.ps1');
-    if (existsSync(checkUpdatesScript)) {
-      try {
-        pwsh(['-File', checkUpdatesScript, '-CheckOnly'], { timeout: 60000, stdio: 'ignore' });
-        const statusFile = join(ROOT_DIR, 'data', 'update-status.json');
-        if (existsSync(statusFile)) {
-          const status = readJson(statusFile);
-          if (status && status.updates_available > 0) {
-            log(YELLOW, `  ${status.updates_available} update(s) available -- run check-updates.ps1 -Update`);
-          } else {
-            log(DARK_GREEN, '  All dependencies up-to-date');
-          }
-        }
-      } catch {
-        log(DARK_YELLOW, '  Update check skipped (non-critical)');
+  // ---- Check dependency updates (shared module) ----
+  try {
+    const { checkUpdatesOnly } = await import('./check-updates.mjs');
+    const status = await checkUpdatesOnly();
+    if (status && status.updates_available > 0) {
+      log(YELLOW, '  ' + status.updates_available + ' update(s) available');
+      const updateItems = (status.items || []).filter(i => i.update_available);
+      for (const item of updateItems) {
+        log(DARK_YELLOW, '    ' + item.name + ': ' + item.current + ' -> ' + item.latest);
       }
+      log(DARK_YELLOW, '  Run: .\\scripts\\check-updates.ps1 -Update');
+    } else {
+      log(DARK_GREEN, '  All dependencies up-to-date');
     }
-  } else {
-    log(DARK_GRAY, '  Dependency update check skipped (Windows-only PS1 scripts)');
+  } catch (e) {
+    log(DARK_YELLOW, '  Update check skipped (non-critical)');
   }
 
   // ---- Check for new models (Win only) ----
@@ -636,7 +568,7 @@ async function main() {
     try {
       const checkModelsScript = join(ROOT_DIR, 'scripts', 'check-models.ps1');
       if (existsSync(checkModelsScript)) {
-        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 60000, stdio: 'ignore' });
+        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 60000, stdio: 'inherit' });
         const modelStatusFile = join(ROOT_DIR, 'data', 'model-update-status.json');
         if (existsSync(modelStatusFile)) {
           const modelStatus = readJson(modelStatusFile);
@@ -711,138 +643,9 @@ async function main() {
     }
   }
 
-  // ---- Cloudflare Tunnel status check ----
-  let cloudflareOk = false;
-  const cloudflareDomain = process.env.GLITCH_DOMAIN;
-
-  if (existsSync(CloudflaredBin)) {
-    if (existsSync(CloudflaredConfig)) {
-      cloudflareOk = true;
-      if (cloudflareDomain) {
-        log(GREEN, `  Cloudflare Tunnel: ${cloudflareDomain}`);
-      } else {
-        log(GREEN, '  Cloudflare Tunnel: configured');
-      }
-    } else {
-      log(YELLOW, '  Cloudflare Tunnel: not configured. Run setup-tunnel.ps1 first.');
-    }
-  } else {
-    log(YELLOW, `  Cloudflare Tunnel: ${CLOUDFLARED_BIN_NAME} not found`);
-  }
-
-  // ---- Password management (before auth proxy) ----
-  let pw = process.env.OPENCODE_SERVER_PASSWORD;
-  if (!pw) {
-    if (!existsSync(PwFile)) {
-      pw = crypto.randomBytes(16).toString('hex');
-      writeFileSync(PwFile, pw, 'utf-8');
-    } else {
-      pw = readFileSync(PwFile, 'utf-8').trim();
-    }
-    setPasswordAcl(PwFile);
-    process.env.OPENCODE_SERVER_PASSWORD = pw;
-  }
-
-  const authToken = Buffer.from(`opencode:${pw}`).toString('base64');
-
-  // ---- Project-pinned URL (SPA decodes base64url slug) ----
-  const projectDir = process.env.GLITCH_PROJECT_DIR || ROOT_DIR;
-  const dirSlug = Buffer.from(projectDir, 'utf-8').toString('base64url');
-
-  // ---- Start Cloudflare Tunnel ----
-  if (cloudflareOk) {
-    log(CYAN, '  Starting Cloudflare Tunnel...');
-    const cfProc = spawn(CloudflaredBin, ['tunnel', '--config', CloudflaredConfig, 'run'], {
-      stdio: 'ignore',
-      windowsHide: true
-    });
-    cfProc.on('error', () => { cloudflareOk = false; });
-    cfProc.unref();
-    trackProcess(cfProc);
-    await new Promise(r => setTimeout(r, 2000));
-    if (cloudflareDomain) {
-      log(GREEN, `  Tunnel running: https://${cloudflareDomain}`);
-    }
-  }
-
-  // ---- Start Handy ----
-  const handyProcName = isWin ? 'handy' : 'Handy';
-  if (!isProcessRunning(handyProcName)) {
-    if (existsSync(HandyBin)) {
-      log(CYAN, '  Starting Handy voice input...');
-      if (isMac) {
-        const handyApp = join(ROOT_DIR, 'handy-voice', 'Handy.app');
-        if (existsSync(handyApp)) {
-          spawn('open', [handyApp], { detached: true, stdio: 'ignore' }).unref();
-        } else {
-          const proc = spawn(HandyBin, [], { detached: true, stdio: 'ignore' });
-          proc.unref();
-        }
-      } else {
-        const proc = spawn(HandyBin, [], { detached: true, stdio: 'ignore', windowsHide: true });
-        proc.unref();
-      }
-      await new Promise(r => setTimeout(r, 1000));
-    } else {
-      log(DARK_YELLOW, '  Handy not found (optional). Voice input disabled.');
-    }
-  } else {
-    log(DARK_GREEN, '  Handy already running');
-  }
-
-  // ---- Start Auth Proxy ----
-  log(CYAN, `  Starting auth proxy (port ${AUTH_PROXY_PORT} -> ${TARGET_PORT})...`);
-  try {
-    const authProxyProc = spawn('node', [AuthProxyPath, String(AUTH_PROXY_PORT), `http://localhost:${TARGET_PORT}`], {
-      stdio: 'ignore',
-      windowsHide: true
-    });
-    authProxyProc.on('error', (err) => {
-      log(YELLOW, `  Auth proxy failed to start: ${err.message}`);
-    });
-    authProxyProc.unref();
-    trackProcess(authProxyProc);
-    await new Promise(r => setTimeout(r, 1000));
-  } catch (e) {
-    log(YELLOW, `  Auth proxy start failed: ${e.message}`);
-  }
-
-  // ---- Display URLs ----
-  log('');
-  log(YELLOW, `  Server password: ${pw}`);
-  log(YELLOW, '  Username: opencode');
-  if (cloudflareDomain) {
-    log(GREEN, `  Web access URL: https://${cloudflareDomain}/${dirSlug}/?auth_token=${authToken}`);
-  }
-  log(GREEN, `  Local URL: http://localhost:${TARGET_PORT}`);
-  log('');
-
-  // ---- Periodic path fixer (runs every 5 min) ----
-  if (existsSync(FixPathsMjs)) {
-    fixerInterval = setInterval(() => {
-      run('node', [FixPathsMjs], { timeout: 15000, stdio: 'ignore' });
-    }, 300000);
-    fixerInterval.unref();
-    log(CYAN, '  Path fixer running (every 5 min)');
-  }
-
-  // ---- Launch OpenCode Web (blocking) ----
-  log(CYAN, '  Launching OpenCode Web...');
-  console.log('');
-
-  try {
-    run(OpenCodeBin, ['web', '--port', String(TARGET_PORT), '--hostname', '0.0.0.0'], {
-      cwd: ROOT_DIR,
-      stdio: 'inherit',
-      timeout: 0
-    });
-  } catch (e) {
-    log(RED, `  OpenCode exited with error: ${e.message || e}`);
-  }
-
-  // ---- Cleanup happens here (via finally equivalent through process.on) ----
-  log('');
-  log(MAGENTA, 'Glitch server session ended.');
+  // ---- Launch Server ----
+  const { launchServer } = await import('./lib/server-mode.mjs');
+  await launchServer({ OpenCodeBin, ROOT_DIR, HandyBin });
 }
 
 main().catch(e => {

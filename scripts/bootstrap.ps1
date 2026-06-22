@@ -64,7 +64,9 @@ if ($needsDownload) {
     try {
       $nodeArch = if ($isArm) { "arm64" } else { "x64" }
       $zipUrl = "https://nodejs.org/dist/$latestVer/node-$latestVer-win-$nodeArch.zip"
-      $zipPath = "$env:TEMP\node-portable.zip"
+      $zipDir = Join-Path $RootDir "data\downloads"
+      if (-not (Test-Path $zipDir)) { New-Item -ItemType Directory -Path $zipDir -Force | Out-Null }
+      $zipPath = Join-Path $zipDir "node-portable.zip"
 
       Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
 
@@ -75,9 +77,16 @@ if ($needsDownload) {
 
       $extractedExe = Get-ChildItem $extractDir -Recurse -Filter "node.exe" | Select-Object -First 1
       if ($extractedExe) {
-        if (Test-Path $BundledNodeDir) { Remove-Item $BundledNodeDir -Recurse -Force -ErrorAction SilentlyContinue }
+        $oldDir = "$BundledNodeDir.old"
+        # Rename old dir to .old first (rename works even with running executables on Windows)
+        if (Test-Path $BundledNodeDir) {
+          if (Test-Path $oldDir) { Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue }
+          Rename-Item $BundledNodeDir $oldDir -ErrorAction SilentlyContinue
+        }
         New-Item -ItemType Directory -Path $BundledNodeDir -Force | Out-Null
         Copy-Item "$($extractedExe.Directory.FullName)\*" $BundledNodeDir -Recurse -Force
+        # Cleanup .old - may fail if node.exe still running; cleaned on next update
+        Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host "  Node.js extracted to data/node/" -ForegroundColor Green
       } else {
         throw "Could not find node.exe in extracted archive"

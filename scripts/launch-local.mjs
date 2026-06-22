@@ -351,6 +351,7 @@ YOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the 
 }
 
 const args = process.argv.slice(2);
+const isServe = args.includes('--serve');
 if (args.includes('--help')) {
   console.log(`
   Glitch AI - Local Mode (cross-platform)
@@ -359,6 +360,7 @@ if (args.includes('--help')) {
 
   Options:
     --model <id>        Set local model ID (overrides GLITCH_LOCAL_MODEL)
+    --serve             Launch in server (web) mode instead of TUI
     --help              Show this help
 
   Environment:
@@ -770,24 +772,31 @@ async function main() {
     log(DARK_GREEN, '  Handy already running');
   }
 
-  // ---- Launch OpenCode ----
+  // ---- Display model info ----
   log('');
   log(CYAN, ' Starting OpenCode in local mode...');
   log(GREEN, ` Model: ${localModel} via LM Studio (192.168.86.139:1234)`);
   log(DARK_GRAY, ' Make sure LM Studio is running and the model is loaded.');
   log('');
 
-  try {
-    const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
-    if (!result.success && result.status !== null) {
-      log(RED, ` OpenCode exited with error (code ${result.status})`);
+  if (isServe) {
+    // Server (web) mode
+    const { launchServer } = await import('./lib/server-mode.mjs');
+    await launchServer({ OpenCodeBin, ROOT_DIR, HandyBin });
+  } else {
+    // TUI mode
+    try {
+      const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
+      if (!result.success && result.status !== null) {
+        log(RED, ` OpenCode exited with error (code ${result.status})`);
+      }
+    } catch (e) {
+      log(RED, ` OpenCode exited with error: ${e.message || e}`);
     }
-  } catch (e) {
-    log(RED, ` OpenCode exited with error: ${e.message || e}`);
-  }
 
-  log('');
-  log(GREEN, 'Local mode ended.');
+    log('');
+    log(GREEN, 'Local mode ended.');
+  }
 }
 
 main().catch(e => {

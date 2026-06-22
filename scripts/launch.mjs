@@ -326,6 +326,7 @@ const HELP_TEXT = `
 
   Options:
     --help              Show this help
+    --serve             Launch in server (web) mode instead of TUI
 
   Environment:
     GLITCH_USER         Set user profile name explicitly
@@ -336,6 +337,8 @@ if (args.includes('--help')) {
   console.log(HELP_TEXT);
   process.exit(0);
 }
+
+const isServe = args.includes('--serve');
 
 async function main() {
   // ---- Branch check (runs first) ----
@@ -697,23 +700,28 @@ async function main() {
     log(DARK_GREEN, '  Handy already running');
   }
 
-  // ---- Launch OpenCode ----
-  log(CYAN, '  Starting OpenCode...');
-  console.log('');
+  // ---- Launch ----
+  if (isServe) {
+    // Server (web) mode
+    const { launchServer } = await import('./lib/server-mode.mjs');
+    await launchServer({ OpenCodeBin, ROOT_DIR, HandyBin });
+  } else {
+    // TUI mode
+    log(CYAN, '  Starting OpenCode...');
+    console.log('');
 
-  try {
-    // Use stdio: 'inherit' so the user can interact with opencode's TUI
-    const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
-    if (!result.success && result.status !== null) {
-      log(RED, `  OpenCode exited with error (code ${result.status})`);
+    try {
+      const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
+      if (!result.success && result.status !== null) {
+        log(RED, `  OpenCode exited with error (code ${result.status})`);
+      }
+    } catch (e) {
+      log(RED, `  OpenCode exited with error: ${e.message || e}`);
     }
-  } catch (e) {
-    log(RED, `  OpenCode exited with error: ${e.message || e}`);
-  }
 
-  // ---- Done ----
-  console.log('');
-  log(MAGENTA, 'Glitch session ended.');
+    console.log('');
+    log(MAGENTA, 'Glitch session ended.');
+  }
 }
 
 main().catch(e => {
