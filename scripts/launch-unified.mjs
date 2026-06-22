@@ -123,7 +123,7 @@ function getModeLabel(combinedKey) {
   return `${delivery.name} + ${model.name}`;
 }
 
-async function showDeliveryMenu(savedDeliveryId) {
+async function showGlitchModeMenu(savedDeliveryId) {
   log(MAGENTA, '');
   log(MAGENTA, ' Glitch AI - Unified Launcher');
   log(MAGENTA, '');
@@ -131,8 +131,8 @@ async function showDeliveryMenu(savedDeliveryId) {
   if (savedDeliveryId) {
     const saved = DELIVERIES.find(d => d.id === savedDeliveryId);
     if (saved) {
-      log(CYAN, ` Last delivery: ${saved.name}`);
-      log(DARK_GRAY, ' Press Enter to keep it, or pick a different delivery:');
+      log(CYAN, ` Last Glitch mode: ${saved.name}`);
+      log(DARK_GRAY, ' Press Enter to keep it, or pick a different Glitch mode:');
       log('');
     }
   }
@@ -145,8 +145,8 @@ async function showDeliveryMenu(savedDeliveryId) {
   });
 
   const prompt = savedDeliveryId
-    ? `Delivery (1-${DELIVERIES.length}, Enter for saved): `
-    : `Delivery (1-${DELIVERIES.length}): `;
+    ? `Glitch mode (1-${DELIVERIES.length}, Enter for saved): `
+    : `Glitch mode (1-${DELIVERIES.length}): `;
 
   const selection = await askQuestion(prompt);
   return selection.trim();
@@ -222,8 +222,8 @@ async function main() {
   Options:
     --help, -h       Show this help
     --mode <key>     Skip menu, launch specific mode directly
-                     Combined format: <delivery>-<tier>  (e.g. normal-paid, web-free)
-                     Old format: <tier>                 (assumes normal delivery)
+                     Combined format: <glitch-mode>-<tier>  (e.g. normal-paid, web-free)
+                     Old format: <tier>                 (assumes normal mode)
                      Tiers: paid, free, local, safe
     --reset          Clear saved preference and show menu
 
@@ -258,8 +258,8 @@ async function main() {
       }
     }
 
-    // Level 1: Delivery mode
-    const delSelection = await showDeliveryMenu(savedDelivery);
+    // Level 1: Glitch mode
+    const delSelection = await showGlitchModeMenu(savedDelivery);
     let deliveryId;
     if (!delSelection && savedDelivery) {
       deliveryId = savedDelivery;
@@ -268,7 +268,7 @@ async function main() {
       if (!isNaN(num) && num >= 1 && num <= DELIVERIES.length) {
         deliveryId = DELIVERIES[num - 1].id;
       } else {
-        log(RED, ' Invalid delivery selection. Exiting.');
+        log(RED, ' Invalid Glitch mode selection. Exiting.');
         process.exit(1);
       }
     }
@@ -300,7 +300,7 @@ async function main() {
   const config = SCRIPT_MAP[modeId];
   if (!config) {
     log(RED, ` Unknown mode: ${modeId}`);
-    log(YELLOW, ' Valid format: <delivery>-<tier> (e.g. normal-paid, web-free)');
+    log(YELLOW, ' Valid format: <glitch-mode>-<tier> (e.g. normal-paid, web-free)');
     process.exit(1);
   }
 
