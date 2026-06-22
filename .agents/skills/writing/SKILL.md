@@ -1,12 +1,12 @@
-# Writing Craft -- Remove AI Telltales
+# Writing Craft - Remove AI Telltales
 
 When producing ANY written content (responses, documentation, comments, commit messages, code review comments, or generated text), apply these rules to avoid common AI writing tells.
 
 ## Hard Rules (Always Apply)
 
 ### Punctuation
-- **No em dashes (--)**. Use commas, colons, periods, or double hyphens (--) instead.
-- Example: "Three things: speed, clarity, and precision." NOT "Three things -- speed, clarity, and precision."
+- **No em dashes**. Use a single dash, comma, colon, or period instead.
+- Example: "Three things: speed, clarity, and precision." NOT "Three things - speed, clarity, and precision." or "Three things -- speed, clarity, and precision."
 - Exception: Code comments or technical documentation where the style guide explicitly requires them.
 
 ### No AI Filler Words
