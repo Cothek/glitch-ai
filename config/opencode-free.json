@@ -99,7 +99,8 @@
         "bash": "deny",
         "glob": "deny",
         "grep": "deny",
-        "edit": "deny"
+        "edit": "deny",
+        "skill": "deny"
       },
       "temperature": 0.2
     },

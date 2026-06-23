@@ -20,11 +20,14 @@ permission:
   read: allow
   edit: deny
   bash: deny
-  glob: allow
-  grep: allow
+  glob: deny
+  grep: deny
   list: allow
   webfetch: allow
   websearch: deny
+  question: deny
+  todowrite: deny
+  skill: deny
 ---
 
 # @vision-paid — Image & Visual Content Analysis (Paid Fallback)
@@ -96,3 +99,5 @@ Provide structured output:
 - ❌ Do NOT make assumptions about content that isn't visible
 - ❌ Do NOT edit files — this is read-only analysis
 - ❌ Do NOT infer user intent from a screenshot alone — flag ambiguities
+- ❌ Do NOT load or use ANY skill — you have `skill: deny`. You are an image analyst, not a skill user.
+- ❌ Do NOT attempt to generate or create images. You ANALYZE images. If you see an "image-generation" skill listed, IGNORE it. Your job is analysis only.

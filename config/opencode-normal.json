@@ -192,7 +192,8 @@
                                                        "bash":  "deny",
                                                        "glob":  "deny",
                                                        "grep":  "deny",
-                                                       "edit":  "deny"
+                                                       "edit":  "deny",
+                                                       "skill":  "deny"
                                                    },
                                    "temperature":  0.2
                                },
@@ -232,10 +233,167 @@
                                                                 "websearch":  "deny",
                                                                 "skill":  "allow"
                                                             },
-                                            "temperature":  0.2
-                                        }
-                },
-    "attachment":  {
+                                             "temperature":  0.2
+                                         },
+                     "general-paid":  {
+                                          "model":  "opencode-go/deepseek-v4-flash",
+                                          "mode":  "subagent",
+                                          "description":  "General-purpose agent — paid fallback for @general. Same capabilities (bash, file ops, simple edits, standard code) but on paid model with higher reliability. Use when @general (free) returns empty results due to quota exhaustion or transient failure.",
+                                          "permission":  {
+                                                              "read":  "allow",
+                                                              "edit":  "allow",
+                                                              "bash":  "allow",
+                                                              "glob":  "allow",
+                                                              "grep":  "allow",
+                                                              "list":  "allow",
+                                                              "webfetch":  "allow",
+                                                              "websearch":  "deny",
+                                                              "question":  "allow",
+                                                              "todowrite":  "allow"
+                                                          },
+                                          "temperature":  0.2
+                                      },
+                     "explore-paid":  {
+                                          "model":  "opencode-go/deepseek-v4-flash",
+                                          "mode":  "subagent",
+                                          "description":  "Codebase research — paid fallback for @explore. Read-only codebase search and analysis. Use when @explore (free) returns empty results.",
+                                          "permission":  {
+                                                              "read":  "allow",
+                                                              "edit":  "deny",
+                                                              "bash":  "deny",
+                                                              "glob":  "allow",
+                                                              "grep":  "allow",
+                                                              "list":  "allow",
+                                                              "webfetch":  "allow",
+                                                              "websearch":  "deny"
+                                                          },
+                                          "temperature":  0.2
+                                      },
+                     "plan-paid":  {
+                                       "model":  "opencode-go/deepseek-v4-flash",
+                                       "mode":  "subagent",
+                                       "description":  "Architecture & planning — paid fallback for @plan. Reason about architecture and design decisions without executing code. Use when @plan (free) returns empty results.",
+                                       "permission":  {
+                                                           "read":  "allow",
+                                                           "edit":  "deny",
+                                                           "bash":  "deny",
+                                                           "glob":  "allow",
+                                                           "grep":  "allow",
+                                                           "list":  "allow",
+                                                           "webfetch":  "allow"
+                                                       },
+                                       "temperature":  0.2
+                                   },
+                     "build-paid":  {
+                                        "model":  "opencode-go/deepseek-v4-flash",
+                                        "mode":  "subagent",
+                                        "description":  "Code scaffolding — paid fallback for @build. Generates code from prompts and structure. Use when @build (free) returns empty results.",
+                                        "permission":  {
+                                                            "read":  "allow",
+                                                            "edit":  "allow",
+                                                            "bash":  "allow",
+                                                            "glob":  "allow",
+                                                            "grep":  "allow",
+                                                            "list":  "allow",
+                                                            "webfetch":  "allow",
+                                                            "websearch":  "deny",
+                                                            "question":  "allow",
+                                                            "todowrite":  "allow"
+                                                        },
+                                        "temperature":  0.2
+                                    },
+                     "coder-paid":  {
+                                        "model":  "opencode-go/kimi-k2.6",
+                                        "mode":  "subagent",
+                                        "description":  "Senior full-stack engineer — paid fallback with kimi-k2.6. Use for complex multi-file features, architecture work, or when the free coder agent's quota is exhausted.",
+                                        "permission":  {
+                                                            "read":  "allow",
+                                                            "edit":  "allow",
+                                                            "bash":  "allow",
+                                                            "glob":  "allow",
+                                                            "grep":  "allow",
+                                                            "list":  "allow",
+                                                            "webfetch":  "allow",
+                                                            "websearch":  "deny",
+                                                            "question":  "allow",
+                                                            "todowrite":  "allow"
+                                                        },
+                                        "temperature":  0.2
+                                    },
+                     "ui-designer-paid":  {
+                                              "model":  "opencode-go/kimi-k2.6",
+                                              "mode":  "subagent",
+                                              "description":  "Senior UI designer — paid fallback with kimi-k2.6. Visual design, component creation, layout, styling, responsive, or UX improvements. Use when the free ui-designer's quota is exhausted or for especially complex design work.",
+                                              "permission":  {
+                                                                  "read":  "allow",
+                                                                  "edit":  "allow",
+                                                                  "bash":  "allow",
+                                                                  "glob":  "allow",
+                                                                  "grep":  "allow",
+                                                                  "list":  "allow",
+                                                                  "webfetch":  "allow",
+                                                                  "websearch":  "deny",
+                                                                  "question":  "allow",
+                                                                  "todowrite":  "allow",
+                                                                  "skill":  "allow"
+                                                              },
+                                              "temperature":  0.2
+                                          },
+                     "reviewer-paid":  {
+                                           "model":  "opencode-go/qwen3.6-plus",
+                                           "mode":  "subagent",
+                                           "description":  "Independent code quality and security reviewer — paid fallback with qwen3.6-plus. Use when the free reviewer's quota is exhausted or for especially critical security reviews. NEVER modifies code.",
+                                           "permission":  {
+                                                               "read":  "allow",
+                                                               "edit":  "deny",
+                                                               "bash":  "deny",
+                                                               "glob":  "allow",
+                                                               "grep":  "allow",
+                                                               "list":  "allow",
+                                                               "webfetch":  "allow",
+                                                               "websearch":  "deny",
+                                                               "skill":  "allow"
+                                                           },
+                                           "temperature":  0.2
+                                       },
+                     "testing-paid":  {
+                                          "model":  "opencode-go/kimi-k2.6",
+                                          "mode":  "subagent",
+                                          "description":  "Senior QA engineer — paid fallback with kimi-k2.6. Test generation, coverage analysis, and TDD. Use when the free testing agent's quota is exhausted or for especially complex test suites.",
+                                          "permission":  {
+                                                              "read":  "allow",
+                                                              "edit":  "allow",
+                                                              "bash":  "allow",
+                                                              "glob":  "allow",
+                                                              "grep":  "allow",
+                                                              "list":  "allow",
+                                                              "webfetch":  "allow",
+                                                              "websearch":  "deny",
+                                                              "question":  "allow",
+                                                              "todowrite":  "allow",
+                                                              "skill":  "allow"
+                                                          },
+                                          "temperature":  0.2
+                                      },
+                     "vision-paid":  {
+                                         "model":  "opencode-go/qwen3.6-plus",
+                                         "mode":  "subagent",
+                                         "description":  "Image and visual content analysis — paid fallback with qwen3.6-plus. Use when the free vision agent's quota is exhausted or for especially detailed visual analysis.",
+                                          "permission":  {
+                                                              "read":  "allow",
+                                                              "edit":  "deny",
+                                                              "bash":  "deny",
+                                                              "glob":  "deny",
+                                                              "grep":  "deny",
+                                                              "list":  "allow",
+                                                              "webfetch":  "allow",
+                                                              "websearch":  "deny",
+                                                              "skill":  "deny"
+                                                          },
+                                         "temperature":  0.2
+                                     }
+                 },
+     "attachment":  {
                        "image":  {
                                      "auto_resize":  true,
                                      "max_width":  2000,
