@@ -48,48 +48,124 @@
                                                  },
                                   "temperature":  0.2
                               },
-                  "explore":  {
-                                  "model":  "opencode/deepseek-v4-flash-free",
-                                  "mode":  "subagent",
-                                  "description":  "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
-                                  "temperature":  0.2
-                              },
-                  "plan":  {
-                               "model":  "opencode/deepseek-v4-flash-free",
-                               "mode":  "subagent",
-                               "description":  "Planning mode -- reason about architecture and designs without executing code.",
-                               "temperature":  0.2
-                           },
-                  "build":  {
-                                "model":  "opencode/deepseek-v4-flash-free",
-                                "mode":  "subagent",
-                                "description":  "Code scaffolding -- generates code from prompts.",
-                                "temperature":  0.2
-                            },
-                  "coder":  {
-                                 "model":  "opencode/nemotron-3-ultra-free",
-                                 "mode":  "subagent",
-                                 "description":  "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
-                                 "temperature":  0.2
-                             },
-                  "ui-designer":  {
-                                       "model":  "opencode/nemotron-3-ultra-free",
-                                       "mode":  "subagent",
-                                       "description":  "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
-                                       "temperature":  0.2
-                                   },
-                  "reviewer":  {
-                                    "model":  "opencode/nemotron-3-ultra-free",
-                                    "mode":  "subagent",
-                                    "description":  "Independent code quality gate -- read-only, severity-rated reports",
-                                    "temperature":  0.2
-                                },
-                  "testing":  {
-                                   "model":  "opencode/nemotron-3-ultra-free",
+                   "explore":  {
+                                   "model":  "opencode/deepseek-v4-flash-free",
                                    "mode":  "subagent",
-                                   "description":  "Test writer -- TDD, framework detection, edge case coverage",
+                                   "description":  "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
+                                   "permission":  {
+                                                       "read":  "allow",
+                                                       "edit":  "deny",
+                                                       "bash":  "deny",
+                                                       "glob":  "allow",
+                                                       "grep":  "allow",
+                                                       "list":  "allow",
+                                                       "webfetch":  "allow"
+                                                   },
                                    "temperature":  0.2
                                },
+                   "plan":  {
+                                "model":  "opencode/deepseek-v4-flash-free",
+                                "mode":  "subagent",
+                                "description":  "Planning mode -- reason about architecture and designs without executing code.",
+                                "permission":  {
+                                                    "read":  "allow",
+                                                    "edit":  "deny",
+                                                    "bash":  "deny",
+                                                    "glob":  "allow",
+                                                    "grep":  "allow",
+                                                    "list":  "allow",
+                                                    "webfetch":  "allow"
+                                                },
+                                "temperature":  0.2
+                            },
+                   "build":  {
+                                 "model":  "opencode/deepseek-v4-flash-free",
+                                 "mode":  "subagent",
+                                 "description":  "Code scaffolding -- generates code from prompts.",
+                                 "permission":  {
+                                                     "read":  "allow",
+                                                     "edit":  "allow",
+                                                     "bash":  "allow",
+                                                     "glob":  "allow",
+                                                     "grep":  "allow",
+                                                     "list":  "allow",
+                                                     "webfetch":  "allow"
+                                                 },
+                                 "temperature":  0.2
+                             },
+                   "coder":  {
+                                  "model":  "opencode/nemotron-3-ultra-free",
+                                  "mode":  "subagent",
+                                  "description":  "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
+                                  "permission":  {
+                                                      "read":  "allow",
+                                                      "edit":  "allow",
+                                                      "bash":  "allow",
+                                                      "glob":  "allow",
+                                                      "grep":  "allow",
+                                                      "list":  "allow",
+                                                      "webfetch":  "allow",
+                                                      "websearch":  "deny",
+                                                      "question":  "allow",
+                                                      "todowrite":  "allow"
+                                                  },
+                                  "temperature":  0.2
+                              },
+                   "ui-designer":  {
+                                        "model":  "opencode/nemotron-3-ultra-free",
+                                        "mode":  "subagent",
+                                        "description":  "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
+                                        "permission":  {
+                                                            "read":  "allow",
+                                                            "edit":  "allow",
+                                                            "bash":  "allow",
+                                                            "glob":  "allow",
+                                                            "grep":  "allow",
+                                                            "list":  "allow",
+                                                            "webfetch":  "allow",
+                                                            "websearch":  "deny",
+                                                            "question":  "allow",
+                                                            "todowrite":  "allow",
+                                                            "skill":  "allow"
+                                                        },
+                                        "temperature":  0.2
+                                    },
+                   "reviewer":  {
+                                     "model":  "opencode/nemotron-3-ultra-free",
+                                     "mode":  "subagent",
+                                     "description":  "Independent code quality gate -- read-only, severity-rated reports",
+                                     "permission":  {
+                                                         "read":  "allow",
+                                                         "edit":  "deny",
+                                                         "bash":  "deny",
+                                                         "glob":  "allow",
+                                                         "grep":  "allow",
+                                                         "list":  "allow",
+                                                         "webfetch":  "allow",
+                                                         "websearch":  "deny",
+                                                         "skill":  "allow"
+                                                     },
+                                     "temperature":  0.2
+                                 },
+                   "testing":  {
+                                    "model":  "opencode/nemotron-3-ultra-free",
+                                    "mode":  "subagent",
+                                    "description":  "Test writer -- TDD, framework detection, edge case coverage",
+                                    "permission":  {
+                                                        "read":  "allow",
+                                                        "edit":  "allow",
+                                                        "bash":  "allow",
+                                                        "glob":  "allow",
+                                                        "grep":  "allow",
+                                                        "list":  "allow",
+                                                        "webfetch":  "allow",
+                                                        "websearch":  "deny",
+                                                        "question":  "allow",
+                                                        "todowrite":  "allow",
+                                                        "skill":  "allow"
+                                                    },
+                                    "temperature":  0.2
+                                },
                     "pentester":  {
                                       "model":  "opencode/nemotron-3-ultra-free",
                                       "mode":  "subagent",
@@ -121,12 +197,26 @@
                                    "temperature":  0.2
                                },
                     "glitch-omni":  {
-                                        "model":  "opencode-go/deepseek-v4-flash",
-                                        "mode":  "primary",
-                                        "description":  "Direct-execution variant — does everything itself, no sub-agent delegation. Alternative primary selectable from agent switcher.",
-                                        "color":  "#a855f7",
-                                        "temperature":  0.2
-                                    },
+                                         "model":  "opencode-go/deepseek-v4-flash",
+                                         "mode":  "primary",
+                                         "description":  "Direct-execution variant — does everything itself, no sub-agent delegation. Alternative primary selectable from agent switcher.",
+                                         "color":  "#a855f7",
+                                         "permission":  {
+                                                             "read":  "allow",
+                                                             "edit":  "allow",
+                                                             "bash":  "allow",
+                                                             "glob":  "allow",
+                                                             "grep":  "allow",
+                                                             "list":  "allow",
+                                                             "webfetch":  "allow",
+                                                             "websearch":  "allow",
+                                                             "question":  "allow",
+                                                             "skill":  "allow",
+                                                             "todowrite":  "allow",
+                                                             "task":  "deny"
+                                                         },
+                                         "temperature":  0.2
+                                     },
                     "pentester-paid":  {
                                             "model":  "opencode-go/kimi-k2.6",
                                             "mode":  "subagent",
@@ -158,7 +248,7 @@
                      },
     "server":  {
                    "port":  4100,
-                   "hostname":  "0.0.0.0"
+                   "hostname":  "127.0.0.1"
                },
     "default_agent":  "glitch",
     "provider":  {
