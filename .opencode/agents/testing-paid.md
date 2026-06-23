@@ -28,6 +28,7 @@ permission:
   websearch: deny
   question: allow
   todowrite: allow
+  skill: allow
 ---
 
 # @testing-paid — Senior QA Engineer (Paid Fallback)

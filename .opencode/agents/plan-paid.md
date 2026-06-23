@@ -7,6 +7,14 @@ description: >-
   Architecture & planning — paid fallback for @plan. Reason about
   architecture and design decisions without executing code.
   Use when @plan (free) returns empty results.
+permission:
+  read: allow
+  edit: deny
+  bash: deny
+  glob: allow
+  grep: allow
+  list: allow
+  webfetch: allow
 ---
 
 # @plan-paid — Architecture & Planning (Paid Fallback)

@@ -1,5 +1,5 @@
 @echo off
-cd /d "E:\Glitch AI\glitch-ai"
+cd /d "%~dp0.."
 echo Capturing old opencode PID...
 for /f "tokens=2" %%a in ('tasklist /fi "imagename eq opencode.exe" /nh 2^>nul') do (
     set OLD_PID=%%a

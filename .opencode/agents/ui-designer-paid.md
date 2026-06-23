@@ -27,6 +27,7 @@ permission:
   websearch: deny
   question: allow
   todowrite: allow
+  skill: allow
 ---
 
 # @ui-designer-paid — Senior UI Designer (Paid Fallback)
