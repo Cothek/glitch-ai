@@ -451,6 +451,16 @@ async function main() {
     process.exit(1);
   }
 
+  // ---- Model ID normalization (prevents double prefix / backslash issues) ----
+  function normalizeModelId(modelId) {
+    if (!modelId) return modelId;
+    // 1. Replace any backslashes with forward slashes (Windows env var issue)
+    let normalized = modelId.replace(/\\/g, '/');
+    // 2. Fix double nvidia/nvidia/ prefix (historical bug in check-models.ps1)
+    normalized = normalized.replace(/^nvidia\/nvidia\//, 'nvidia/');
+    return normalized;
+  }
+
   // ---- Determine model (env var > --model flag > default) ----
   let localModel = DEFAULT_LOCAL_MODEL;
   let modelSource = 'default';
@@ -463,6 +473,9 @@ async function main() {
     localModel = process.env.GLITCH_LOCAL_MODEL;
     modelSource = 'env var';
   }
+
+  // Normalize the model ID before use
+  localModel = normalizeModelId(localModel);
 
   const modelNameParts = localModel.split('/');
   const modelName = modelNameParts[modelNameParts.length - 1].replace(/-/g, ' ');

@@ -14,12 +14,22 @@ $UpdateCache = $args -contains "-UpdateCache"
 $CheckOnly = (-not $ResetCache -and -not $UpdateCache) -or $args -contains "-CheckOnly"
 $Silent = $args -contains "-Silent"
 
+# --- Helper: normalize model ID (prevents double prefix / backslash issues) ---
+function Normalize-ModelId($modelId) {
+  if (-not $modelId) { return $modelId }
+  # 1. Replace any backslashes with forward slashes (Windows env var issue)
+  $normalized = $modelId -replace '\\', '/'
+  # 2. Fix double nvidia/nvidia/ prefix (historical bug)
+  $normalized = $normalized -replace '^nvidia/nvidia/', 'nvidia/'
+  return $normalized
+}
+
 # --- Helper: fetch JSON from a URL ----------------------------------------------
 function Fetch-Models($url) {
   try {
     $response = Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 15 -ErrorAction Stop
     $ids = if ($response.data) { $response.data.id } else { @() }
-    return @($ids | Where-Object { $_ -ne $null })
+    return @($ids | Where-Object { $_ -ne $null } | ForEach-Object { Normalize-ModelId $_ })
   } catch {
     if (-not $Silent) { Write-Host " [WARN] Failed to fetch $url : $_" -ForegroundColor Yellow }
     return $null
@@ -239,8 +249,8 @@ if ($zenModels -ne $null) {
 
 if ($nvidiaModels -ne $null) {
     # NVIDIA returns full model IDs like "nvidia/qwen/qwen3-coder-480b-a35b-instruct"
-    # Shorten them to just the path for cache consistency
-    $nvidiaShort = $nvidiaModels | ForEach-Object { "nvidia/$_".Replace("nvidia/nvidia/", "nvidia/") }
+    # Normalize to ensure consistent format (single nvidia/ prefix, forward slashes)
+    $nvidiaShort = $nvidiaModels | ForEach-Object { Normalize-ModelId "nvidia/$($_.Replace('nvidia/', ''))" }
     $currentSources["nvidia"] = $nvidiaShort
     $newInNvidia = if ($knownModels.ContainsKey("nvidia")) { Compare-Object $nvidiaShort $knownModels["nvidia"] | Where-Object { $_.SideIndicator -eq "<=" } | ForEach-Object { $_.InputObject } } else { $nvidiaShort }
     foreach ($m in $newInNvidia) {
@@ -455,7 +465,7 @@ if ($nvidiaModels -ne $null) {
   # Filter to keep only useful models
   $filteredModels = Filter-NvidiaModels $nvidiaModels
   foreach ($m in $filteredModels) {
-    $fullId = "nvidia/$($m.Replace('nvidia/', ''))"
+    $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
     $parts = $m -split '/'
     $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
     $displayName = $shortName -replace '-instruct-\d+$', '' -replace '-a\d+b$', ''

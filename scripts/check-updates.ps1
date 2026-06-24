@@ -705,6 +705,11 @@ try {
       } catch {
         Write-ColorHost "  Download failed: $_" "Red"
       }
+      # After successful update, re-check version and clear update flag
+      if ($curVer -eq $latestVer) {
+        $updateNeeded = $false
+        $updatesAvailable--
+      }
     }
   }
 
@@ -774,41 +779,71 @@ try {
         $isArm = (Get-CimInstance Win32_Processor).Architecture -eq 5
         $archSuffix = if ($isArm) { "arm64" } else { "x64" }
         
-        # Find the setup.exe asset for this architecture
+        # Find the MSI asset for this architecture (can be extracted with msiexec /a)
+        # Asset name format: Handy_0.8.3_x64_en-US.msi (no 'v' prefix in version)
+        $versionNoV = $latestVer.TrimStart('v')
         $json = Invoke-WebRequest -Uri "https://api.github.com/repos/cjpais/Handy/releases/latest" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
         $data = $json | ConvertFrom-Json
         $assets = $data.assets
-        $asset = $assets | Where-Object { $_.name -like "Handy_*_${archSuffix}-setup.exe" } | Select-Object -First 1
+        $asset = $assets | Where-Object { $_.name -eq "Handy_${versionNoV}_${archSuffix}_en-US.msi" } | Select-Object -First 1
         
         if ($asset) {
-          $setupUrl = $asset.browser_download_url
-          $setupPath = Join-Path $env:TEMP "Handy_setup.exe"
-          $extractDir = Join-Path $env:TEMP "Handy_tmp"
+          $msiUrl = $asset.browser_download_url
+          $msiPath = Join-Path $env:TEMP "Handy_installer.msi"
+          $extractDir = Join-Path $env:TEMP "Handy_extracted"
           
-          Write-ColorHost "  Downloading: $setupUrl" "Cyan"
-          Invoke-WebRequest -Uri $setupUrl -OutFile $setupPath -UseBasicParsing -TimeoutSec 60
+          Write-ColorHost "  Downloading: $msiUrl" "Cyan"
+          Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing -TimeoutSec 60
           
-          # Extract using 7-Zip if available, otherwise silent install
-          $7z = Get-Command "7z" -ErrorAction SilentlyContinue
-          if ($7z) {
-            Write-ColorHost "  Extracting with 7-Zip..." "Cyan"
-            if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
-            New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-            & $7z.Source x "$setupPath" -o"$extractDir" -y 2>&1 | Out-Null
-          } else {
-            Write-ColorHost "  Installing silently..." "Cyan"
-            $proc = Start-Process -FilePath $setupPath -ArgumentList "/S", "/D=$extractDir" -Wait -PassThru
-            if ($proc.ExitCode -ne 0) {
-              Write-ColorHost "  Silent install failed." "Yellow"
-            }
+          # Extract using msiexec /a (administrative install - extracts files without installing)
+          if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
+          New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+          
+          Write-ColorHost "  Extracting with msiexec..." "Cyan"
+          $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList "/a", "`"$msiPath`"", "/qn", "TARGETDIR=`"$extractDir`"" -Wait -PassThru
+          if ($proc.ExitCode -ne 0) {
+            Write-ColorHost "  MSI extraction failed (exit code: $($proc.ExitCode))." "Red"
           }
           
-          # Find and copy handy.exe
+          # Find and copy handy.exe (should be in the extracted folder)
           $foundExe = Get-ChildItem -Path $extractDir -Recurse -Filter "handy.exe" | Select-Object -First 1
           if ($foundExe) {
             $src = $foundExe.Directory.FullName
             $HandyDir = Split-Path -Parent $HandyBin
-            if (Test-Path $HandyDir) { Remove-Item $HandyDir -Recurse -Force -ErrorAction SilentlyContinue }
+            
+            # Stop any running Handy process first (holds handle on directory)
+            $handyProc = Get-Process -Name "handy" -ErrorAction SilentlyContinue
+            $wasRunning = $false
+            if ($handyProc) {
+              Write-ColorHost "  Stopping Handy process (PID: $($handyProc.Id))..." "Cyan"
+              Stop-Process -Id $handyProc.Id -Force -ErrorAction SilentlyContinue
+              # Wait for process to fully exit
+              $waitCount = 0
+              while ((Get-Process -Name "handy" -ErrorAction SilentlyContinue) -and $waitCount -lt 10) {
+                Start-Sleep -Seconds 1
+                $waitCount++
+              }
+              $handyProc = Get-Process -Name "handy" -ErrorAction SilentlyContinue
+              if ($handyProc) {
+                Write-ColorHost "  WARNING: Handy process still running after stop attempt" "Yellow"
+              } else {
+                Write-ColorHost "  Handy process stopped" "Green"
+              }
+              $wasRunning = $true
+            }
+            
+            # Now rename old dir (should work after process stopped)
+            $oldDir = "$HandyDir.old"
+            if (Test-Path $HandyDir) {
+              if (Test-Path $oldDir) { Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue }
+              try {
+                Rename-Item $HandyDir $oldDir -ErrorAction Stop
+                Write-ColorHost "  Renamed old Handy dir to $oldDir" "Cyan"
+              } catch {
+                Write-ColorHost "  Rename failed: $($_.Exception.Message)" "Red"
+                throw
+              }
+            }
             New-Item -ItemType Directory -Path $HandyDir -Force | Out-Null
             Copy-Item "$src\*" $HandyDir -Recurse -Force
             # Update file timestamp to now (Copy-Item preserves source timestamp)
@@ -816,6 +851,12 @@ try {
               (Get-Item $HandyBin).LastWriteTime = Get-Date
             }
             Write-ColorHost "  Handy updated to $latestVer" "Green"
+            
+            # Restart Handy if it was running
+            if ($wasRunning) {
+              Write-ColorHost "  Restarting Handy..." "Cyan"
+              Start-Process -FilePath $HandyBin -WindowStyle Hidden
+            }
             
             # Refresh version info
             if (Test-Path $HandyBin) {
@@ -828,15 +869,17 @@ try {
                 $updatesAvailable--
               }
             }
+            # Cleanup .old
+            Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue
           } else {
-            Write-ColorHost "  Failed to extract Handy." "Red"
+            Write-ColorHost "  Failed to find handy.exe in extracted MSI." "Red"
           }
           
           # Cleanup
-          Remove-Item $setupPath -Force -ErrorAction SilentlyContinue
+          Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
           Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
         } else {
-          Write-ColorHost "  No matching asset found for architecture: $archSuffix" "Yellow"
+          Write-ColorHost "  No MSI asset found for architecture: $archSuffix" "Yellow"
           Write-ColorHost "  Manual: https://github.com/cjpais/Handy/releases" "DarkYellow"
         }
       } catch {

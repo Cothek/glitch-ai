@@ -833,6 +833,29 @@ async function main() {
     log(DARK_GREEN, '  TUI config loaded');
   }
 
+  // ---- Model ID normalization (prevents double prefix / backslash issues) ----
+  function normalizeModelId(modelId) {
+    if (!modelId) return modelId;
+    // 1. Replace any backslashes with forward slashes (Windows env var issue)
+    let normalized = modelId.replace(/\\/g, '/');
+    // 2. Fix double nvidia/nvidia/ prefix (historical bug in check-models.ps1)
+    normalized = normalized.replace(/^nvidia\/nvidia\//, 'nvidia/');
+    // 3. Ensure NVIDIA models have exactly one nvidia/ prefix
+    if (normalized.startsWith('nvidia/') && !normalized.startsWith('nvidia/nvidia/')) {
+      // Already correct
+    } else if (normalized.startsWith('nvidia/')) {
+      // Double prefix already handled above
+    } else if (!normalized.includes('/') && !normalized.startsWith('opencode/') && !normalized.startsWith('openrouter/')) {
+      // Bare model name without provider prefix - assume NVIDIA if it looks like a NVIDIA model
+      // This is a fallback, normally model IDs should always have provider prefix
+    }
+    return normalized;
+  }
+
+  // Normalize both model IDs before use
+  primaryModel = normalizeModelId(primaryModel);
+  visionModel = normalizeModelId(visionModel);
+
   // ---- Generate runtime config from template ----
   log(CYAN, '  Generating free mode config...');
 
