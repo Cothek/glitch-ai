@@ -1,5 +1,6 @@
 ---
 name: vision
+model: opencode/mimo-v2.5-free
 mode: subagent
 temperature: 0.2
 
@@ -19,9 +20,9 @@ permission:
   edit: deny
   bash: deny
   glob: allow
-  grep: allow
+  grep: deny
   list: allow
-  webfetch: allow
+  webfetch: deny
   websearch: deny
   question: deny
   todowrite: deny

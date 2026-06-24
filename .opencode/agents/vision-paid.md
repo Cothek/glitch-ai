@@ -20,7 +20,7 @@ permission:
   read: allow
   edit: deny
   bash: deny
-  glob: deny
+  glob: allow
   grep: deny
   list: allow
   webfetch: allow
