@@ -32,9 +32,9 @@ If the project is large (multiple of the above), run goal once per distinct comp
 
 Define the goal for a UI screen before writing components.
 
-### Step 1 — Clarify (3-5 questions)
+### Step 1 — Clarify
 
-Ask these before defining the goal. Don't guess:
+Ask as many questions as needed to fully understand the goal. Don't guess. Default starter set:
 
 - What's the **primary user action** on this screen? (One verb, one object.)
 - What data is **visible by default** vs **hidden behind a click or tab**?
@@ -113,7 +113,9 @@ Do NOT start coding until these are answered. Default set:
 
 Define the goal for a feature, workflow, or system behavior before implementing.
 
-### Step 1 — Clarify (3-5 questions)
+### Step 1 — Clarify
+
+Ask as many questions as needed to fully understand the goal. Don't guess. Default starter set:
 
 - What **problem** does this solve? Who has this problem?
 - What is the **core action** the user takes? (One verb.)
@@ -196,7 +198,9 @@ Default set:
 
 Define the goal for a command-line tool or automation script before writing code.
 
-### Step 1 — Clarify (3-5 questions)
+### Step 1 — Clarify
+
+Ask as many questions as needed to fully understand the goal. Don't guess. Default starter set:
 
 - What's the **single core verb** this tool performs? (One verb, one noun: "convert markdown to html", "validate JSON schema", "scaffold a component")
 - What **input** does it take? (File, stdin, argument, environment variable?)
@@ -278,7 +282,9 @@ Show exit codes, side effects (file writes, network calls), and error paths.
 
 Define the goal for a backend API, service, or data pipeline before implementing.
 
-### Step 1 — Clarify (3-5 questions)
+### Step 1 — Clarify
+
+Ask as many questions as needed to fully understand the goal. Don't guess. Default starter set:
 
 - What **resource** does this manage? (One noun: "grants", "users", "documents".)
 - What are the **core operations**? (CRUD? Commands? Queries? Events?)
