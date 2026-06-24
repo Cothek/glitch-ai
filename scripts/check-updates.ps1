@@ -1088,7 +1088,119 @@ try {
   Write-ColorHost "  [ERROR] $_" "Red"
 }
 
-# ========== 11. External tool dependencies (config/tools.json) ==========
+# ========== 11. NVIDIA Model Catalog (Free Endpoints) ==========
+try {
+  # Known free models from NVIDIA build.nvidia.com (curated list)
+  # Source: https://build.nvidia.com/models and individual model pages
+  # Note: Model IDs use the integrate API format (provider/model), not the website URL format
+  # Note: Some specialized models (e.g., active-speaker-detection) may not be in the general chat/completions API
+  $knownFreeModels = @(
+    @{ id = "nvidia/nemotron-3-nano-30b-a3b"; name = "Nemotron 3 Nano 30B"; multimodal = $false },
+    @{ id = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"; name = "Nemotron 3 Nano Omni"; multimodal = $true },
+    @{ id = "nvidia/nvidia-nemotron-nano-9b-v2"; name = "Nemotron Nano 9B v2"; multimodal = $false },
+    @{ id = "nvidia/nemotron-mini-4b-instruct"; name = "Nemotron Mini 4B"; multimodal = $false },
+    @{ id = "minimaxai/minimax-m2.7"; name = "MiniMax M2.7"; multimodal = $false },
+    @{ id = "minimaxai/minimax-m3"; name = "MiniMax M3"; multimodal = $true },
+    @{ id = "qwen/qwen3.5-122b-a10b"; name = "Qwen3.5 122B"; multimodal = $true },
+    @{ id = "stepfun-ai/step-3.7-flash"; name = "Step 3.7 Flash"; multimodal = $true },
+    @{ id = "nvidia/nemotron-3-content-safety"; name = "Nemotron 3 Content Safety"; multimodal = $true },
+    @{ id = "nvidia/ai-synthetic-video-detector"; name = "Synthetic Video Detector"; multimodal = $true },
+    @{ id = "nvidia/ising-calibration-1-35b-a3b"; name = "Ising Calibration"; multimodal = $true },
+    @{ id = "deepseek-ai/deepseek-v4-flash"; name = "DeepSeek V4 Flash"; multimodal = $false },
+    @{ id = "deepseek-ai/deepseek-v4-pro"; name = "DeepSeek V4 Pro"; multimodal = $false },
+    @{ id = "z-ai/glm-5.1"; name = "GLM-5.1"; multimodal = $false }
+  )
+
+  $verifiedModels = @()
+  $missingModels = @()
+
+  # Fetch integrate API model list once
+  $allNvidiaModels = @()
+  try {
+    $response = Invoke-WebRequest -Uri "https://integrate.api.nvidia.com/v1/models" -Headers @{ "Accept" = "application/json" } -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+    $data = $response.Content | ConvertFrom-Json
+    $allNvidiaModels = $data.data | Where-Object { $_.id -like "nvidia/*" -or $_.id -like "minimaxai/*" -or $_.id -like "deepseek-ai/*" -or $_.id -like "qwen/*" -or $_.id -like "stepfun-ai/*" -or $_.id -like "z-ai/*" -or $_.id -like "01-ai/*" -or $_.id -like "abacusai/*" } | Select-Object -ExpandProperty id
+  } catch {
+    Write-ColorHost "  [WARN] Could not fetch NVIDIA integrate API model list: $_" "Yellow"
+  }
+
+  # Check each known free model against the integrate API to verify it exists
+  foreach ($model in $knownFreeModels) {
+    $exists = $allNvidiaModels | Where-Object { $_ -eq $model.id }
+    if ($exists) {
+      $verifiedModels += $model.id
+    } else {
+      $missingModels += $model.id
+    }
+  }
+
+  # Check for newly added free models by scraping a few key model card pages
+  # (Only for high-priority models we're watching)
+  # Note: Website URLs use nvidia/ prefix for all, but model cards are at /provider/model
+  $watchList = @(
+    "/minimaxai/minimax-m3",
+    "/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+    "/qwen/qwen3.5-122b-a10b",
+    "/stepfun-ai/step-3.7-flash"
+  )
+  $newlyFree = @()
+  foreach ($path in $watchList) {
+    $modelId = $path.TrimStart('/')
+    if ($knownFreeModels | Where-Object { $_.id -eq $modelId }) { continue }  # Already in known list
+    try {
+      $cardUrl = "https://build.nvidia.com$path"
+      $cardResponse = Invoke-WebRequest -Uri $cardUrl -Headers @{ "Accept" = "text/html" } -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+      if ($cardResponse.Content -match 'Free Endpoint') {
+        $newlyFree += @{
+          id = $modelId
+          note = "Free Endpoint badge found on model card"
+        }
+      }
+    } catch {
+      # Ignore errors for individual model cards
+    }
+  }
+
+  $hasNewModels = $newlyFree.Count -gt 0
+  if ($hasNewModels) { $updatesAvailable++ }
+
+  if ($IsUpdate -and $hasNewModels -and ($Filter.Count -eq 0 -or $Filter -contains "NVIDIA Model Catalog")) {
+    Write-ColorHost "  Newly free NVIDIA models detected:" "Cyan"
+    foreach ($m in $newlyFree) {
+      Write-ColorHost "    $($m.id) - $($m.note)" "DarkCyan"
+    }
+    Write-ColorHost "  Consider adding to known free models list" "DarkCyan"
+  }
+
+  $results += @{
+    name = "NVIDIA Model Catalog"
+    current = "$($verifiedModels.Count) verified free models"
+    latest = "$($allNvidiaModels.Count) NVIDIA models in integrate API"
+    update_available = $hasNewModels
+    update_type = if ($hasNewModels) {"$($newlyFree.Count) newly free model(s)"} else {"none"}
+    auto_safe = $false
+    status = "ok"
+    verified_models = $verifiedModels
+    missing_models = $missingModels
+    newly_free = $newlyFree
+  }
+
+  if ($hasNewModels) {
+    Write-ColorHost "  [UPDATE] $($newlyFree.Count) newly free model(s) detected" "Yellow"
+    foreach ($m in $newlyFree) {
+      Write-ColorHost "    $($m.id)" "DarkYellow"
+    }
+  } elseif ($missingModels.Count -gt 0) {
+    Write-ColorHost "  [WARN] $($missingModels.Count) known free model(s) not found in integrate API: $($missingModels -join ', ')" "Yellow"
+  } else {
+    Write-ColorHost "  [OK] All $($verifiedModels.Count) known free models verified in integrate API" "Green"
+  }
+} catch {
+  $results += @{ name = "NVIDIA Model Catalog"; status = "error"; error_message = $_.Exception.Message }
+  Write-ColorHost "  [ERROR] $_" "Red"
+}
+
+# ========== 12. External tool dependencies (config/tools.json) ==========
 try {
   $toolManifestPath = Join-Path $RootDir "config\tools.json"
   if (Test-Path $toolManifestPath) {
