@@ -1,19 +1,19 @@
 ---
-name: shape
-description: "Project goal definition — asks clarifying questions to define what you're actually building before writing any code. Works for UI screens, features, CLI tools, and backend APIs. Use when the brief is ambiguous, starting something new, or when you need to figure out what you actually want."
+name: goal
+description: "Project goal definition — asks clarifying questions to figure out what you're actually building before writing any code. Works for UI screens, features, CLI tools, and backend APIs. Use when the brief is ambiguous, starting something new, or when you need to nail down what you actually want."
 ---
 
-# Shape — Project Goal Definition
+# Goal — Project Goal Definition
 
-This skill produces a **shape artifact**, not code. The point is to force low-fi thinking — clarifying the goal, prioritizing what matters, sketching the structure, catching edge cases — before any code is written. Skipping this step is how you build the wrong thing: straight to implementation, no discovery, every project drifts.
+This skill produces a **goal definition**, not code. The point is to force low-fi thinking — clarifying what success looks like, prioritizing what matters, sketching the structure, catching edge cases — before any code is written. Skipping this step is how you build the wrong thing: straight to implementation, no discovery, every project drifts.
 
-**Core principle:** The shape artifact is a single Markdown block with all 5 steps, in order. Nothing else. Do NOT write code during shaping. Do NOT skip steps.
+**Core principle:** The goal definition is a single Markdown block with all 5 steps, in order. Nothing else. Do NOT write code during goal definition. Do NOT skip steps.
 
 ---
 
 ## Step 0 — Detect Project Type
 
-Before shaping, determine what kind of project this is. Ask quietly (no explicit question to the user — infer from context):
+Before defining the goal, determine what kind of project this is. Ask quietly (no explicit question to the user — infer from context):
 
 | If the target is... | Use mode... |
 |-|-|
@@ -24,17 +24,17 @@ Before shaping, determine what kind of project this is. Ask quietly (no explicit
 
 If ambiguous, ask one clarifying question: "Is this a UI screen, a feature/workflow, a CLI tool, or a backend API?"
 
-If the project is large (multiple of the above), run shape once per distinct component. A full-stack feature might run shape twice: once for the API backend, once for the UI surface.
+If the project is large (multiple of the above), run goal once per distinct component. A full-stack feature might run goal twice: once for the API backend, once for the UI surface.
 
 ---
 
 ## UI Mode
 
-Shape a UI screen before writing components.
+Define the goal for a UI screen before writing components.
 
 ### Step 1 — Clarify (3-5 questions)
 
-Ask these before shaping. Don't guess:
+Ask these before defining the goal. Don't guess:
 
 - What's the **primary user action** on this screen? (One verb, one object.)
 - What data is **visible by default** vs **hidden behind a click or tab**?
@@ -104,14 +104,14 @@ Do NOT start coding until these are answered. Default set:
 - Typography — existing tokens, or new system?
 - Responsive breakpoints — what's the minimum supported width?
 - Animation — CSS only, or a library?
-- Data source — real API ready, or mock for shape?
+- Data source — real API ready, or mock for now?
 - Keyboard / a11y requirements — anything beyond baseline?
 
 ---
 
 ## Feature/System Mode
 
-Shape a feature, workflow, or system behavior before implementing.
+Define the goal for a feature, workflow, or system behavior before implementing.
 
 ### Step 1 — Clarify (3-5 questions)
 
@@ -194,7 +194,7 @@ Default set:
 
 ## CLI/Tool Mode
 
-Shape a command-line tool or automation script before writing code.
+Define the goal for a command-line tool or automation script before writing code.
 
 ### Step 1 — Clarify (3-5 questions)
 
@@ -276,7 +276,7 @@ Show exit codes, side effects (file writes, network calls), and error paths.
 
 ## Backend/API Mode
 
-Shape a backend API, service, or data pipeline before implementing.
+Define the goal for a backend API, service, or data pipeline before implementing.
 
 ### Step 1 — Clarify (3-5 questions)
 
@@ -362,13 +362,13 @@ Show primary entities, key fields, relationships, and cardinality.
 ## Output Contract (All Modes)
 
 - Produce a single Markdown block with all 5 steps, in order. Nothing else.
-- Do **NOT** write any implementation code during shaping.
+- Do **NOT** write any implementation code during goal definition.
 - End with the open questions and wait for confirmation before proceeding.
-- After the user confirms the shape, only then move to implementation.
-- If the confirmed shape reveals a design surface, load `ui-craft` or `brief` for the design phase.
+- After the user confirms the goal definition, only then move to implementation.
+- If the confirmed goal reveals a design surface, load `ui-craft` or `brief` for the design phase.
 
-## When NOT to Shape
+## When NOT to Define the Goal
 
 - Trivial changes (single field, one-line fix, comment)
-- The user explicitly says "just build it, no shaping needed"
+- The user explicitly says "just build it, no goal definition needed"
 - Hotfix/emergency where speed matters more than discovery
