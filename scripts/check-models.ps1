@@ -331,6 +331,9 @@ function Is-VisionModel($modelId) {
     if ($modelId -match 'step-3\.7') { return $true }
     if ($modelId -match 'gemma-[34]') { return $true }
     if ($modelId -match 'llama-4-maverick') { return $true }
+    # MiniMax M3 is multimodal (image + video input) per NVIDIA build.nvidia.com
+    if ($modelId -match 'minimax-m3') { return $true }
+    # MiniMax M2.7 is text-only, so NOT included
     return $false
 }
 
