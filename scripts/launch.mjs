@@ -8,6 +8,7 @@ import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
 import { checkRepoUpdates, checkUserRepoUpdates } from './lib/git-sync.mjs';
+import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -265,7 +266,7 @@ async function checkAndSwitchToMain() {
   }
 
   log(YELLOW, '');
-  log(YELLOW, `  ⚠ Currently on branch '${current}', not 'main'`);
+  log(YELLOW, `  !! Currently on branch '${current}', not 'main'`);
   log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
   log(WHITE, '  [Y/n] Switch to main now (recommended)');
   let choice = await askQuestion('  > ');
@@ -307,7 +308,7 @@ async function checkAndSwitchToMain() {
       // Verify clean tree after checkout
       const postStatus = run(GIT_BIN, ['status', '--porcelain'], { cwd: ROOT_DIR, timeout: 5000 });
       if (postStatus.success && postStatus.stdout.trim().length > 0) {
-        log(YELLOW, '  ⚠ Working tree has uncommitted changes after checkout.');
+        log(YELLOW, '  !! Working tree has uncommitted changes after checkout.');
       }
     } else {
       log(RED, `  Failed to switch: ${checkout.stderr || checkout.error}`);
@@ -447,65 +448,7 @@ async function main() {
   }
 
   // ---- User Profile Detection ----
-  let UserName = process.env.GLITCH_USER || null;
-  let userFound = false;
-
-  if (UserName) {
-    const subdirPath = join(ROOT_DIR, 'user', UserName);
-    if (existsSync(join(subdirPath, 'main-memory.md'))) {
-      userFound = true;
-      log(CYAN, `  User profile: ${UserName}`);
-    } else if (existsSync(join(ROOT_DIR, 'user', 'main-memory.md'))) {
-      UserName = '';
-      userFound = true;
-      log(CYAN, '  User profile: (flat -- user/main-memory.md)');
-    } else {
-      log(YELLOW, `  WARNING: User '${UserName}' specified but no profile found at user/${UserName}`);
-      log(YELLOW, `  Run: node setup.mjs --user ${UserName}`);
-      UserName = null;
-    }
-  }
-
-  if (!userFound) {
-    const userBase = join(ROOT_DIR, 'user');
-    if (existsSync(join(userBase, 'main-memory.md'))) {
-      UserName = '';
-      userFound = true;
-      log(CYAN, '  User profile: (flat -- user/main-memory.md)');
-    } else if (existsSync(userBase)) {
-      const { readdirSync, statSync } = await import('fs');
-      let profiles;
-      try {
-        const entries = readdirSync(userBase, { withFileTypes: true });
-        profiles = entries
-          .filter(e => e.isDirectory())
-          .map(e => e.name)
-          .filter(name => existsSync(join(userBase, name, 'main-memory.md')));
-      } catch {
-        profiles = [];
-      }
-
-      if (profiles.length === 1) {
-        UserName = profiles[0];
-        userFound = true;
-        log(CYAN, `  User profile: ${UserName}`);
-      } else if (profiles.length > 1) {
-        log(YELLOW, '  Multiple user profiles found:');
-        profiles.forEach((name, i) => {
-          log(CYAN, `    [${i + 1}] ${name}`);
-        });
-        log(DARK_GRAY, '  Set $env:GLITCH_USER=<name> to auto-select.');
-        UserName = profiles[0];
-        userFound = true;
-        log(CYAN, `  Using: ${UserName}`);
-      }
-    }
-  }
-
-  if (!userFound) {
-    log(YELLOW, '  No user profile found.');
-    log(CYAN, '  Starting with engine defaults (no user profile loaded).');
-  }
+  const { userName: UserName, userFound } = detectUserProfile(ROOT_DIR, ['GLITCH_USER']);
 
   // ---- TUI config: user/tui.json -> OPENCODE_TUI_CONFIG ----
   const TuiConfigPath = join(ROOT_DIR, 'user', 'tui.json');
@@ -528,22 +471,7 @@ async function main() {
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
   ];
 
-  let userInstructions = [];
-  if (UserName && UserName !== '') {
-    userInstructions = [
-      `user/${UserName}/main-memory.md`,
-      `user/${UserName}/current-session.md`,
-      `user/${UserName}/reminders.md`,
-      `user/${UserName}/session-dashboard.md`
-    ];
-  } else if (existsSync(join(ROOT_DIR, 'user', 'main-memory.md'))) {
-    userInstructions = [
-      'user/main-memory.md',
-      'user/current-session.md',
-      'user/reminders.md',
-      'user/session-dashboard.md'
-    ];
-  }
+  let userInstructions = buildUserInstructions(ROOT_DIR, UserName);
 
   const allInstructions = [...engineInstructions, ...userInstructions];
   const instrJson = allInstructions.map(s => `    "${s}"`).join(',\n');
@@ -599,7 +527,7 @@ async function main() {
     try {
       const checkModelsScript = join(ROOT_DIR, 'scripts', 'check-models.ps1');
       if (existsSync(checkModelsScript)) {
-        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 60000, stdio: 'inherit' });
+        pwsh(['-File', checkModelsScript, '-CheckOnly', '-SkipNvidiaFreeCheck'], { timeout: 60000, stdio: 'inherit' });
 
         const modelStatusFile = join(ROOT_DIR, 'data', 'model-update-status.json');
         if (existsSync(modelStatusFile)) {
