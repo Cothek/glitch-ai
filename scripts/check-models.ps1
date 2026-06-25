@@ -402,6 +402,71 @@ function Is-VisionModel($modelId) {
     return $false
 }
 
+# --- Helper: check if a NVIDIA model has "Free Endpoint" badge on build.nvidia.com ---
+# Cache to avoid repeated HTTP requests
+$script:nvidiaFreeEndpointCache = @{}
+
+function Test-NvidiaFreeEndpoint($modelId) {
+    # Check cache first
+    if ($script:nvidiaFreeEndpointCache.ContainsKey($modelId)) {
+        return $script:nvidiaFreeEndpointCache[$modelId]
+    }
+    
+    # Convert API model ID to website URL path
+    # The build.nvidia.com URLs use the full path including provider prefix
+    # Examples:
+    #   minimaxai/minimax-m3 -> https://build.nvidia.com/minimaxai/minimax-m3
+    #   nvidia/nemotron-3-nano-30b-a3b -> https://build.nvidia.com/nvidia/nemotron-3-nano-30b-a3b
+    #   qwen/qwen3.5-122b-a10b -> https://build.nvidia.com/qwen/qwen3.5-122b-a10b
+    # So we use the model ID as-is (it already has the correct provider prefix)
+    $cardUrl = "https://build.nvidia.com/$modelId"
+    
+    try {
+        $response = Invoke-WebRequest -Uri $cardUrl -Headers @{ "Accept" = "text/html" } -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+        $isFree = $response.Content -match 'Free Endpoint'
+        $script:nvidiaFreeEndpointCache[$modelId] = $isFree
+        return $isFree
+    } catch {
+        # If we can't check, return null (unknown)
+        return $null
+    }
+}
+
+# --- Helper: verify all known NVIDIA models against build.nvidia.com ---
+function Verify-NvidiaFreeModels {
+    $modelsToCheck = @(
+        "minimaxai/minimax-m3",
+        "minimaxai/minimax-m2.7",
+        "nvidia/nemotron-3-nano-30b-a3b",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "nvidia/nvidia-nemotron-nano-9b-v2",
+        "nvidia/nemotron-mini-4b-instruct",
+        "qwen/qwen3.5-122b-a10b",
+        "stepfun-ai/step-3.7-flash",
+        "nvidia/nemotron-3-content-safety",
+        "nvidia/ai-synthetic-video-detector",
+        "nvidia/ising-calibration-1-35b-a3b",
+        "deepseek-ai/deepseek-v4-flash",
+        "deepseek-ai/deepseek-v4-pro",
+        "z-ai/glm-5.1"
+    )
+    
+    $results = @{}
+    foreach ($model in $modelsToCheck) {
+        $isFree = Test-NvidiaFreeEndpoint $model
+        $results[$model] = $isFree
+        if ($isFree -eq $true) {
+            Write-Host "  ✅ $model - Free Endpoint confirmed" -ForegroundColor Green
+        } elseif ($isFree -eq $false) {
+            Write-Host "  ❌ $model - NOT free (no badge)" -ForegroundColor Red
+        } else {
+            Write-Host "  ⚠ $model - Could not verify" -ForegroundColor Yellow
+        }
+        Start-Sleep -Milliseconds 500  # Be nice to the server
+    }
+    return $results
+}
+
 # OpenCode Zen: models ending in -free or named big-pickle
 if ($zenModels -ne $null) {
   $zenGroup = @{
@@ -532,6 +597,13 @@ $nvidiaGroup = @{
 if ($nvidiaModels -ne $null) {
   # Filter to keep only useful models
   $filteredModels = Filter-NvidiaModels $nvidiaModels
+  
+  # Verify free endpoint status for known models (only in non-silent mode)
+  if (-not $Silent) {
+    Write-Host " Verifying NVIDIA free endpoint status..." -ForegroundColor Cyan
+    $freeStatus = Verify-NvidiaFreeModels
+  }
+  
   foreach ($m in $filteredModels) {
     $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
     $parts = $m -split '/'
