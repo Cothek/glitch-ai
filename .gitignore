@@ -25,6 +25,9 @@ Thumbs.db
 # Auto-generated config (written by launch scripts from templates)
 opencode.json
 
+# Auto-generated config (written by tunnel auto-setup)
+config/cloudflared-config.yml
+
 # Auto-generated status files (written by launch scripts)
 /update-status.json
 /model-update-status.json
