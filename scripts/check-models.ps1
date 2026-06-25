@@ -319,9 +319,77 @@ $freeModelsData = @{
   providers = @()
 }
 
-# --- Helper: check if a raw model ID is vision/image capable --------------------
-# Used by Zen, OpenRouter, and NVIDIA sections below
+# --- Helper: fetch OpenRouter model capabilities (authoritative source for vision) ---
+# Returns a hashtable mapping model ID -> @{ input_modalities = @(...); output_modalities = @(...) }
+$script:openRouterCapabilities = $null
+
+function Fetch-OpenRouterCapabilities {
+    if ($script:openRouterCapabilities) { return $script:openRouterCapabilities }
+    
+    try {
+        $response = Invoke-RestMethod -Uri "https://openrouter.ai/api/v1/models" -Method Get -TimeoutSec 20 -ErrorAction Stop
+        $capabilities = @{}
+        foreach ($m in $response.data) {
+            if ($m.architecture -and $m.architecture.input_modalities) {
+                $capabilities[$m.id] = @{
+                    input_modalities = @($m.architecture.input_modalities)
+                    output_modalities = @($m.architecture.output_modalities)
+                }
+            }
+        }
+        $script:openRouterCapabilities = $capabilities
+        return $capabilities
+    } catch {
+        Write-Host " [WARN] Failed to fetch OpenRouter capabilities: $_" -ForegroundColor Yellow
+        $script:openRouterCapabilities = @{}
+        return @{}
+    }
+}
+
+# --- Helper: normalize model ID for cross-provider matching ---
+function Normalize-For-Matching($modelId) {
+    # Map NVIDIA provider prefixes to OpenRouter equivalents
+    # NVIDIA: nvidia/minimaxai/minimax-m3 -> minimax/minimax-m3
+    # NVIDIA: nvidia/qwen/qwen3.5-122b-a10b -> qwen/qwen3.5-122b-a10b
+    # NVIDIA: nvidia/stepfun-ai/step-3.7-flash -> stepfun/step-3.7-flash
+    # NVIDIA: nvidia/deepseek-ai/deepseek-v4-flash -> deepseek/deepseek-v4-flash
+    # NVIDIA: nvidia/z-ai/glm-5.1 -> z-ai/glm-5.1
+    $normalized = $modelId
+    
+    # Strip nvidia/ prefix first
+    $normalized = $normalized -replace '^nvidia/', ''
+    
+    # Map provider prefixes to OpenRouter equivalents
+    $normalized = $normalized -replace '^minimaxai/', 'minimax/'
+    $normalized = $normalized -replace '^deepseek-ai/', 'deepseek/'
+    $normalized = $normalized -replace '^qwen/', 'qwen/'
+    $normalized = $normalized -replace '^stepfun-ai/', 'stepfun/'
+    $normalized = $normalized -replace '^z-ai/', 'z-ai/'
+    
+    # Remove :free suffix
+    $normalized = $normalized -replace ':free$', ''
+    return $normalized
+}
+
+# --- Helper: check if a model has vision capabilities using OpenRouter data ---
 function Is-VisionModel($modelId) {
+    $capabilities = Fetch-OpenRouterCapabilities
+    
+    # Try exact match first
+    if ($capabilities.ContainsKey($modelId)) {
+        return $capabilities[$modelId].input_modalities -contains 'image'
+    }
+    
+    # Try normalized match (strip provider prefixes)
+    $normalized = Normalize-For-Matching $modelId
+    foreach ($key in $capabilities.Keys) {
+        $keyNorm = Normalize-For-Matching $key
+        if ($keyNorm -eq $normalized) {
+            return $capabilities[$key].input_modalities -contains 'image'
+        }
+    }
+    
+    # Fallback to heuristics for models not in OpenRouter
     if ($modelId -match 'vision') { return $true }
     if ($modelId -match 'multimodal') { return $true }
     if ($modelId -match '-vl[-]|-vl$') { return $true }
@@ -331,9 +399,6 @@ function Is-VisionModel($modelId) {
     if ($modelId -match 'step-3\.7') { return $true }
     if ($modelId -match 'gemma-[34]') { return $true }
     if ($modelId -match 'llama-4-maverick') { return $true }
-    # MiniMax M3 is multimodal (image + video input) per NVIDIA build.nvidia.com
-    if ($modelId -match 'minimax-m3') { return $true }
-    # MiniMax M2.7 is text-only, so NOT included
     return $false
 }
 
