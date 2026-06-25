@@ -456,11 +456,11 @@ function Verify-NvidiaFreeModels {
         $isFree = Test-NvidiaFreeEndpoint $model
         $results[$model] = $isFree
         if ($isFree -eq $true) {
-            Write-Host "  ✅ $model - Free Endpoint confirmed" -ForegroundColor Green
+            Write-Host "  [OK] $model - Free Endpoint confirmed" -ForegroundColor Green
         } elseif ($isFree -eq $false) {
-            Write-Host "  ❌ $model - NOT free (no badge)" -ForegroundColor Red
+            Write-Host "  [FAIL] $model - NOT free (no badge)" -ForegroundColor Red
         } else {
-            Write-Host "  ⚠ $model - Could not verify" -ForegroundColor Yellow
+            Write-Host "  [WARN] $model - Could not verify" -ForegroundColor Yellow
         }
         Start-Sleep -Milliseconds 500  # Be nice to the server
     }

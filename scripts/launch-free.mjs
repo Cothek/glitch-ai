@@ -834,13 +834,16 @@ async function main() {
   }
 
   // ---- Model ID normalization (prevents double prefix / backslash issues) ----
+ 
   function normalizeModelId(modelId) {
     if (!modelId) return modelId;
-    // 1. Replace any backslashes with forward slashes (Windows env var issue)
-    let normalized = modelId.replace(/\\/g, '/');
-    // 2. Fix double nvidia/nvidia/ prefix (historical bug in check-models.ps1)
+    // 1. Strip leading/trailing slashes and whitespace
+    let normalized = modelId.trim().replace(/^\/+|\/+$/g, '');
+    // 2. Replace any backslashes with forward slashes (Windows env var issue)
+    normalized = normalized.replace(/\\/g, '/');
+    // 3. Fix double nvidia/nvidia/ prefix (historical bug in check-models.ps1)
     normalized = normalized.replace(/^nvidia\/nvidia\//, 'nvidia/');
-    // 3. Ensure NVIDIA models have exactly one nvidia/ prefix
+    // 4. Ensure NVIDIA models have exactly one nvidia/ prefix
     if (normalized.startsWith('nvidia/') && !normalized.startsWith('nvidia/nvidia/')) {
       // Already correct
     } else if (normalized.startsWith('nvidia/')) {
