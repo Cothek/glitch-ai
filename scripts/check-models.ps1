@@ -598,13 +598,21 @@ if ($nvidiaModels -ne $null) {
   # Filter to keep only useful models
   $filteredModels = Filter-NvidiaModels $nvidiaModels
   
-  # Verify free endpoint status for known models (only in non-silent mode)
-  if (-not $Silent) {
-    Write-Host " Verifying NVIDIA free endpoint status..." -ForegroundColor Cyan
-    $freeStatus = Verify-NvidiaFreeModels
-  }
+  # Verify free endpoint status for known models
+  # This also prints [OK]/[FAIL] status for each model
+  Write-Host " Verifying NVIDIA free endpoint status..." -ForegroundColor Cyan
+  $freeStatus = Verify-NvidiaFreeModels
+  
+  # Build list of confirmed-free model IDs
+  $confirmedFree = @($freeStatus.Keys | Where-Object { $freeStatus[$_] -eq $true })
+  $skippedCount = 0
   
   foreach ($m in $filteredModels) {
+    # Only include models confirmed as free endpoints
+    if ($m -notin $confirmedFree) {
+      $skippedCount++
+      continue
+    }
     $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
     $parts = $m -split '/'
     $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
@@ -612,6 +620,8 @@ if ($nvidiaModels -ne $null) {
     if (Is-VisionModel $m) { $displayName += ' (image)' }
     $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
   }
+  
+  Write-Host "  Free models: $($nvidiaGroup.models.Count) confirmed, $skippedCount filtered out (unverified/paid)" -ForegroundColor DarkGray
 } else {
   # No API key or API unavailable - don't write a static fallback list.
   # The picker will show "(no models available)" and the user gets a clear message.
