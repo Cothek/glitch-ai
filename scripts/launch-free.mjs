@@ -8,6 +8,7 @@ import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
 import { checkRepoUpdates, checkUserRepoUpdates } from './lib/git-sync.mjs';
+import { injectProviders } from './lib/inject-providers.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -293,27 +294,18 @@ async function checkAndSwitchToMain() {
     const status = run(GIT_BIN, ['status', '--porcelain'], { cwd: ROOT_DIR, timeout: 5000 });
     const isDirty = status.success && status.stdout.trim().length > 0;
     if (isDirty) {
-      log(YELLOW, '  Local changes detected, stashing before switch...');
-      const stashMsg = `glitch-auto-stash: ${current}`;
-      const stash = run(GIT_BIN, ['stash', 'push', '-m', stashMsg], { cwd: ROOT_DIR, timeout: 15000 });
-      if (stash.success) {
-        log(GREEN, `  Changes stashed. Run \`git stash pop\` when back on '${current}' to restore.`);
-      } else {
-        log(RED, `  Failed to stash: ${stash.stderr || stash.error}`);
-        log(YELLOW, '  Continuing on current branch...');
-        log('');
-        return;
-      }
+      log(YELLOW, '');
+      log(YELLOW, '  Cannot switch branches: working tree has uncommitted changes.');
+      log(YELLOW, `  Commit or stash them first, then re-launch from main.`);
+      log(YELLOW, '');
+      log(YELLOW, '  Or run: git stash push -m "wip" && node scripts/launch-free.mjs');
+      log('');
+      return;
     }
 
     const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
     if (checkout.success) {
       log(GREEN, '  Switched to main');
-      // Verify clean tree after checkout
-      const postStatus = run(GIT_BIN, ['status', '--porcelain'], { cwd: ROOT_DIR, timeout: 5000 });
-      if (postStatus.success && postStatus.stdout.trim().length > 0) {
-        log(YELLOW, '  ΓÜá Working tree has uncommitted changes after checkout.');
-      }
     } else {
       log(RED, `  Failed to switch: ${checkout.stderr || checkout.error}`);
       log(YELLOW, '  Continuing on current branch...');
@@ -899,6 +891,9 @@ async function main() {
 
   // Set the free mode prompt directly on the parsed object (avoids string escaping)
   configObj.agent.glitch.prompt = buildFreePrompt(primaryModel, primaryName, visionModel, visionName);
+
+  // Inject shared providers (NVIDIA, LM Studio) from config/providers.json
+  injectProviders(configObj);
 
   // Validate and write
   const finalJson = JSON.stringify(configObj, null, 2);
