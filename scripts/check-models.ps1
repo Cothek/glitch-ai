@@ -16,6 +16,65 @@ $Silent = $args -contains "-Silent"
 $SkipNvidiaFreeCheck = $args -contains "-SkipNvidiaFreeCheck"
 
 # --- Helper: normalize model ID (prevents double prefix / backslash issues) ---
+# --- Helper: name override dict for well-known NVIDIA models --------------------
+$NvidiaNameOverrides = @{
+  "deepseek-v4-flash" = "DeepSeek V4 Flash"
+  "deepseek-v4-pro" = "DeepSeek V4 Pro"
+  "minimax-m3" = "MiniMax M3"
+  "minimax-m2.7" = "MiniMax M2.7"
+  "nemotron-3-ultra-550b" = "Nemotron 3 Ultra 550B"
+  "nemotron-3-super-120b" = "Nemotron 3 Super 120B"
+  "nemotron-3-nano-omni-30b-a3b-reasoning" = "Nemotron 3 Nano Omni 30B"
+  "nemotron-4-340b" = "Nemotron 4 340B"
+  "nemotron-nano-12b" = "Nemotron Nano 12B VL"
+  "llama-3.1-nemotron-ultra-253b" = "Nemotron Ultra 253B"
+  "llama-3.3-nemotron-super-49b" = "Nemotron Super 49B"
+  "mistral-large-3-675b" = "Mistral Large 3"
+  "kimi-k2.6" = "Kimi K2.6"
+  "qwen3-next-80b" = "Qwen3 Next 80B"
+  "qwen3.5-122b" = "Qwen 3.5 122B"
+  "qwen3.5-397b" = "Qwen 3.5 397B"
+  "llama-3.1-70b" = "Llama 3.1 70B"
+  "llama-3.1-8b" = "Llama 3.1 8B"
+  "llama-3.2-11b-vision" = "Llama 3.2 11B Vision"
+  "llama-3.3-70b" = "Llama 3.3 70B"
+  "llama-4-maverick-17b-128e" = "Llama 4 Maverick 17B"
+  "gemma-3-12b" = "Gemma 3 12B"
+  "gemma-4-31b" = "Gemma 4 31B"
+  "step-3.7-flash" = "Step 3.7 Flash"
+  "step-3.5-flash" = "Step 3.5 Flash"
+  "glm-5.1" = "GLM 5.1"
+  "yi-large" = "Yi Large"
+  "codestral-22b" = "Codestral 22B"
+  "mistral-nemo-12b" = "Mistral Nemo 12B"
+  "mistral-nemotron" = "Mistral Nemotron"
+  "granite-3.0-8b" = "Granite 3.0 8B"
+}
+
+# --- Helper: generate a readable display name for NVIDIA models ------------------
+function Get-NvidiaDisplayName($modelName, $isVision) {
+  # Step 1: strip version suffixes
+  $cleaned = $modelName -replace '-instruct(-\d+)?$', '' -replace '-a\d+b$', '' -replace '-v\d+(\.\d+)?$', '' -replace '-it$', ''
+
+  # Step 2: check override dictionary
+  if ($NvidiaNameOverrides.ContainsKey($cleaned)) {
+    $displayName = $NvidiaNameOverrides[$cleaned]
+  } else {
+    # Step 3: capitalize each dash-separated word
+    $displayName = ($cleaned -split '-' | ForEach-Object {
+      if ($_ -match '^(\d+\.?\d*)([a-z])$') {
+        # e.g., "550b" -> "550B", "8b" -> "8B"
+        $matches[1] + $matches[2].ToUpper()
+      } elseif ($_ -match '^[a-z]') {
+        $_.Substring(0,1).ToUpper() + $_.Substring(1)
+      } else { $_ }
+    }) -join ' '
+  }
+
+  if ($isVision) { $displayName += ' (image)' }
+  return $displayName
+}
+
 function Normalize-ModelId($modelId) {
   if (-not $modelId) { return $modelId }
   # 1. Replace any backslashes with forward slashes (Windows env var issue)
@@ -436,19 +495,15 @@ function Test-NvidiaFreeEndpoint($modelId) {
 # --- Helper: verify all known NVIDIA models against build.nvidia.com ---
 function Verify-NvidiaFreeModels {
     $modelsToCheck = @(
-        "minimaxai/minimax-m3",
         "minimaxai/minimax-m2.7",
-        "nvidia/nemotron-3-nano-30b-a3b",
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-        "nvidia/nvidia-nemotron-nano-9b-v2",
-        "nvidia/nemotron-mini-4b-instruct",
-        "qwen/qwen3.5-122b-a10b",
-        "stepfun-ai/step-3.7-flash",
-        "nvidia/nemotron-3-content-safety",
-        "nvidia/ai-synthetic-video-detector",
-        "nvidia/ising-calibration-1-35b-a3b",
+        "minimaxai/minimax-m3",
         "deepseek-ai/deepseek-v4-flash",
         "deepseek-ai/deepseek-v4-pro",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "nvidia/nemotron-3-ultra-550b-a55b",
+        "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "qwen/qwen3.5-122b-a10b",
+        "stepfun-ai/step-3.7-flash",
         "z-ai/glm-5.1"
     )
     
@@ -599,16 +654,15 @@ if ($nvidiaModels -ne $null) {
   # Filter to keep only useful models
   $filteredModels = Filter-NvidiaModels $nvidiaModels
   
-  if ($SkipNvidiaFreeCheck) {
-    # Normal mode — skip free endpoint verification, include all NVIDIA models
-    foreach ($m in $filteredModels) {
-      $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
-      $parts = $m -split '/'
-      $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
-      $displayName = $shortName -replace '-instruct-\d+$', '' -replace '-a\d+b$', ''
-      if (Is-VisionModel $m) { $displayName += ' (image)' }
-      $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
-    }
+    if ($SkipNvidiaFreeCheck) {
+      # Normal mode — skip free endpoint verification, include all NVIDIA models
+      foreach ($m in $filteredModels) {
+        $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
+        $parts = $m -split '/'
+        $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
+        $displayName = Get-NvidiaDisplayName -modelName $shortName -isVision (Is-VisionModel $m)
+        $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
+      }
   } else {
     # Free mode — verify free endpoint status, only include confirmed-free models
     Write-Host " Verifying NVIDIA free endpoint status..." -ForegroundColor Cyan
@@ -625,8 +679,7 @@ if ($nvidiaModels -ne $null) {
       $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
       $parts = $m -split '/'
       $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
-      $displayName = $shortName -replace '-instruct-\d+$', '' -replace '-a\d+b$', ''
-      if (Is-VisionModel $m) { $displayName += ' (image)' }
+      $displayName = Get-NvidiaDisplayName -modelName $shortName -isVision (Is-VisionModel $m)
       $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
     }
     
