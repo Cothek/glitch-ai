@@ -820,8 +820,8 @@ if ($zenModels -ne $null) {
             $orData = Get-OpenRouterPricing $fullId
             $capabilities = @(Get-ModelCapabilities -modelId $m -provider "opencode")
             if ($orData) {
-                $promptPrice = [double]::TryParse($orData.pricing.prompt, [ref](0.0)) | Out-Null; $p = 0.0; [double]::TryParse($orData.pricing.prompt, [ref]$p)
-                $compPrice = [double]::TryParse($orData.pricing.completion, [ref](0.0)) | Out-Null; $c = 0.0; [double]::TryParse($orData.pricing.completion, [ref]$c)
+                $p = 0.0; [void][double]::TryParse($orData.pricing.prompt, [ref]$p)
+                $c = 0.0; [void][double]::TryParse($orData.pricing.completion, [ref]$c)
                 $registryModels += @{
                     id = $fullId; source = "zen"; provider = "opencode"
                     pricing = @{ prompt = $p; completion = $c }
@@ -852,8 +852,8 @@ if ($goModels -ne $null) {
         $capabilities = @(Get-ModelCapabilities -modelId $m -provider "opencode-go")
         if ($orData) {
             $p = 0.0; $c = 0.0
-            [double]::TryParse($orData.pricing.prompt, [ref]$p)
-            [double]::TryParse($orData.pricing.completion, [ref]$c)
+            [void][double]::TryParse($orData.pricing.prompt, [ref]$p)
+            [void][double]::TryParse($orData.pricing.completion, [ref]$c)
             $registryModels += @{
                 id = $fullId; source = "go"; provider = "opencode-go"
                 pricing = @{ prompt = $p; completion = $c }
@@ -885,8 +885,8 @@ if ($nvidiaModels -ne $null) {
 
         if ($orData) {
             $p = 0.0; $c = 0.0
-            [double]::TryParse($orData.pricing.prompt, [ref]$p)
-            [double]::TryParse($orData.pricing.completion, [ref]$c)
+            [void][double]::TryParse($orData.pricing.prompt, [ref]$p)
+            [void][double]::TryParse($orData.pricing.completion, [ref]$c)
             $isFreeEndpoint = $false
             try { $isFreeEndpoint = (Test-NvidiaFreeEndpoint $m) -eq $true } catch {}
             $registryModels += @{
@@ -918,8 +918,8 @@ foreach ($orId in $orFullModels.Keys) {
     $orData = $orFullModels[$orId]
     $capabilities = @(Get-ModelCapabilities -modelId $orId -provider "openrouter" -contextLength $orData.context_length)
     $p = 0.0; $c = 0.0
-    [double]::TryParse($orData.pricing.prompt, [ref]$p)
-    [double]::TryParse($orData.pricing.completion, [ref]$c)
+    [void][double]::TryParse($orData.pricing.prompt, [ref]$p)
+    [void][double]::TryParse($orData.pricing.completion, [ref]$c)
     # Skip OpenRouter routing models
     if ($orId -match '^openrouter/(auto|free|fusion|bodybuilder|pareto-code)$') { continue }
     $registryModels += @{
