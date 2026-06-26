@@ -462,6 +462,85 @@ function Is-VisionModel($modelId) {
     return $false
 }
 
+# --- Helper: derive cost tier from pricing -----------------------------------------
+# OpenCode Zen/Go don't expose per-model pricing; we estimate or fall back to "unknown".
+# - Both prices at/under $0.28 / Mtok  -> "budget_paid"
+# - Both prices at/under $0.50 / Mtok  -> "mid_paid"
+# - Higher                            -> "premium_paid"
+# - Both $0 (numeric)                 -> "free"
+# - Missing/null pricing              -> "unknown"
+function Get-CostTier($promptPrice, $completionPrice) {
+    # Both null/missing -> unknown
+    if ($null -eq $promptPrice -or $null -eq $completionPrice) { return "unknown" }
+    # Strings from OpenRouter JSON ("0", "0.0000005") need to be parsed
+    $p = 0.0
+    $c = 0.0
+    $hasP = [double]::TryParse([string]$promptPrice, [ref]$p)
+    $hasC = [double]::TryParse([string]$completionPrice, [ref]$c)
+    if (-not $hasP -or -not $hasC) { return "unknown" }
+    if ($p -eq 0.0 -and $c -eq 0.0) { return "free" }
+    $max = [Math]::Max($p, $c)
+    if ($max -le 0.28) { return "budget_paid" }
+    if ($max -le 0.50) { return "mid_paid" }
+    return "premium_paid"
+}
+
+# --- Helper: derive capability tags for a model -----------------------------------
+# Returns an array of capability strings. "text" is always included as a baseline.
+# - "vision"            : image inputs (from Is-VisionModel)
+# - "code"              : name contains code/coder/codestral/deepseek/qwen/qwen3-coder/granite-code keywords
+# - "large_context"     : context_length > 128000 (OpenRouter data only; null otherwise)
+# Mirrors the ai-gm agent routing logic kept in user/decisions.md.
+function Get-ModelCapabilities($modelId, $provider = "", $contextLength = $null) {
+    $caps = @("text")
+    if (Is-VisionModel $modelId) { $caps = @("text", "vision") }
+    $lc = [string]$modelId
+    # Match vendor/code family naming. Lowercased comparison only.
+    if ($lc -match 'coder|code|deepseek|qwen|codestral|granite.*code|starcoder|gpt-oss|kimi-k2') {
+        $caps += "code"
+    }
+    if ($null -ne $contextLength) {
+        try {
+            $ctx = [int]$contextLength
+            if ($ctx -gt 128000) { $caps += "large_context" }
+        } catch { }
+    }
+    return $caps
+}
+
+# --- Helper: fetch all OpenRouter models with pricing (for the model registry) ----
+# Distinct from Fetch-OpenRouterFreeModels which only extracts free IDs.
+# Returns a hashtable: modelId -> @{ prompt = "..."; completion = "..."; context_length = <int|null> }
+$script:openRouterFullModels = $null
+
+function Fetch-OpenRouterFullModels {
+    if ($script:openRouterFullModels) { return $script:openRouterFullModels }
+    try {
+        $response = Invoke-RestMethod -Uri "https://openrouter.ai/api/v1/models" -Method Get -TimeoutSec 20 -ErrorAction Stop
+        $models = @{}
+        foreach ($m in $response.data) {
+            $pricing = @{
+                prompt = if ($m.pricing -and $null -ne $m.pricing.prompt) { [string]$m.pricing.prompt } else { $null }
+                completion = if ($m.pricing -and $null -ne $m.pricing.completion) { [string]$m.pricing.completion } else { $null }
+            }
+            $ctx = $null
+            if ($m.context_length) {
+                try { $ctx = [int]$m.context_length } catch { $ctx = $null }
+            }
+            $models[$m.id] = @{
+                pricing = $pricing
+                context_length = $ctx
+            }
+        }
+        $script:openRouterFullModels = $models
+        return $models
+    } catch {
+        if (-not $Silent) { Write-Host " [WARN] Failed to fetch OpenRouter full models: $_" -ForegroundColor Yellow }
+        $script:openRouterFullModels = @{}
+        return @{}
+    }
+}
+
 # --- Helper: check if a NVIDIA model has "Free Endpoint" badge on build.nvidia.com ---
 # Cache to avoid repeated HTTP requests
 $script:nvidiaFreeEndpointCache = @{}
@@ -696,6 +775,180 @@ $freeModelsDir = Split-Path -Parent $FreeModelsFile
 if (-not (Test-Path $freeModelsDir)) { New-Item -ItemType Directory -Path $freeModelsDir -Force | Out-Null }
 $freeModelsData | ConvertTo-Json -Depth 4 | Out-File -FilePath $FreeModelsFile -Encoding utf8 -Force
 
+# 6.75. Build model-registry.json (all models with pricing, tier, capabilities)
+# This is the primary input for resolve-models.mjs
+$RegistryFile = "$RootDir\data\model-registry.json"
+$registryModels = @()
+
+# Fetch OpenRouter full model data (pricing, context) for cross-referencing
+$orFullModels = Fetch-OpenRouterFullModels
+
+# Build a normalized lookup: "short name without prefix/free suffix" -> OpenRouter data
+$orLookup = @{}
+foreach ($orId in $orFullModels.Keys) {
+    $normalized = Normalize-For-Matching $orId
+    $orLookup[$normalized] = $orFullModels[$orId]
+}
+
+# --- Helper: try to find OpenRouter pricing for a model by normalized matching ---
+function Get-OpenRouterPricing($modelId) {
+    $orFull = Fetch-OpenRouterFullModels
+    # Try exact match
+    if ($orFull.ContainsKey($modelId)) { return $orFull[$modelId] }
+    # Try normalized match
+    $normalized = Normalize-For-Matching $modelId
+    foreach ($key in $orFull.Keys) {
+        $keyNorm = Normalize-For-Matching $key
+        if ($keyNorm -eq $normalized) { return $orFull[$key] }
+    }
+    # Try last-segment match (e.g. "minimax-m3" from "nvidia/minimaxai/minimax-m3")
+    $parts = $modelId -split '/'
+    $lastSegment = $parts[-1]
+    foreach ($key in $orFull.Keys) {
+        if ($key -match [regex]::Escape($lastSegment)) {
+            return $orFull[$key]
+        }
+    }
+    return $null
+}
+
+# OpenCode Zen models: all free
+if ($zenModels -ne $null) {
+    foreach ($m in $zenModels) {
+        if ($m -match '-free$' -or $m -eq 'big-pickle') {
+            $fullId = "opencode/$m"
+            $orData = Get-OpenRouterPricing $fullId
+            $capabilities = @(Get-ModelCapabilities -modelId $m -provider "opencode")
+            if ($orData) {
+                $promptPrice = [double]::TryParse($orData.pricing.prompt, [ref](0.0)) | Out-Null; $p = 0.0; [double]::TryParse($orData.pricing.prompt, [ref]$p)
+                $compPrice = [double]::TryParse($orData.pricing.completion, [ref](0.0)) | Out-Null; $c = 0.0; [double]::TryParse($orData.pricing.completion, [ref]$c)
+                $registryModels += @{
+                    id = $fullId; source = "zen"; provider = "opencode"
+                    pricing = @{ prompt = $p; completion = $c }
+                    tier = Get-CostTier $p $c
+                    capabilities = $capabilities
+                    context_length = $orData.context_length
+                    vision = ($capabilities -contains "vision"); free = $true
+                }
+            } else {
+                $registryModels += @{
+                    id = $fullId; source = "zen"; provider = "opencode"
+                    pricing = @{ prompt = 0; completion = 0 }
+                    tier = "free"
+                    capabilities = $capabilities
+                    context_length = $null
+                    vision = ($capabilities -contains "vision"); free = $true
+                }
+            }
+        }
+    }
+}
+
+# OpenCode Go models: paid, estimate budget_paid unless OpenRouter says otherwise
+if ($goModels -ne $null) {
+    foreach ($m in $goModels) {
+        $fullId = "opencode-go/$m"
+        $orData = Get-OpenRouterPricing $fullId
+        $capabilities = @(Get-ModelCapabilities -modelId $m -provider "opencode-go")
+        if ($orData) {
+            $p = 0.0; $c = 0.0
+            [double]::TryParse($orData.pricing.prompt, [ref]$p)
+            [double]::TryParse($orData.pricing.completion, [ref]$c)
+            $registryModels += @{
+                id = $fullId; source = "go"; provider = "opencode-go"
+                pricing = @{ prompt = $p; completion = $c }
+                tier = Get-CostTier $p $c
+                capabilities = $capabilities
+                context_length = $orData.context_length
+                vision = ($capabilities -contains "vision"); free = ($p -eq 0.0 -and $c -eq 0.0)
+            }
+        } else {
+            $registryModels += @{
+                id = $fullId; source = "go"; provider = "opencode-go"
+                pricing = $null
+                tier = "budget_paid"
+                capabilities = $capabilities
+                context_length = $null
+                vision = ($capabilities -contains "vision"); free = $false
+            }
+        }
+    }
+}
+
+# NVIDIA models (all filtered, includes both free and paid)
+if ($nvidiaModels -ne $null) {
+    $filteredModels = Filter-NvidiaModels $nvidiaModels
+    foreach ($m in $filteredModels) {
+        $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
+        $orData = Get-OpenRouterPricing $fullId
+        $capabilities = @(Get-ModelCapabilities -modelId $m -provider "nvidia")
+
+        if ($orData) {
+            $p = 0.0; $c = 0.0
+            [double]::TryParse($orData.pricing.prompt, [ref]$p)
+            [double]::TryParse($orData.pricing.completion, [ref]$c)
+            $isFreeEndpoint = $false
+            try { $isFreeEndpoint = (Test-NvidiaFreeEndpoint $m) -eq $true } catch {}
+            $registryModels += @{
+                id = $fullId; source = "nvidia"; provider = "nvidia"
+                pricing = @{ prompt = $p; completion = $c }
+                tier = if ($isFreeEndpoint) { "free" } else { Get-CostTier $p $c }
+                capabilities = $capabilities
+                context_length = $orData.context_length
+                vision = ($capabilities -contains "vision"); free = $isFreeEndpoint
+            }
+        } else {
+            # No OpenRouter match — use free/endpoint heuristic only
+            $isFree = $false
+            try { $isFree = (Test-NvidiaFreeEndpoint $m) -eq $true } catch {}
+            $registryModels += @{
+                id = $fullId; source = "nvidia"; provider = "nvidia"
+                pricing = $null
+                tier = if ($isFree) { "free" } else { "unknown" }
+                capabilities = $capabilities
+                context_length = $null
+                vision = ($capabilities -contains "vision"); free = $isFree
+            }
+        }
+    }
+}
+
+# OpenRouter models (all, including free and paid)
+foreach ($orId in $orFullModels.Keys) {
+    $orData = $orFullModels[$orId]
+    $capabilities = @(Get-ModelCapabilities -modelId $orId -provider "openrouter" -contextLength $orData.context_length)
+    $p = 0.0; $c = 0.0
+    [double]::TryParse($orData.pricing.prompt, [ref]$p)
+    [double]::TryParse($orData.pricing.completion, [ref]$c)
+    # Skip OpenRouter routing models
+    if ($orId -match '^openrouter/(auto|free|fusion|bodybuilder|pareto-code)$') { continue }
+    $registryModels += @{
+        id = $orId; source = "openrouter"; provider = "openrouter"
+        pricing = @{ prompt = $p; completion = $c }
+        tier = Get-CostTier $p $c
+        capabilities = $capabilities
+        context_length = $orData.context_length
+        vision = ($capabilities -contains "vision"); free = ($p -eq 0.0 -and $c -eq 0.0)
+    }
+}
+
+# Deduplicate by model ID (keep first occurrence — source priority: zen > go > nvidia > openrouter)
+$seen = @{}
+$dedupedModels = @()
+foreach ($entry in $registryModels) {
+    if (-not $seen.ContainsKey($entry.id)) {
+        $seen[$entry.id] = $true
+        $dedupedModels += $entry
+    }
+}
+
+$registryData = @{
+    generated_at = (Get-Date).ToString("o")
+    total_models = $dedupedModels.Count
+    models = $dedupedModels
+}
+$registryData | ConvertTo-Json -Depth 4 | Out-File -FilePath $RegistryFile -Encoding utf8 -Force
+
 # 7. Write status file
 $totalNow = ($currentSources.Values | ForEach-Object { $_ }).Count
 
@@ -750,6 +1003,7 @@ if (-not $Silent) {
     Write-Host " Status written to: model-update-status.json" -ForegroundColor DarkGray
     Write-Host " Cache: glitch-memorycore\data\known-models.json" -ForegroundColor DarkGray
     Write-Host " Free models: data\free-models.json" -ForegroundColor DarkGray
+    Write-Host " Model registry: data\model-registry.json ($($dedupedModels.Count) models)" -ForegroundColor DarkGray
     Write-Host ""
 }
 

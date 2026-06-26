@@ -546,6 +546,71 @@ async function main() {
     }
   }
 
+  // ---- Resolve model assignments (Win only) ----
+  if (isWin) {
+    try {
+      const resolverScript = join(ROOT_DIR, 'scripts', 'resolve-models.mjs');
+      if (existsSync(resolverScript) && existsSync(join(ROOT_DIR, 'data', 'model-registry.json'))) {
+        // Run resolver (always exits 0; writes model-assignment.json)
+        run('node', [resolverScript], { timeout: 30000 });
+
+        // Read resolver output for changes
+        const assignmentFile = join(ROOT_DIR, 'data', 'model-assignment.json');
+        if (existsSync(assignmentFile)) {
+          const assignment = readJson(assignmentFile);
+          if (assignment && assignment.has_changes) {
+            log(YELLOW, `  ${assignment.changes.length} model assignment change(s) available`);
+            for (const c of assignment.changes) {
+              log(DARK_GRAY, `    @${c.agent}: ${c.old_model || '(none)'} -> ${c.new_model}`);
+            }
+
+            // Check preference file for autonomy choice
+            const prefFile = join(ROOT_DIR, 'data', 'model-resolver-preference.json');
+            let autoApply = false;
+            if (existsSync(prefFile)) {
+              const pref = readJson(prefFile);
+              if (pref && pref.autonomous) {
+                autoApply = true;
+              }
+            } else {
+              // No preference yet — ask the user once
+              log(DARK_GRAY, '');
+              log(CYAN, '  [Model Budget System]');
+              log(DARK_YELLOW, '  Model assignment changes detected.');
+              const rl = createInterface({ input: process.stdin, output: process.stdout });
+              const answer = await new Promise(resolve => {
+                rl.question(DARK_YELLOW + '  Apply automatically? (Y/n): ' + RESET, resolve);
+              });
+              rl.close();
+              const trimmed = answer.trim().toLowerCase();
+              if (trimmed === '' || trimmed === 'y' || trimmed === 'yes') {
+                autoApply = true;
+              }
+              // Save preference for next time
+              writeFileSync(prefFile, JSON.stringify({
+                autonomous: autoApply,
+                timestamp: new Date().toISOString()
+              }, null, 2), 'utf-8');
+            }
+
+            if (autoApply) {
+              log(DARK_GRAY, '  Applying model assignments...');
+              run('node', [resolverScript, '--apply'], { timeout: 15000 });
+              log(GREEN, '  Model assignments applied.');
+              log(DARK_YELLOW, '  Restart opencode to activate.');
+            } else {
+              log(DARK_GRAY, '  Skipping — use `node scripts/resolve-models.mjs --apply` to apply later');
+            }
+          } else {
+            log(DARK_GREEN, '  Model assignments up-to-date');
+          }
+        }
+      }
+    } catch {
+      log(DARK_YELLOW, '  Model assignment resolution skipped (non-critical)');
+    }
+  }
+
   // ---- Sync user memory data from private repo (handled by checkUserRepoUpdates above) ----
 
 // ---- Auto-update opencode to latest (minor/patch) + sync local binary ----
