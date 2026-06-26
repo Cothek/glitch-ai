@@ -1,6 +1,5 @@
 ---
 name: glitch-omni
-model: opencode-go/deepseek-v4-flash
 mode: primary
 temperature: 0.2
 color: "#a855f7"
