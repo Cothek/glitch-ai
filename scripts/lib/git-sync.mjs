@@ -315,7 +315,7 @@ export async function checkRepoUpdates(options = {}) {
     log(C.DARK_YELLOW, `  main is ${mainBehind} commit(s) behind origin/main`);
   }
   log('');
-  log(C.WHITE, '  [p] Pull updates now (fast-forward)');
+  log(C.WHITE, '  [P] Pull updates now (fast-forward) [default]');
   log(C.WHITE, '  [s] Skip (update later)');
   if (allowBranchSwitch && branch !== 'main') {
     log(C.WHITE, '  [m] Switch to main & update (recommended)');
@@ -324,7 +324,7 @@ export async function checkRepoUpdates(options = {}) {
 
   const choice = (await askQuestion('  > ')).trim().toLowerCase();
 
-  if (choice === 'p') {
+  if (choice === '' || choice === 'p') {
     log(C.CYAN, `  Pulling origin/${branch}...`);
     if (pullBranch(cwd, branch)) {
       log(C.GREEN, `  ${label}: updated!`);
@@ -376,7 +376,7 @@ export async function checkRepoUpdates(options = {}) {
     return { checked: true, updated: false, switchedBranch: true };
   }
 
-  // 's' or anything else
+  // 's' — explicit skip
   if (!quiet) log(C.DARK_YELLOW, `  ${label}: skipping update.`);
   return { checked: true, updated: false, switchedBranch: false };
 }

@@ -705,6 +705,11 @@ try {
       } catch {
         Write-ColorHost "  Download failed: $_" "Red"
       }
+      # After successful update, re-check version and clear update flag
+      if ($curVer -eq $latestVer) {
+        $updateNeeded = $false
+        $updatesAvailable--
+      }
     }
   }
 
@@ -774,41 +779,71 @@ try {
         $isArm = (Get-CimInstance Win32_Processor).Architecture -eq 5
         $archSuffix = if ($isArm) { "arm64" } else { "x64" }
         
-        # Find the setup.exe asset for this architecture
+        # Find the MSI asset for this architecture (can be extracted with msiexec /a)
+        # Asset name format: Handy_0.8.3_x64_en-US.msi (no 'v' prefix in version)
+        $versionNoV = $latestVer.TrimStart('v')
         $json = Invoke-WebRequest -Uri "https://api.github.com/repos/cjpais/Handy/releases/latest" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
         $data = $json | ConvertFrom-Json
         $assets = $data.assets
-        $asset = $assets | Where-Object { $_.name -like "Handy_*_${archSuffix}-setup.exe" } | Select-Object -First 1
+        $asset = $assets | Where-Object { $_.name -eq "Handy_${versionNoV}_${archSuffix}_en-US.msi" } | Select-Object -First 1
         
         if ($asset) {
-          $setupUrl = $asset.browser_download_url
-          $setupPath = Join-Path $env:TEMP "Handy_setup.exe"
-          $extractDir = Join-Path $env:TEMP "Handy_tmp"
+          $msiUrl = $asset.browser_download_url
+          $msiPath = Join-Path $env:TEMP "Handy_installer.msi"
+          $extractDir = Join-Path $env:TEMP "Handy_extracted"
           
-          Write-ColorHost "  Downloading: $setupUrl" "Cyan"
-          Invoke-WebRequest -Uri $setupUrl -OutFile $setupPath -UseBasicParsing -TimeoutSec 60
+          Write-ColorHost "  Downloading: $msiUrl" "Cyan"
+          Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing -TimeoutSec 60
           
-          # Extract using 7-Zip if available, otherwise silent install
-          $7z = Get-Command "7z" -ErrorAction SilentlyContinue
-          if ($7z) {
-            Write-ColorHost "  Extracting with 7-Zip..." "Cyan"
-            if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
-            New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-            & $7z.Source x "$setupPath" -o"$extractDir" -y 2>&1 | Out-Null
-          } else {
-            Write-ColorHost "  Installing silently..." "Cyan"
-            $proc = Start-Process -FilePath $setupPath -ArgumentList "/S", "/D=$extractDir" -Wait -PassThru
-            if ($proc.ExitCode -ne 0) {
-              Write-ColorHost "  Silent install failed." "Yellow"
-            }
+          # Extract using msiexec /a (administrative install - extracts files without installing)
+          if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
+          New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+          
+          Write-ColorHost "  Extracting with msiexec..." "Cyan"
+          $proc = Start-Process -FilePath "msiexec.exe" -ArgumentList "/a", "`"$msiPath`"", "/qn", "TARGETDIR=`"$extractDir`"" -Wait -PassThru
+          if ($proc.ExitCode -ne 0) {
+            Write-ColorHost "  MSI extraction failed (exit code: $($proc.ExitCode))." "Red"
           }
           
-          # Find and copy handy.exe
+          # Find and copy handy.exe (should be in the extracted folder)
           $foundExe = Get-ChildItem -Path $extractDir -Recurse -Filter "handy.exe" | Select-Object -First 1
           if ($foundExe) {
             $src = $foundExe.Directory.FullName
             $HandyDir = Split-Path -Parent $HandyBin
-            if (Test-Path $HandyDir) { Remove-Item $HandyDir -Recurse -Force -ErrorAction SilentlyContinue }
+            
+            # Stop any running Handy process first (holds handle on directory)
+            $handyProc = Get-Process -Name "handy" -ErrorAction SilentlyContinue
+            $wasRunning = $false
+            if ($handyProc) {
+              Write-ColorHost "  Stopping Handy process (PID: $($handyProc.Id))..." "Cyan"
+              Stop-Process -Id $handyProc.Id -Force -ErrorAction SilentlyContinue
+              # Wait for process to fully exit
+              $waitCount = 0
+              while ((Get-Process -Name "handy" -ErrorAction SilentlyContinue) -and $waitCount -lt 10) {
+                Start-Sleep -Seconds 1
+                $waitCount++
+              }
+              $handyProc = Get-Process -Name "handy" -ErrorAction SilentlyContinue
+              if ($handyProc) {
+                Write-ColorHost "  WARNING: Handy process still running after stop attempt" "Yellow"
+              } else {
+                Write-ColorHost "  Handy process stopped" "Green"
+              }
+              $wasRunning = $true
+            }
+            
+            # Now rename old dir (should work after process stopped)
+            $oldDir = "$HandyDir.old"
+            if (Test-Path $HandyDir) {
+              if (Test-Path $oldDir) { Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue }
+              try {
+                Rename-Item $HandyDir $oldDir -ErrorAction Stop
+                Write-ColorHost "  Renamed old Handy dir to $oldDir" "Cyan"
+              } catch {
+                Write-ColorHost "  Rename failed: $($_.Exception.Message)" "Red"
+                throw
+              }
+            }
             New-Item -ItemType Directory -Path $HandyDir -Force | Out-Null
             Copy-Item "$src\*" $HandyDir -Recurse -Force
             # Update file timestamp to now (Copy-Item preserves source timestamp)
@@ -816,6 +851,12 @@ try {
               (Get-Item $HandyBin).LastWriteTime = Get-Date
             }
             Write-ColorHost "  Handy updated to $latestVer" "Green"
+            
+            # Restart Handy if it was running
+            if ($wasRunning) {
+              Write-ColorHost "  Restarting Handy..." "Cyan"
+              Start-Process -FilePath $HandyBin -WindowStyle Hidden
+            }
             
             # Refresh version info
             if (Test-Path $HandyBin) {
@@ -828,15 +869,17 @@ try {
                 $updatesAvailable--
               }
             }
+            # Cleanup .old
+            Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue
           } else {
-            Write-ColorHost "  Failed to extract Handy." "Red"
+            Write-ColorHost "  Failed to find handy.exe in extracted MSI." "Red"
           }
           
           # Cleanup
-          Remove-Item $setupPath -Force -ErrorAction SilentlyContinue
+          Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
           Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
         } else {
-          Write-ColorHost "  No matching asset found for architecture: $archSuffix" "Yellow"
+          Write-ColorHost "  No MSI asset found for architecture: $archSuffix" "Yellow"
           Write-ColorHost "  Manual: https://github.com/cjpais/Handy/releases" "DarkYellow"
         }
       } catch {
@@ -1045,7 +1088,119 @@ try {
   Write-ColorHost "  [ERROR] $_" "Red"
 }
 
-# ========== 11. External tool dependencies (config/tools.json) ==========
+# ========== 11. NVIDIA Model Catalog (Free Endpoints) ==========
+try {
+  # Known free models from NVIDIA build.nvidia.com (curated list)
+  # Source: https://build.nvidia.com/models and individual model pages
+  # Note: Model IDs use the integrate API format (provider/model), not the website URL format
+  # Note: Some specialized models (e.g., active-speaker-detection) may not be in the general chat/completions API
+  $knownFreeModels = @(
+    @{ id = "nvidia/nemotron-3-nano-30b-a3b"; name = "Nemotron 3 Nano 30B"; multimodal = $false },
+    @{ id = "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning"; name = "Nemotron 3 Nano Omni"; multimodal = $true },
+    @{ id = "nvidia/nvidia-nemotron-nano-9b-v2"; name = "Nemotron Nano 9B v2"; multimodal = $false },
+    @{ id = "nvidia/nemotron-mini-4b-instruct"; name = "Nemotron Mini 4B"; multimodal = $false },
+    @{ id = "minimaxai/minimax-m2.7"; name = "MiniMax M2.7"; multimodal = $false },
+    @{ id = "minimaxai/minimax-m3"; name = "MiniMax M3"; multimodal = $true },
+    @{ id = "qwen/qwen3.5-122b-a10b"; name = "Qwen3.5 122B"; multimodal = $true },
+    @{ id = "stepfun-ai/step-3.7-flash"; name = "Step 3.7 Flash"; multimodal = $true },
+    @{ id = "nvidia/nemotron-3-content-safety"; name = "Nemotron 3 Content Safety"; multimodal = $true },
+    @{ id = "nvidia/ai-synthetic-video-detector"; name = "Synthetic Video Detector"; multimodal = $true },
+    @{ id = "nvidia/ising-calibration-1-35b-a3b"; name = "Ising Calibration"; multimodal = $true },
+    @{ id = "deepseek-ai/deepseek-v4-flash"; name = "DeepSeek V4 Flash"; multimodal = $false },
+    @{ id = "deepseek-ai/deepseek-v4-pro"; name = "DeepSeek V4 Pro"; multimodal = $false },
+    @{ id = "z-ai/glm-5.1"; name = "GLM-5.1"; multimodal = $false }
+  )
+
+  $verifiedModels = @()
+  $missingModels = @()
+
+  # Fetch integrate API model list once
+  $allNvidiaModels = @()
+  try {
+    $response = Invoke-WebRequest -Uri "https://integrate.api.nvidia.com/v1/models" -Headers @{ "Accept" = "application/json" } -UseBasicParsing -TimeoutSec 15 -ErrorAction Stop
+    $data = $response.Content | ConvertFrom-Json
+    $allNvidiaModels = $data.data | Where-Object { $_.id -like "nvidia/*" -or $_.id -like "minimaxai/*" -or $_.id -like "deepseek-ai/*" -or $_.id -like "qwen/*" -or $_.id -like "stepfun-ai/*" -or $_.id -like "z-ai/*" -or $_.id -like "01-ai/*" -or $_.id -like "abacusai/*" } | Select-Object -ExpandProperty id
+  } catch {
+    Write-ColorHost "  [WARN] Could not fetch NVIDIA integrate API model list: $_" "Yellow"
+  }
+
+  # Check each known free model against the integrate API to verify it exists
+  foreach ($model in $knownFreeModels) {
+    $exists = $allNvidiaModels | Where-Object { $_ -eq $model.id }
+    if ($exists) {
+      $verifiedModels += $model.id
+    } else {
+      $missingModels += $model.id
+    }
+  }
+
+  # Check for newly added free models by scraping a few key model card pages
+  # (Only for high-priority models we're watching)
+  # Note: Website URLs use nvidia/ prefix for all, but model cards are at /provider/model
+  $watchList = @(
+    "/minimaxai/minimax-m3",
+    "/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+    "/qwen/qwen3.5-122b-a10b",
+    "/stepfun-ai/step-3.7-flash"
+  )
+  $newlyFree = @()
+  foreach ($path in $watchList) {
+    $modelId = $path.TrimStart('/')
+    if ($knownFreeModels | Where-Object { $_.id -eq $modelId }) { continue }  # Already in known list
+    try {
+      $cardUrl = "https://build.nvidia.com$path"
+      $cardResponse = Invoke-WebRequest -Uri $cardUrl -Headers @{ "Accept" = "text/html" } -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+      if ($cardResponse.Content -match 'Free Endpoint') {
+        $newlyFree += @{
+          id = $modelId
+          note = "Free Endpoint badge found on model card"
+        }
+      }
+    } catch {
+      # Ignore errors for individual model cards
+    }
+  }
+
+  $hasNewModels = $newlyFree.Count -gt 0
+  if ($hasNewModels) { $updatesAvailable++ }
+
+  if ($IsUpdate -and $hasNewModels -and ($Filter.Count -eq 0 -or $Filter -contains "NVIDIA Model Catalog")) {
+    Write-ColorHost "  Newly free NVIDIA models detected:" "Cyan"
+    foreach ($m in $newlyFree) {
+      Write-ColorHost "    $($m.id) - $($m.note)" "DarkCyan"
+    }
+    Write-ColorHost "  Consider adding to known free models list" "DarkCyan"
+  }
+
+  $results += @{
+    name = "NVIDIA Model Catalog"
+    current = "$($verifiedModels.Count) verified free models"
+    latest = "$($allNvidiaModels.Count) NVIDIA models in integrate API"
+    update_available = $hasNewModels
+    update_type = if ($hasNewModels) {"$($newlyFree.Count) newly free model(s)"} else {"none"}
+    auto_safe = $false
+    status = "ok"
+    verified_models = $verifiedModels
+    missing_models = $missingModels
+    newly_free = $newlyFree
+  }
+
+  if ($hasNewModels) {
+    Write-ColorHost "  [UPDATE] $($newlyFree.Count) newly free model(s) detected" "Yellow"
+    foreach ($m in $newlyFree) {
+      Write-ColorHost "    $($m.id)" "DarkYellow"
+    }
+  } elseif ($missingModels.Count -gt 0) {
+    Write-ColorHost "  [WARN] $($missingModels.Count) known free model(s) not found in integrate API: $($missingModels -join ', ')" "Yellow"
+  } else {
+    Write-ColorHost "  [OK] All $($verifiedModels.Count) known free models verified in integrate API" "Green"
+  }
+} catch {
+  $results += @{ name = "NVIDIA Model Catalog"; status = "error"; error_message = $_.Exception.Message }
+  Write-ColorHost "  [ERROR] $_" "Red"
+}
+
+# ========== 12. External tool dependencies (config/tools.json) ==========
 try {
   $toolManifestPath = Join-Path $RootDir "config\tools.json"
   if (Test-Path $toolManifestPath) {

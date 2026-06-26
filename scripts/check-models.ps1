@@ -13,13 +13,83 @@ $ResetCache = $args -contains "-ResetCache"
 $UpdateCache = $args -contains "-UpdateCache"
 $CheckOnly = (-not $ResetCache -and -not $UpdateCache) -or $args -contains "-CheckOnly"
 $Silent = $args -contains "-Silent"
+$SkipNvidiaFreeCheck = $args -contains "-SkipNvidiaFreeCheck"
+
+# --- Helper: normalize model ID (prevents double prefix / backslash issues) ---
+# --- Helper: name override dict for well-known NVIDIA models --------------------
+$NvidiaNameOverrides = @{
+  "deepseek-v4-flash" = "DeepSeek V4 Flash"
+  "deepseek-v4-pro" = "DeepSeek V4 Pro"
+  "minimax-m3" = "MiniMax M3"
+  "minimax-m2.7" = "MiniMax M2.7"
+  "nemotron-3-ultra-550b" = "Nemotron 3 Ultra 550B"
+  "nemotron-3-super-120b" = "Nemotron 3 Super 120B"
+  "nemotron-3-nano-omni-30b-a3b-reasoning" = "Nemotron 3 Nano Omni 30B"
+  "nemotron-4-340b" = "Nemotron 4 340B"
+  "nemotron-nano-12b" = "Nemotron Nano 12B VL"
+  "llama-3.1-nemotron-ultra-253b" = "Nemotron Ultra 253B"
+  "llama-3.3-nemotron-super-49b" = "Nemotron Super 49B"
+  "mistral-large-3-675b" = "Mistral Large 3"
+  "kimi-k2.6" = "Kimi K2.6"
+  "qwen3-next-80b" = "Qwen3 Next 80B"
+  "qwen3.5-122b" = "Qwen 3.5 122B"
+  "qwen3.5-397b" = "Qwen 3.5 397B"
+  "llama-3.1-70b" = "Llama 3.1 70B"
+  "llama-3.1-8b" = "Llama 3.1 8B"
+  "llama-3.2-11b-vision" = "Llama 3.2 11B Vision"
+  "llama-3.3-70b" = "Llama 3.3 70B"
+  "llama-4-maverick-17b-128e" = "Llama 4 Maverick 17B"
+  "gemma-3-12b" = "Gemma 3 12B"
+  "gemma-4-31b" = "Gemma 4 31B"
+  "step-3.7-flash" = "Step 3.7 Flash"
+  "step-3.5-flash" = "Step 3.5 Flash"
+  "glm-5.1" = "GLM 5.1"
+  "yi-large" = "Yi Large"
+  "codestral-22b" = "Codestral 22B"
+  "mistral-nemo-12b" = "Mistral Nemo 12B"
+  "mistral-nemotron" = "Mistral Nemotron"
+  "granite-3.0-8b" = "Granite 3.0 8B"
+}
+
+# --- Helper: generate a readable display name for NVIDIA models ------------------
+function Get-NvidiaDisplayName($modelName, $isVision) {
+  # Step 1: strip version suffixes
+  $cleaned = $modelName -replace '-instruct(-\d+)?$', '' -replace '-a\d+b$', '' -replace '-v\d+(\.\d+)?$', '' -replace '-it$', ''
+
+  # Step 2: check override dictionary
+  if ($NvidiaNameOverrides.ContainsKey($cleaned)) {
+    $displayName = $NvidiaNameOverrides[$cleaned]
+  } else {
+    # Step 3: capitalize each dash-separated word
+    $displayName = ($cleaned -split '-' | ForEach-Object {
+      if ($_ -match '^(\d+\.?\d*)([a-z])$') {
+        # e.g., "550b" -> "550B", "8b" -> "8B"
+        $matches[1] + $matches[2].ToUpper()
+      } elseif ($_ -match '^[a-z]') {
+        $_.Substring(0,1).ToUpper() + $_.Substring(1)
+      } else { $_ }
+    }) -join ' '
+  }
+
+  if ($isVision) { $displayName += ' (image)' }
+  return $displayName
+}
+
+function Normalize-ModelId($modelId) {
+  if (-not $modelId) { return $modelId }
+  # 1. Replace any backslashes with forward slashes (Windows env var issue)
+  $normalized = $modelId -replace '\\', '/'
+  # 2. Fix double nvidia/nvidia/ prefix (historical bug)
+  $normalized = $normalized -replace '^nvidia/nvidia/', 'nvidia/'
+  return $normalized
+}
 
 # --- Helper: fetch JSON from a URL ----------------------------------------------
 function Fetch-Models($url) {
   try {
     $response = Invoke-RestMethod -Uri $url -Method Get -TimeoutSec 15 -ErrorAction Stop
     $ids = if ($response.data) { $response.data.id } else { @() }
-    return @($ids | Where-Object { $_ -ne $null })
+    return @($ids | Where-Object { $_ -ne $null } | ForEach-Object { Normalize-ModelId $_ })
   } catch {
     if (-not $Silent) { Write-Host " [WARN] Failed to fetch $url : $_" -ForegroundColor Yellow }
     return $null
@@ -239,8 +309,8 @@ if ($zenModels -ne $null) {
 
 if ($nvidiaModels -ne $null) {
     # NVIDIA returns full model IDs like "nvidia/qwen/qwen3-coder-480b-a35b-instruct"
-    # Shorten them to just the path for cache consistency
-    $nvidiaShort = $nvidiaModels | ForEach-Object { "nvidia/$_".Replace("nvidia/nvidia/", "nvidia/") }
+    # Normalize to ensure consistent format (single nvidia/ prefix, forward slashes)
+    $nvidiaShort = $nvidiaModels | ForEach-Object { Normalize-ModelId "nvidia/$($_.Replace('nvidia/', ''))" }
     $currentSources["nvidia"] = $nvidiaShort
     $newInNvidia = if ($knownModels.ContainsKey("nvidia")) { Compare-Object $nvidiaShort $knownModels["nvidia"] | Where-Object { $_.SideIndicator -eq "<=" } | ForEach-Object { $_.InputObject } } else { $nvidiaShort }
     foreach ($m in $newInNvidia) {
@@ -309,9 +379,77 @@ $freeModelsData = @{
   providers = @()
 }
 
-# --- Helper: check if a raw model ID is vision/image capable --------------------
-# Used by Zen, OpenRouter, and NVIDIA sections below
+# --- Helper: fetch OpenRouter model capabilities (authoritative source for vision) ---
+# Returns a hashtable mapping model ID -> @{ input_modalities = @(...); output_modalities = @(...) }
+$script:openRouterCapabilities = $null
+
+function Fetch-OpenRouterCapabilities {
+    if ($script:openRouterCapabilities) { return $script:openRouterCapabilities }
+    
+    try {
+        $response = Invoke-RestMethod -Uri "https://openrouter.ai/api/v1/models" -Method Get -TimeoutSec 20 -ErrorAction Stop
+        $capabilities = @{}
+        foreach ($m in $response.data) {
+            if ($m.architecture -and $m.architecture.input_modalities) {
+                $capabilities[$m.id] = @{
+                    input_modalities = @($m.architecture.input_modalities)
+                    output_modalities = @($m.architecture.output_modalities)
+                }
+            }
+        }
+        $script:openRouterCapabilities = $capabilities
+        return $capabilities
+    } catch {
+        Write-Host " [WARN] Failed to fetch OpenRouter capabilities: $_" -ForegroundColor Yellow
+        $script:openRouterCapabilities = @{}
+        return @{}
+    }
+}
+
+# --- Helper: normalize model ID for cross-provider matching ---
+function Normalize-For-Matching($modelId) {
+    # Map NVIDIA provider prefixes to OpenRouter equivalents
+    # NVIDIA: nvidia/minimaxai/minimax-m3 -> minimax/minimax-m3
+    # NVIDIA: nvidia/qwen/qwen3.5-122b-a10b -> qwen/qwen3.5-122b-a10b
+    # NVIDIA: nvidia/stepfun-ai/step-3.7-flash -> stepfun/step-3.7-flash
+    # NVIDIA: nvidia/deepseek-ai/deepseek-v4-flash -> deepseek/deepseek-v4-flash
+    # NVIDIA: nvidia/z-ai/glm-5.1 -> z-ai/glm-5.1
+    $normalized = $modelId
+    
+    # Strip nvidia/ prefix first
+    $normalized = $normalized -replace '^nvidia/', ''
+    
+    # Map provider prefixes to OpenRouter equivalents
+    $normalized = $normalized -replace '^minimaxai/', 'minimax/'
+    $normalized = $normalized -replace '^deepseek-ai/', 'deepseek/'
+    $normalized = $normalized -replace '^qwen/', 'qwen/'
+    $normalized = $normalized -replace '^stepfun-ai/', 'stepfun/'
+    $normalized = $normalized -replace '^z-ai/', 'z-ai/'
+    
+    # Remove :free suffix
+    $normalized = $normalized -replace ':free$', ''
+    return $normalized
+}
+
+# --- Helper: check if a model has vision capabilities using OpenRouter data ---
 function Is-VisionModel($modelId) {
+    $capabilities = Fetch-OpenRouterCapabilities
+    
+    # Try exact match first
+    if ($capabilities.ContainsKey($modelId)) {
+        return $capabilities[$modelId].input_modalities -contains 'image'
+    }
+    
+    # Try normalized match (strip provider prefixes)
+    $normalized = Normalize-For-Matching $modelId
+    foreach ($key in $capabilities.Keys) {
+        $keyNorm = Normalize-For-Matching $key
+        if ($keyNorm -eq $normalized) {
+            return $capabilities[$key].input_modalities -contains 'image'
+        }
+    }
+    
+    # Fallback to heuristics for models not in OpenRouter
     if ($modelId -match 'vision') { return $true }
     if ($modelId -match 'multimodal') { return $true }
     if ($modelId -match '-vl[-]|-vl$') { return $true }
@@ -322,6 +460,67 @@ function Is-VisionModel($modelId) {
     if ($modelId -match 'gemma-[34]') { return $true }
     if ($modelId -match 'llama-4-maverick') { return $true }
     return $false
+}
+
+# --- Helper: check if a NVIDIA model has "Free Endpoint" badge on build.nvidia.com ---
+# Cache to avoid repeated HTTP requests
+$script:nvidiaFreeEndpointCache = @{}
+
+function Test-NvidiaFreeEndpoint($modelId) {
+    # Check cache first
+    if ($script:nvidiaFreeEndpointCache.ContainsKey($modelId)) {
+        return $script:nvidiaFreeEndpointCache[$modelId]
+    }
+    
+    # Convert API model ID to website URL path
+    # The build.nvidia.com URLs use the full path including provider prefix
+    # Examples:
+    #   minimaxai/minimax-m3 -> https://build.nvidia.com/minimaxai/minimax-m3
+    #   nvidia/nemotron-3-nano-30b-a3b -> https://build.nvidia.com/nvidia/nemotron-3-nano-30b-a3b
+    #   qwen/qwen3.5-122b-a10b -> https://build.nvidia.com/qwen/qwen3.5-122b-a10b
+    # So we use the model ID as-is (it already has the correct provider prefix)
+    $cardUrl = "https://build.nvidia.com/$modelId"
+    
+    try {
+        $response = Invoke-WebRequest -Uri $cardUrl -Headers @{ "Accept" = "text/html" } -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+        $isFree = $response.Content -match 'Free Endpoint'
+        $script:nvidiaFreeEndpointCache[$modelId] = $isFree
+        return $isFree
+    } catch {
+        # If we can't check, return null (unknown)
+        return $null
+    }
+}
+
+# --- Helper: verify all known NVIDIA models against build.nvidia.com ---
+function Verify-NvidiaFreeModels {
+    $modelsToCheck = @(
+        "minimaxai/minimax-m2.7",
+        "minimaxai/minimax-m3",
+        "deepseek-ai/deepseek-v4-flash",
+        "deepseek-ai/deepseek-v4-pro",
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
+        "nvidia/nemotron-3-ultra-550b-a55b",
+        "nvidia/llama-3.3-nemotron-super-49b-v1.5",
+        "qwen/qwen3.5-122b-a10b",
+        "stepfun-ai/step-3.7-flash",
+        "z-ai/glm-5.1"
+    )
+    
+    $results = @{}
+    foreach ($model in $modelsToCheck) {
+        $isFree = Test-NvidiaFreeEndpoint $model
+        $results[$model] = $isFree
+        if ($isFree -eq $true) {
+            Write-Host "  [OK] $model - Free Endpoint confirmed" -ForegroundColor Green
+        } elseif ($isFree -eq $false) {
+            Write-Host "  [FAIL] $model - NOT free (no badge)" -ForegroundColor Red
+        } else {
+            Write-Host "  [WARN] $model - Could not verify" -ForegroundColor Yellow
+        }
+        Start-Sleep -Milliseconds 500  # Be nice to the server
+    }
+    return $results
 }
 
 # OpenCode Zen: models ending in -free or named big-pickle
@@ -454,13 +653,37 @@ $nvidiaGroup = @{
 if ($nvidiaModels -ne $null) {
   # Filter to keep only useful models
   $filteredModels = Filter-NvidiaModels $nvidiaModels
-  foreach ($m in $filteredModels) {
-    $fullId = "nvidia/$($m.Replace('nvidia/', ''))"
-    $parts = $m -split '/'
-    $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
-    $displayName = $shortName -replace '-instruct-\d+$', '' -replace '-a\d+b$', ''
-    if (Is-VisionModel $m) { $displayName += ' (image)' }
-    $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
+  
+    if ($SkipNvidiaFreeCheck) {
+      # Normal mode — skip free endpoint verification, include all NVIDIA models
+      foreach ($m in $filteredModels) {
+        $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
+        $parts = $m -split '/'
+        $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
+        $displayName = Get-NvidiaDisplayName -modelName $shortName -isVision (Is-VisionModel $m)
+        $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
+      }
+  } else {
+    # Free mode — verify free endpoint status, only include confirmed-free models
+    Write-Host " Verifying NVIDIA free endpoint status..." -ForegroundColor Cyan
+    $freeStatus = Verify-NvidiaFreeModels
+    
+    $confirmedFree = @($freeStatus.Keys | Where-Object { $freeStatus[$_] -eq $true })
+    $skippedCount = 0
+    
+    foreach ($m in $filteredModels) {
+      if ($m -notin $confirmedFree) {
+        $skippedCount++
+        continue
+      }
+      $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
+      $parts = $m -split '/'
+      $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
+      $displayName = Get-NvidiaDisplayName -modelName $shortName -isVision (Is-VisionModel $m)
+      $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
+    }
+    
+    Write-Host "  Free models: $($nvidiaGroup.models.Count) confirmed, $skippedCount filtered out (unverified/paid)" -ForegroundColor DarkGray
   }
 } else {
   # No API key or API unavailable - don't write a static fallback list.

@@ -409,20 +409,71 @@
                    "hostname":  "127.0.0.1"
                },
     "default_agent":  "glitch",
-    "provider":  {
-                     "lmstudio":  {
-                                      "npm":  "@ai-sdk/openai-compatible",
-                                      "name":  "LM Studio (local)",
-                                      "options":  {
-                                                      "baseURL":  "http://192.168.86.139:1234/v1"
-                                                  },
-                                      "models":  {
-                                                     "google/gemma-4-12b":  {
-                                                                                "name":  "Gemma 4 12B (local)"
-                                                                            }
-                                                 }
-                                  }
-                 },
+     "provider":  {
+                      "lmstudio":  {
+                                       "npm":  "@ai-sdk/openai-compatible",
+                                       "name":  "LM Studio (local)",
+                                       "options":  {
+                                                       "baseURL":  "http://192.168.86.139:1234/v1"
+                                                   },
+                                       "models":  {
+                                                      "google/gemma-4-12b":  {
+                                                                                 "name":  "Gemma 4 12B (local)"
+                                                                             }
+                                                  }
+                                   },
+                      "nvidia":  {
+                                       "npm":  "@ai-sdk/openai-compatible",
+                                       "name":  "NVIDIA API (free endpoints)",
+                                       "options":  {
+                                                       "baseURL":  "https://integrate.api.nvidia.com/v1"
+                                                   },
+                                       "models":  {
+                                                      "minimaxai/minimax-m3":  {
+                                                                                 "name":  "MiniMax M3 (free, multimodal)"
+                                                                             },
+                                                      "nvidia/nemotron-3-nano-30b-a3b":  {
+                                                                                 "name":  "Nemotron 3 Nano 30B (free)"
+                                                                             },
+                                                      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning":  {
+                                                                                 "name":  "Nemotron 3 Nano Omni (free, multimodal)"
+                                                                             },
+                                                      "nvidia/nvidia-nemotron-nano-9b-v2":  {
+                                                                                 "name":  "Nemotron Nano 9B v2 (free)"
+                                                                             },
+                                                      "nvidia/nemotron-mini-4b-instruct":  {
+                                                                                 "name":  "Nemotron Mini 4B (free)"
+                                                                             },
+                                                      "minimaxai/minimax-m2.7":  {
+                                                                                 "name":  "MiniMax M2.7 (free)"
+                                                                             },
+                                                      "qwen/qwen3.5-122b-a10b":  {
+                                                                                 "name":  "Qwen3.5 122B (free, multimodal)"
+                                                                             },
+                                                      "stepfun-ai/step-3.7-flash":  {
+                                                                                 "name":  "Step 3.7 Flash (free, multimodal)"
+                                                                             },
+                                                      "nvidia/nemotron-3-content-safety":  {
+                                                                                 "name":  "Nemotron 3 Content Safety (free, multimodal)"
+                                                                             },
+                                                      "nvidia/ai-synthetic-video-detector":  {
+                                                                                 "name":  "Synthetic Video Detector (free, multimodal)"
+                                                                             },
+                                                      "nvidia/ising-calibration-1-35b-a3b":  {
+                                                                                 "name":  "Ising Calibration (free, multimodal)"
+                                                                             },
+                                                      "deepseek-ai/deepseek-v4-flash":  {
+                                                                                 "name":  "DeepSeek V4 Flash (free)"
+                                                                             },
+                                                      "deepseek-ai/deepseek-v4-pro":  {
+                                                                                 "name":  "DeepSeek V4 Pro (free)"
+                                                                             },
+                                                      "z-ai/glm-5.1":  {
+                                                                                 "name":  "GLM-5.1 (free)"
+                                                                             }
+                                                  }
+                                   }
+                  },
     "compaction":  {
                        "auto":  true,
                        "tail_turns":  8

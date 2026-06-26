@@ -1,0 +1,50 @@
+{
+  "nvidia": {
+    "npm": "@ai-sdk/openai-compatible",
+    "name": "NVIDIA API (free endpoints)",
+    "options": {
+      "baseURL": "https://integrate.api.nvidia.com/v1"
+    },
+    "models": {
+      "minimaxai/minimax-m3": {
+        "name": "MiniMax M3 (free, multimodal)"
+      },
+      "minimaxai/minimax-m2.7": {
+        "name": "MiniMax M2.7 (free)"
+      },
+      "deepseek-ai/deepseek-v4-flash": {
+        "name": "DeepSeek V4 Flash (free)"
+      },
+      "deepseek-ai/deepseek-v4-pro": {
+        "name": "DeepSeek V4 Pro (free)"
+      },
+      "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
+        "name": "Nemotron 3 Nano Omni 30B (free, multimodal)"
+      },
+      "nvidia/nemotron-3-ultra-550b-a55b": {
+        "name": "Nemotron 3 Ultra 550B (free)"
+      },
+      "qwen/qwen3.5-122b-a10b": {
+        "name": "Qwen 3.5 122B (free, multimodal)"
+      },
+      "stepfun-ai/step-3.7-flash": {
+        "name": "Step 3.7 Flash (free, multimodal)"
+      },
+      "z-ai/glm-5.1": {
+        "name": "GLM-5.1 (free)"
+      }
+    }
+  },
+  "lmstudio": {
+    "npm": "@ai-sdk/openai-compatible",
+    "name": "LM Studio (local)",
+    "options": {
+      "baseURL": "http://192.168.86.139:1234/v1"
+    },
+    "models": {
+      "google/gemma-4-12b": {
+        "name": "Gemma 4 12B (local)"
+      }
+    }
+  }
+}

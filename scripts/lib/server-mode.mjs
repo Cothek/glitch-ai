@@ -7,9 +7,10 @@
  * Used by all launch scripts when --serve flag is passed.
  */
 
-import { existsSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, writeFileSync, readFileSync, copyFileSync, unlinkSync, statSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { execFileSync, spawn } from 'child_process';
+import { createInterface } from 'readline';
 import net from 'net';
 import crypto from 'crypto';
 
@@ -63,6 +64,16 @@ function readJson(path) {
   } catch {
     return null;
   }
+}
+
+function promptUser(question) {
+  return new Promise((resolve) => {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim().toLowerCase());
+    });
+  });
 }
 
 function timestamp() {
@@ -157,9 +168,9 @@ export async function launchServer(options = {}) {
     ROOT_DIR,
     TARGET_PORT = 4102,
     AUTH_PROXY_PORT = 4100,
-    cloudflareDomain = process.env.GLITCH_DOMAIN,
     skipBootstrap = false,
   } = options;
+  let cloudflareDomain = options.cloudflareDomain || process.env.GLITCH_DOMAIN;
 
   if (!OpenCodeBin || !ROOT_DIR) {
     log(RED, '  ERROR: OpenCodeBin and ROOT_DIR are required');
@@ -194,16 +205,152 @@ export async function launchServer(options = {}) {
   }
   log(CYAN, `  Port ${TARGET_PORT} is free`);
 
-  // ---- Cloudflare Tunnel status check ----
+  // ---- Cloudflare Tunnel status check + auto-setup ----
   let cloudflareOk = false;
+  const HOME_DIR = process.env.USERPROFILE || process.env.HOME;
 
   if (existsSync(CLOUDFLARED_BIN)) {
+    // Ensure config exists (copy from template if this is a fresh clone)
+    if (!existsSync(CLOUDFLARED_CONFIG)) {
+      const templateFile = join(ROOT_DIR, 'config', 'cloudflared-config.yml.template');
+      if (existsSync(templateFile)) {
+        log(YELLOW, '  Creating cloudflared-config.yml from template...');
+        copyFileSync(templateFile, CLOUDFLARED_CONFIG);
+      }
+    }
+
     if (existsSync(CLOUDFLARED_CONFIG)) {
-      cloudflareOk = true;
-      if (cloudflareDomain) {
-        log(GREEN, `  Cloudflare Tunnel: ${cloudflareDomain}`);
+      // Parse tunnel UUID from config
+      const configContent = readFileSync(CLOUDFLARED_CONFIG, 'utf-8');
+      const uuidMatch = configContent.match(/^tunnel:\s*([a-f0-9-]+)/m);
+      const uuid = uuidMatch ? uuidMatch[1] : null;
+
+      // Check credential file exists for this tunnel
+      const isAlreadyConfigured = uuid && existsSync(join(HOME_DIR, '.cloudflared', `${uuid}.json`));
+
+      if (isAlreadyConfigured) {
+        // Tunnel is ready to use
+        cloudflareOk = true;
+
+        // Derive domain from config or domain file (allow env var override)
+        if (!cloudflareDomain) {
+          const domainFile = join(ROOT_DIR, 'data', 'cloudflare-domain.txt');
+          if (existsSync(domainFile)) {
+            cloudflareDomain = readFileSync(domainFile, 'utf-8').trim();
+          }
+        }
+        if (!cloudflareDomain) {
+          const hostnameMatch = configContent.match(/hostname:\s*(\S+)/);
+          cloudflareDomain = hostnameMatch ? hostnameMatch[1] : null;
+        }
+
+        if (cloudflareDomain) {
+          log(GREEN, `  Cloudflare Tunnel: ${cloudflareDomain}`);
+        } else {
+          log(GREEN, '  Cloudflare Tunnel: configured');
+        }
       } else {
-        log(GREEN, '  Cloudflare Tunnel: configured');
+        // Tunnel credentials missing — try auto-setup
+        const certPath = join(HOME_DIR, '.cloudflared', 'cert.pem');
+        const hasAuth = existsSync(certPath);
+        const SETUP_TUNNEL_PS1 = join(ROOT_DIR, 'scripts', 'setup-tunnel.ps1');
+        const LOCK_FILE = join(ROOT_DIR, 'data', '.tunnel-setup.lock');
+
+        if (hasAuth) {
+          log(YELLOW, '  Tunnel credentials not found for current config.');
+          log(CYAN, '  Auto-creating a new tunnel for this machine...');
+
+          // Acquire lock (avoid concurrent setup)
+          if (existsSync(LOCK_FILE)) {
+            const lockAge = Date.now() - statSync(LOCK_FILE).mtimeMs;
+            if (lockAge < 120000) {
+              log(YELLOW, '  Tunnel setup already in progress on another process. Waiting...');
+              let waited = 0;
+              while (existsSync(LOCK_FILE) && waited < 60) {
+                await new Promise(r => setTimeout(r, 2000));
+                waited += 2;
+              }
+            } else {
+              log(YELLOW, '  Removing stale tunnel setup lock...');
+              unlinkSync(LOCK_FILE);
+            }
+          }
+          writeFileSync(LOCK_FILE, String(process.pid));
+
+          try {
+            // Ensure data/ directory exists
+            const dataDir = join(ROOT_DIR, 'data');
+            if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
+
+            const setupResult = spawn('powershell.exe', [
+              '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+              SETUP_TUNNEL_PS1, '-Auto'
+            ], { stdio: 'inherit' });
+
+            await new Promise((resolve, reject) => {
+              setupResult.on('close', (code) => {
+                if (code === 0) resolve();
+                else reject(new Error(`setup-tunnel.ps1 exited with code ${code}`));
+              });
+              setupResult.on('error', reject);
+            });
+
+            // Re-read domain from the file auto-setup wrote
+            const domainFile = join(ROOT_DIR, 'data', 'cloudflare-domain.txt');
+            if (existsSync(domainFile)) {
+              cloudflareDomain = readFileSync(domainFile, 'utf-8').trim();
+            }
+            cloudflareOk = true;
+            log(GREEN, `  Tunnel ready: https://${cloudflareDomain}`);
+          } catch (err) {
+            log(YELLOW, `  Tunnel auto-setup failed: ${err.message}`);
+            log(YELLOW, '  Starting server without tunnel (local-only).');
+            cloudflareOk = false;
+          } finally {
+            if (existsSync(LOCK_FILE)) unlinkSync(LOCK_FILE);
+          }
+        } else {
+          // Not authenticated with Cloudflare at all
+          log(YELLOW, '  Cloudflare not authenticated on this machine.');
+          if (process.stdin.isTTY) {
+            log(CYAN, '  Auto-setup can open your browser for one-time Cloudflare authorization.');
+            const answer = await promptUser('  Open browser to authorize Cloudflare? [Y/n]: ');
+            if (answer === '' || answer === 'y' || answer === 'yes') {
+              log(CYAN, '  Launching Cloudflare login (opens browser)...');
+              const loginProc = spawn(CLOUDFLARED_BIN, ['tunnel', 'login'], { stdio: 'inherit' });
+              await new Promise((resolve, reject) => {
+                loginProc.on('close', (code) => {
+                  if (code === 0) resolve();
+                  else reject(new Error(`cloudflared tunnel login exited with code ${code}`));
+                });
+                loginProc.on('error', reject);
+              });
+              // After auth, retry auto-setup
+              log(CYAN, '  Cloudflare authorized. Creating tunnel...');
+              const retryResult = spawn('powershell.exe', [
+                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+                SETUP_TUNNEL_PS1, '-Auto'
+              ], { stdio: 'inherit' });
+              await new Promise((resolve, reject) => {
+                retryResult.on('close', (code) => {
+                  if (code === 0) resolve();
+                  else reject(new Error(`setup-tunnel.ps1 exited with code ${code}`));
+                });
+                retryResult.on('error', reject);
+              });
+              const domainFile = join(ROOT_DIR, 'data', 'cloudflare-domain.txt');
+              if (existsSync(domainFile)) {
+                cloudflareDomain = readFileSync(domainFile, 'utf-8').trim();
+              }
+              cloudflareOk = true;
+              log(GREEN, `  Tunnel ready: https://${cloudflareDomain}`);
+            } else {
+              log(YELLOW, '  Tunnel setup skipped. Run later: cloudflared tunnel login');
+            }
+          } else {
+            log(YELLOW, '  Run in a terminal to set up the tunnel: .\scripts\setup-tunnel.ps1');
+          }
+        }
       }
     } else {
       log(YELLOW, '  Cloudflare Tunnel: not configured. Run setup-tunnel.ps1 first.');
