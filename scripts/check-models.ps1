@@ -655,7 +655,7 @@ if ($nvidiaModels -ne $null) {
   $filteredModels = Filter-NvidiaModels $nvidiaModels
   
     if ($SkipNvidiaFreeCheck) {
-      # Normal mode — skip free endpoint verification, include all NVIDIA models
+      # Normal mode - skip free endpoint verification, include all NVIDIA models
       foreach ($m in $filteredModels) {
         $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
         $parts = $m -split '/'
@@ -664,7 +664,7 @@ if ($nvidiaModels -ne $null) {
         $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
       }
   } else {
-    # Free mode — verify free endpoint status, only include confirmed-free models
+    # Free mode - verify free endpoint status, only include confirmed-free models
     Write-Host " Verifying NVIDIA free endpoint status..." -ForegroundColor Cyan
     $freeStatus = Verify-NvidiaFreeModels
     
