@@ -1,7 +1,11 @@
 /**
  * Auth Proxy — sits between cloudflare tunnel and opencode web server.
- * Adds Authorization: Basic header to all requests so the browser
- * never sees a 401/native auth prompt on assets or API calls.
+ * Enforces HTTP Basic Auth on incoming requests. Valid credentials
+ * are forwarded to the upstream server with the auth header injected.
+ *
+ * Credentials accepted via:
+ *   - Authorization: Basic <base64> header (browser native auth dialog)
+ *   - ?auth_token=<base64> query parameter (bookmarkable one-click URL)
  *
  * Usage: node plugins/auth-proxy.mjs [port] [upstream]
  *   Default port: 4101
@@ -30,7 +34,46 @@ const PROXY_PORT = parseInt(process.argv[2] || '4101', 10);
 const UPSTREAM_URL = process.argv[3] || 'http://localhost:4102';
 const upstream = new URL(UPSTREAM_URL);
 
+/**
+ * Extract and validate credentials from request.
+ * Returns true if auth matches, false otherwise.
+ * Checks: Authorization header, then auth_token query param.
+ */
+function isAuthenticated(req) {
+  // Check Authorization header
+  const authHeader = req.headers['authorization'];
+  if (authHeader) {
+    const match = authHeader.match(/^Basic\s+(.+)$/i);
+    if (match && match[1] === authToken) {
+      return true;
+    }
+  }
+
+  // Check auth_token query parameter (bookmarkable URL support)
+  if (req.url) {
+    try {
+      const parsed = new URL(req.url, 'http://localhost');
+      const tokenParam = parsed.searchParams.get('auth_token');
+      if (tokenParam === authToken) {
+        return true;
+      }
+    } catch {}
+  }
+
+  return false;
+}
+
 const server = http.createServer((req, res) => {
+  // ---- Authentication gate ----
+  if (!isAuthenticated(req)) {
+    res.writeHead(401, {
+      'WWW-Authenticate': 'Basic realm="Glitch AI", charset="UTF-8"',
+      'Content-Type': 'text/plain',
+    });
+    res.end('Authorization required');
+    return;
+  }
+
   // Strip directory and workspace params from /agent requests
   // (server bug: workspace crashes, directory filters out custom agents)
   let targetPath = req.url;
@@ -40,11 +83,10 @@ const server = http.createServer((req, res) => {
       if (url.pathname === '/agent') {
         url.searchParams.delete('directory');
         url.searchParams.delete('workspace');
-        targetPath = url.pathname + url.search;
-        if (targetPath !== req.url) {
-          console.log(`  Stripped params from /agent: ${req.url} -> ${targetPath}`);
-        }
       }
+      // Strip auth_token from forwarded URL (upstream doesn't need it)
+      url.searchParams.delete('auth_token');
+      targetPath = url.pathname + url.search;
     } catch {}
   }
 
@@ -65,7 +107,7 @@ const server = http.createServer((req, res) => {
 
   const proxyReq = http.request(options, (proxyRes) => {
     // For API responses, disable caching so sessions always refresh
-    if (req.url.startsWith('/api/') || req.url.startsWith('/session/') || req.url.startsWith('/assets/')) {
+    if (targetPath.startsWith('/api/') || targetPath.startsWith('/session/') || targetPath.startsWith('/assets/')) {
       proxyRes.headers['cache-control'] = 'no-cache, no-store, must-revalidate';
       proxyRes.headers['pragma'] = 'no-cache';
       proxyRes.headers['expires'] = '0';

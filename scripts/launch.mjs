@@ -517,6 +517,7 @@ async function main() {
   await checkAndPromptUpdates({ skipIfNoPowerShell: !isWin });
 
   // ---- Check for new models (Win only) ----
+  let hasNewModels = false;
   if (isWin) {
     try {
       const checkModelsScript = join(ROOT_DIR, 'scripts', 'check-models.ps1');
@@ -527,6 +528,7 @@ async function main() {
         if (existsSync(modelStatusFile)) {
           const modelStatus = readJson(modelStatusFile);
           if (modelStatus && modelStatus.new_models_count > 0) {
+            hasNewModels = true;
             log(YELLOW, `  ${modelStatus.new_models_count} new model(s) available`);
             if (modelStatus.new_models) {
               for (const nm of modelStatus.new_models) {
@@ -543,6 +545,110 @@ async function main() {
       }
     } catch {
       log(DARK_YELLOW, '  Model check skipped (non-critical)');
+    }
+  }
+
+  // ---- Show agent model dashboard ----
+  try {
+    if (existsSync(CONFIG_PATH)) {
+      const config = readJson(CONFIG_PATH);
+      if (config && config.agent) {
+        const agents = Object.entries(config.agent);
+        // Group: primary first, then free sub-agents, then paid sub-agents
+        const primary = agents.filter(([n]) => n === 'glitch');
+        const freeSub = agents.filter(([n]) => n !== 'glitch' && !n.endsWith('-paid'));
+        const paidSub = agents.filter(([n]) => n.endsWith('-paid'));
+        const ordered = [...primary, ...freeSub, ...paidSub];
+
+        const rows = ordered.map(([name, def]) => {
+          const model = def.model || '(none)';
+          const tier = model.includes('-free') || model.startsWith('nvidia/') ? 'free' :
+                       model.startsWith('opencode-go/') ? 'paid' : 'free';
+          return { name, model, tier };
+        });
+
+        const maxNameLen = Math.max(...rows.map(r => r.name.length), 6);
+        const maxModelLen = Math.max(...rows.map(r => r.model.length), 6);
+        const separator = '─'.repeat(maxNameLen + maxModelLen + 22);
+
+        log(DARK_GRAY, `  ${separator}`);
+        log(DARK_GRAY, `  Agent${' '.repeat(maxNameLen - 5)}  Model${' '.repeat(Math.max(0, maxModelLen - 5))}  Tier`);
+        log(DARK_GRAY, `  ${separator}`);
+        for (const r of rows) {
+          const namePad = r.name.padEnd(maxNameLen);
+          const modelPad = r.model.padEnd(maxModelLen);
+          const tierColor = r.tier === 'free' ? DARK_GREEN : DARK_YELLOW;
+          log(DARK_GRAY, `  @${namePad}  ${modelPad}  ${tierColor}${r.tier}${DARK_GRAY}`);
+        }
+        log(DARK_GRAY, `  ${separator}`);
+      }
+    }
+  } catch {
+    // non-critical
+  }
+
+  // ---- Resolve model assignments (Win only; only prompt when new models available) ----
+  if (isWin) {
+    try {
+      const resolverScript = join(ROOT_DIR, 'scripts', 'resolve-models.mjs');
+      if (existsSync(resolverScript) && existsSync(join(ROOT_DIR, 'data', 'model-registry.json'))) {
+        // Always run resolver silently (keeps model-assignment.json current)
+        run('node', [resolverScript], { timeout: 30000, stdio: 'ignore' });
+
+        if (hasNewModels) {
+          // Only show output and prompt when genuinely new models are available
+          const assignmentFile = join(ROOT_DIR, 'data', 'model-assignment.json');
+          if (existsSync(assignmentFile)) {
+            const assignment = readJson(assignmentFile);
+            if (assignment && assignment.has_changes) {
+              log(YELLOW, `  ${assignment.changes.length} model assignment change(s) possible with new models`);
+              for (const c of assignment.changes) {
+                log(DARK_GRAY, `    @${c.agent}: ${c.old_model || '(none)'} -> ${c.new_model}`);
+              }
+
+              // Check preference file for autonomy choice
+              const prefFile = join(ROOT_DIR, 'data', 'model-resolver-preference.json');
+              let autoApply = false;
+              if (existsSync(prefFile)) {
+                const pref = readJson(prefFile);
+                if (pref && pref.autonomous) {
+                  autoApply = true;
+                }
+              } else {
+                // No preference yet — ask the user once
+                log(DARK_GRAY, '');
+                log(CYAN, '  [Model Budget System]');
+                log(DARK_YELLOW, '  New models available that may improve agent performance.');
+                const rl = createInterface({ input: process.stdin, output: process.stdout });
+                const answer = await new Promise(resolve => {
+                  rl.question(DARK_YELLOW + '  Apply automatically? (Y/n): ' + RESET, resolve);
+                });
+                rl.close();
+                const trimmed = answer.trim().toLowerCase();
+                if (trimmed === '' || trimmed === 'y' || trimmed === 'yes') {
+                  autoApply = true;
+                }
+                // Save preference for next time
+                writeFileSync(prefFile, JSON.stringify({
+                  autonomous: autoApply,
+                  timestamp: new Date().toISOString()
+                }, null, 2), 'utf-8');
+              }
+
+              if (autoApply) {
+                log(DARK_GRAY, '  Applying model assignments...');
+                run('node', [resolverScript, '--apply'], { timeout: 15000 });
+                log(GREEN, '  Model assignments applied.');
+                log(DARK_YELLOW, '  Restart opencode to activate.');
+              } else {
+                log(DARK_GRAY, '  Skipping — use `node scripts/resolve-models.mjs --apply` to apply later');
+              }
+            }
+          }
+        }
+      }
+    } catch {
+      log(DARK_YELLOW, '  Model assignment resolution skipped (non-critical)');
     }
   }
 

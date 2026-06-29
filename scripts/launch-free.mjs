@@ -317,7 +317,7 @@ async function checkAndSwitchToMain() {
 }
 
 // ---- Sync glitch-ai repo from remote (branch-aware, shared module) ----
-// Uses scripts/lib/git-sync.mjs — handles any branch, prompts interactively
+// Uses scripts/lib/git-sync.mjs - handles any branch, prompts interactively
 // Replaces the old syncMainRepo() that only worked on 'main'
 
 // --- Hardcoded fallback model groups (used when free-models.json is missing/stale) ---
@@ -336,7 +336,7 @@ const FallbackModelGroups = [
   {
     Name: 'NVIDIA (free endpoint, requires /connect)',
     Models: [
-      // No static fallback models ΓÇö the live list from check-models.ps1 is always used.
+      // No static fallback models - the live list from check-models.ps1 is always used.
       // If NVIDIA isn't connected, this section stays empty and the user gets a message.
     ]
   },
@@ -412,7 +412,7 @@ function getVisionPreference() {
     const pref = readJson(PrefFile);
     // Backward compat: old format had single 'model' field (vision = same as primary)
     if (pref && pref.vision_model) return pref.vision_model;
-    if (pref && pref.model) return pref.model; // old single-model format ΓåÆ primary used for vision
+    if (pref && pref.model) return pref.model; // old single-model format -> primary used for vision
     return null;
   } catch {
     return null;
@@ -459,7 +459,7 @@ function buildFreePrompt(primaryId, primaryName, visionId, visionName) {
 
 ## Free Mode Rules
 1. You have FULL permissions same capabilities as normal mode.
-2. All agents use free models — there are NO paid fallback models available.
+2. All agents use free models - there are NO paid fallback models available.
 3. Premium features are generally UNAVAILABLE in OpenCode Zen free models, but some NVIDIA free endpoint models may support image/vision analysis and stronger coding capability depends on the specific model.
 4. If a free model exhausts its quota, close this session and relaunch with a different model:
    - Set \`$env:GLITCH_FREE_MODEL\` for the primary model, or \`$env:GLITCH_FREE_VISION_MODEL\` for the vision model
@@ -493,8 +493,8 @@ Glitch's job is coordination. The first action for every code task is DISPATCH, 
 YOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the appropriate sub-agent - at the same time as creating the todowrite.
 
 - I may NOT use \`edit\`/\`write\`/\`bash\` for code work UNLESS a sub-agent was dispatched first and failed
-- Dispatch at todowrite time — send sub-agents in parallel while creating the task list
-- Fallback chain: free agent → direct execution (last resort — no paid fallbacks in free mode)
+- Dispatch at todowrite time - send sub-agents in parallel while creating the task list
+- Fallback chain: free agent -> direct execution (last resort - no paid fallbacks in free mode)
 - Direct work (no dispatch needed): memory writes (R12), git, planning, reading, questions
 - If caught violating: stop immediately, log FAILURE to scratchpad, dispatch correctly`;
 }
@@ -509,7 +509,7 @@ const HELP_TEXT = `
     --serve             Launch in server (web) mode instead of TUI
 
   Both model pickers (primary + vision) always appear in interactive mode.
-  Saved preferences are shown as the default — press Enter to keep them.
+  Saved preferences are shown as the default - press Enter to keep them.
 
   Set either model via environment variable to skip its picker entirely.
 
@@ -606,7 +606,7 @@ async function main() {
   // ---- Check if NVIDIA models are available (user needs /connect) ----
   const nvidiaGroup = modelGroups.find(g => g.Name && g.Name.includes('NVIDIA'));
   if (!nvidiaGroup || !nvidiaGroup.Models || nvidiaGroup.Models.length === 0) {
-    log(DARK_YELLOW, '  NVIDIA: (no models available ΓÇö run /connect nvidia in OpenCode TUI)');
+    log(DARK_YELLOW, '  NVIDIA: (no models available - run /connect nvidia in OpenCode TUI)');
   }
 
   // ---- Build flat lookup table ----
@@ -657,16 +657,16 @@ async function main() {
     process.exit(1);
   }
 
-  // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  // ---------------------------------------------------------------------
   // PRIMARY MODEL (for @general, @explore, @plan, @build)
   // Env var skips the picker; otherwise show interactive menu (saved preference = default)
-  // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  // ---------------------------------------------------------------------
 
   if (process.env.GLITCH_FREE_MODEL) {
     primaryModel = process.env.GLITCH_FREE_MODEL;
     log(CYAN, ` Primary model from env var: ${primaryModel}`);
   } else {
-    // Show picker every time ΓÇö saved preference marks the default with *
+    // Show picker every time - saved preference marks the default with *
     primaryModel = await pickSingleModel('Primary Model (for @general, @explore, @plan, @build)', getPreference(), false);
   }
 
@@ -684,10 +684,10 @@ async function main() {
 
   const primaryName = allModels[primaryModel].Name;
 
-  // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  // ---------------------------------------------------------------------
   // VISION MODEL (for @vision agent only)
   // Priority: GLITCH_FREE_VISION_MODEL env var > interactive prompt (default = primary model)
-  // ΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉΓòÉ
+  // ---------------------------------------------------------------------
 
   if (process.env.GLITCH_FREE_VISION_MODEL) {
     visionModel = process.env.GLITCH_FREE_VISION_MODEL;
@@ -699,7 +699,7 @@ async function main() {
     const visionDefault = (savedVision && allModels[savedVision]) ? savedVision : primaryModel;
 
     log('');
-    log(DARK_GRAY, ' ΓöÇΓöÇ Vision Model (for @vision agent only) ΓöÇΓöÇ');
+    log(DARK_GRAY, ' -- Vision Model (for @vision agent only) --');
     log(DARK_GRAY, ' Press Enter to use primary model for vision, or pick a separate model.');
     log(DARK_GRAY, ` Default: ${visionDefault} (${allModels[visionDefault].Name})`);
     log('');
