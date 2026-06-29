@@ -262,7 +262,7 @@ async function checkAndSwitchToMain() {
       const autoStashes = stashList.stdout.split('\n').filter(l => l.includes('glitch-auto-stash:'));
       if (autoStashes.length > 0) {
         log(YELLOW, '');
-        autoStashes.forEach(s => log(YELLOW, `  ≡ƒôª ${s}`));
+        autoStashes.forEach(s => log(YELLOW, `  [stash] ${s}`));
         log(YELLOW, `  Run \`git stash pop\` to restore when ready.`);
         log('');
       }
@@ -271,7 +271,7 @@ async function checkAndSwitchToMain() {
   }
 
   log(YELLOW, '');
-  log(YELLOW, `  ΓÜá Currently on branch '${current}', not 'main'`);
+  log(YELLOW, `  !! Currently on branch '${current}', not 'main'`);
   log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
   log(WHITE, '  [Y/n] Switch to main now (recommended)');
   let choice = await askQuestion('  > ');
