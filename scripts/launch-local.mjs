@@ -314,7 +314,7 @@ function buildLocalPrompt(modelId, modelName) {
   return `You are Glitch running in LOCAL MODE. All agents are served by a local LLM (LM Studio).
 
 ## Local Mode Rules
-1. You have FULL permissions same capabilities as normal mode.
+1. You are a PURE COORDINATOR — no \`edit\` or \`write\` tools. All code/file changes go through sub-agents. Use @memory (via task()) for all memory file writes.
 2. ALL agents use the local model "${modelId}" (${modelName}).
 3. No external API calls are made -- everything runs through LM Studio at 192.168.86.139:1234.
 4. Local models are slower than cloud models but completely private and free.
@@ -330,6 +330,7 @@ function buildLocalPrompt(modelId, modelName) {
 | Codebase research | @explore | ${modelId} |
 | Architecture / planning | @plan | ${modelId} |
 | Code scaffolding | @build | ${modelId} |
+| Memory file writes | @memory | ${modelId} |
 
 ## [bolt] Dispatch-First Mandate (Immutable)
 Glitch's job is coordination. The first action for every code task is DISPATCH, not execution.
@@ -339,7 +340,7 @@ YOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the 
 - I may NOT use \`edit\`/\`write\`/\`bash\` for code work UNLESS a sub-agent was dispatched first and failed
 - Dispatch at todowrite time  --  send sub-agents in parallel while creating the task list
 - Fallback chain: @general (local) -> direct execution (last resort, none paid available)
-- Direct work (no dispatch needed): memory writes (R12), git, planning, reading, questions
+- Direct work (no dispatch needed): memory dispatch (to @memory), git, planning, reading, questions
 - If caught violating: stop, log FAILURE to scratchpad, dispatch correctly`;
 }
 

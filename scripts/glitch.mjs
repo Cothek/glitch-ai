@@ -16,9 +16,9 @@ const BackupDir = join(ROOT_DIR, 'data', 'backups');
 const ModeFile = join(BackupDir, '.last-mode');
 
 const MODES = {
-  normal: { name: 'Normal', description: 'Full featured mode with paid models and all agents', template: 'config/opencode-normal.json', launchScript: 'scripts/launch.mjs', color: '\x1b[35m', model: 'opencode-go/deepseek-v4-flash', hasPaidFallbacks: true, agents: ['glitch', 'glitch-omni', 'general', 'explore', 'plan', 'build', 'coder', 'ui-designer', 'reviewer', 'testing', 'vision'] },
-  free: { name: 'Free', description: 'Free models only (OpenCode Zen, NVIDIA, OpenRouter) - no paid fallbacks', template: 'config/opencode-free.json', launchScript: 'scripts/launch-free.mjs', color: '\x1b[32m', model: 'opencode/deepseek-v4-flash-free', hasPaidFallbacks: false, agents: ['glitch', 'general', 'explore', 'plan', 'build', 'vision', 'glitch-omni'] },
-  local: { name: 'Local', description: 'Local models via LM Studio (192.168.86.139:1234)', template: 'config/opencode-local.json', launchScript: 'scripts/launch-local.mjs', color: '\x1b[36m', model: 'google/gemma-4-12b', hasPaidFallbacks: false, agents: ['glitch', 'general', 'explore', 'plan', 'build'] },
+  normal: { name: 'Normal', description: 'Full featured mode with paid models and all agents', template: 'config/opencode-normal.json', launchScript: 'scripts/launch.mjs', color: '\x1b[35m', model: 'opencode-go/deepseek-v4-flash', hasPaidFallbacks: true, agents: ['glitch', 'glitch-omni', 'general', 'explore', 'plan', 'build', 'coder', 'ui-designer', 'reviewer', 'testing', 'vision', 'memory'] },
+  free: { name: 'Free', description: 'Free models only (OpenCode Zen, NVIDIA, OpenRouter) - no paid fallbacks', template: 'config/opencode-free.json', launchScript: 'scripts/launch-free.mjs', color: '\x1b[32m', model: 'opencode/deepseek-v4-flash-free', hasPaidFallbacks: false, agents: ['glitch', 'general', 'explore', 'plan', 'build', 'vision', 'glitch-omni', 'memory'] },
+  local: { name: 'Local', description: 'Local models via LM Studio (192.168.86.139:1234)', template: 'config/opencode-local.json', launchScript: 'scripts/launch-local.mjs', color: '\x1b[36m', model: 'google/gemma-4-12b', hasPaidFallbacks: false, agents: ['glitch', 'general', 'explore', 'plan', 'build', 'memory'] },
   safe: { name: 'Safe', description: 'Minimal config for troubleshooting - restores normal on exit', template: 'config/opencode-safe.json', launchScript: 'scripts/launch-safe.mjs', color: '\x1b[31m', model: 'opencode-go/deepseek-v4-flash', hasPaidFallbacks: false, agents: ['glitch'] }
 };
 

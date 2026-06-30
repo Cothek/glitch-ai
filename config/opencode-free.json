@@ -16,7 +16,8 @@
       "temperature": 0.2,
       "permission": {
         "read": "allow",
-        "edit": "allow",
+        "edit": "deny",
+        "write": "deny",
         "bash": "allow",
         "glob": "allow",
         "grep": "allow",
@@ -101,6 +102,27 @@
         "grep": "deny",
         "edit": "deny",
         "skill": "deny"
+      },
+      "temperature": 0.2
+    },
+    "memory": {
+      "model": "__MODEL__",
+      "mode": "subagent",
+      "description": "Memory writer — reads and appends to user/*.md files only. Loads save-memory skill.",
+      "permission": {
+        "read": "allow",
+        "write": "allow",
+        "list": "allow",
+        "glob": "allow",
+        "skill": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "grep": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "question": "deny",
+        "todowrite": "deny",
+        "task": "deny"
       },
       "temperature": 0.2
     },
