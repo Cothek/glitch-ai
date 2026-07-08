@@ -495,7 +495,7 @@ YOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the 
 - I may NOT use \`edit\`/\`write\`/\`bash\` for code work UNLESS a sub-agent was dispatched first and failed
 - Dispatch at todowrite time - send sub-agents in parallel while creating the task list
 - Fallback chain: free agent -> direct execution (last resort - no paid fallbacks in free mode)
-- Direct work (no dispatch needed): memory writes (R12), git, planning, reading, questions
+- Direct work (no dispatch needed): planning, reading, investigation, questions, config edits (R15)
 - If caught violating: stop immediately, log FAILURE to scratchpad, dispatch correctly`;
 }
 

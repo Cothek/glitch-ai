@@ -17,7 +17,7 @@
       "permission": {
         "read": "allow",
         "edit": "allow",
-        "bash": "allow",
+        "bash": "deny",
         "glob": "allow",
         "grep": "allow",
         "list": "allow",
