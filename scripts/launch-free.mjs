@@ -473,7 +473,7 @@ function buildFreePrompt(primaryId, primaryName, visionId, visionName) {
 | Task Type | Agent | Model |
 |-----------|-------|-------|
 | Bash, file ops, simple edits | @general | ${primaryId} (${primaryName}) |
-| Code (1-5 files, standard logic) | @general | ${primaryId} (${primaryName}) |
+| Code (1-5 files, standard logic) | @coder | ${primaryId} (${primaryName}) |
 | Complex code (5+ files, auth, architecture) | @coder | ${primaryId} (${primaryName}) |
 | Codebase research | @explore | ${primaryId} (${primaryName}) |
 | Architecture / planning | @plan | ${primaryId} (${primaryName}) |
