@@ -544,6 +544,20 @@ function Fetch-OpenRouterFullModels {
 # --- Helper: check if a NVIDIA model has "Free Endpoint" badge on build.nvidia.com ---
 # Cache to avoid repeated HTTP requests
 $script:nvidiaFreeEndpointCache = @{}
+$script:nvidiaFreeCacheFile = "$RootDir\data\nvidia-free-cache.json"
+
+# Load persistent cache for NVIDIA free endpoint status (24h TTL)
+if (Test-Path $script:nvidiaFreeCacheFile) {
+    try {
+        $cache = Get-Content $script:nvidiaFreeCacheFile -Raw | ConvertFrom-Json
+        $cachedAt = [DateTime]::Parse($cache.cached_at)
+        if ((Get-Date) - $cachedAt -lt [TimeSpan]::FromHours(24)) {
+            foreach ($entry in $cache.results.PSObject.Properties) {
+                $script:nvidiaFreeEndpointCache[$entry.Name] = $entry.Value
+            }
+        }
+    } catch { }
+}
 
 function Test-NvidiaFreeEndpoint($modelId) {
     # Check cache first
@@ -571,24 +585,28 @@ function Test-NvidiaFreeEndpoint($modelId) {
     }
 }
 
-# --- Helper: verify all known NVIDIA models against build.nvidia.com ---
+# --- Helper: verify NVIDIA models against build.nvidia.com dynamically ---
+# Accepts the full filtered model list and checks each one.
+# Uses cached results when available (loaded at script start).
 function Verify-NvidiaFreeModels {
-    $modelsToCheck = @(
-        "minimaxai/minimax-m2.7",
-        "minimaxai/minimax-m3",
-        "deepseek-ai/deepseek-v4-flash",
-        "deepseek-ai/deepseek-v4-pro",
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning",
-        "nvidia/nemotron-3-ultra-550b-a55b",
-        "nvidia/llama-3.3-nemotron-super-49b-v1.5",
-        "qwen/qwen3.5-122b-a10b",
-        "stepfun-ai/step-3.7-flash",
-        "z-ai/glm-5.1"
-    )
+    param($models)
     
+    if (-not $models -or $models.Count -eq 0) { return @{} }
+    
+    Write-Host "  Checking $($models.Count) NVIDIA models for free endpoint status..." -ForegroundColor Cyan
     $results = @{}
-    foreach ($model in $modelsToCheck) {
-        $isFree = Test-NvidiaFreeEndpoint $model
+    $fetchedCount = 0
+    $cachedCount = 0
+    foreach ($model in $models) {
+        # Use cached result if available (from file cache loaded at script start)
+        if ($script:nvidiaFreeEndpointCache.ContainsKey($model)) {
+            $isFree = $script:nvidiaFreeEndpointCache[$model]
+            $cachedCount++
+        } else {
+            $isFree = Test-NvidiaFreeEndpoint $model
+            $fetchedCount++
+            Start-Sleep -Milliseconds 300  # Be nice to server during live fetch
+        }
         $results[$model] = $isFree
         if ($isFree -eq $true) {
             Write-Host "  [OK] $model - Free Endpoint confirmed" -ForegroundColor Green
@@ -597,7 +615,11 @@ function Verify-NvidiaFreeModels {
         } else {
             Write-Host "  [WARN] $model - Could not verify" -ForegroundColor Yellow
         }
-        Start-Sleep -Milliseconds 500  # Be nice to the server
+    }
+    if ($fetchedCount -gt 0) {
+        Write-Host "  ($cachedCount from cache, $fetchedCount live fetches)" -ForegroundColor DarkGray
+    } elseif ($cachedCount -gt 0) {
+        Write-Host "  (all $cachedCount from cache)" -ForegroundColor DarkGray
     }
     return $results
 }
@@ -745,7 +767,7 @@ if ($nvidiaModels -ne $null) {
   } else {
     # Free mode - verify free endpoint status, only include confirmed-free models
     Write-Host " Verifying NVIDIA free endpoint status..." -ForegroundColor Cyan
-    $freeStatus = Verify-NvidiaFreeModels
+    $freeStatus = Verify-NvidiaFreeModels -models $filteredModels
     
     $confirmedFree = @($freeStatus.Keys | Where-Object { $freeStatus[$_] -eq $true })
     $skippedCount = 0
@@ -967,6 +989,15 @@ $status = @{
     current_agent_models = $agentModels
 }
 $status | ConvertTo-Json -Depth 4 | Out-File -FilePath $StatusFile -Encoding utf8 -Force
+
+# 7.5 Save NVIDIA free endpoint cache for next launch
+$cacheSave = @{
+    cached_at = (Get-Date).ToString("o")
+    results = $script:nvidiaFreeEndpointCache
+}
+$cacheDir = Split-Path -Parent $script:nvidiaFreeCacheFile
+if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
+$cacheSave | ConvertTo-Json -Depth 4 | Out-File -FilePath $script:nvidiaFreeCacheFile -Encoding utf8 -Force
 
 # 8. Print summary
 if (-not $Silent) {
