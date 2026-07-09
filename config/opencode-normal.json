@@ -240,10 +240,10 @@
                                                          },
                                          "temperature":  0.2
                                      },
-                    "pentester-paid":  {
-                                            "model":  "opencode-go/kimi-k2.6",
-                                            "mode":  "subagent",
-                                            "description":  "Application security tester and penetration testing specialist — paid fallback. Performs structured security assessments, OWASP Top 10 analysis, API security testing, dependency scanning, and secret detection.",
+                     "pentester-paid":  {
+                                             "model":  "opencode-go/qwen3.7-plus",
+                                             "mode":  "subagent",
+                                             "description":  "Application security tester and penetration testing specialist. Performs structured security assessments, OWASP Top 10 analysis, API security testing, dependency scanning, and secret detection.",
                                             "permission":  {
                                                                 "read":  "allow",
                                                                 "edit":  "deny",
@@ -324,10 +324,10 @@
                                                         },
                                         "temperature":  0.2
                                     },
-                     "coder-paid":  {
-                                        "model":  "opencode-go/kimi-k2.6",
-                                        "mode":  "subagent",
-                                        "description":  "Senior full-stack engineer — paid fallback with kimi-k2.6. Use for complex multi-file features, architecture work, or when the free coder agent's quota is exhausted.",
+                      "coder-paid":  {
+                                         "model":  "opencode-go/qwen3.7-plus",
+                                         "mode":  "subagent",
+                                         "description":  "Senior full-stack engineer — paid fallback with qwen3.7-plus. Use for complex multi-file features, architecture work, or when the free coder agent's quota is exhausted.",
                                         "permission":  {
                                                             "read":  "allow",
                                                             "edit":  "allow",
@@ -342,10 +342,10 @@
                                                         },
                                         "temperature":  0.2
                                     },
-                     "ui-designer-paid":  {
-                                              "model":  "opencode-go/kimi-k2.6",
-                                              "mode":  "subagent",
-                                              "description":  "Senior UI designer — paid fallback with kimi-k2.6. Visual design, component creation, layout, styling, responsive, or UX improvements. Use when the free ui-designer's quota is exhausted or for especially complex design work.",
+                      "ui-designer-paid":  {
+                                               "model":  "opencode-go/qwen3.7-plus",
+                                               "mode":  "subagent",
+                                               "description":  "Senior UI designer — paid fallback with qwen3.7-plus. Visual design, component creation, layout, styling, responsive, or UX improvements. Use when the free ui-designer's quota is exhausted or for especially complex design work.",
                                               "permission":  {
                                                                   "read":  "allow",
                                                                   "edit":  "allow",
@@ -378,10 +378,10 @@
                                                            },
                                            "temperature":  0.2
                                        },
-                     "testing-paid":  {
-                                          "model":  "opencode-go/kimi-k2.6",
-                                          "mode":  "subagent",
-                                          "description":  "Senior QA engineer — paid fallback with kimi-k2.6. Test generation, coverage analysis, and TDD. Use when the free testing agent's quota is exhausted or for especially complex test suites.",
+                      "testing-paid":  {
+                                           "model":  "opencode-go/qwen3.7-plus",
+                                           "mode":  "subagent",
+                                           "description":  "Senior QA engineer — paid fallback with qwen3.7-plus. Test generation, coverage analysis, and TDD. Use when the free testing agent's quota is exhausted or for especially complex test suites.",
                                           "permission":  {
                                                               "read":  "allow",
                                                               "edit":  "allow",
