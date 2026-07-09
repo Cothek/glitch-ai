@@ -14,6 +14,12 @@ $UpdateCache = $args -contains "-UpdateCache"
 $CheckOnly = (-not $ResetCache -and -not $UpdateCache) -or $args -contains "-CheckOnly"
 $Silent = $args -contains "-Silent"
 $SkipNvidiaFreeCheck = $args -contains "-SkipNvidiaFreeCheck"
+$Force = $args -contains "-Force"
+$StaleMinutes = 60  # default staleness threshold
+$staleIdx = [array]::IndexOf($args, '-StaleMinutes')
+if ($staleIdx -ge 0 -and $staleIdx -lt $args.Count - 1) {
+    $StaleMinutes = [int]$args[$staleIdx + 1]
+}
 
 # --- Helper: normalize model ID (prevents double prefix / backslash issues) ---
 # --- Helper: name override dict for well-known NVIDIA models --------------------
@@ -270,6 +276,41 @@ $prevTotal = ($knownModels.Values | ForEach-Object { $_ }).Count
 if (-not $Silent) {
   Write-Host " Sources: Go (opencode-go), Zen (opencode), NVIDIA, OpenRouter"
   if ($cache) { Write-Host " Previous snapshot: $($cache.lastCheck) ($prevTotal models)" }
+}
+
+# 1.5 Staleness gate — skip API fetches if cache is fresh enough
+if ($cache -and -not $Force) {
+    $cacheAge = (Get-Date) - (Get-Item $CacheFile).LastWriteTime
+    if ($cacheAge -lt [TimeSpan]::FromMinutes($StaleMinutes)) {
+        if (-not $Silent) {
+            Write-Host ""
+            Write-Host " Cache is fresh ($([math]::Round($cacheAge.TotalMinutes, 0)) min old, threshold: ${StaleMinutes}min). Skipping API fetch." -ForegroundColor DarkGray
+            Write-Host " Use -Force to bypass." -ForegroundColor DarkGray
+        }
+
+        # Write status file with 0 new models (keeps launch scripts happy)
+        $status = @{
+            checked_at = (Get-Date).ToString("o")
+            total_models_known = $prevTotal
+            new_models_count = 0
+            new_models = @()
+            new_free_models = @()
+            related_to_current_agents = @()
+            current_agent_models = (Get-CurrentAgentModels)
+            skipped = $true
+            skip_reason = "cache_fresh"
+        }
+        $status | ConvertTo-Json -Depth 4 | Out-File -FilePath $StatusFile -Encoding utf8 -Force
+
+        if (-not $Silent) {
+            Write-Host ""
+            Write-Host " -- Summary --" -ForegroundColor Cyan
+            Write-Host " Total known models: $prevTotal"
+            Write-Host " No new models (cache fresh, fetch skipped)." -ForegroundColor Gray
+            Write-Host ""
+        }
+        exit 0
+    }
 }
 
 # 2. Fetch current model lists

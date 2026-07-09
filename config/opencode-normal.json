@@ -16,7 +16,7 @@
                                  "temperature":  0.2,
                                  "permission":  {
                                                     "read":  "allow",
-                                                    "edit":  "allow",
+                                                    "edit":  "deny",
                                                     "bash":  "deny",
                                                     "glob":  "allow",
                                                     "grep":  "allow",
@@ -54,8 +54,9 @@
                                    "description":  "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
                                    "permission":  {
                                                        "read":  "allow",
-                                                       "edit":  "deny",
-                                                       "bash":  "deny",
+                                                     "edit":  "deny",
+                                                     "write":  "deny",
+                                                     "bash":  "deny",
                                                        "glob":  "allow",
                                                        "grep":  "allow",
                                                        "list":  "allow",
@@ -195,9 +196,30 @@
                                                        "edit":  "deny",
                                                        "skill":  "deny"
                                                    },
-                                   "temperature":  0.2
-                               },
-                    "glitch-omni":  {
+                                    "temperature":  0.2
+                                },
+                     "memory":  {
+                                    "model":  "opencode/deepseek-v4-flash-free",
+                                    "mode":  "subagent",
+                                    "description":  "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
+                                    "permission":  {
+                                                        "read":  "allow",
+                                                        "write":  "allow",
+                                                        "list":  "allow",
+                                                        "glob":  "allow",
+                                                        "skill":  "allow",
+                                                        "edit":  "deny",
+                                                        "bash":  "deny",
+                                                        "grep":  "deny",
+                                                        "webfetch":  "deny",
+                                                        "websearch":  "deny",
+                                                        "question":  "deny",
+                                                        "todowrite":  "deny",
+                                                        "task":  "deny"
+                                                    },
+                                    "temperature":  0.2
+                                },
+                     "glitch-omni":  {
                                          "model":  "opencode-go/deepseek-v4-flash",
                                          "mode":  "primary",
                                          "description":  "Direct-execution variant — does everything itself, no sub-agent delegation. Alternative primary selectable from agent switcher.",
