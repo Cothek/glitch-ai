@@ -1216,8 +1216,14 @@ try {
         # npm-installed tool
         try {
           $npmOut = & "npm.cmd" "list" "-g" "--depth=0" $tool.package 2>&1
-          if ($LASTEXITCODE -eq 0 -and $npmOut -match "@?\S+@(\S+)") {
-            $curVer = $matches[1]
+          if ($LASTEXITCODE -eq 0 -and $npmOut) {
+            $curVer = "not installed"
+            foreach ($line in $npmOut) {
+              if ($line -match "@?\S+@(\S+)") {
+                $curVer = $matches[1]
+                break
+              }
+            }
             if ($curVer -ne $latestVer -and $latestVer -ne "latest") {
               $updateNeeded = $true
               $updatesAvailable++
@@ -1247,12 +1253,14 @@ try {
         if (Test-Path $binaryPath) {
           try {
             $verOut = & $binaryPath "--version" 2>&1
-            if ($LASTEXITCODE -eq 0 -and $verOut) {
-              $curVer = ($verOut | Select-Object -First 1).Trim()
+            $verLine = ($verOut | ForEach-Object { "$_" } | Select-Object -First 1).Trim()
+            if ($LASTEXITCODE -eq 0 -and $verLine) {
+              $curVer = $verLine
             } else {
               $verOut = & $binaryPath "-version" 2>&1
-              if ($LASTEXITCODE -eq 0 -and $verOut) {
-                $curVer = ($verOut | Select-Object -First 1).Trim()
+              $verLine = ($verOut | ForEach-Object { "$_" } | Select-Object -First 1).Trim()
+              if ($LASTEXITCODE -eq 0 -and $verLine) {
+                $curVer = $verLine
               } else {
                 $curVer = "exists (version unknown)"
               }

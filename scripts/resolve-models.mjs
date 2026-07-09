@@ -47,6 +47,7 @@ const DEFAULT_BUDGET = {
     testing:     { max_tier: 'budget_paid' },
     vision:      { max_tier: 'free' },
     pentester:   { max_tier: 'budget_paid' },
+    memory:      { max_tier: 'free' },
     'glitch-omni': { max_tier: 'free' }
   },
   overrides: {}
