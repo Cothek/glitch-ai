@@ -326,7 +326,7 @@ function buildLocalPrompt(modelId, modelName) {
 | Task Type | Agent | Model |
 |-----------|-------|-------|
 | Bash, file ops, simple edits | @general | ${modelId} |
-| Code (1-5 files, standard logic) | @general | ${modelId} |
+| Code (1-5 files, standard logic) | @coder | ${modelId} |
 | Codebase research | @explore | ${modelId} |
 | Architecture / planning | @plan | ${modelId} |
 | Code scaffolding | @build | ${modelId} |

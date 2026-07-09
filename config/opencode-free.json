@@ -33,7 +33,7 @@
     "general": {
       "model": "__MODEL__",
       "mode": "subagent",
-      "description": "General-purpose agent -- bash, file ops, simple edits, standard code.",
+      "description": "General-purpose agent -- bash, file ops, simple edits.",
       "permission": {
         "read": "allow",
         "edit": "allow",
