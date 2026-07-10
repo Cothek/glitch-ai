@@ -6,7 +6,7 @@ import { fileURLToPath } from 'url';
 import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
-import { checkRepoUpdates, checkUserRepoUpdates } from './lib/git-sync.mjs';
+import { checkRepoUpdates, checkUserRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
 import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -361,7 +361,8 @@ async function main() {
   }
 
   // ---- Sync glitch-ai repo from remote (silent, best-effort, branch-aware) ----
-  await checkRepoUpdates({ cwd: ROOT_DIR, interactive: false, allowBranchSwitch: false });
+  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: false, allowBranchSwitch: false });
+  handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
 
   // ---- Sync user data repo (silent, best-effort) ----
   const userRepoDir = join(ROOT_DIR, 'user');

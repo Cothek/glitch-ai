@@ -270,6 +270,47 @@ function switchBranch(cwd, targetBranch, sourceBranch) {
   return r.success;
 }
 
+const RESTART_MAX_DISPLAY = 8;
+
+/**
+ * If startup-critical files were updated by a git pull, spawn a fresh
+ * process running the same launch script and exit the current one.
+ * Ensures updated code on disk takes effect immediately.
+ *
+ * @param {Function} spawnFn - spawn function from child_process (passed by caller)
+ * @param {{ restartNeeded: boolean, changedStartupFiles: string[] }} syncResult
+ * @param {string} cwd - Working directory for the child process (repo root)
+ */
+export function handleRestartOnUpdate(spawnFn, syncResult, cwd) {
+  if (!syncResult.restartNeeded) return;
+
+  log(C.CYAN, '');
+  log(C.CYAN, '  Startup scripts updated. Restarting to apply changes...');
+  if (syncResult.changedStartupFiles && syncResult.changedStartupFiles.length > 0) {
+    log(C.DARK_GRAY, `  ${syncResult.changedStartupFiles.length} file(s) changed:`);
+    for (const f of syncResult.changedStartupFiles.slice(0, RESTART_MAX_DISPLAY)) {
+      log(C.DARK_GRAY, `    ${f}`);
+    }
+    if (syncResult.changedStartupFiles.length > RESTART_MAX_DISPLAY) {
+      log(C.DARK_GRAY, `    ... and ${syncResult.changedStartupFiles.length - RESTART_MAX_DISPLAY} more`);
+    }
+  }
+  log('');
+
+  const child = spawnFn(process.execPath, [process.argv[1], ...process.argv.slice(2)], {
+    cwd,
+    stdio: 'inherit',
+    detached: false
+  });
+
+  child.on('error', (err) => {
+    console.error(`\x1b[31m  Restart failed: ${err.message}\x1b[0m`);
+    process.exit(1);
+  });
+
+  child.on('exit', (code) => process.exit(code ?? 0));
+}
+
 // ===== Exported functions =====
 
 /**
@@ -368,7 +409,7 @@ export async function checkRepoUpdates(options = {}) {
     if (pullBranch(cwd, branch)) {
       log(C.DARK_GREEN, `  ${label}: synced`);
       syncSubmodules(cwd);
-      return { checked: true, updated: true, switchedBranch: false };
+      return { checked: true, updated: true, switchedBranch: false, ...computeRestartInfo(cwd) };
     }
     log(C.DARK_YELLOW, `  ${label}: pull failed (need manual update)`);
     return { checked: true, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
@@ -399,7 +440,7 @@ export async function checkRepoUpdates(options = {}) {
     if (pullBranch(cwd, branch)) {
       log(C.GREEN, `  ${label}: updated!`);
       syncSubmodules(cwd);
-      return { checked: true, updated: true, switchedBranch: false };
+      return { checked: true, updated: true, switchedBranch: false, ...computeRestartInfo(cwd) };
     }
     // Pull failed -- likely dirty working tree. Show conflicts and offer discard.
     log(C.YELLOW, `  ${label}: pull failed (local changes may be blocking).`);
@@ -423,7 +464,7 @@ export async function checkRepoUpdates(options = {}) {
       if (pullBranch(cwd, branch)) {
         log(C.GREEN, `  ${label}: updated!`);
         syncSubmodules(cwd);
-        return { checked: true, updated: true, switchedBranch: false };
+        return { checked: true, updated: true, switchedBranch: false, ...computeRestartInfo(cwd) };
       }
       log(C.RED, `  ${label}: pull still failed after discarding. Check git status.`);
     }
@@ -440,7 +481,7 @@ export async function checkRepoUpdates(options = {}) {
     if (pullBranch(cwd, 'main')) {
       log(C.GREEN, `  ${label}: switched to main and updated!`);
       syncSubmodules(cwd);
-      return { checked: true, updated: true, switchedBranch: true };
+      return { checked: true, updated: true, switchedBranch: true, ...computeRestartInfo(cwd) };
     }
     log(C.RED, `  ${label}: pull failed after switching. Check git status.`);
     return { checked: true, updated: false, switchedBranch: true, restartNeeded: false, changedStartupFiles: [] };

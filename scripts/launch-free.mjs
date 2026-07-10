@@ -7,7 +7,7 @@ import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
-import { checkRepoUpdates, checkUserRepoUpdates } from './lib/git-sync.mjs';
+import { checkRepoUpdates, checkUserRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -262,7 +262,7 @@ async function checkAndSwitchToMain() {
       const autoStashes = stashList.stdout.split('\n').filter(l => l.includes('glitch-auto-stash:'));
       if (autoStashes.length > 0) {
         log(YELLOW, '');
-        autoStashes.forEach(s => log(YELLOW, `  ≡ƒôª ${s}`));
+        autoStashes.forEach(s => log(YELLOW, `  [stash] ${s}`));
         log(YELLOW, `  Run \`git stash pop\` to restore when ready.`);
         log('');
       }
@@ -576,7 +576,8 @@ async function main() {
   }
 
   // ---- Sync glitch-ai repo from remote (branch-aware, shared module) ----
-  await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
+  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
+  handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
 
   // ---- Sync user data repo (separate nested git repo) ----
   const userRepoDir = join(ROOT_DIR, 'user');
