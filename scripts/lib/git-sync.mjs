@@ -181,10 +181,80 @@ function getModifiedFiles(cwd) {
 }
 
 /**
+ * Get list of files that changed between the previous HEAD and current HEAD.
+ * Uses `git diff --name-only HEAD@{1} HEAD` which, after a fast-forward pull,
+ * gives exactly the files updated by the pull.
+ *
+ * Returns null if the reflog entry HEAD@{1} does not exist (first commit,
+ * shallow clone, reflog disabled). Callers should treat null as "unknown"
+ * and default to restartNeeded: true (safer to restart than to skip).
+ *
+ * @param {string} cwd
+ * @returns {string[]|null}
+ */
+function getChangedFiles(cwd) {
+  const r = run('git', ['diff', '--name-only', 'HEAD@{1}', 'HEAD'], { cwd, timeout: 10000 });
+  if (!r.success) return null;
+  if (!r.stdout) return [];
+  return r.stdout.split('\n').filter(l => l.trim().length > 0);
+}
+
+/**
+ * Determine whether a changed file is startup-critical: if it changed, the
+ * currently-running launch script may be executing stale code and should
+ * restart itself to pick up the new version.
+ *
+ * Matches by prefix and extension (simple string checks, not whole-path regex):
+ *   - scripts/        + (.mjs or .ps1)   shared modules and launch scripts
+ *   - config/         + any               template configs
+ *   - glitch-memorycore/ + any            engine files loaded as instructions
+ *   - .opencode/       + any              agent definitions, plugins, instructions
+ *   - root files ending in .bat or .sh    entry point launchers in repo root
+ *
+ * @param {string} filePath - Repo-relative path using forward slashes.
+ * @returns {boolean}
+ */
+function isStartupCritical(filePath) {
+  if (!filePath || typeof filePath !== 'string') return false;
+  const p = filePath.trim();
+  if (p.length === 0) return false;
+
+  if (p.startsWith('scripts/')) {
+    return p.endsWith('.mjs') || p.endsWith('.ps1');
+  }
+  if (p.startsWith('config/')) return true;
+  if (p.startsWith('glitch-memorycore/')) return true;
+  if (p.startsWith('.opencode/')) return true;
+  if (p.endsWith('.bat') || p.endsWith('.sh')) return true;
+  return false;
+}
+
+/**
  * Discard local changes to tracked files (git restore .).
  */
 function discardChanges(cwd) {
   run('git', ['restore', '.'], { cwd, timeout: 15000 });
+}
+
+/**
+ * Compute restart-needed info after a successful pull.
+ *
+ * Runs `git diff --name-only HEAD@{1} HEAD` to get the files changed by the
+ * pull, then filters to startup-critical paths. If the diff command fails
+ * (HEAD@{1} unavailable -- first commit, shallow clone, reflog disabled),
+ * returns restartNeeded: true with an empty changedStartupFiles list, since
+ * it is safer to restart than to silently skip.
+ *
+ * @param {string} cwd
+ * @returns {{ restartNeeded: boolean, changedStartupFiles: string[] }}
+ */
+function computeRestartInfo(cwd) {
+  const changed = getChangedFiles(cwd);
+  if (changed === null) {
+    return { restartNeeded: true, changedStartupFiles: [] };
+  }
+  const startupFiles = changed.filter(isStartupCritical);
+  return { restartNeeded: startupFiles.length > 0, changedStartupFiles: startupFiles };
 }
 
 /**
@@ -200,6 +270,47 @@ function switchBranch(cwd, targetBranch, sourceBranch) {
   return r.success;
 }
 
+const RESTART_MAX_DISPLAY = 8;
+
+/**
+ * If startup-critical files were updated by a git pull, spawn a fresh
+ * process running the same launch script and exit the current one.
+ * Ensures updated code on disk takes effect immediately.
+ *
+ * @param {Function} spawnFn - spawn function from child_process (passed by caller)
+ * @param {{ restartNeeded: boolean, changedStartupFiles: string[] }} syncResult
+ * @param {string} cwd - Working directory for the child process (repo root)
+ */
+export function handleRestartOnUpdate(spawnFn, syncResult, cwd) {
+  if (!syncResult.restartNeeded) return;
+
+  log(C.CYAN, '');
+  log(C.CYAN, '  Startup scripts updated. Restarting to apply changes...');
+  if (syncResult.changedStartupFiles && syncResult.changedStartupFiles.length > 0) {
+    log(C.DARK_GRAY, `  ${syncResult.changedStartupFiles.length} file(s) changed:`);
+    for (const f of syncResult.changedStartupFiles.slice(0, RESTART_MAX_DISPLAY)) {
+      log(C.DARK_GRAY, `    ${f}`);
+    }
+    if (syncResult.changedStartupFiles.length > RESTART_MAX_DISPLAY) {
+      log(C.DARK_GRAY, `    ... and ${syncResult.changedStartupFiles.length - RESTART_MAX_DISPLAY} more`);
+    }
+  }
+  log('');
+
+  const child = spawnFn(process.execPath, [process.argv[1], ...process.argv.slice(2)], {
+    cwd,
+    stdio: 'inherit',
+    detached: false
+  });
+
+  child.on('error', (err) => {
+    console.error(`\x1b[31m  Restart failed: ${err.message}\x1b[0m`);
+    process.exit(1);
+  });
+
+  child.on('exit', (code) => process.exit(code ?? 0));
+}
+
 // ===== Exported functions =====
 
 /**
@@ -211,7 +322,7 @@ function switchBranch(cwd, targetBranch, sourceBranch) {
  * @param {boolean} [options.interactive=true] - Show prompts
  * @param {boolean} [options.allowBranchSwitch=true] - Show "switch to main" option
  * @param {boolean} [options.quiet=false] - Suppress "up-to-date" logs
- * @returns {Promise<{ checked: boolean, updated: boolean, switchedBranch: boolean }>}
+ * @returns {Promise<{ checked: boolean, updated: boolean, switchedBranch: boolean, restartNeeded: boolean, changedStartupFiles: string[] }>}
  */
 export async function checkRepoUpdates(options = {}) {
   const {
@@ -227,7 +338,7 @@ export async function checkRepoUpdates(options = {}) {
   // 1. Check .git exists
   if (!existsSync(join(cwd, '.git'))) {
     if (!quiet) log(C.DARK_YELLOW, `  ${label}: not a git repository, skipping`);
-    return { checked: false, updated: false, switchedBranch: false };
+    return { checked: false, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
   }
 
   // 2. Detect current branch
@@ -238,33 +349,33 @@ export async function checkRepoUpdates(options = {}) {
     } else {
       if (!quiet) log(C.DARK_YELLOW, `  ${label}: could not detect branch -- skipping`);
     }
-    return { checked: false, updated: false, switchedBranch: false };
+    return { checked: false, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
   }
 
   // 3. Check upstream exists
   if (!hasUpstream(cwd, branch)) {
     if (!quiet) log(C.DARK_YELLOW, `  ${label}: branch '${branch}' has no upstream -- skipping`);
-    return { checked: true, updated: false, switchedBranch: false };
+    return { checked: true, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
   }
 
   // 4. Fetch origin
   if (!fetchOrigin(cwd)) {
     if (!quiet) log(C.DARK_YELLOW, `  ${label}: could not fetch (offline?)`);
-    return { checked: false, updated: false, switchedBranch: false };
+    return { checked: false, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
   }
 
   // 5. Check behind/ahead for current branch
   const ba = getBehindAhead(cwd, branch);
   if (!ba) {
     if (!quiet) log(C.DARK_YELLOW, `  ${label}: could not check behind count`);
-    return { checked: false, updated: false, switchedBranch: false };
+    return { checked: false, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
   }
 
   // 6. Check divergence
   if (ba.behind > 0 && ba.ahead > 0) {
     log(C.YELLOW, `  ${label}: '${branch}' diverged (${ba.ahead} ahead, ${ba.behind} behind).`);
     log(C.YELLOW, `  Run: git pull origin ${branch}`);
-    return { checked: true, updated: false, switchedBranch: false };
+    return { checked: true, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
   }
 
   // 7. Check main status for reference (only if on a different branch)
@@ -283,7 +394,7 @@ export async function checkRepoUpdates(options = {}) {
         log(C.DARK_GREEN, `  ${label}: up-to-date (branch: ${branch})`);
       }
     }
-    return { checked: true, updated: false, switchedBranch: false };
+    return { checked: true, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
   }
 
   // ===== Updates available =====
@@ -292,16 +403,16 @@ export async function checkRepoUpdates(options = {}) {
     // Silent/headless mode -- only auto-pull on main
     if (branch !== 'main') {
       if (!quiet) log(C.DARK_YELLOW, `  ${label}: ${branch} is ${ba.behind} behind (auto-sync only on main)`);
-      return { checked: true, updated: false, switchedBranch: false };
+      return { checked: true, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
     }
     log(C.DARK_GRAY, `  ${label}: ${ba.behind} commit(s) behind, syncing...`);
     if (pullBranch(cwd, branch)) {
       log(C.DARK_GREEN, `  ${label}: synced`);
       syncSubmodules(cwd);
-      return { checked: true, updated: true, switchedBranch: false };
+      return { checked: true, updated: true, switchedBranch: false, ...computeRestartInfo(cwd) };
     }
     log(C.DARK_YELLOW, `  ${label}: pull failed (need manual update)`);
-    return { checked: true, updated: false, switchedBranch: false };
+    return { checked: true, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
   }
 
   // ===== Interactive prompt =====
@@ -329,7 +440,7 @@ export async function checkRepoUpdates(options = {}) {
     if (pullBranch(cwd, branch)) {
       log(C.GREEN, `  ${label}: updated!`);
       syncSubmodules(cwd);
-      return { checked: true, updated: true, switchedBranch: false };
+      return { checked: true, updated: true, switchedBranch: false, ...computeRestartInfo(cwd) };
     }
     // Pull failed -- likely dirty working tree. Show conflicts and offer discard.
     log(C.YELLOW, `  ${label}: pull failed (local changes may be blocking).`);
@@ -353,27 +464,27 @@ export async function checkRepoUpdates(options = {}) {
       if (pullBranch(cwd, branch)) {
         log(C.GREEN, `  ${label}: updated!`);
         syncSubmodules(cwd);
-        return { checked: true, updated: true, switchedBranch: false };
+        return { checked: true, updated: true, switchedBranch: false, ...computeRestartInfo(cwd) };
       }
       log(C.RED, `  ${label}: pull still failed after discarding. Check git status.`);
     }
-    return { checked: true, updated: false, switchedBranch: false };
+    return { checked: true, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
   }
 
   if (choice === 'm' && allowBranchSwitch && branch !== 'main') {
     log(C.CYAN, `  Switching to main...`);
     if (!switchToMain(cwd, branch)) {
       log(C.RED, `  ${label}: failed to switch to main. Check git status.`);
-      return { checked: true, updated: false, switchedBranch: false };
+      return { checked: true, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
     }
     log(C.CYAN, '  Pulling origin/main...');
     if (pullBranch(cwd, 'main')) {
       log(C.GREEN, `  ${label}: switched to main and updated!`);
       syncSubmodules(cwd);
-      return { checked: true, updated: true, switchedBranch: true };
+      return { checked: true, updated: true, switchedBranch: true, ...computeRestartInfo(cwd) };
     }
     log(C.RED, `  ${label}: pull failed after switching. Check git status.`);
-    return { checked: true, updated: false, switchedBranch: true };
+    return { checked: true, updated: false, switchedBranch: true, restartNeeded: false, changedStartupFiles: [] };
   }
 
   // 's' — explicit skip

@@ -7,7 +7,7 @@ import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
-import { checkRepoUpdates, checkUserRepoUpdates } from './lib/git-sync.mjs';
+import { checkRepoUpdates, checkUserRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
 import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
 
@@ -384,7 +384,8 @@ async function main() {
   }
 
   // ---- Sync glitch-ai repo from remote (branch-aware, shared module) ----
-  await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
+  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
+  handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
 
   // ---- Sync user data repo (separate nested git repo) ----
   const userRepoDir = join(ROOT_DIR, 'user');

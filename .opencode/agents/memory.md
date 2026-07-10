@@ -29,6 +29,7 @@ The skill contains the full methodology — file map, append formats, category t
 4. **Honor YAML frontmatter** — update `timestamp` field, leave `type`/`title`/`tags` alone
 5. **Read first** — before appending to a file, always read the last ~30 lines to understand current format and avoid duplication
 6. **Return confirmation** — after writing, return a brief confirmation of what was written and where
+7. **Heartbeat first (non-negotiable)** — Before writing any content, ALWAYS update `user/current-session.md`'s `Last Memory Update` timestamp AND the target file's frontmatter `timestamp` field. This is detailed in the save-memory skill under "Mandatory First Action — Heartbeat (Always)". Load the skill with `skill("save-memory")` on activation — it contains the full protocol.
 
 ## Input You Receive
 When dispatched, Glitch will tell you:
