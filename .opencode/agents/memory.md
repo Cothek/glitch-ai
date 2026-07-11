@@ -7,8 +7,8 @@ permission:
   list: allow
   glob: allow
   edit: deny
-  grep: deny
-  bash: deny
+  grep: allow
+  bash: allow
   task: deny
   skill: allow
 ---

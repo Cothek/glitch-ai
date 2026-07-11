@@ -1053,60 +1053,30 @@
     <div class="card-grid">
       <div class="card">
         <span class="badge-layer badge-public">Windows</span>
-        <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/></svg> Download ZIP</div>
+        <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/></svg> New Users</div>
         <div class="desc">
           <ol class="steps" style="margin:0">
-            <li>Download the <a href="https://github.com/Cothek/glitch-ai/archive/refs/heads/main.zip" style="color:var(--accent)">latest release zip</a></li>
-            <li>Extract to any folder</li>
-            <li>Double-click <code>launch-glitch.bat</code></li>
+            <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
+            <li><code>cd glitch-ai</code></li>
+            <li><code>.\scripts\setup.ps1</code></li>
+            <li><code>.\launch-glitch.bat</code></li>
           </ol>
-          <p style="color:var(--text-dim);font-size:0.75rem;margin-top:0.5rem">Auto-downloads Node.js and all dependencies on first launch.</p>
         </div>
       </div>
       <div class="card">
         <span class="badge-layer badge-public">Mac / Linux</span>
-        <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M4 20h16"/></svg> Download ZIP</div>
+        <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M4 20h16"/></svg> New Users</div>
         <div class="desc">
           <ol class="steps" style="margin:0">
-            <li>Download the <a href="https://github.com/Cothek/glitch-ai/archive/refs/heads/main.zip" style="color:var(--accent)">latest release zip</a></li>
-            <li>Extract to any folder</li>
-            <li>Open terminal: <code>./launch-glitch.sh</code></li>
+            <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
+            <li><code>cd glitch-ai</code></li>
+            <li><code>git submodule update --init --recursive</code></li>
+            <li><code>node scripts/launch.mjs</code></li>
           </ol>
-          <p style="color:var(--text-dim);font-size:0.75rem;margin-top:0.5rem">Requires <a href="https://nodejs.org" style="color:var(--accent)">Node.js 22+</a> installed manually.</p>
         </div>
       </div>
     </div>
-    <details style="margin-top:1rem">
-      <summary>Or use Git (for developers)</summary>
-      <div class="content">
-        <div class="card-grid">
-          <div class="card">
-            <span class="badge-layer badge-public">Windows</span>
-            <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--cyan)" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/></svg> Git Clone</div>
-            <div class="desc">
-              <ol class="steps" style="margin:0">
-                <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
-                <li><code>cd glitch-ai</code></li>
-                <li><code>.\launch-glitch.bat</code></li>
-              </ol>
-            </div>
-          </div>
-          <div class="card">
-            <span class="badge-layer badge-public">Mac / Linux</span>
-            <div class="title"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="var(--green)" stroke-width="2"><path d="M4 20h16"/></svg> Git Clone</div>
-            <div class="desc">
-              <ol class="steps" style="margin:0">
-                <li><code>git clone https://github.com/Cothek/glitch-ai.git</code></li>
-                <li><code>cd glitch-ai</code></li>
-                <li><code>git submodule update --init --recursive</code></li>
-                <li><code>./launch-glitch.sh</code></li>
-              </ol>
-            </div>
-          </div>
-        </div>
-      </div>
-    </details>
-    <p style="color:var(--text-dim);font-size:0.8rem;margin-top:0.75rem">Prerequisites: Git and Node.js 22+ for the git path. ZIP path auto-bootstraps on Windows.</p>
+    <p style="color:var(--text-dim);font-size:0.8rem;margin-top:0.75rem">Prerequisites: <a href="https://git-scm.com/downloads" style="color:var(--accent)">Git</a> and <a href="https://nodejs.org" style="color:var(--accent)">Node.js 22+</a>. No Git? Grab the <a href="https://github.com/Cothek/glitch-ai/archive/refs/heads/main.zip" style="color:var(--accent)">ZIP from GitHub</a> — you'll need Git later for updates.</p>
   </div>
 
   <div class="tab-panel tab-old">
@@ -1134,7 +1104,7 @@ git remote set-url origin https://cothek@github.com/Cothek/glitch-engine.git</co
   </div>
 </div>
 
-<p style="color:var(--text-muted);font-size:0.875rem">Your data stays local under <code>user/</code> — nothing shared. Works cross-platform on Windows, macOS, and Linux. ZIP download auto-bootstraps on Windows; Git path requires <strong>Node.js 22+</strong> and <strong>Git</strong>.</p>
+<p style="color:var(--text-muted);font-size:0.875rem">Your data stays local under <code>user/</code> — nothing shared. Requires <strong>Node.js 22+</strong> and <strong>Git</strong>. Works cross-platform on Windows, macOS, and Linux.</p>
 
 </section>
 

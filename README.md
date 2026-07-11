@@ -4,32 +4,41 @@ Portable AI companion environment — one clone, one setup, Glitch is ready on W
 
 ## Quick Start
 
-Two paths to get Glitch running:
+### Windows
 
-### 📦 Download ZIP (no git required)
+```powershell
+git clone https://github.com/Cothek/glitch-ai.git
+cd glitch-ai
+.\scripts\setup.ps1            # First-time: init engine + profile wizard
+.\launch-glitch.bat            # Start using Glitch
+```
 
-1. Download the [latest release](https://github.com/Cothek/glitch-ai/archive/refs/heads/main.zip)
-2. Extract to any folder
-3. Run `launch-glitch.bat` (Windows) or `./launch-glitch.sh` (Mac/Linux)
+Or use the Node.js launcher (works on all platforms):
+```powershell
+node scripts\launch.mjs        # Cross-platform launcher
+```
 
-> **First launch** auto-downloads Node.js and all dependencies (Windows).  
-> **Mac/Linux**: [Node.js](https://nodejs.org) 22+ must be installed manually.
-
-### 🐙 Git Clone (for developers)
+### Mac / Linux
 
 ```bash
 git clone https://github.com/Cothek/glitch-ai.git
 cd glitch-ai
+git submodule update --init --recursive
+node scripts/setup.mjs         # First-time setup
+./launch-glitch.sh             # Start using Glitch (unified launcher)
 ```
 
-| Platform | Setup + Launch |
-|----------|---------------|
-| Windows  | `.\launch-glitch.bat` |
-| Mac/Linux | `git submodule update --init --recursive && ./launch-glitch.sh` |
+### For Troy (Returning User, cross-platform)
 
-> First launch auto-downloads OpenCode, Handy, and other dependencies.
+```bash
+git clone https://github.com/Cothek/glitch-ai.git
+cd glitch-ai
+git submodule update --init --recursive
+git clone https://cothek@github.com/Cothek/glitch-user-troy.git user/
+./launch-glitch.sh
+```
 
-> **Note**: The `.sh` scripts require [Node.js](https://nodejs.org) 22+. The `.bat` scripts (Windows) auto-bootstrap Node.js if not found.
+> **Note**: The `.sh` scripts require [Node.js](https://nodejs.org) 22+. The `.bat` scripts (Windows) are the legacy path — both call the same `.mjs` launcher under the hood.
 
 **If you get a GitHub login pop-up after `git submodule sync`**, the submodule remote got reset. Fix it:
 
