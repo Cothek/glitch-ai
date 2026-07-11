@@ -10,6 +10,7 @@ permission:
   grep: deny
   bash: deny
   task: deny
+  skill: allow
 ---
 
 # @memory — Memory Writer Agent
