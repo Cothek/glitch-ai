@@ -174,6 +174,73 @@ async function checkGit() {
   }
 }
 
+// --- Step 4b: Touch timestamps on all user memory files ---
+async function touchAllTimestamps() {
+  const userDir = path.join(CWD, "user");
+  const files = [
+    "main-memory.md",
+    "decisions.md",
+    "patterns.md",
+    "post-mortems.md",
+    "reminders.md",
+    "forge-log.md",
+    "projects/project-list.md",
+    "session-dashboard.md",
+    "daily-diary",
+  ];
+  const todayISO = `${todayStr}T00:00:00Z`;
+  const results = [];
+
+  for (const f of files) {
+    try {
+      if (f === "daily-diary") {
+        // For diary, try the current date file
+        const diaryPath = path.join(userDir, "daily-diary", "current", `${todayStr}.md`);
+        try {
+          await stat(diaryPath);
+          let content = await readFile(diaryPath, "utf-8");
+          if (content.includes("timestamp:")) {
+            content = content.replace(
+              /^(\s*timestamp:\s*).*/m,
+              `$1${todayISO}`
+            );
+            await writeFile(diaryPath, content, "utf-8");
+            results.push(`✓ ${f}/current/${todayStr}.md`);
+          }
+        } catch {
+          // diary file doesn't exist yet — skip
+        }
+        continue;
+      }
+
+      const fp = path.join(userDir, f);
+      try {
+        await stat(fp);
+      } catch {
+        results.push(`✗ ${f}: not found`);
+        continue;
+      }
+
+      let content = await readFile(fp, "utf-8");
+      if (content.includes("timestamp:")) {
+        content = content.replace(
+          /^(\s*timestamp:\s*).*/m,
+          `$1${todayISO}`
+        );
+        await writeFile(fp, content, "utf-8");
+        results.push(`✓ ${f}`);
+      } else {
+        results.push(`⚠ ${f}: no timestamp field found`);
+      }
+    } catch (e) {
+      warn(`touchAllTimestamps: ${f} failed: ${e.message}`);
+      results.push(`✗ ${f}: ${e.message}`);
+    }
+  }
+
+  return results;
+}
+
 // --- Main ---
 async function main() {
   const results = {
@@ -182,6 +249,7 @@ async function main() {
     curriculum: await checkCurriculum(),
     gc: await checkImageGC(),
     git: await checkGit(),
+    touches: await touchAllTimestamps(),
   };
 
   // Split GC result into main line + potential alert
@@ -195,6 +263,7 @@ async function main() {
     "",
     "=== Auto-Completed ===",
     results.timestamp,
+    ...results.touches,
     results.diary,
     results.curriculum,
     gcMain,
