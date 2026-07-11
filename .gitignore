@@ -92,3 +92,6 @@ data/
 handy-voice/
 
 cloudflared.exe.tmp
+# Large binary backups
+*.exe.old.*
+opencode/opencode.exe.old.*
