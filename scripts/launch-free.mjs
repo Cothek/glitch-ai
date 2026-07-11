@@ -226,7 +226,7 @@ async function ensureHandy() {
       const url = `https://github.com/cjpais/Handy/releases/download/v${HANDY_VERSION}/Handy_${HANDY_VERSION}_${arch}.AppImage`;
       const appImagePath = join(handyVoiceDir, 'Handy.AppImage');
 
-      log(CYAN, `  Downloading Handy v${HANDY_VERSION} for Linux (${arch})...`);
+      log(CYAN, `  Downloading Handy v${HANDY_VERSION} for Linux (${arch})....`);
       await downloadFile(url, appImagePath);
 
       log(CYAN, '  Making executable...');
@@ -827,7 +827,7 @@ async function main() {
   }
 
   // ---- Model ID normalization (prevents double prefix / backslash issues) ----
- 
+  
   function normalizeModelId(modelId) {
     if (!modelId) return modelId;
     // 1. Strip leading/trailing slashes and whitespace
@@ -984,6 +984,22 @@ async function main() {
     }
   } catch (e) {
     log(YELLOW, '  WARNING: Binary sync failed: ' + (e.message || e));
+  }
+
+  // ---- Root directory audit (print warning if untracked artifacts found) ----
+  try {
+    const auditScript = join(SCRIPT_DIR, 'audit-root.mjs');
+    if (existsSync(auditScript)) {
+      const auditResult = run('node', [auditScript, '--check'], { timeout: 10000 });
+      if (auditResult.success && auditResult.stdout) {
+        const report = JSON.parse(auditResult.stdout);
+        if (report.status === 'dirty') {
+          log(YELLOW, `  WARNING: Root has ${report.count} untracked artifact(s). Run 'node scripts/audit-root.mjs' to review.`);
+        }
+      }
+    }
+  } catch {
+    // intentionally silent — non-blocking startup warning
   }
 
   // ---- Check + install Handy if missing ----

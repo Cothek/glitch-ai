@@ -551,8 +551,8 @@ async function main() {
 
   // ---- Show agent model dashboard ----
   try {
-    if (existsSync(CONFIG_PATH)) {
-      const config = readJson(CONFIG_PATH);
+    if (existsSync(ConfigPath)) {
+      const config = readJson(ConfigPath);
       if (config && config.agent) {
         const agents = Object.entries(config.agent);
         // Group: primary first, then free sub-agents, then paid sub-agents
@@ -702,6 +702,22 @@ async function main() {
     }
   } catch (e) {
     log(YELLOW, '  WARNING: Binary sync failed: ' + (e.message || e));
+  }
+
+  // ---- Root directory audit (print warning if untracked artifacts found) ----
+  try {
+    const auditScript = join(SCRIPT_DIR, 'audit-root.mjs');
+    if (existsSync(auditScript)) {
+      const auditResult = run('node', [auditScript, '--check'], { timeout: 10000 });
+      if (auditResult.success && auditResult.stdout) {
+        const report = JSON.parse(auditResult.stdout);
+        if (report.status === 'dirty') {
+          log(YELLOW, `  WARNING: Root has ${report.count} untracked artifact(s). Run 'node scripts/audit-root.mjs' to review.`);
+        }
+      }
+    }
+  } catch {
+    // intentionally silent — non-blocking startup warning
   }
 
   // ---- Start Handy (if not already running) ----

@@ -17,6 +17,7 @@ $CloudflaredBin = Join-Path $RootDir "cloudflared.exe"
 $HandyDir = Join-Path $RootDir "handy-voice"
 $HandyBin = [System.IO.Path]::Combine($HandyDir, "Handy", "handy.exe")
 $StatusFile = Join-Path $RootDir "data\update-status.json"
+$NvidiaFreeWatchlistCache = Join-Path $RootDir "data\nvidia-free-watchlist-cache.json"
 $IsUpdate = $Update -or (-not $CheckOnly)
 
 function Write-ColorHost {
@@ -1090,6 +1091,21 @@ try {
 
 # ========== 11. NVIDIA Model Catalog (Free Endpoints) ==========
 try {
+  # Load persistent cache to avoid re-reporting the same models
+  $watchlistCache = @{}
+  if (Test-Path $NvidiaFreeWatchlistCache) {
+    try {
+      $cacheData = Get-Content $NvidiaFreeWatchlistCache -Raw | ConvertFrom-Json
+      if ($cacheData.detected_models) {
+        foreach ($m in $cacheData.detected_models) {
+          $watchlistCache[$m] = $true
+        }
+      }
+    } catch {
+      # Ignore cache load errors - start fresh
+    }
+  }
+
   # Check for newly added free models by scraping a few key model card pages
   # (Only for high-priority models we're watching)
   # Note: Website URLs use nvidia/ prefix for all, but model cards are at /provider/model
@@ -1100,8 +1116,13 @@ try {
     "/stepfun-ai/step-3.7-flash"
   )
   $newlyFree = @()
+  $newlyDetected = @()
   foreach ($path in $watchList) {
     $modelId = $path.TrimStart('/')
+    # Skip if already in cache (already reported)
+    if ($watchlistCache.ContainsKey($modelId)) {
+      continue
+    }
     try {
       $cardUrl = "https://build.nvidia.com$path"
       $cardResponse = Invoke-WebRequest -Uri $cardUrl -Headers @{ "Accept" = "text/html" } -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
@@ -1110,10 +1131,28 @@ try {
           id = $modelId
           note = "Free Endpoint badge found on model card"
         }
+        $newlyDetected += $modelId
       }
     } catch {
       # Ignore errors for individual model cards
     }
+  }
+
+  # Update cache with newly detected models
+  if ($newlyDetected.Count -gt 0) {
+    $existingModels = @()
+    if (Test-Path $NvidiaFreeWatchlistCache) {
+      try {
+        $existingData = Get-Content $NvidiaFreeWatchlistCache -Raw | ConvertFrom-Json
+        if ($existingData.detected_models) { $existingModels = @($existingData.detected_models) }
+      } catch {}
+    }
+    $updatedModels = $existingModels + $newlyDetected | Sort-Object -Unique
+    $cacheSave = @{
+      cached_at = (Get-Date).ToString("o")
+      detected_models = $updatedModels
+    }
+    $cacheSave | ConvertTo-Json -Depth 4 | Out-File -FilePath $NvidiaFreeWatchlistCache -Encoding utf8 -Force
   }
 
   $hasNewModels = $newlyFree.Count -gt 0
