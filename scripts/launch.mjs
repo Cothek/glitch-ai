@@ -551,8 +551,8 @@ async function main() {
 
   // ---- Show agent model dashboard ----
   try {
-    if (existsSync(CONFIG_PATH)) {
-      const config = readJson(CONFIG_PATH);
+    if (existsSync(ConfigPath)) {
+      const config = readJson(ConfigPath);
       if (config && config.agent) {
         const agents = Object.entries(config.agent);
         // Group: primary first, then free sub-agents, then paid sub-agents

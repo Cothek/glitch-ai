@@ -15,7 +15,7 @@ $CheckOnly = (-not $ResetCache -and -not $UpdateCache) -or $args -contains "-Che
 $Silent = $args -contains "-Silent"
 $SkipNvidiaFreeCheck = $args -contains "-SkipNvidiaFreeCheck"
 $Force = $args -contains "-Force"
-$StaleMinutes = 60  # default staleness threshold
+$StaleMinutes = 15  # default staleness threshold (minutes)
 $staleIdx = [array]::IndexOf($args, '-StaleMinutes')
 if ($staleIdx -ge 0 -and $staleIdx -lt $args.Count - 1) {
     $StaleMinutes = [int]$args[$staleIdx + 1]
