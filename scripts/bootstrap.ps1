@@ -127,9 +127,20 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
       Write-Host "  Found system install, copying..." -ForegroundColor Yellow
       Copy-Item $systemOpenCode $OpenCodeBin -Force
     } else {
-      $zipUrl = "https://github.com/anomalyco/opencode/releases/download/v1.15.7/opencode-windows-$archSuffix.zip"
+      # Fetch latest version from npm
+      $opencodeVersion = "v1.15.7"  # fallback
+      try {
+        $npmVer = npm view opencode-ai version 2>$null
+        if ($npmVer) {
+          $opencodeVersion = "v$($npmVer.Trim())"
+        }
+      } catch {
+        # npm not available or failed, use fallback
+      }
+
+      $zipUrl = "https://github.com/opencode-ai/opencode/releases/download/$opencodeVersion/opencode-windows-$archSuffix.zip"
       $zipPath = "$env:TEMP\opencode.zip"
-      Write-Host "  Downloading opencode v1.15.7..." -ForegroundColor Yellow
+      Write-Host "  Downloading opencode $opencodeVersion..." -ForegroundColor Yellow
       Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
       Write-Host "  Extracting..." -ForegroundColor Yellow
       Expand-Archive -Path $zipPath -DestinationPath $OpenCodeDir -Force

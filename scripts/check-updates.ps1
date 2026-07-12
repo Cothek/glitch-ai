@@ -1235,36 +1235,69 @@ try {
             Write-ColorHost "  Done." "Green"
             $updateNeeded = $false
           }
+}
+    } else {
+      # Binary tool
+      # Helper: fetch latest GitHub release version (strips 'v' prefix)
+      function Get-LatestGitHubRelease {
+        param([string]$Repo)
+        try {
+          $api = "https://api.github.com/repos/$Repo/releases/latest"
+          $resp = Invoke-WebRequest -Uri $api -Headers @{ "Accept" = "application/vnd.github+json" } -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+          $data = $resp.Content | ConvertFrom-Json
+          if ($data.tag_name) {
+            return $data.tag_name.TrimStart('v')
+          }
+        } catch {
+          # Silently fail - version check is informational only
         }
-      } else {
-        # Binary tool
-        $binaryPath = Join-Path $RootDir $tool.binary
-        if (Test-Path $binaryPath) {
-          try {
-            $verOut = & $binaryPath "--version" 2>&1
+        return $null
+      }
+
+      $binaryPath = Join-Path $RootDir $tool.binary
+      if (Test-Path $binaryPath) {
+        try {
+          $verOut = & $binaryPath "--version" 2>&1
+          $verLine = ($verOut | ForEach-Object { "$_" } | Select-Object -First 1).Trim()
+          if ($LASTEXITCODE -eq 0 -and $verLine) {
+            $curVer = $verLine
+          } else {
+            $verOut = & $binaryPath "-version" 2>&1
             $verLine = ($verOut | ForEach-Object { "$_" } | Select-Object -First 1).Trim()
             if ($LASTEXITCODE -eq 0 -and $verLine) {
               $curVer = $verLine
             } else {
-              $verOut = & $binaryPath "-version" 2>&1
-              $verLine = ($verOut | ForEach-Object { "$_" } | Select-Object -First 1).Trim()
-              if ($LASTEXITCODE -eq 0 -and $verLine) {
-                $curVer = $verLine
-              } else {
-                $curVer = "exists (version unknown)"
-              }
+              $curVer = "exists (version unknown)"
             }
-          } catch {
-            $curVer = "exists (version check failed)"
           }
-          # For now, don't auto-update binaries — could be destructive
-          $updateNeeded = $false
-        } else {
-          $curVer = "not installed"
-          $updateNeeded = $true
-          $updatesAvailable++
+        } catch {
+          $curVer = "exists (version check failed)"
         }
+
+        # Check GitHub for latest version (visible in summary, skips auto-update)
+        $githubVer = $null
+        switch ($toolName) {
+          "nuclei" { $githubVer = Get-LatestGitHubRelease -Repo "projectdiscovery/nuclei" }
+          "trufflehog" { $githubVer = Get-LatestGitHubRelease -Repo "trufflesecurity/trufflehog" }
+        }
+
+        $updateNeeded = $false
+        if ($githubVer -and $curVer -match '(\d+\.\d+\.\d+)') {
+          $installedVerNum = $matches[1]
+          if ($installedVerNum -ne $githubVer) {
+            $updateNeeded = $true
+            $updatesAvailable++
+            $latestVer = "v$githubVer (check only)"
+          }
+        }
+        # Don't auto-update binaries — could be destructive
+        if (-not $updateNeeded) { $updateNeeded = $false }
+      } else {
+        $curVer = "not installed"
+        $updateNeeded = $true
+        $updatesAvailable++
       }
+    }
 
       $results += @{
         name = "tool: $toolName"

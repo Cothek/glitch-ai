@@ -674,6 +674,8 @@ async function main() {
         }
       } else {
         logUpdate(`autoSafe=false  --  major version change, skipping auto-update`);
+        log(YELLOW, '  \u26A0 OpenCode major version available: ' + currentVer + ' -> ' + latestVer);
+        log(YELLOW, '  Run: npm install -g opencode-ai@latest');
       }
     } else {
       logUpdate('no update needed');
