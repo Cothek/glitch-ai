@@ -1,11 +1,11 @@
 @echo off
 title Glitch AI - Unified Launcher
 
-REM Auto-bootstrap if Node.js not available (neither bundled nor system)
+REM Auto-bootstrap if Node.js not available - neither bundled nor system
 if not exist "%~dp0data\node\node.exe" (
     where node >nul 2>nul
     if errorlevel 1 (
-        echo Bootstrapping Glitch (first-time setup - downloading Node.js)...
+        echo Bootstrapping Glitch ^(first-time setup - downloading Node.js^)...
         powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0scripts\bootstrap.ps1"
         echo.
         if not exist "%~dp0data\node\node.exe" (
