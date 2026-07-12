@@ -217,7 +217,7 @@ if ($needsInstall) {
     }
   } catch {
     Write-Host "  ERROR installing Handy: $_" -ForegroundColor Red
-    $failures += "Step 3: Handy -- $_"
+    $failures += "Step 4: Handy -- $_"
   }
 } else {
   Write-Host "[4/5] Handy found" -ForegroundColor DarkGreen
@@ -239,7 +239,7 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
   } catch {
     Write-Host "  ERROR installing cloudflared: $_" -ForegroundColor Red
     Write-Host "  This is optional -- tunnel mode won't be available but local mode works fine." -ForegroundColor Yellow
-    $failures += "Step 4: Cloudflare Tunnel -- $_"
+    $failures += "Step 5: Cloudflare Tunnel -- $_"
   }
 } else {
   Write-Host "[5/5] cloudflared found" -ForegroundColor DarkGreen
@@ -252,7 +252,7 @@ Write-Host "=== Glitch Bootstrap Complete ===" -ForegroundColor Magenta
 if ($failures.Count -gt 0) {
   Write-Host ""
   Write-Host "$($failures.Count) step(s) had non-critical errors:" -ForegroundColor Yellow
-  $failures | ForEach-Object { Write-Host "  ⚠ $_" -ForegroundColor Yellow }
+  $failures | ForEach-Object { Write-Host "  [!] $_" -ForegroundColor Yellow }
   Write-Host ""
   Write-Host "These are optional components -- Glitch will still run." -ForegroundColor Yellow
   Write-Host "See bootstrap.log for full details." -ForegroundColor DarkGray
