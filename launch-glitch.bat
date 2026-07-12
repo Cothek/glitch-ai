@@ -23,7 +23,7 @@ if exist "%~dp0data\node\node.exe" (
   set "PATH=%~dp0data\node;%PATH%"
 )
 
-powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
+if exist "%~dp0glitch-head.txt" powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
 echo.
 "%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %*
 if %errorlevel% neq 0 (
