@@ -537,6 +537,9 @@ async function main() {
         run(NPM_BIN, ['install', '-g', 'opencode-ai@latest'], { stdio: 'inherit', timeout: 60000 });
         const updatedVer = run(OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode', ['--version'], { timeout: 10000 });
         log(GREEN, `  Done. Version: ${updatedVer.success ? updatedVer.stdout : currentGlobal}`);
+      } else {
+        log(YELLOW, '  \u26A0 OpenCode major version available: ' + currentGlobal + ' -> ' + latestGlobal);
+        log(YELLOW, '  Run: npm install -g opencode-ai@latest');
       }
     }
 

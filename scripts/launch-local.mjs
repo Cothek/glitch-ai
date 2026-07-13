@@ -51,8 +51,13 @@ function logUpdate(msg) {
 const BundledNodeDir = join(ROOT_DIR, 'data', 'node');
 const BundledNodeBin = join(BundledNodeDir, isWin ? 'node.exe' : 'node');
 if (existsSync(BundledNodeBin)) {
-  process.env.PATH = (isWin ? ';' : ':') + BundledNodeDir + process.env.PATH;
+  process.env.PATH = BundledNodeDir + (isWin ? ';' : ':') + process.env.PATH;
 }
+
+  // ---- Detect zip download (no git repo) ----
+  if (!existsSync(join(ROOT_DIR, '.git'))) {
+    log(DARK_YELLOW, '  Running from zip snapshot -- git features unavailable (auto-update, branch switching)');
+  }
 
 const DEFAULT_LOCAL_MODEL = 'google/gemma-4-12b';
 
@@ -674,6 +679,8 @@ async function main() {
         }
       } else {
         logUpdate(`autoSafe=false  --  major version change, skipping auto-update`);
+        log(YELLOW, '  \u26A0 OpenCode major version available: ' + currentVer + ' -> ' + latestVer);
+        log(YELLOW, '  Run: npm install -g opencode-ai@latest');
       }
     } else {
       logUpdate('no update needed');

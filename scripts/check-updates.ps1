@@ -1235,8 +1235,8 @@ try {
             Write-ColorHost "  Done." "Green"
             $updateNeeded = $false
           }
-        }
-      } else {
+}
+    } else {
         # Binary tool
         $binaryPath = Join-Path $RootDir $tool.binary
         if (Test-Path $binaryPath) {
@@ -1257,14 +1257,60 @@ try {
           } catch {
             $curVer = "exists (version check failed)"
           }
-          # For now, don't auto-update binaries — could be destructive
+          # For now, don't auto-update binaries -- could be destructive
           $updateNeeded = $false
         } else {
           $curVer = "not installed"
           $updateNeeded = $true
           $updatesAvailable++
+
+          # Auto-download on first run (when in update mode)
+          if ($IsUpdate -and ($Filter.Count -eq 0 -or $Filter -contains $toolName)) {
+            $platform = "win32"
+            $platformConfig = $tool.platforms.$platform
+            if ($platformConfig -and $platformConfig.url) {
+              $url = $platformConfig.url -replace "{version}", $tool.version
+              $binaryDir = Split-Path -Parent $binaryPath
+              if (-not (Test-Path $binaryDir)) { New-Item -ItemType Directory -Path $binaryDir -Force | Out-Null }
+
+              Write-ColorHost "  Downloading $toolName..." "Cyan"
+              $ext = if ($platformConfig.archive -eq "zip") { ".zip" } else { ".tar.gz" }
+              $archivePath = Join-Path $env:TEMP "$toolName$ext"
+              try {
+                Invoke-WebRequest -Uri $url -OutFile $archivePath -UseBasicParsing -TimeoutSec 30
+
+                if ($platformConfig.archive -eq "zip") {
+                  Expand-Archive -Path $archivePath -DestinationPath $binaryDir -Force
+                } elseif ($platformConfig.archive -eq "targz") {
+                  # tar.exe is available on Windows 10 1803+ (2018+)
+                  tar -xzf $archivePath -C $binaryDir 2>&1 | Out-Null
+                  if (-not (Test-Path $binaryPath)) {
+                    # Fallback: search recursively for the binary
+                    $found = Get-ChildItem -Path $binaryDir -Recurse -Filter "$toolName*" | Select-Object -First 1
+                    if ($found) {
+                      Move-Item $found.FullName $binaryPath -Force
+                    }
+                  }
+                }
+
+                if (Test-Path $binaryPath) {
+                  Write-ColorHost "  $toolName installed to $binaryPath" "Green"
+                  $curVer = "installed"
+                  $updateNeeded = $false
+                  $updatesAvailable--
+                } else {
+                  Write-ColorHost "  $toolName download complete but binary not found at expected path" "Yellow"
+                }
+              } catch {
+                Write-ColorHost "  Download failed: $_" "Red"
+              }
+              Remove-Item $archivePath -Force -ErrorAction SilentlyContinue
+            } else {
+              Write-ColorHost "  No download URL configured for $toolName on $platform" "Yellow"
+            }
+          }
         }
-      }
+    }
 
       $results += @{
         name = "tool: $toolName"
