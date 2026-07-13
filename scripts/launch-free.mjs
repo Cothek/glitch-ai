@@ -277,7 +277,7 @@ async function checkAndSwitchToMain() {
   }
 
   log(YELLOW, '');
-  log(YELLOW, `  ΓÜá Currently on branch '${current}', not 'main'`);
+  log(YELLOW, `  !! Currently on branch '${current}', not 'main'`);
   log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
   log(WHITE, '  [Y/n] Switch to main now (recommended)');
   let choice = await askQuestion('  > ');
@@ -493,7 +493,7 @@ ${same ? '' : `| Image / visual analysis | @vision | ${visionId} (${visionName})
 - **Glitch (default)**: Delegates first, executes directly only as last resort. Uses @general, @explore, @plan, @build, @coder, @ui-designer, @reviewer, @testing, @vision sub-agents.
 - **Glitch Omni**: Does everything itself -- no delegation. Executes code, writes files, runs bash directly. Use @glitch-omni to invoke.
 
-## ⚡ Dispatch-First Mandate (Immutable)
+## !! Dispatch-First Mandate (Immutable)
 Glitch's job is coordination. The first action for every code task is DISPATCH, not execution.
 
 YOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the appropriate sub-agent - at the same time as creating the todowrite.
@@ -1012,7 +1012,7 @@ async function main() {
       }
     }
   } catch {
-    // intentionally silent — non-blocking startup warning
+    // intentionally silent -- non-blocking startup warning
   }
 
   // ---- Check + install Handy if missing ----
