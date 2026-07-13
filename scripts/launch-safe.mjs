@@ -280,8 +280,13 @@ const modeFile = join(backupDir, '.last-mode');
 const BundledNodeDir = join(rootDir, 'data', 'node');
 const BundledNodeBin = join(BundledNodeDir, platform() === 'win32' ? 'node.exe' : 'node');
 if (existsSync(BundledNodeBin)) {
-  process.env.PATH = (platform() === 'win32' ? ';' : ':') + BundledNodeDir + process.env.PATH;
+  process.env.PATH = BundledNodeDir + (platform() === 'win32' ? ';' : ':') + process.env.PATH;
 }
+
+  // ---- Detect zip download (no git repo) ----
+  if (!existsSync(join(rootDir, '.git'))) {
+    log(DARK_YELLOW, '  Running from zip snapshot -- git features unavailable (auto-update, branch switching)');
+  }
 
 async function main() {
   // ---- Branch check (runs first) ----

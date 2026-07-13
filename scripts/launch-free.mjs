@@ -9,6 +9,7 @@ import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
 import { checkRepoUpdates, checkUserRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
+import { ensureEngine } from './lib/engine-bootstrap.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -61,11 +62,16 @@ function logUpdate(msg) {
 }
 
 // ---- Prepend bundled Node to PATH if available ----
-const BundledNodeDir = join(ROOT_DIR, 'data', 'node');
-const BundledNodeBin = join(BundledNodeDir, isWin ? 'node.exe' : 'node');
-if (existsSync(BundledNodeBin)) {
-  process.env.PATH = (isWin ? ';' : ':') + BundledNodeDir + process.env.PATH;
-}
+  const BundledNodeDir = join(ROOT_DIR, 'data', 'node');
+  const BundledNodeBin = join(BundledNodeDir, isWin ? 'node.exe' : 'node');
+  if (existsSync(BundledNodeBin)) {
+    process.env.PATH = BundledNodeDir + (isWin ? ';' : ':') + process.env.PATH;
+  }
+
+  // ---- Detect zip download (no git repo) ----
+  if (!existsSync(join(ROOT_DIR, '.git'))) {
+    log(DARK_YELLOW, '  Running from zip snapshot -- git features unavailable (auto-update, branch switching)');
+  }
 
 function log(color, msg) {
   if (msg === undefined) {
@@ -563,16 +569,19 @@ async function main() {
     log(GREEN, '  OpenCode downloaded successfully.');
   }
 
-  // ---- Initialize submodules if needed ----
-  if (!existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
-    log(CYAN, '  Initializing glitch-memorycore submodule...');
-    try {
-      run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
-    } catch {
-      log(RED, '  Could not initialize submodules');
-    }
-  } else {
-    log(DARK_GREEN, '  Engine found');
+  // ---- Ensure glitch-memorycore engine files ----
+  const engineOk = await ensureEngine({
+    rootDir: ROOT_DIR,
+    isWin,
+    run,
+    downloadFile,
+    log,
+  });
+  if (!engineOk) {
+    log(RED, '  ERROR: Glitch engine not available.');
+    log(RED, '  Run: git clone --recursive https://github.com/Cothek/glitch-ai.git');
+    log(RED, '  Or run: node scripts/bootstrap.ps1');
+    process.exit(1);
   }
 
   // ---- Sync glitch-ai repo from remote (branch-aware, shared module) ----
@@ -816,6 +825,9 @@ async function main() {
 
   if (!userFound) {
     log(YELLOW, '  No user profile found.');
+    log(DARK_GRAY, '  To restore your user data from a GitHub repository:');
+    log(DARK_GRAY, '    cd user && git init && git remote add origin <your-repo-url> && git pull origin main');
+    log(DARK_GRAY, '  Or create a new profile: Glitch will build one automatically as we work.');
     log(CYAN, '  Starting with engine defaults (no user profile loaded).');
   }
 
