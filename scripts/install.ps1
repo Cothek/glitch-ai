@@ -101,13 +101,17 @@ if (-not $gitPath) {
         try {
             $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
             $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -TimeoutSec 10
-            $version = $release.tag_name -replace '^v', ''
-            $downloadUrl = "https://github.com/git-for-windows/git/releases/download/v$version/MinGit-$version-64-bit.zip"
-            Write-Step "  Latest MinGit release: $version"
+            $minGitAsset = $release.assets | Where-Object { $_.name -like "MinGit-*-64-bit.zip" } | Select-Object -First 1
+            if ($minGitAsset) {
+                $downloadUrl = $minGitAsset.browser_download_url
+                Write-Step "  Found: $($minGitAsset.name)"
+            } else {
+                throw "No MinGit asset found in latest release"
+            }
         } catch {
             # Fallback to known good version
             $downloadUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.2/MinGit-2.47.0.2-64-bit.zip"
-            Write-Step "  Using MinGit 2.47.0.2 (fallback)"
+            Write-Step "  Using fixed MinGit 2.47.0.2 (API failed: $($_.Exception.Message))"
         }
         
         $tempZip = Join-Path $env:TEMP "mingit.zip"
