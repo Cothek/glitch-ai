@@ -60,7 +60,7 @@ Parameters:
   -Help                Show this help
 
 Prerequisites:
-  - Git (https://git-scm.com/download/win)
+  - Git (auto-downloaded if missing -- portable MinGit ~40 MB)
   - Internet connection
   - PowerShell 5.1+ (built into Windows 10/11)
 
@@ -87,13 +87,56 @@ if ($psVersion -lt 5) {
 }
 Write-Success "PowerShell $($PSVersionTable.PSVersion) OK"
 
-# 2. Check git
+# 2. Check git — auto-download portable MinGit if missing
 $gitPath = (Get-Command git -ErrorAction SilentlyContinue).Source
 if (-not $gitPath) {
-    Write-Error "Git not found in PATH."
-    Write-Error "Install from: https://git-scm.com/download/win"
-    Write-Error "After installing, restart your terminal and re-run the installer."
-    exit 1
+    Write-Warn "Git not found in PATH."
+    Write-Step "Downloading MinGit (portable Git for Windows, ~40 MB)..."
+    
+    $gitToolsDir = Join-Path $InstallDir "data\tools\git"
+    $gitBin = Join-Path $gitToolsDir "cmd\git.exe"
+    
+    if (-not (Test-Path $gitBin)) {
+        # Try to get latest release URL from GitHub API
+        try {
+            $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+            $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -TimeoutSec 10
+            $version = $release.tag_name -replace '^v', ''
+            $downloadUrl = "https://github.com/git-for-windows/git/releases/download/v$version/MinGit-$version-64-bit.zip"
+            Write-Step "  Latest MinGit release: $version"
+        } catch {
+            # Fallback to known good version
+            $downloadUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.2/MinGit-2.47.0.2-64-bit.zip"
+            Write-Step "  Using MinGit 2.47.0.2 (fallback)"
+        }
+        
+        $tempZip = Join-Path $env:TEMP "mingit.zip"
+        try {
+            Write-Step "  Downloading..."
+            Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip -UseBasicParsing -TimeoutSec 120
+            
+            New-Item -ItemType Directory -Path $gitToolsDir -Force | Out-Null
+            Write-Step "  Extracting..."
+            Expand-Archive -Path $tempZip -DestinationPath $gitToolsDir -Force
+            Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
+            
+            if (-not (Test-Path $gitBin)) {
+                throw "MinGit binary not found after extraction at $gitBin"
+            }
+            Write-Success "MinGit installed to $gitToolsDir"
+        } catch {
+            Write-Error "Failed to download MinGit: $_"
+            Write-Error "Install Git manually from https://git-scm.com/download/win"
+            Write-Error "After installing, restart your terminal and re-run the installer."
+            exit 1
+        }
+    } else {
+        Write-Step "MinGit already installed at $gitToolsDir"
+    }
+    
+    # Add MinGit to PATH for current session
+    $env:PATH = "$gitToolsDir\cmd;$env:PATH"
+    $gitPath = $gitBin
 }
 Write-Success "Git found: $gitPath"
 
