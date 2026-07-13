@@ -453,54 +453,73 @@ try {
 
 # ========== 4. glitch-ai repo ==========
 try {
-  $behindCount = "?"
-  $updateNeeded = $false
-  $branchName = "unknown"
-  $displayLatest = "origin/main"
+  # Short-circuit for zip download (no .git)
+  if (!(Test-Path (Join-Path $RootDir ".git"))) {
+    $results += @{
+      name = "glitch-ai repo"
+      current = "zip snapshot (no git)"
+      latest = "n/a"
+      update_available = $false
+      update_type = "none"
+      auto_safe = $false
+      status = "ok"
+      error_message = $null
+    }
+    Write-ColorHost "  [OK] zip snapshot (no git features)" "Green"
+  } else {
+    $behindCount = "?"
+    $updateNeeded = $false
+    $branchName = "unknown"
+    $displayLatest = "origin/main"
 
-  $branchName = Get-CurrentBranch -WorkDir $RootDir
-  if ($branchName -and $branchName -ne "detached") {
-    $behindRaw = Get-RemoteBehindCount -WorkDir $RootDir -Branch $branchName
-    if ($null -ne $behindRaw) {
-      $behindCount = $behindRaw
-      $displayLatest = "origin/$branchName"
-      if ($behindCount -gt 0) {
-        $updateNeeded = $true
-        $updatesAvailable++
+    $branchName = Get-CurrentBranch -WorkDir $RootDir
+    if ($branchName -and $branchName -ne "detached") {
+      $behindRaw = Get-RemoteBehindCount -WorkDir $RootDir -Branch $branchName
+      if ($null -ne $behindRaw) {
+        $behindCount = $behindRaw
+        $displayLatest = "origin/$branchName"
+        if ($behindCount -gt 0) {
+          $updateNeeded = $true
+          $updatesAvailable++
+        }
       }
     }
-  }
 
-  if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-ai repo")) {
-    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "glitch-ai repo (git pull)" -FromVer "$behindCount behind" -ToVer $displayLatest)
-    if ($proceed) {
-      Push-Location $RootDir
-      Write-ColorHost "  Pulling from origin/$branchName..." "Cyan"
-      $pullOut = & "git" "pull" "origin" $branchName 2>&1
-      if ($LASTEXITCODE -eq 0) {
-        Write-ColorHost "  Done." "Green"
-        $updateNeeded = $false
-        $behindCount = "0"
+    if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-ai repo")) {
+      if ($Filter.Count -gt 0 -or $Update) {
+        $proceed = $true
       } else {
-        Write-ColorHost "  Pull failed. Output: $pullOut" "Red"
+        $proceed = Confirm-Update -Name "glitch-ai repo (git pull)" -FromVer "$behindCount behind" -ToVer $displayLatest
       }
-      Pop-Location
+      if ($proceed) {
+        Push-Location $RootDir
+        Write-ColorHost "  Pulling from origin/$branchName..." "Cyan"
+        $pullOut = & "git" "pull" "origin" $branchName 2>&1
+        if ($LASTEXITCODE -eq 0) {
+          Write-ColorHost "  Done." "Green"
+          $updateNeeded = $false
+          $behindCount = "0"
+        } else {
+          Write-ColorHost "  Pull failed. Output: $pullOut" "Red"
+        }
+        Pop-Location
+      }
     }
-  }
 
-  $statusDisplay = "${branchName}: $behindCount commit(s) behind $displayLatest"
-  $results += @{
-    name = "glitch-ai repo"
-    current = $statusDisplay
-    latest = $displayLatest
-    update_available = $updateNeeded
-    update_type = if ($updateNeeded) {"git pull"} else {"none"}
-    auto_safe = $false
-    status = "ok"
-    error_message = $null
-  }
+    $statusDisplay = "${branchName}: $behindCount commit(s) behind $displayLatest"
+    $results += @{
+      name = "glitch-ai repo"
+      current = $statusDisplay
+      latest = $displayLatest
+      update_available = $updateNeeded
+      update_type = if ($updateNeeded) {"git pull"} else {"none"}
+      auto_safe = $false
+      status = "ok"
+      error_message = $null
+    }
 
-  Write-ColorHost ("  [{0}] $statusDisplay" -f $(if ($updateNeeded) {"UPDATE"} else {"OK"})) $(if ($updateNeeded) {"Yellow"} else {"Green"})
+    Write-ColorHost ("  [{0}] $statusDisplay" -f $(if ($updateNeeded) {"UPDATE"} else {"OK"})) $(if ($updateNeeded) {"Yellow"} else {"Green"})
+  }
 } catch {
   $results += @{ name = "glitch-ai repo"; status = "error"; error_message = $_.Exception.Message }
   Write-ColorHost "  [ERROR] $_" "Red"
@@ -508,31 +527,41 @@ try {
 
 # ========== 5. glitch-memorycore submodule ==========
 try {
-  $subStatus = "unknown"
-  $updateNeeded = $false
+  # Short-circuit for zip download (no .git)
+  if (!(Test-Path (Join-Path $RootDir ".git"))) {
+    $subStatus = "n/a (zip snapshot)"
+    $updateNeeded = $false
+  } else {
+    $subStatus = "unknown"
+    $updateNeeded = $false
 
-  Push-Location $RootDir
-  try {
-    $subRaw = & "git" "submodule" "status" 2>$null | Out-String
-    $subStatus = $subRaw.Trim()
-    if ($subStatus -match '^([\+\- ])([a-f0-9]+)') {
-      $prefix = $matches[1]
-      $currentSha = $matches[2]
-      if ($prefix -eq "+") {
-        $updateNeeded = $true
-        $updatesAvailable++
-        $subStatus = "$currentSha (outdated)"
-      } elseif ($prefix -eq "-") {
-        $subStatus = "$currentSha (uninitialized)"
-      } else {
-        $subStatus = "$currentSha (current)"
+    Push-Location $RootDir
+    try {
+      $subRaw = & "git" "submodule" "status" 2>$null | Out-String
+      $subStatus = $subRaw.Trim()
+      if ($subStatus -match '^([\+\- ])([a-f0-9]+)') {
+        $prefix = $matches[1]
+        $currentSha = $matches[2]
+        if ($prefix -eq "+") {
+          $updateNeeded = $true
+          $updatesAvailable++
+          $subStatus = "$currentSha (outdated)"
+        } elseif ($prefix -eq "-") {
+          $subStatus = "$currentSha (uninitialized)"
+        } else {
+          $subStatus = "$currentSha (current)"
+        }
       }
-    }
-  } catch { $subStatus = "error" }
-  Pop-Location
+    } catch { $subStatus = "error" }
+    Pop-Location
+  }
 
   if ($IsUpdate -and $updateNeeded -and ($Filter.Count -eq 0 -or $Filter -contains "glitch-memorycore submodule")) {
-    $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "glitch-memorycore submodule" -FromVer "$currentSha" -ToVer "remote")
+    if ($Filter.Count -gt 0 -or $Update) {
+      $proceed = $true
+    } else {
+      $proceed = Confirm-Update -Name "glitch-memorycore submodule" -FromVer "$currentSha" -ToVer "remote"
+    }
     if ($proceed) {
       Push-Location $RootDir
       Write-ColorHost "  Updating glitch-memorycore submodule..." "Cyan"
