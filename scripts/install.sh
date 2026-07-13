@@ -158,31 +158,92 @@ else
 fi
 success "Fetch tool: $FETCH_CMD"
 
-# 2. Check install directory
+# 2. Choose install location
+header "Installation location"
+
+# Only prompt if INSTALL_DIR is the default (not explicitly passed)
+if [ "$INSTALL_DIR" = "$HOME/glitch-ai" ]; then
+    echo ""
+    echo "  [1] Current directory: $(pwd)"
+    echo "  [2] User home directory: $HOME/glitch-ai (default)"
+    echo "  [3] Custom path"
+    echo ""
+    prompt "  Choose (Enter=2): "
+    read -r loc_choice
+    case "$loc_choice" in
+        1) INSTALL_DIR="$(pwd)" ;;
+        3)
+            prompt "  Enter installation path: "
+            read -r custom_dir
+            if [ -n "$custom_dir" ]; then
+                INSTALL_DIR="$custom_dir"
+            fi
+            ;;
+    esac
+fi
+success "Installation directory: $INSTALL_DIR"
+
+# 3. Check install directory
 header "Installation directory: $INSTALL_DIR"
 
 if [ -d "$INSTALL_DIR/.git" ]; then
+    # Existing git repo — offer update
     warn "Glitch AI already installed at $INSTALL_DIR"
     prompt "Update to latest version? (Y/n): "
     read -r update
     if [ -z "$update" ] || [[ "$update" =~ ^[Yy] ]]; then
         step "Pulling latest changes..."
-        cd "$INSTALL_DIR"
-        if git pull --ff-only; then
+        (cd "$INSTALL_DIR" && git pull --ff-only)
+        if [ $? -eq 0 ]; then
             success "Updated to latest version"
         else
-            error "Update failed. You may have local changes. Try: cd $INSTALL_DIR && git status"
+            error "Update failed. You may have local changes."
+            warn "Try: cd $INSTALL_DIR && git status"
             exit 1
         fi
     else
         warn "Skipping update. Using existing installation."
     fi
-else
-    # Fresh install
-    step "Cloning Glitch AI repository..."
-    parent_dir=$(dirname "$INSTALL_DIR")
-    mkdir -p "$parent_dir"
+elif [ -d "$INSTALL_DIR" ]; then
+    # Directory exists but not a git repo — ask what to do
+    warn "Directory '$INSTALL_DIR' already exists (not a git repo)."
+    echo ""
+    echo "  [1] Overwrite (delete and re-clone)"
+    echo "  [2] Choose a different directory"
+    echo "  [3] Cancel"
+    echo ""
+    prompt "  Choose (Enter=3): "
+    read -r over_choice
+    case "$over_choice" in
+        1)
+            step "Removing existing directory..."
+            rm -rf "$INSTALL_DIR"
+            success "Directory cleared."
+            ;;
+        2)
+            prompt "  Enter new installation path: "
+            read -r new_dir
+            if [ -n "$new_dir" ]; then
+                INSTALL_DIR="$new_dir"
+                success "Will install to: $INSTALL_DIR"
+            else
+                warn "Installation cancelled."
+                exit 0
+            fi
+            ;;
+        *)
+            warn "Installation cancelled."
+            exit 0
+            ;;
+    esac
+fi
+
+# Fresh clone (if not a git repo already)
+if [ ! -d "$INSTALL_DIR/.git" ]; then
+    parent_dir="$(dirname "$INSTALL_DIR")"
+    mkdir -p "$parent_dir" 2>/dev/null || true
     
+    step "Cloning Glitch AI repository..."
     if git clone --recursive https://github.com/Cothek/glitch-ai.git "$INSTALL_DIR"; then
         success "Repository cloned to $INSTALL_DIR"
     else
@@ -191,7 +252,7 @@ else
     fi
 fi
 
-# 3. Run bootstrap (if exists - it's Windows-specific but launch scripts handle deps)
+# 4. Run bootstrap (if exists - it's Windows-specific but launch scripts handle deps)
 header "Checking for bootstrap script..."
 BOOTSTRAP_PATH="$INSTALL_DIR/scripts/bootstrap.ps1"
 if [ -f "$BOOTSTRAP_PATH" ]; then
@@ -201,7 +262,7 @@ else
     step "No bootstrap needed - launch scripts handle Node.js/OpenCode download."
 fi
 
-# 4. User profile setup
+# 5. User profile setup
 header "User Profile Setup"
 cat <<'EOF'
 Glitch AI stores your personal memory, preferences, and projects in a separate Git repo.
@@ -235,7 +296,7 @@ if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
     fi
 fi
 
-# 5. Launch
+# 6. Launch
 if [ "$NO_LAUNCH" = false ]; then
     header "Launch Glitch AI"
     prompt "Launch Glitch now? (Y/n): "

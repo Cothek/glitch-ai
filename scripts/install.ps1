@@ -87,13 +87,36 @@ if ($psVersion -lt 5) {
 }
 Write-Success "PowerShell $($PSVersionTable.PSVersion) OK"
 
-# 2. Check git — auto-download portable MinGit if missing
+# 2. Choose install location
+Write-Header "Installation location"
+if (-not $PSBoundParameters.ContainsKey('InstallDir')) {
+    Write-Host "  Where should Glitch AI be installed?" -ForegroundColor White
+    Write-Host ""
+    Write-Host "  [1] Current directory: $(Get-Location)" -ForegroundColor White
+    Write-Host "  [2] User home directory: $HOME\glitch-ai (default)" -ForegroundColor White
+    Write-Host "  [3] Custom path" -ForegroundColor White
+    Write-Host ""
+    Write-Prompt "  Choose (Enter=2): "
+    $locChoice = Read-Host
+    switch ($locChoice) {
+        '1' { $InstallDir = (Get-Location).Path }
+        '3' {
+            $custom = Read-Host "  Enter installation path"
+            if (-not [string]::IsNullOrWhiteSpace($custom)) {
+                $InstallDir = $custom.Trim()
+            }
+        }
+    }
+}
+Write-Success "Installation directory: $InstallDir"
+
+# 3. Check git — auto-download portable MinGit if missing
 $gitPath = (Get-Command git -ErrorAction SilentlyContinue).Source
 if (-not $gitPath) {
     Write-Warn "Git not found in PATH."
     Write-Step "Downloading MinGit (portable Git for Windows, ~40 MB)..."
     
-    $gitToolsDir = Join-Path $InstallDir "data\tools\git"
+    $gitToolsDir = Join-Path $env:LOCALAPPDATA "glitch-mingit"
     $gitBin = Join-Path $gitToolsDir "cmd\git.exe"
     
     if (-not (Test-Path $gitBin)) {
@@ -144,10 +167,11 @@ if (-not $gitPath) {
 }
 Write-Success "Git found: $gitPath"
 
-# 3. Check install directory
+# 4. Check install directory
 Write-Header "Installation directory: $InstallDir"
 
 if (Test-Path "$InstallDir\.git") {
+    # Existing git repo — offer update
     Write-Warn "Glitch AI already installed at $InstallDir"
     Write-Prompt "Update to latest version? (Y/n): "
     $update = Read-Host
@@ -167,14 +191,48 @@ if (Test-Path "$InstallDir\.git") {
     } else {
         Write-Warn "Skipping update. Using existing installation."
     }
-} else {
-    # Fresh install
-    Write-Step "Cloning Glitch AI repository..."
+} elseif (Test-Path $InstallDir) {
+    # Directory exists but not a git repo — ask what to do
+    Write-Warn "Directory '$InstallDir' already exists (not a git repo)."
+    Write-Host ""
+    Write-Host "  [1] Overwrite (delete and re-clone)" -ForegroundColor White
+    Write-Host "  [2] Choose a different directory" -ForegroundColor White
+    Write-Host "  [3] Cancel" -ForegroundColor White
+    Write-Host ""
+    Write-Prompt "  Choose (Enter=3): "
+    $overChoice = Read-Host
+    switch ($overChoice) {
+        '1' {
+            Write-Step "Removing existing directory..."
+            Remove-Item $InstallDir -Recurse -Force
+            Write-Success "Directory cleared."
+            # Now fresh clone below
+        }
+        '2' {
+            $newDir = Read-Host "  Enter new installation path"
+            if (-not [string]::IsNullOrWhiteSpace($newDir)) {
+                $InstallDir = $newDir.Trim()
+                Write-Success "Will install to: $InstallDir"
+            } else {
+                Write-Warn "Installation cancelled."
+                exit 0
+            }
+        }
+        default {
+            Write-Warn "Installation cancelled."
+            exit 0
+        }
+    }
+}
+
+# Fresh install (or after overwrite)
+if (-not (Test-Path "$InstallDir\.git")) {
     $parentDir = Split-Path $InstallDir -Parent
     if (-not (Test-Path $parentDir)) {
         New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
     }
     
+    Write-Step "Cloning Glitch AI repository..."
     $result = git clone --recursive https://github.com/Cothek/glitch-ai.git "$InstallDir" 2>&1
     $exitCode = $LASTEXITCODE
     if ($exitCode -ne 0) {
