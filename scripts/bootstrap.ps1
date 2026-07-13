@@ -26,6 +26,7 @@ Write-Host "Log: $LogFile" -ForegroundColor DarkGray
 Write-Host ""
 
 $failures = @()
+$criticalFailures = @()
 
 # ── Step 1: Node.js (portable bundled — always installed) ──
 $BundledNodeDir = "$RootDir\data\node"
@@ -96,7 +97,7 @@ if ($needsDownload) {
       Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
     } catch {
       Write-Host "  ERROR downloading Node.js: $_" -ForegroundColor Red
-      $failures += "Step 1: Node.js -- $_"
+      $criticalFailures += "Step 1: Node.js -- $_"
     }
   }
 }
@@ -127,37 +128,49 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
       Write-Host "  Found system install, copying..." -ForegroundColor Yellow
       Copy-Item $systemOpenCode $OpenCodeBin -Force
     } else {
-      # Fetch latest version from npm
-      $opencodeVersion = "v1.15.7"  # fallback
+      # Determine version from npm
+      $opencodeVersion = "1.17.19"  # fallback
       try {
         $npmVer = npm view opencode-ai version 2>$null
         if ($npmVer) {
-          $opencodeVersion = "v$($npmVer.Trim())"
+          $opencodeVersion = $npmVer.Trim()
         }
       } catch {
         # npm not available or failed, use fallback
       }
 
-      $zipUrl = "https://github.com/opencode-ai/opencode/releases/download/$opencodeVersion/opencode-windows-$archSuffix.zip"
-      $zipPath = "$env:TEMP\opencode.zip"
+      # Download platform-specific binary from npm registry
+      # (GitHub releases don't ship Windows binaries)
+      $npmPkg = if ($isArm) { "opencode-windows-arm64" } else { "opencode-windows-x64" }
+      $tgzUrl = "https://registry.npmjs.org/$npmPkg/-/$npmPkg-$opencodeVersion.tgz"
+      $tgzPath = "$env:TEMP\opencode.tgz"
       Write-Host "  Downloading opencode $opencodeVersion..." -ForegroundColor Yellow
-      Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+      Invoke-WebRequest -Uri $tgzUrl -OutFile $tgzPath -UseBasicParsing
+
       Write-Host "  Extracting..." -ForegroundColor Yellow
-      Expand-Archive -Path $zipPath -DestinationPath $OpenCodeDir -Force
-      Remove-Item $zipPath -Force
-      $extracted = Get-ChildItem "$OpenCodeDir\**\opencode.exe" -Recurse | Select-Object -First 1
-      if ($extracted) {
-        Move-Item $extracted.FullName $OpenCodeBin -Force
-        Get-ChildItem "$OpenCodeDir\*" -Directory | Remove-Item -Recurse -Force
+      $extractDir = "$env:TEMP\opencode-extracted"
+      if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
+      New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+
+      # tar.exe handles .tgz on Windows 10 1803+
+      tar -xf $tgzPath -C $extractDir
+      if ($LASTEXITCODE -ne 0) { throw "tar extraction failed" }
+
+      $extractedExe = Get-ChildItem $extractDir -Recurse -Filter "opencode.exe" | Select-Object -First 1
+      if ($extractedExe) {
+        if (-not (Test-Path $OpenCodeDir)) { New-Item -ItemType Directory -Path $OpenCodeDir -Force | Out-Null }
+        Move-Item $extractedExe.FullName $OpenCodeBin -Force
       } else {
-        throw "Could not find opencode.exe in extracted files"
+        throw "Could not find opencode.exe in extracted package"
       }
+      Remove-Item $tgzPath -Force -ErrorAction SilentlyContinue
+      Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
     }
     Write-Host "  OpenCode ready!" -ForegroundColor Green
   } catch {
     Write-Host "  ERROR installing OpenCode: $_" -ForegroundColor Red
     $stepOk = $false
-    $failures += "Step 3: OpenCode -- $_"
+    $criticalFailures += "Step 3: OpenCode -- $_"
   }
 } else {
   Write-Host "[3/5] OpenCode found" -ForegroundColor DarkGreen
@@ -260,9 +273,20 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
 Write-Host ""
 Write-Host "=== Glitch Bootstrap Complete ===" -ForegroundColor Magenta
 
+if ($criticalFailures.Count -gt 0) {
+  Write-Host ""
+  Write-Host "$($criticalFailures.Count) critical error(s):" -ForegroundColor Red
+  $criticalFailures | ForEach-Object { Write-Host "  [!] $_" -ForegroundColor Red }
+  Write-Host ""
+  Write-Host "Essential components failed to install. Glitch cannot start." -ForegroundColor Red
+  Write-Host "See bootstrap.log for full details." -ForegroundColor DarkGray
+  Stop-Transcript | Out-Null
+  exit 1
+}
+
 if ($failures.Count -gt 0) {
   Write-Host ""
-  Write-Host "$($failures.Count) step(s) had non-critical errors:" -ForegroundColor Yellow
+  Write-Host "$($failures.Count) non-critical error(s):" -ForegroundColor Yellow
   $failures | ForEach-Object { Write-Host "  [!] $_" -ForegroundColor Yellow }
   Write-Host ""
   Write-Host "These are optional components -- Glitch will still run." -ForegroundColor Yellow
