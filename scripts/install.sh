@@ -71,11 +71,79 @@ EOF
 # 1. Check prerequisites
 header "Checking prerequisites..."
 
-# Check git
+# Check git — auto-install via package manager if missing
 if ! command -v git >/dev/null 2>&1; then
-    error "Git not found in PATH."
-    error "Install: macOS: 'brew install git' | Linux: 'sudo apt install git' / 'sudo dnf install git'"
-    exit 1
+    warn "Git not found in PATH."
+
+    # macOS — Homebrew
+    if command -v brew >/dev/null 2>&1; then
+        prompt "Install git via Homebrew? (Y/n): "
+        read -r answer
+        if [ -z "$answer" ] || echo "$answer" | grep -qi "^y"; then
+            step "Installing git via Homebrew..."
+            brew install git
+            success "Git installed: $(command -v git)"
+        else
+            error "Install git manually: brew install git"
+            exit 1
+        fi
+
+    # Debian/Ubuntu — apt
+    elif command -v apt-get >/dev/null 2>&1; then
+        prompt "Install git via apt (requires sudo)? (Y/n): "
+        read -r answer
+        if [ -z "$answer" ] || echo "$answer" | grep -qi "^y"; then
+            step "Installing git via apt..."
+            sudo apt-get install -y git
+            success "Git installed: $(command -v git)"
+        else
+            error "Install git manually: sudo apt-get install git"
+            exit 1
+        fi
+
+    # Fedora/RHEL — dnf
+    elif command -v dnf >/dev/null 2>&1; then
+        prompt "Install git via dnf (requires sudo)? (Y/n): "
+        read -r answer
+        if [ -z "$answer" ] || echo "$answer" | grep -qi "^y"; then
+            step "Installing git via dnf..."
+            sudo dnf install -y git
+            success "Git installed: $(command -v git)"
+        else
+            error "Install git manually: sudo dnf install git"
+            exit 1
+        fi
+
+    # Alpine — apk
+    elif command -v apk >/dev/null 2>&1; then
+        prompt "Install git via apk (requires sudo)? (Y/n): "
+        read -r answer
+        if [ -z "$answer" ] || echo "$answer" | grep -qi "^y"; then
+            step "Installing git via apk..."
+            sudo apk add git
+            success "Git installed: $(command -v git)"
+        else
+            error "Install git manually: sudo apk add git"
+            exit 1
+        fi
+
+    # Unknown package manager
+    else
+        error "No known package manager found."
+        error "Install git manually, then re-run this script."
+        error "  macOS: brew install git"
+        error "  Debian/Ubuntu: sudo apt-get install git"
+        error "  Fedora: sudo dnf install git"
+        error "  Alpine: sudo apk add git"
+        exit 1
+    fi
+
+    # Verify git is now available
+    if ! command -v git >/dev/null 2>&1; then
+        error "Git installation failed."
+        error "Install git manually, then re-run this script."
+        exit 1
+    fi
 fi
 success "Git found: $(command -v git)"
 
