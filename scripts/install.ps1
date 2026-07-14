@@ -99,7 +99,7 @@ if (-not $PSBoundParameters.ContainsKey('InstallDir')) {
     Write-Prompt "  Choose (Enter=2): "
     $locChoice = Read-Host
     switch ($locChoice) {
-        '1' { $InstallDir = (Get-Location).Path }
+        '1' { $InstallDir = Join-Path (Get-Location).Path "glitch-ai" }
         '3' {
             $custom = Read-Host "  Enter installation path"
             if (-not [string]::IsNullOrWhiteSpace($custom)) {
@@ -282,6 +282,9 @@ if ($setupProfile -eq '' -or $setupProfile -like 'y*') {
             Write-Warn "User profile already exists at $userDir"
         } else {
             Write-Step "Initializing user profile..."
+            if (-not (Test-Path $userDir)) {
+                New-Item -ItemType Directory -Path $userDir -Force | Out-Null
+            }
             Push-Location $userDir
             git init | Out-Null
             git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null

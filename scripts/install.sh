@@ -171,7 +171,7 @@ if [ "$INSTALL_DIR" = "$HOME/glitch-ai" ]; then
     prompt "  Choose (Enter=2): "
     read -r loc_choice
     case "$loc_choice" in
-        1) INSTALL_DIR="$(pwd)" ;;
+        1) INSTALL_DIR="$(pwd)/glitch-ai" ;;
         3)
             prompt "  Enter installation path: "
             read -r custom_dir
@@ -283,6 +283,7 @@ if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
             warn "User profile already exists at $USER_DIR"
         else
             step "Initializing user profile..."
+            mkdir -p "$USER_DIR"
             cd "$USER_DIR"
             git init >/dev/null
             git remote add origin "https://github.com/$gh_user/$repo_name.git" 2>/dev/null
