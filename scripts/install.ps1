@@ -282,6 +282,9 @@ if ($setupProfile -eq '' -or $setupProfile -like 'y*') {
             Write-Warn "User profile already exists at $userDir"
         } else {
             Write-Step "Initializing user profile..."
+            if (-not (Test-Path $userDir)) {
+                New-Item -ItemType Directory -Path $userDir -Force | Out-Null
+            }
             Push-Location $userDir
             git init | Out-Null
             git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null

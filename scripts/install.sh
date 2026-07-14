@@ -283,6 +283,7 @@ if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
             warn "User profile already exists at $USER_DIR"
         else
             step "Initializing user profile..."
+            mkdir -p "$USER_DIR"
             cd "$USER_DIR"
             git init >/dev/null
             git remote add origin "https://github.com/$gh_user/$repo_name.git" 2>/dev/null
