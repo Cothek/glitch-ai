@@ -171,7 +171,7 @@ if [ "$INSTALL_DIR" = "$HOME/glitch-ai" ]; then
     prompt "  Choose (Enter=2): "
     read -r loc_choice
     case "$loc_choice" in
-        1) INSTALL_DIR="$(pwd)" ;;
+        1) INSTALL_DIR="$(pwd)/glitch-ai" ;;
         3)
             prompt "  Enter installation path: "
             read -r custom_dir

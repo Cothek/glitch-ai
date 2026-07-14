@@ -99,7 +99,7 @@ if (-not $PSBoundParameters.ContainsKey('InstallDir')) {
     Write-Prompt "  Choose (Enter=2): "
     $locChoice = Read-Host
     switch ($locChoice) {
-        '1' { $InstallDir = (Get-Location).Path }
+        '1' { $InstallDir = Join-Path (Get-Location).Path "glitch-ai" }
         '3' {
             $custom = Read-Host "  Enter installation path"
             if (-not [string]::IsNullOrWhiteSpace($custom)) {
