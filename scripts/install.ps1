@@ -47,37 +47,38 @@ function Write-Error  { param([string]$msg) Write-Host "  $msg" -ForegroundColor
 function Write-Prompt { param([string]$msg) Write-Host "  $msg" -NoNewline -ForegroundColor Cyan }
 
 # ── Spinner helper for long operations ──
+# Shows a rotating spinner + elapsed seconds while a background job runs.
+# Use $using:varName inside the scriptblock to pass parent variables.
 function Invoke-WithSpinner {
   param([string]$Label, [scriptblock]$ScriptBlock, [string]$DoneMessage = "")
   
-  $state = [hashtable]@{ running = $true; startTick = [Environment]::TickCount }
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
+  $job = Start-Job -ScriptBlock $ScriptBlock 2>$null
   
-  $spinnerChars = '-\|/'
-  $thread = [System.Threading.Thread]::new([System.Threading.ParameterizedThreadStart]{
-    param($s, $l)
-    $chars = '-\|/'
-    $i = 0
-    while ($s.running) {
-      $elapsed = ([Environment]::TickCount - $s.startTick) / 1000
-      try { [System.Console]::Write("`r  $l $($chars[$i % 4]) ($($elapsed.ToString('F0'))s)") } catch {}
-      [System.Threading.Thread]::Sleep(200)
-      $i++
-    }
-    try { [System.Console]::Write("`r" + (" " * 60) + "`r") } catch {}
-  })
-  $thread.IsBackground = $true
-  $thread.Start(@($state, $Label))
+  $chars = '-\|/'
+  $i = 0
+  while ($job.State -eq 'Running') {
+    $elapsed = $sw.Elapsed.TotalSeconds.ToString('F0')
+    Write-Host "`r  $Label $($chars[$($i % 4)]) ($($elapsed)s)" -NoNewline
+    Start-Sleep -Milliseconds 200
+    $i++
+  }
   
-  try {
-    $null = & $ScriptBlock
-  } finally {
-    $state.running = $false
-    $thread.Join(2000) | Out-Null
-    $sw.Stop()
-    if ($DoneMessage -ne "") {
-      [System.Console]::WriteLine("  $DoneMessage done! ($($sw.Elapsed.TotalSeconds.ToString('F1'))s)")
-    }
+  $sw.Stop()
+  Write-Host ("`r" + " " * 60 + "`r") -NoNewline
+  
+  if ($job.State -eq 'Failed') {
+    $reason = $job.ChildJobs[0].JobStateInfo.Reason
+    $err = if ($reason -ne $null) { $reason.Message } else { $job.ChildJobs[0].Error[0].Exception.Message }
+    $null = Receive-Job $job -Wait -AutoRemoveJob 2>$null
+    Write-Host "  $Label FAILED" -ForegroundColor Red
+    throw $err
+  }
+  
+  $null = Receive-Job $job -Wait -AutoRemoveJob 2>$null
+  
+  if ($DoneMessage -ne "") {
+    Write-Host "  $DoneMessage done! ($($sw.Elapsed.TotalSeconds.ToString('F1'))s)"
   }
 }
 
@@ -175,12 +176,12 @@ if (-not $gitPath) {
         $tempZip = Join-Path $env:TEMP "mingit.zip"
         try {
             Invoke-WithSpinner -Label "Downloading MinGit (40MB)" -DoneMessage "MinGit" -ScriptBlock {
-              Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip -UseBasicParsing -TimeoutSec 120
+              Invoke-WebRequest -Uri $using:downloadUrl -OutFile $using:tempZip -UseBasicParsing -TimeoutSec 120
             }
             
             New-Item -ItemType Directory -Path $gitToolsDir -Force | Out-Null
             Invoke-WithSpinner -Label "Extracting MinGit" -DoneMessage "MinGit" -ScriptBlock {
-              Expand-Archive -Path $tempZip -DestinationPath $gitToolsDir -Force
+              Expand-Archive -Path $using:tempZip -DestinationPath $using:gitToolsDir -Force
             }
             Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
             
@@ -269,18 +270,16 @@ if (-not (Test-Path "$InstallDir\.git")) {
         New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
     }
     
-    Write-Step "Cloning Glitch AI repository..."
-    $result = ""
-    $exitCode = 0
-    Invoke-WithSpinner -Label "Cloning Glitch AI repository" -DoneMessage "Repository" -ScriptBlock {
-      $script:result = git clone --recursive https://github.com/Cothek/glitch-ai.git "$InstallDir" 2>&1
-      $script:exitCode = $LASTEXITCODE
+    try {
+      Invoke-WithSpinner -Label "Cloning Glitch AI repository" -DoneMessage "Repository" -ScriptBlock {
+        $r = git clone --recursive https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
+        if ($LASTEXITCODE -ne 0) { throw "Clone failed (exit $LASTEXITCODE)`n$r" }
+      }
+      Write-Success "Repository cloned to $InstallDir"
+    } catch {
+      Write-Error "Clone failed: $_"
+      exit 1
     }
-    if ($exitCode -ne 0) {
-        Write-Error "Clone failed: $result"
-        exit 1
-    }
-    Write-Success "Repository cloned to $InstallDir"
 }
 
 # 4. Run bootstrap
