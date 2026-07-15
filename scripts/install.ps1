@@ -175,12 +175,12 @@ if (-not $gitPath) {
         $tempZip = Join-Path $env:TEMP "mingit.zip"
         try {
             Invoke-WithSpinner -Label "Downloading MinGit (40MB)" -DoneMessage "MinGit" -ScriptBlock {
-              Invoke-WebRequest -Uri $using:downloadUrl -OutFile $using:tempZip -UseBasicParsing -TimeoutSec 120
+              Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip -UseBasicParsing -TimeoutSec 120
             }
             
             New-Item -ItemType Directory -Path $gitToolsDir -Force | Out-Null
             Invoke-WithSpinner -Label "Extracting MinGit" -DoneMessage "MinGit" -ScriptBlock {
-              Expand-Archive -Path $using:tempZip -DestinationPath $using:gitToolsDir -Force
+              Expand-Archive -Path $tempZip -DestinationPath $gitToolsDir -Force
             }
             Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
             
@@ -273,7 +273,7 @@ if (-not (Test-Path "$InstallDir\.git")) {
     $result = ""
     $exitCode = 0
     Invoke-WithSpinner -Label "Cloning Glitch AI repository" -DoneMessage "Repository" -ScriptBlock {
-      $script:result = git clone --recursive https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
+      $script:result = git clone --recursive https://github.com/Cothek/glitch-ai.git "$InstallDir" 2>&1
       $script:exitCode = $LASTEXITCODE
     }
     if ($exitCode -ne 0) {

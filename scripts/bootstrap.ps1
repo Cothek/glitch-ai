@@ -108,13 +108,13 @@ if ($needsDownload) {
       $zipPath = Join-Path $zipDir "node-portable.zip"
 
       Invoke-WithSpinner -Label "Downloading Node.js $latestVer" -ScriptBlock {
-        Invoke-WebRequest -Uri $using:zipUrl -OutFile $using:zipPath -UseBasicParsing
+        Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
       }
 
       $extractDir = "$env:TEMP\node-extracted"
       Invoke-WithSpinner -Label "Extracting Node.js" -ScriptBlock {
-        if (Test-Path $using:extractDir) { Remove-Item $using:extractDir -Recurse -Force -ErrorAction SilentlyContinue }
-        Expand-Archive -Path $using:zipPath -DestinationPath $using:extractDir -Force
+        if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
+        Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
       }
 
       $extractedExe = Get-ChildItem $extractDir -Recurse -Filter "node.exe" | Select-Object -First 1
@@ -188,13 +188,13 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
       $tgzPath = "$env:TEMP\opencode.tgz"
       Write-Host "  Downloading opencode $opencodeVersion..." -ForegroundColor Yellow
       Invoke-WithSpinner -Label "Downloading opencode $opencodeVersion" -ScriptBlock {
-        Invoke-WebRequest -Uri $using:tgzUrl -OutFile $using:tgzPath -UseBasicParsing
+        Invoke-WebRequest -Uri $tgzUrl -OutFile $tgzPath -UseBasicParsing
       }
 
       Invoke-WithSpinner -Label "Extracting opencode" -ScriptBlock {
-        if (Test-Path "$using:extractDir") { Remove-Item "$using:extractDir" -Recurse -Force }
-        New-Item -ItemType Directory -Path "$using:extractDir" -Force | Out-Null
-        tar -xf $using:tgzPath -C $using:extractDir
+        if (Test-Path "$extractDir") { Remove-Item "$extractDir" -Recurse -Force }
+        New-Item -ItemType Directory -Path "$extractDir" -Force | Out-Null
+        tar -xf $tgzPath -C $extractDir
         if ($LASTEXITCODE -ne 0) { throw "tar extraction failed" }
       }
 
@@ -241,7 +241,7 @@ if ($needsInstall) {
       $setupPath = "$env:TEMP\Handy_setup.exe"
       $extractDir = "$env:TEMP\Handy_tmp"
       Invoke-WithSpinner -Label "Downloading Handy v$handyVersion" -ScriptBlock {
-        Invoke-WebRequest -Uri $using:setupUrl -OutFile $using:setupPath -UseBasicParsing
+        Invoke-WebRequest -Uri $setupUrl -OutFile $setupPath -UseBasicParsing
       }
       $7z = Get-Command "7z" -ErrorAction SilentlyContinue
       if ($7z) {
@@ -263,7 +263,7 @@ if ($needsInstall) {
           $extractDir = "$env:TEMP\Handy_exe"
           New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
           Invoke-WithSpinner -Label "Downloading Handy MSI" -ScriptBlock {
-            Invoke-WebRequest -Uri $using:msiUrl -OutFile $using:msiPath -UseBasicParsing
+            Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
           }
           Invoke-WithSpinner -Label "Extracting via MSI" -ScriptBlock {
             Start-Process -FilePath "msiexec" -ArgumentList "/a `"$msiPath`" /qn TARGETDIR=`"$extractDir`"" -Wait
@@ -307,7 +307,7 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
       Write-Host "  Downloading cloudflared.exe..." -ForegroundColor Yellow
       $exeUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
       Invoke-WithSpinner -Label "Downloading cloudflared" -ScriptBlock {
-        Invoke-WebRequest -Uri $using:exeUrl -OutFile $using:CloudflaredBin -UseBasicParsing
+        Invoke-WebRequest -Uri $exeUrl -OutFile $CloudflaredBin -UseBasicParsing
       }
       Write-Host "  cloudflared ready!" -ForegroundColor Green
     }

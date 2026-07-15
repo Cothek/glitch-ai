@@ -736,7 +736,40 @@ async function main() {
       }
       await new Promise(r => setTimeout(r, 1500));
       if (!isProcessRunning(handyProcName)) {
-        log(DARK_YELLOW, '  Handy did not start (check handy-voice/Handy/handy.exe)');
+        log(YELLOW, '  Handy failed to start. Re-installing...');
+        // Force re-install via bootstrap
+        const bootstrapScript = join(ROOT_DIR, 'scripts', 'bootstrap.ps1');
+        if (existsSync(bootstrapScript)) {
+          try {
+            pwsh(['-File', bootstrapScript], { stdio: 'inherit', timeout: 120000 });
+          } catch (e) {
+            log(DARK_YELLOW, `  Re-install script error, continuing...`);
+          }
+        }
+        // Retry spawn
+        if (existsSync(HandyBin)) {
+          log(CYAN, '  Retrying Handy start...');
+          if (isMac) {
+            const handyApp = join(ROOT_DIR, 'handy-voice', 'Handy.app');
+            if (existsSync(handyApp)) {
+              const macProc = spawn('open', [handyApp], { detached: true, stdio: 'ignore' });
+              macProc.on('error', (err) => { log(DARK_YELLOW, `  Handy retry failed: ${err.message}`); });
+              macProc.unref();
+            } else {
+              const macProc = spawn(HandyBin, [], { detached: true, stdio: 'ignore' });
+              macProc.on('error', (err) => { log(DARK_YELLOW, `  Handy retry failed: ${err.message}`); });
+              macProc.unref();
+            }
+          } else {
+            const retryProc = spawn(HandyBin, [], { detached: true, stdio: 'ignore', windowsHide: true });
+            retryProc.on('error', (err) => { log(DARK_YELLOW, `  Handy retry failed: ${err.message}`); });
+            retryProc.unref();
+          }
+          await new Promise(r => setTimeout(r, 2000));
+          if (!isProcessRunning(handyProcName)) {
+            log(YELLOW, '  Handy could not start after re-install. Check handy-voice/Handy/');
+          }
+        }
       }
     } else {
       log(DARK_YELLOW, '  Handy not found (optional). Voice input disabled.');

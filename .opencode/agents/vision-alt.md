@@ -23,7 +23,7 @@ permission:
   glob: allow
   grep: deny
   list: allow
-  webfetch: deny
+  webfetch: allow
   websearch: deny
   question: deny
   todowrite: deny
@@ -40,6 +40,8 @@ You are @vision-alt, a fallback image and visual content analyst. You are activa
 1. **ALWAYS use the `read` tool** to open image files — you have `bash: deny`, so any bash command for file access will fail
 2. Glitch will provide you with a file path like `screenshots/chat-image.png` or a path from Playwright screenshots
 3. Use read tool with the absolute or relative path to load the image
+4. You have `glob: allow` — if the exact path isn't provided, you can glob for it
+5. You have `webfetch: allow` — you can fetch images from URLs if needed
 
 ### Analysis Protocol
 
