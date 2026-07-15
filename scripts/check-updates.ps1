@@ -874,6 +874,24 @@ try {
             }
             New-Item -ItemType Directory -Path $HandyDir -Force | Out-Null
             Copy-Item "$src\*" $HandyDir -Recurse -Force
+            # Merge missing files from old install (MSI extraction may miss merge module files like VC++ runtime)
+            if (Test-Path $oldDir) {
+              $missingCount = 0
+              $oldFiles = Get-ChildItem -Path $oldDir -Recurse -File
+              foreach ($oldFile in $oldFiles) {
+                $relPath = $oldFile.FullName.Substring($oldDir.Length + 1)
+                $newPath = Join-Path $HandyDir $relPath
+                if (-not (Test-Path $newPath)) {
+                  $parentDir = Split-Path $newPath -Parent
+                  if (-not (Test-Path $parentDir)) { New-Item -ItemType Directory -Path $parentDir -Force | Out-Null }
+                  Copy-Item $oldFile.FullName $newPath -Force -ErrorAction SilentlyContinue
+                  $missingCount++
+                }
+              }
+              if ($missingCount -gt 0) {
+                Write-ColorHost "  (merged $missingCount files from previous install)" "DarkGray"
+              }
+            }
             # Update file timestamp to now (Copy-Item preserves source timestamp)
             if (Test-Path $HandyBin) {
               (Get-Item $HandyBin).LastWriteTime = Get-Date
