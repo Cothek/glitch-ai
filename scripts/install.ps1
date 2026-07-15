@@ -48,11 +48,12 @@ function Write-Prompt { param([string]$msg) Write-Host "  $msg" -NoNewline -Fore
 
 # ── Spinner helper for long operations ──
 function Invoke-WithSpinner {
-  param([string]$Label, [scriptblock]$ScriptBlock)
+  param([string]$Label, [scriptblock]$ScriptBlock, [string]$DoneMessage = "")
   
   $state = [hashtable]@{ running = $true; startTick = [Environment]::TickCount }
   $sw = [System.Diagnostics.Stopwatch]::StartNew()
   
+  $spinnerChars = '-\|/'
   $thread = [System.Threading.Thread]::new([System.Threading.ParameterizedThreadStart]{
     param($s, $l)
     $chars = '-\|/'
@@ -74,6 +75,9 @@ function Invoke-WithSpinner {
     $state.running = $false
     $thread.Join(2000) | Out-Null
     $sw.Stop()
+    if ($DoneMessage -ne "") {
+      [System.Console]::WriteLine("  $DoneMessage done! ($($sw.Elapsed.TotalSeconds.ToString('F1'))s)")
+    }
   }
 }
 
@@ -170,12 +174,12 @@ if (-not $gitPath) {
         
         $tempZip = Join-Path $env:TEMP "mingit.zip"
         try {
-            Invoke-WithSpinner -Label "Downloading MinGit (40MB)" -ScriptBlock {
+            Invoke-WithSpinner -Label "Downloading MinGit (40MB)" -DoneMessage "MinGit" -ScriptBlock {
               Invoke-WebRequest -Uri $using:downloadUrl -OutFile $using:tempZip -UseBasicParsing -TimeoutSec 120
             }
             
             New-Item -ItemType Directory -Path $gitToolsDir -Force | Out-Null
-            Invoke-WithSpinner -Label "Extracting MinGit" -ScriptBlock {
+            Invoke-WithSpinner -Label "Extracting MinGit" -DoneMessage "MinGit" -ScriptBlock {
               Expand-Archive -Path $using:tempZip -DestinationPath $using:gitToolsDir -Force
             }
             Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
@@ -268,7 +272,7 @@ if (-not (Test-Path "$InstallDir\.git")) {
     Write-Step "Cloning Glitch AI repository..."
     $result = ""
     $exitCode = 0
-    Invoke-WithSpinner -Label "Cloning Glitch AI repository" -ScriptBlock {
+    Invoke-WithSpinner -Label "Cloning Glitch AI repository" -DoneMessage "Repository" -ScriptBlock {
       $script:result = git clone --recursive https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
       $script:exitCode = $LASTEXITCODE
     }
