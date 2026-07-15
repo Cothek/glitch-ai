@@ -734,16 +734,29 @@ async function main() {
       if (isMac) {
         const handyApp = join(ROOT_DIR, 'handy-voice', 'Handy.app');
         if (existsSync(handyApp)) {
-          spawn('open', [handyApp], { detached: true, stdio: 'ignore' }).unref();
+          const macProc = spawn('open', [handyApp], { detached: true, stdio: 'ignore' });
+          macProc.on('error', (err) => {
+            log(DARK_YELLOW, `  Failed to start Handy: ${err.message}`);
+          });
+          macProc.unref();
         } else {
-          const proc = spawn(HandyBin, [], { detached: true, stdio: 'ignore' });
-          proc.unref();
+          const macProc = spawn(HandyBin, [], { detached: true, stdio: 'ignore' });
+          macProc.on('error', (err) => {
+            log(DARK_YELLOW, `  Failed to start Handy: ${err.message}`);
+          });
+          macProc.unref();
         }
       } else {
         const proc = spawn(HandyBin, [], { detached: true, stdio: 'ignore', windowsHide: true });
+        proc.on('error', (err) => {
+          log(DARK_YELLOW, `  Failed to start Handy: ${err.message}`);
+        });
         proc.unref();
       }
-      await new Promise(r => setTimeout(r, 1000));
+      await new Promise(r => setTimeout(r, 1500));
+      if (!isProcessRunning(handyProcName)) {
+        log(DARK_YELLOW, '  Handy did not start (check handy-voice/Handy/handy.exe)');
+      }
     } else {
       log(DARK_YELLOW, '  Handy not found (optional). Voice input disabled.');
     }

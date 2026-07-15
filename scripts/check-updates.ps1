@@ -843,7 +843,6 @@ try {
             
             # Stop any running Handy process first (holds handle on directory)
             $handyProc = Get-Process -Name "handy" -ErrorAction SilentlyContinue
-            $wasRunning = $false
             if ($handyProc) {
               Write-ColorHost "  Stopping Handy process (PID: $($handyProc.Id))..." "Cyan"
               Stop-Process -Id $handyProc.Id -Force -ErrorAction SilentlyContinue
@@ -859,7 +858,6 @@ try {
               } else {
                 Write-ColorHost "  Handy process stopped" "Green"
               }
-              $wasRunning = $true
             }
             
             # Now rename old dir (should work after process stopped)
@@ -881,12 +879,6 @@ try {
               (Get-Item $HandyBin).LastWriteTime = Get-Date
             }
             Write-ColorHost "  Handy updated to $latestVer" "Green"
-            
-            # Restart Handy if it was running
-            if ($wasRunning) {
-              Write-ColorHost "  Restarting Handy..." "Cyan"
-              Start-Process -FilePath $HandyBin -WindowStyle Hidden
-            }
             
             # Refresh version info
             if (Test-Path $HandyBin) {
