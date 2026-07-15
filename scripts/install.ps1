@@ -92,7 +92,7 @@ Write-Header "Installation location"
 if (-not $PSBoundParameters.ContainsKey('InstallDir')) {
     Write-Host "  Where should Glitch AI be installed?" -ForegroundColor White
     Write-Host ""
-    Write-Host "  [1] Current directory: $(Get-Location)" -ForegroundColor White
+    Write-Host "  [1] Current directory: $(Join-Path (Get-Location).Path "glitch-ai")" -ForegroundColor White
     Write-Host "  [2] User home directory: $HOME\glitch-ai (default)" -ForegroundColor White
     Write-Host "  [3] Custom path" -ForegroundColor White
     Write-Host ""
@@ -309,12 +309,12 @@ if (-not $NoLaunch) {
         Write-Step "Starting Glitch AI..."
         Push-Location $InstallDir
         # Use Start-Process to launch in a new window (detached)
-        $proc = Start-Process -FilePath "node.exe" -ArgumentList "scripts\launch.mjs" -WindowStyle Normal -PassThru
+        $proc = Start-Process -FilePath "launch-glitch.bat" -WindowStyle Normal -PassThru
         Write-Success "Glitch AI launched (PID: $($proc.Id))"
         Write-Host ""
         Write-Host "  To launch again later, run:" -ForegroundColor Cyan
         Write-Host "    cd $InstallDir" -ForegroundColor Gray
-        Write-Host "    node scripts\launch.mjs" -ForegroundColor Gray
+        Write-Host "    .\launch-glitch.bat" -ForegroundColor Gray
         Pop-Location
     }
 }
@@ -324,10 +324,10 @@ Write-Host @"
 Glitch AI is installed at: $InstallDir
 
 Next steps:
-  • Launch:        cd $InstallDir && node scripts\launch.mjs
-  • Free mode:     cd $InstallDir && node scripts\launch-free.mjs
-  • Local mode:    cd $InstallDir && node scripts\launch-local.mjs
-  • Safe mode:     cd $InstallDir && node scripts\launch-safe.mjs
+  • Launch:        cd $InstallDir && .\launch-glitch.bat
+  • Free mode:     cd $InstallDir && .\launch-glitch.bat (select Free at prompt)
+  • Local mode:    cd $InstallDir && .\launch-glitch.bat (select Local at prompt)
+  • Safe mode:     cd $InstallDir && .\launch-glitch.bat (select Safe at prompt)
   • Update:        Re-run this installer (it will pull latest)
   • User sync:     .\scripts\sync-user.ps1 -Push  (after making changes)
 
