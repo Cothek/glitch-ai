@@ -2,49 +2,50 @@
 name: dev-loop
 description: "MUST load when running autonomous development — building features end-to-end without user interaction.
               Activates when: user says 'build this feature', 'implement X', 'run the dev loop', 'autonomous mode',
-              or when running autonomously — continuously iterating on code with write → review → render → interact → verify cycles.
+              or when running autonomously — continuously iterating on code with write → select → review → security scan → build → interact → verify → iterate cycles.
               NOT for single-file edits, simple changes, or one-off tasks."
 ---
 
-# Autonomous Dev Loop — Write → Review → Security Scan → Build → Interact → Verify → Iterate
+# Autonomous Dev Loop — Write → Select → Review → Security Scan → Build → Interact → Verify → Iterate
 
 ## Activation
 When this skill activates, output:
-"🔄 Running autonomous dev loop [write → review → security scan → build → interact → verify → iterate]..."
+"🔄 Running autonomous dev loop [write → select → review → security scan → build → interact → verify → iterate]..."
 
 ## Architecture
 
 The dev loop orchestrates sub-agents in a strict sequence for each feature:
 
 ```
-┌──────────────────────────────────────────────────────────┐
-│                     DELEGATOR (me)                        │
-│    Orchestrates phases, evaluates results, loops back    │
-└───┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬─────┘
-    │      │      │      │      │      │      │      │
-    ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼
- Write  Review  Secure  Build  Interact Verify Iterate Complete
-  │       │     Scan    │       │       │       │       │
-  ▼       ▼       ▼    ▼       ▼       ▼       ▼       ▼
-@coder  @reviewer @pent- @general @coder  @vision  Glitch
-@general          ester          +       checks   evaluates
-                   +             @general screens  pass/fail
-                  snyk    wait   runs     hots    loops back
-                  truffle -for-  browser-         or finishes
-                  nuclei  server interact
+┌──────────────────────────────────────────────────────────────┐
+│                     DELEGATOR (me)                            │
+│    Orchestrates phases, evaluates results, loops back        │
+└───┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──────┬──┘
+    │      │      │      │      │      │      │      │      │
+    ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼      ▼
+ Write  Select  Review  Secure  Build  Interact Verify Iterate Complete
+  │       │       │     Scan    │       │       │       │      │
+  ▼       ▼       ▼      ▼     ▼       ▼       ▼       ▼      ▼
+@coder  Glitch  @reviewer @pent- @general @coder  @vision  Glitch
+@general runs   (uses    ester  starts   runs    checks   evaluates
+(×N)    verifier verifier +      server  browser- screens  pass/fail
+        skill   scoring)  snyk   wait    interact hots    loops back
+                          truffle -for-  +        or finishes
+                          nuclei  server nuclei
 ```
 
 ### Sub-agent Roles in the Loop
 
 | Phase | Agent | Action | Output |
 |-------|-------|--------|--------|
-| **Write** | @coder or @general | Writes code files for the feature | Code changes |
-| **Review** | @reviewer | Quality + security audit | Structured report with pass/fail verdict |
-| **Security Scan** | @pentester or @pentester-paid | Static scans: snyk, trufflehog, code pattern grep for OWASP issues | Security findings report with severity |
+| **Write** | @coder or @general | Writes N candidate implementations for the feature | N code change sets |
+| **Select** | Glitch | Uses verifier skill + PPT to select best from N candidates | Single selected implementation + ranking |
+| **Review** | @reviewer | Quality + security audit using verifier continuous scoring | Structured report with continuous quality score |
+| **Security Scan** | @pentester or @pentester-paid | Static scans: snyk, trufflehog, code pattern grep | Security findings report |
 | **Build** | @general | Start dev server, wait for readiness | Server running on port |
-| **Interact** | @coder (plan) + @general (execute) | Write JSON plan, run browser-interact.mjs + dynamic nuclei scan | Screenshots + results.json + nuclei findings |
+| **Interact** | @coder (plan) + @general (execute) | Write JSON plan, run browser-interact.mjs + nuclei scan | Screenshots + results.json |
 | **Verify** | @vision | Analyze screenshots against expectations | Visual pass/fail report |
-| **Iterate** | Delegator | Evaluate all results (code, security, visual), decide loop or finish | Next phase instructions |
+| **Iterate** | Glitch | Evaluate VOC + phase results, decide loop or finish | Next phase instructions |
 
 ## Tool Creation (CodeAct-lite)
 
@@ -150,18 +151,47 @@ When the same tool gets created in 3+ different dev loops, that's a Forge trigge
 
 ## Protocol
 
-### Phase 1: Write
+### Phase 1: Write — Multi-Candidate Generation
 
-**Goal**: Implement the feature code.
+**Goal**: Generate N candidate implementations to maximize coverage of the solution space.
 
-1. Delegate to @coder (complex: 5+ files, auth, API) or @general (simple: 1-5 files)
-2. Provide clear requirements: what to build, expected behavior, acceptance criteria
-3. Include any context from previous loop iterations (failure reasons, review findings)
-4. After code is written, verify the file changes exist
+1. **Decompose the feature** into the key decision dimensions (e.g., approach, data flow, state management, error handling)
+2. **Dispatch N parallel generation tasks** to @coder or @general:
+   - For complex features: dispatch N independent @coder tasks, each with a slightly different prompt focus (e.g., "optimize for simplicity", "optimize for completeness", "optimize for performance")
+   - For simple features: N=2 candidates is sufficient
+   - For complex/architectural decisions: N=5 candidates to explore solution space
+3. **Collect all N candidates** — verify each exists and compiles
+4. Pass all N candidates to Phase 2: Select
 
-**Output check**: All files were created/modified and pass basic syntax check.
+**N defaults by complexity:**
+- Simple (1-2 files, standard pattern): N=1 (skip multi-candidate, go directly to Select)
+- Medium (3-5 files, some new logic): N=2
+- Complex (5+ files, architecture decisions): N=3-5
+- Architectural decision (framework, data layer, auth): N=5
 
-### Phase 2: Review
+### Phase 2: Select — Best Candidate via Probabilistic Pivot Tournament
+
+**Goal**: Efficiently select the best candidate from N implementations using the verifier methodology.
+
+**Delegation**: This phase runs directly (not delegated) — it requires reasoning about the code, not editing it.
+
+1. **Load the verifier skill** — `skill("verifier")` for continuous scoring methodology
+2. **Score each candidate** on 3 quick criteria (not a full 5-axis review, just a lightweight pass):
+   - Does it compile/satisfy requirements?
+   - Is the approach clean and maintainable?
+   - Are edge cases handled?
+3. **For N <= 3**: Run full round-robin pairwise comparison using ring pass (swap A/B ordering)
+4. **For N >= 4**: Run Probabilistic Pivot Tournament:
+   - Ring pass: Compare each adjacent pair (N comparisons, A/B swapped for bias cancellation)
+   - Pick top k=3 pivots by mean preference score
+   - Compare all non-pivots against all pivots
+   - Select candidate with highest normalized win count
+5. **If candidates are close (score difference < 0.05)**: Run K=3 repeated evaluation to reduce noise, then re-rank.
+6. **Submit the selected candidate** to Phase 3: Review
+
+**Output**: Single selected implementation + the full ranking for reference.
+
+### Phase 3: Review
 
 **Goal**: Catch bugs, security issues, and quality problems before running.
 
@@ -170,9 +200,9 @@ When the same tool gets created in 3+ different dev loops, that's a Forge trigge
 3. Check gate verdict:
    - **FAIL** (BLOCKER found) → Immediately loop back to **Phase 1: Write** with the BLOCKER details. Do NOT proceed.
    - **PASS with changes required** (MAJOR findings) → Loop back to **Phase 1: Write** with MAJOR findings to fix.
-   - **PASS** (only MINORs/NITs) → Proceed to Phase 3: Security Scan.
+   - **PASS** (only MINORs/NITs) → Proceed to Phase 4: Security Scan.
 
-### Phase 3: Security Scan
+### Phase 4: Security Scan
 
 **Goal**: Catch security vulnerabilities, secrets, and dependency risks before the app runs.
 
@@ -207,13 +237,13 @@ When the same tool gets created in 3+ different dev loops, that's a Forge trigge
 4. **Evaluate findings**:
    - **CRITICAL finding** (credential leak, hardcoded API key in committed code, SQL injection) → **BLOCKER**. Immediately loop back to **Phase 1: Write** with full details. Do NOT proceed.
    - **HIGH finding** (XSS, outdated dep with known exploit, exposed internal path) → Flag as MAJOR. Loop back to **Phase 1: Write** with findings.
-   - **MEDIUM/LOW** → Log for the final report, proceed to Phase 4: Build.
+   - **MEDIUM/LOW** → Log for the final report, proceed to Phase 5: Build.
 
-5. **Run dynamic scanning later**: The nuclei vulnerability scanner runs against the live server in Phase 5: Interact. You don't need to run it here.
+5. **Run dynamic scanning later**: The nuclei vulnerability scanner runs against the live server in Phase 6: Interact. You don't need to run it here.
 
 **Output check**: Security findings report with severity levels. No CRITICAL/HIGH blocking findings, or they are already fed back to Write phase.
 
-### Phase 4: Build
+### Phase 5: Build
 
 **Goal**: Get the app running so we can interact with it.
 
@@ -230,7 +260,7 @@ When the same tool gets created in 3+ different dev loops, that's a Forge trigge
 
 **Output check**: Server responds with HTTP 200 at the expected URL.
 
-### Phase 5: Interact
+### Phase 6: Interact
 
 **Goal**: Verify the app works through actual browser interaction — clicking, typing, navigating.
 
@@ -255,7 +285,7 @@ When the same tool gets created in 3+ different dev loops, that's a Forge trigge
 
 4. If interaction tests fail:
    - If step-level failures → include failure details in loop-back to Phase 1
-   - If browser crash → check server is still running, retry Phase 4: Build
+   - If browser crash → check server is still running, retry Phase 5: Build
 
 5. **Dynamic security scan** — While the server is running, run nuclei against it:
    ```bash
@@ -263,7 +293,7 @@ When the same tool gets created in 3+ different dev loops, that's a Forge trigge
    ```
    Parse results for any CRITICAL/HIGH findings. Add them to the failure context if found.
 
-### Phase 6: Verify
+### Phase 7: Verify
 
 **Goal**: Visually confirm the UI looks correct and matches expectations.
 
@@ -280,22 +310,37 @@ When the same tool gets created in 3+ different dev loops, that's a Forge trigge
 
 3. If visual defects found → loop back to Phase 1 with @vision's descriptions of what's wrong
 
-### Phase 7: Iterate
+### Phase 8: Iterate — VOC-Guided Decision
 
-**Goal**: Decide whether to loop or finish.
+**Goal**: Decide whether to loop or finish, guided by Value-Order Correlation (VOC).
 
-1. **Collect all failure context**: Gather results from Review, Security Scan, Interact, and Verify phases
-2. **Make a decision**:
-   - All phases passed → Feature complete. Move to next feature or notify user.
-   - Phase failed → Loop back to **Phase 1: Write** with ALL failure context:
-     - @reviewer's findings (quality issues)
-     - @pentester's findings (security vulnerabilities, CVEs, secrets)
-     - Interaction test failures (which steps failed, error messages)
-     - nuclei scan results (dynamic vulnerability findings)
-     - @vision's visual analysis (what doesn't look right)
-     - Console errors captured during interaction
-3. **Loop budget**: Maximum 3 iterations per feature before escalating
-4. After all features complete → present summary to user
+1. **Compute verifier quality score** for the current iteration using continuous scoring (from code-review Phase 6)
+2. **Track VOC** — maintain a running list of (iteration_number, quality_score) pairs
+3. **Compute Spearman rank correlation** between iteration indices and quality scores:
+   ```
+   VOC = rank_correlation(argsort(scores), iteration_indices)
+   ```
+4. **Make a decision based on VOC + results**:
+   - All phases passed AND VOC > 0.8 → Feature complete. Move to next feature or notify user.
+   - VOC 0.5-0.8 but phase failed → Loop back to Phase 1 with failure context. Quality is improving, keep iterating.
+   - VOC < 0.5 → **Escalate**: Quality is not improving. Flag to user. May need architectural rethink, not more iterations.
+   - Negative VOC → **Stop**: Quality is decreasing. Something is fundamentally wrong. Escalate to user immediately.
+5. **Collect all failure context**: Gather results from Review, Security Scan, Interact, and Verify phases
+6. **Loop budget**: Maximum 3 iterations per feature before escalating (regardless of VOC)
+7. After all features complete → present summary to user
+
+**VOC tracking table format:**
+```
+## VOC Progress
+| Iteration | Quality Score | Delta |
+|-----------|--------------|-------|
+| 1 | 0.52 | — |
+| 2 | 0.68 | +0.16 |
+| 3 | 0.74 | +0.06 |
+| 4 | 0.71 | -0.03 |
+
+VOC: 0.82 — quality improving, but iteration 4 plateau. One more iteration before escalate.
+```
 
 ## Interaction DSL Reference
 
@@ -396,6 +441,6 @@ Check for: Proper spacing, visible text, no layout breaks."
 ### Fallback on Failure
 
 - **Server won't start**: Check for port conflicts, kill existing processes with `stop-dev.ps1`, retry
-- **Browser crashes**: Restart server, relaunch browser, retry from Phase 4: Build
+- **Browser crashes**: Restart server, relaunch browser, retry from Phase 5: Build
 - **Selector not found**: The @reviewer may have missed something — check the actual rendered HTML (use `evaluate` action to dump HTML)
 - **Intermittent failures**: Add `waitForTimeout` or `waitForSelector` before dependent actions

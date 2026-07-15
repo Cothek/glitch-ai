@@ -11,6 +11,42 @@ $HandyDir = "$RootDir\handy-voice\Handy"
 $HandyBin = "$HandyDir\handy.exe"
 $CloudflaredBin = "$RootDir\cloudflared.exe"
 
+# ── Spinner helper for long operations ──
+function Invoke-WithSpinner {
+    param([string]$Label, [scriptblock]$ScriptBlock, [string]$DoneMessage = "", [string]$FailMessage)
+    if (-not $FailMessage) { $FailMessage = $Label }
+    
+    $state = [hashtable]@{ running = $true; startTick = [Environment]::TickCount }
+    $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    
+    $spinnerChars = '-\|/'
+    $thread = [System.Threading.Thread]::new([System.Threading.ParameterizedThreadStart]{
+        param($s, $l)
+        $chars = '-\|/'
+        $i = 0
+        while ($s.running) {
+            $elapsed = ([Environment]::TickCount - $s.startTick) / 1000
+            try { [System.Console]::Write("`r  $l $($chars[$i % 4]) ($($elapsed.ToString('F0'))s)") } catch {}
+            [System.Threading.Thread]::Sleep(200)
+            $i++
+        }
+        try { [System.Console]::Write("`r" + (" " * 60) + "`r") } catch {}
+    })
+    $thread.IsBackground = $true
+    $thread.Start(@($state, $Label))
+    
+    try {
+        $null = & $ScriptBlock
+    } finally {
+        $state.running = $false
+        $thread.Join(2000) | Out-Null
+        $sw.Stop()
+        if ($DoneMessage -ne "") {
+            [System.Console]::WriteLine("  $DoneMessage done! ($($sw.Elapsed.TotalSeconds.ToString('F1'))s)")
+        }
+    }
+}
+
 # Don't stop on first error -- we handle per-step
 $ErrorActionPreference = "Continue"
 
@@ -49,7 +85,9 @@ if (-not $needsDownload) {
 if ($needsDownload) {
   Write-Host "  Checking latest LTS version..." -ForegroundColor Yellow
   try {
-    $json = Invoke-WebRequest -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+    Invoke-WithSpinner -Label "Checking latest Node.js version" -ScriptBlock {
+        $script:json = Invoke-WebRequest -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+    }
     $releases = $json | ConvertFrom-Json
     $latestLTS = ($releases | Where-Object { $_.lts -ne $false } | Select-Object -First 1)
     $latestVer = if ($latestLTS -and $latestLTS.version) { $latestLTS.version } else { "v22.14.0" }
@@ -69,12 +107,15 @@ if ($needsDownload) {
       if (-not (Test-Path $zipDir)) { New-Item -ItemType Directory -Path $zipDir -Force | Out-Null }
       $zipPath = Join-Path $zipDir "node-portable.zip"
 
-      Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+      Invoke-WithSpinner -Label "Downloading Node.js $latestVer" -ScriptBlock {
+        Invoke-WebRequest -Uri $using:zipUrl -OutFile $using:zipPath -UseBasicParsing
+      }
 
-      Write-Host "  Extracting..." -ForegroundColor Yellow
       $extractDir = "$env:TEMP\node-extracted"
-      if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
-      Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+      Invoke-WithSpinner -Label "Extracting Node.js" -ScriptBlock {
+        if (Test-Path $using:extractDir) { Remove-Item $using:extractDir -Recurse -Force -ErrorAction SilentlyContinue }
+        Expand-Archive -Path $using:zipPath -DestinationPath $using:extractDir -Force
+      }
 
       $extractedExe = Get-ChildItem $extractDir -Recurse -Filter "node.exe" | Select-Object -First 1
       if ($extractedExe) {
@@ -112,8 +153,9 @@ if (Test-Path $NodeBin) {
 # ── Step 2: Git Submodules ──
 Write-Host "[2/5] Initializing git submodules..." -ForegroundColor Cyan
 try {
-  git submodule update --init --recursive 2>&1 | Out-Null
-  Write-Host "  Submodules ready!" -ForegroundColor Green
+  Invoke-WithSpinner -Label "Initializing git submodules" -DoneMessage "Submodules" -ScriptBlock {
+    git submodule update --init --recursive 2>&1 | Out-Null
+  }
 } catch {
   Write-Host "  Skipping submodules (not a git repo or git not available)" -ForegroundColor Yellow
 }
@@ -145,16 +187,16 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
       $tgzUrl = "https://registry.npmjs.org/$npmPkg/-/$npmPkg-$opencodeVersion.tgz"
       $tgzPath = "$env:TEMP\opencode.tgz"
       Write-Host "  Downloading opencode $opencodeVersion..." -ForegroundColor Yellow
-      Invoke-WebRequest -Uri $tgzUrl -OutFile $tgzPath -UseBasicParsing
+      Invoke-WithSpinner -Label "Downloading opencode $opencodeVersion" -ScriptBlock {
+        Invoke-WebRequest -Uri $using:tgzUrl -OutFile $using:tgzPath -UseBasicParsing
+      }
 
-      Write-Host "  Extracting..." -ForegroundColor Yellow
-      $extractDir = "$env:TEMP\opencode-extracted"
-      if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force }
-      New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-
-      # tar.exe handles .tgz on Windows 10 1803+
-      tar -xf $tgzPath -C $extractDir
-      if ($LASTEXITCODE -ne 0) { throw "tar extraction failed" }
+      Invoke-WithSpinner -Label "Extracting opencode" -ScriptBlock {
+        if (Test-Path "$using:extractDir") { Remove-Item "$using:extractDir" -Recurse -Force }
+        New-Item -ItemType Directory -Path "$using:extractDir" -Force | Out-Null
+        tar -xf $using:tgzPath -C $using:extractDir
+        if ($LASTEXITCODE -ne 0) { throw "tar extraction failed" }
+      }
 
       $extractedExe = Get-ChildItem $extractDir -Recurse -Filter "opencode.exe" | Select-Object -First 1
       if ($extractedExe) {
@@ -198,7 +240,9 @@ if ($needsInstall) {
       $setupUrl = "https://github.com/cjpais/Handy/releases/download/v$handyVersion/Handy_${handyVersion}_${handyArch}-setup.exe"
       $setupPath = "$env:TEMP\Handy_setup.exe"
       $extractDir = "$env:TEMP\Handy_tmp"
-      Invoke-WebRequest -Uri $setupUrl -OutFile $setupPath -UseBasicParsing
+      Invoke-WithSpinner -Label "Downloading Handy v$handyVersion" -ScriptBlock {
+        Invoke-WebRequest -Uri $using:setupUrl -OutFile $using:setupPath -UseBasicParsing
+      }
       $7z = Get-Command "7z" -ErrorAction SilentlyContinue
       if ($7z) {
         Write-Host "  Extracting with 7-Zip..." -ForegroundColor Yellow
@@ -208,7 +252,9 @@ if ($needsInstall) {
       } else {
         Write-Host "  Installing silently..." -ForegroundColor Yellow
         $extractDir = "$env:LOCALAPPDATA\Handy_tmp"
-        $proc = Start-Process -FilePath $setupPath -ArgumentList "/S", "/D=$extractDir" -Wait -PassThru
+        Invoke-WithSpinner -Label "Installing Handy silently" -ScriptBlock {
+          $script:proc = Start-Process -FilePath $setupPath -ArgumentList "/S", "/D=$extractDir" -Wait -PassThru
+        }
         if ($proc.ExitCode -ne 0) {
           Write-Host "  Silent install failed. Trying MSI extraction..." -ForegroundColor DarkYellow
           $msiUrl = "https://github.com/cjpais/Handy/releases/download/v$handyVersion/Handy_${handyVersion}_${handyArch}_en-US.msi"
@@ -216,9 +262,12 @@ if ($needsInstall) {
           Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
           $extractDir = "$env:TEMP\Handy_exe"
           New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
-          Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
-          Write-Host "  Extracting via MSI..." -ForegroundColor Yellow
-          Start-Process -FilePath "msiexec" -ArgumentList "/a `"$msiPath`" /qn TARGETDIR=`"$extractDir`"" -Wait
+          Invoke-WithSpinner -Label "Downloading Handy MSI" -ScriptBlock {
+            Invoke-WebRequest -Uri $using:msiUrl -OutFile $using:msiPath -UseBasicParsing
+          }
+          Invoke-WithSpinner -Label "Extracting via MSI" -ScriptBlock {
+            Start-Process -FilePath "msiexec" -ArgumentList "/a `"$msiPath`" /qn TARGETDIR=`"$extractDir`"" -Wait
+          }
           Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
         }
       }
@@ -257,7 +306,9 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
     } else {
       Write-Host "  Downloading cloudflared.exe..." -ForegroundColor Yellow
       $exeUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
-      Invoke-WebRequest -Uri $exeUrl -OutFile $CloudflaredBin -UseBasicParsing
+      Invoke-WithSpinner -Label "Downloading cloudflared" -ScriptBlock {
+        Invoke-WebRequest -Uri $using:exeUrl -OutFile $using:CloudflaredBin -UseBasicParsing
+      }
       Write-Host "  cloudflared ready!" -ForegroundColor Green
     }
   } catch {
