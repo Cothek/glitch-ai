@@ -286,11 +286,26 @@ if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
             mkdir -p "$USER_DIR"
             cd "$USER_DIR"
             git init >/dev/null
+            # Detect what branch git init created (reflects user's init.defaultBranch setting)
+            local_branch=$(git rev-parse --abbrev-ref HEAD)
             git remote add origin "https://github.com/$gh_user/$repo_name.git" 2>/dev/null
-            if git pull origin main --allow-unrelated-histories 2>/dev/null; then
-                success "User profile pulled from GitHub"
+            # Try to detect remote's default branch
+            remote_head=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
+            if [ -n "$remote_head" ]; then
+                default_branch="$remote_head"
+                # Rename local branch to match remote if needed
+                if [ "$local_branch" != "$default_branch" ]; then
+                    git branch -m "$default_branch" 2>/dev/null
+                fi
+                if git pull origin "$default_branch" --allow-unrelated-histories 2>/dev/null; then
+                    success "User profile pulled from GitHub"
+                    git branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null
+                else
+                    warn "No existing profile on GitHub (or pull failed). Starting fresh."
+                    echo "  Your memory will be saved locally and can be pushed later with: ./scripts/sync-user.ps1 -Push"
+                fi
             else
-                warn "No existing profile on GitHub (or pull failed). Starting fresh."
+                warn "No existing profile on GitHub. Starting fresh."
                 echo "  Your memory will be saved locally and can be pushed later with: ./scripts/sync-user.ps1 -Push"
             fi
         fi

@@ -287,12 +287,28 @@ if ($setupProfile -eq '' -or $setupProfile -like 'y*') {
             }
             Push-Location $userDir
             git init | Out-Null
+            # Detect what branch git init created (reflects user's init.defaultBranch setting)
+            $localBranch = git rev-parse --abbrev-ref HEAD
             git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
-            $pullResult = git pull origin main --allow-unrelated-histories 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "User profile pulled from GitHub"
+            # Try to detect remote's default branch
+            $remoteHead = git ls-remote --symref origin HEAD 2>$null
+            if ($remoteHead -match 'ref: refs/heads/(\S+)') {
+                $defaultBranch = $matches[1]
+                # Rename local branch to match remote if needed
+                if ($localBranch -ne $defaultBranch) {
+                    git branch -m $defaultBranch 2>&1 | Out-Null
+                }
+                # Pull from remote
+                $pullResult = git pull origin $defaultBranch --allow-unrelated-histories 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "User profile pulled from GitHub"
+                    git branch --set-upstream-to="origin/$defaultBranch" $defaultBranch 2>&1 | Out-Null
+                } else {
+                    Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
+                    Write-Host "  Your memory will be saved locally and can be pushed later with: .\scripts\sync-user.ps1 -Push"
+                }
             } else {
-                Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
+                Write-Warn "No existing profile on GitHub. Starting fresh."
                 Write-Host "  Your memory will be saved locally and can be pushed later with: .\scripts\sync-user.ps1 -Push"
             }
             Pop-Location
