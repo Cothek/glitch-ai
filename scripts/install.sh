@@ -164,7 +164,7 @@ header "Installation location"
 # Only prompt if INSTALL_DIR is the default (not explicitly passed)
 if [ "$INSTALL_DIR" = "$HOME/glitch-ai" ]; then
     echo ""
-    echo "  [1] Current directory: $(pwd)"
+    echo "  [1] Current directory: $(pwd)/glitch-ai"
     echo "  [2] User home directory: $HOME/glitch-ai (default)"
     echo "  [3] Custom path"
     echo ""
@@ -306,13 +306,13 @@ if [ "$NO_LAUNCH" = false ]; then
         step "Starting Glitch AI..."
         cd "$INSTALL_DIR"
         # Launch in background, detached
-        nohup node scripts/launch.mjs > glitch.log 2>&1 &
+        nohup ./launch-glitch.sh > glitch.log 2>&1 &
         PID=$!
         success "Glitch AI launched (PID: $PID)"
         echo ""
         echo "  To launch again later, run:" 
         echo "    cd $INSTALL_DIR"
-        echo "    node scripts/launch.mjs"
+        echo "    ./launch-glitch.sh"
         echo ""
         echo "  Logs: tail -f $INSTALL_DIR/glitch.log"
     fi
@@ -324,10 +324,10 @@ cat <<EOF
 Glitch AI is installed at: $INSTALL_DIR
 
 Next steps:
-  • Launch:        cd $INSTALL_DIR && node scripts/launch.mjs
-  • Free mode:     cd $INSTALL_DIR && node scripts/launch-free.mjs
-  • Local mode:    cd $INSTALL_DIR && node scripts/launch-local.mjs
-  • Safe mode:     cd $INSTALL_DIR && node scripts/launch-safe.mjs
+  • Launch:        cd $INSTALL_DIR && ./launch-glitch.sh
+  • Free mode:     cd $INSTALL_DIR && ./launch-glitch.sh (select Free at prompt)
+  • Local mode:    cd $INSTALL_DIR && ./launch-glitch.sh (select Local at prompt)
+  • Safe mode:     cd $INSTALL_DIR && ./launch-glitch.sh (select Safe at prompt)
   • Update:        Re-run this installer (it will pull latest)
   • User sync:     ./scripts/sync-user.ps1 -Push  (after making changes)
 
