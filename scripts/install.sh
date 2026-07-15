@@ -64,36 +64,50 @@ prompt() { printf "  ${CYAN}%s${NC}" "$1"; }
 # Shows a rotating spinner + elapsed seconds while running a command.
 # Usage: spinner "Label" command arg1 arg2 ...
 # Exit code: returns the command's exit code (caller should handle errors)
+# ── Spinner helper for long operations ──
+# Shows a rotating spinner + elapsed seconds while running a command.
+# Captures stdout+stderr to a temp file shown on failure.
+# Usage: spinner "Label" command arg1 arg2 ...
+# Exit code: returns the command's exit code (caller should handle errors)
 spinner() {
   local label="$1"
   shift
   local chars='-\|/'
   local i=0
   local start_time
+  local tmp_out
+  tmp_out=$(mktemp 2>/dev/null || mktemp -t glitch-spinner 2>/dev/null || echo "/tmp/glitch-spinner-$$")
   
-  # Prefer python for elapsed time (more portable date parsing)
   start_time=$(date +%s 2>/dev/null || python3 -c 'import time; print(int(time.time()))' 2>/dev/null || echo "0")
   
-  # Run command with output hidden
-  "$@" >/dev/null 2>&1 &
+  # Run command, capture stdout+stderr to temp file
+  "$@" >"$tmp_out" 2>&1 &
   local pid=$!
   
   while kill -0 "$pid" 2>/dev/null; do
     local now
     now=$(date +%s 2>/dev/null || python3 -c 'import time; print(int(time.time()))' 2>/dev/null || echo "0")
     local elapsed=$((now - start_time))
-    # Use printf with \r to overwrite the line
     printf "\r  %s %c (%ds)" "$label" "${chars:$i%4:1}" "$elapsed" 2>/dev/null || true
     i=$((i+1))
     sleep 0.2 2>/dev/null || sleep 1
   done
   
-  # Wait and capture exit code (|| true prevents set -e from firing)
+  # Wait and capture exit code
   wait "$pid" 2>/dev/null || true
   local exit_code=$?
   
   # Clear spinner line
   printf "\r                                                  \r" 2>/dev/null || true
+  
+  # On failure, show captured output
+  if [ $exit_code -ne 0 ] && [ -s "$tmp_out" ]; then
+    while IFS= read -r line; do
+      printf "    %s\n" "$line" >&2
+    done < "$tmp_out"
+  fi
+  
+  rm -f "$tmp_out" 2>/dev/null || true
   return $exit_code
 }
 
