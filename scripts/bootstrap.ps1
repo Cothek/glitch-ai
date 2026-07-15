@@ -12,38 +12,38 @@ $HandyBin = "$HandyDir\handy.exe"
 $CloudflaredBin = "$RootDir\cloudflared.exe"
 
 # ── Spinner helper for long operations ──
+# Shows a rotating spinner + elapsed seconds while a background job runs.
+# Use $using:varName inside the scriptblock to pass parent variables.
 function Invoke-WithSpinner {
-    param([string]$Label, [scriptblock]$ScriptBlock, [string]$DoneMessage = "", [string]$FailMessage)
-    if (-not $FailMessage) { $FailMessage = $Label }
+    param([string]$Label, [scriptblock]$ScriptBlock, [string]$DoneMessage = "")
     
-    $state = [hashtable]@{ running = $true; startTick = [Environment]::TickCount }
     $sw = [System.Diagnostics.Stopwatch]::StartNew()
+    $job = Start-Job -ScriptBlock $ScriptBlock 2>$null
     
-    $spinnerChars = '-\|/'
-    $thread = [System.Threading.Thread]::new([System.Threading.ParameterizedThreadStart]{
-        param($s, $l)
-        $chars = '-\|/'
-        $i = 0
-        while ($s.running) {
-            $elapsed = ([Environment]::TickCount - $s.startTick) / 1000
-            try { [System.Console]::Write("`r  $l $($chars[$i % 4]) ($($elapsed.ToString('F0'))s)") } catch {}
-            [System.Threading.Thread]::Sleep(200)
-            $i++
-        }
-        try { [System.Console]::Write("`r" + (" " * 60) + "`r") } catch {}
-    })
-    $thread.IsBackground = $true
-    $thread.Start(@($state, $Label))
+    $chars = '-\|/'
+    $i = 0
+    while ($job.State -eq 'Running') {
+        $elapsed = $sw.Elapsed.TotalSeconds.ToString('F0')
+        Write-Host "`r  $Label $($chars[$($i % 4)]) ($($elapsed)s)" -NoNewline
+        Start-Sleep -Milliseconds 200
+        $i++
+    }
     
-    try {
-        $null = & $ScriptBlock
-    } finally {
-        $state.running = $false
-        $thread.Join(2000) | Out-Null
-        $sw.Stop()
-        if ($DoneMessage -ne "") {
-            [System.Console]::WriteLine("  $DoneMessage done! ($($sw.Elapsed.TotalSeconds.ToString('F1'))s)")
-        }
+    $sw.Stop()
+    Write-Host ("`r" + " " * 60 + "`r") -NoNewline
+    
+    if ($job.State -eq 'Failed') {
+        $reason = $job.ChildJobs[0].JobStateInfo.Reason
+        $err = if ($reason -ne $null) { $reason.Message } else { $job.ChildJobs[0].Error[0].Exception.Message }
+        $null = Receive-Job $job -Wait -AutoRemoveJob 2>$null
+        Write-Host "  $Label FAILED" -ForegroundColor Red
+        throw $err
+    }
+    
+    $null = Receive-Job $job -Wait -AutoRemoveJob 2>$null
+    
+    if ($DoneMessage -ne "") {
+        Write-Host "  $DoneMessage done! ($($sw.Elapsed.TotalSeconds.ToString('F1'))s)"
     }
 }
 
@@ -108,13 +108,13 @@ if ($needsDownload) {
       $zipPath = Join-Path $zipDir "node-portable.zip"
 
       Invoke-WithSpinner -Label "Downloading Node.js $latestVer" -ScriptBlock {
-        Invoke-WebRequest -Uri $zipUrl -OutFile $zipPath -UseBasicParsing
+        Invoke-WebRequest -Uri $using:zipUrl -OutFile $using:zipPath -UseBasicParsing
       }
 
       $extractDir = "$env:TEMP\node-extracted"
       Invoke-WithSpinner -Label "Extracting Node.js" -ScriptBlock {
-        if (Test-Path $extractDir) { Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue }
-        Expand-Archive -Path $zipPath -DestinationPath $extractDir -Force
+        if (Test-Path "$using:extractDir") { Remove-Item "$using:extractDir" -Recurse -Force -ErrorAction SilentlyContinue }
+        Expand-Archive -Path $using:zipPath -DestinationPath $using:extractDir -Force
       }
 
       $extractedExe = Get-ChildItem $extractDir -Recurse -Filter "node.exe" | Select-Object -First 1
@@ -188,13 +188,13 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
       $tgzPath = "$env:TEMP\opencode.tgz"
       Write-Host "  Downloading opencode $opencodeVersion..." -ForegroundColor Yellow
       Invoke-WithSpinner -Label "Downloading opencode $opencodeVersion" -ScriptBlock {
-        Invoke-WebRequest -Uri $tgzUrl -OutFile $tgzPath -UseBasicParsing
+        Invoke-WebRequest -Uri $using:tgzUrl -OutFile $using:tgzPath -UseBasicParsing
       }
 
       Invoke-WithSpinner -Label "Extracting opencode" -ScriptBlock {
-        if (Test-Path "$extractDir") { Remove-Item "$extractDir" -Recurse -Force }
-        New-Item -ItemType Directory -Path "$extractDir" -Force | Out-Null
-        tar -xf $tgzPath -C $extractDir
+        if (Test-Path "$using:extractDir") { Remove-Item "$using:extractDir" -Recurse -Force }
+        New-Item -ItemType Directory -Path "$using:extractDir" -Force | Out-Null
+        tar -xf $using:tgzPath -C $using:extractDir
         if ($LASTEXITCODE -ne 0) { throw "tar extraction failed" }
       }
 
@@ -241,7 +241,7 @@ if ($needsInstall) {
       $setupPath = "$env:TEMP\Handy_setup.exe"
       $extractDir = "$env:TEMP\Handy_tmp"
       Invoke-WithSpinner -Label "Downloading Handy v$handyVersion" -ScriptBlock {
-        Invoke-WebRequest -Uri $setupUrl -OutFile $setupPath -UseBasicParsing
+        Invoke-WebRequest -Uri $using:setupUrl -OutFile $using:setupPath -UseBasicParsing
       }
       $7z = Get-Command "7z" -ErrorAction SilentlyContinue
       if ($7z) {
@@ -252,9 +252,7 @@ if ($needsInstall) {
       } else {
         Write-Host "  Installing silently..." -ForegroundColor Yellow
         $extractDir = "$env:LOCALAPPDATA\Handy_tmp"
-        Invoke-WithSpinner -Label "Installing Handy silently" -ScriptBlock {
-          $script:proc = Start-Process -FilePath $setupPath -ArgumentList "/S", "/D=$extractDir" -Wait -PassThru
-        }
+        $proc = Start-Process -FilePath $setupPath -ArgumentList "/S", "/D=$extractDir" -Wait -PassThru
         if ($proc.ExitCode -ne 0) {
           Write-Host "  Silent install failed. Trying MSI extraction..." -ForegroundColor DarkYellow
           $msiUrl = "https://github.com/cjpais/Handy/releases/download/v$handyVersion/Handy_${handyVersion}_${handyArch}_en-US.msi"
@@ -263,11 +261,10 @@ if ($needsInstall) {
           $extractDir = "$env:TEMP\Handy_exe"
           New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
           Invoke-WithSpinner -Label "Downloading Handy MSI" -ScriptBlock {
-            Invoke-WebRequest -Uri $msiUrl -OutFile $msiPath -UseBasicParsing
+            Invoke-WebRequest -Uri $using:msiUrl -OutFile $using:msiPath -UseBasicParsing
           }
-          Invoke-WithSpinner -Label "Extracting via MSI" -ScriptBlock {
-            Start-Process -FilePath "msiexec" -ArgumentList "/a `"$msiPath`" /qn TARGETDIR=`"$extractDir`"" -Wait
-          }
+          Write-Host "  Extracting via MSI..." -ForegroundColor Yellow
+          Start-Process -FilePath "msiexec" -ArgumentList "/a `"$msiPath`" /qn TARGETDIR=`"$extractDir`"" -Wait
           Remove-Item $msiPath -Force -ErrorAction SilentlyContinue
         }
       }
@@ -307,7 +304,7 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
       Write-Host "  Downloading cloudflared.exe..." -ForegroundColor Yellow
       $exeUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
       Invoke-WithSpinner -Label "Downloading cloudflared" -ScriptBlock {
-        Invoke-WebRequest -Uri $exeUrl -OutFile $CloudflaredBin -UseBasicParsing
+        Invoke-WebRequest -Uri $using:exeUrl -OutFile $using:CloudflaredBin -UseBasicParsing
       }
       Write-Host "  cloudflared ready!" -ForegroundColor Green
     }
