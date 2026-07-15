@@ -60,6 +60,43 @@ warn()   { printf "  ${YELLOW}%s${NC}\n" "$1"; }
 error()  { printf "  ${RED}%s${NC}\n" "$1" >&2; }
 prompt() { printf "  ${CYAN}%s${NC}" "$1"; }
 
+# ── Spinner helper for long operations ──
+# Shows a rotating spinner + elapsed seconds while running a command.
+# Usage: spinner "Label" command arg1 arg2 ...
+# Exit code: returns the command's exit code (caller should handle errors)
+spinner() {
+  local label="$1"
+  shift
+  local chars='-\|/'
+  local i=0
+  local start_time
+  
+  # Prefer python for elapsed time (more portable date parsing)
+  start_time=$(date +%s 2>/dev/null || python3 -c 'import time; print(int(time.time()))' 2>/dev/null || echo "0")
+  
+  # Run command with output hidden
+  "$@" >/dev/null 2>&1 &
+  local pid=$!
+  
+  while kill -0 "$pid" 2>/dev/null; do
+    local now
+    now=$(date +%s 2>/dev/null || python3 -c 'import time; print(int(time.time()))' 2>/dev/null || echo "0")
+    local elapsed=$((now - start_time))
+    # Use printf with \r to overwrite the line
+    printf "\r  %s %c (%ds)" "$label" "${chars:$i%4:1}" "$elapsed" 2>/dev/null || true
+    i=$((i+1))
+    sleep 0.2 2>/dev/null || sleep 1
+  done
+  
+  # Wait and capture exit code (|| true prevents set -e from firing)
+  wait "$pid" 2>/dev/null || true
+  local exit_code=$?
+  
+  # Clear spinner line
+  printf "\r                                                  \r" 2>/dev/null || true
+  return $exit_code
+}
+
 # Banner
 cat <<'EOF'
 ╔═══════════════════════════════════════════════════════════════════════════════╗
@@ -243,8 +280,7 @@ if [ ! -d "$INSTALL_DIR/.git" ]; then
     parent_dir="$(dirname "$INSTALL_DIR")"
     mkdir -p "$parent_dir" 2>/dev/null || true
     
-    step "Cloning Glitch AI repository..."
-    if git clone --recursive https://github.com/Cothek/glitch-ai.git "$INSTALL_DIR"; then
+    if spinner "Cloning Glitch AI repository" git clone --recursive https://github.com/Cothek/glitch-ai.git "$INSTALL_DIR"; then
         success "Repository cloned to $INSTALL_DIR"
     else
         error "Clone failed"

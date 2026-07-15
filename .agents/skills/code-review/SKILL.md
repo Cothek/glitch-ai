@@ -268,3 +268,123 @@ After review is complete:
 - **Lv.2** — Quality Gate: auto-trigger check, bypass criteria, gate verdict, testing handoff.
 - **Lv.3** — Startup-Safety Gate: Phase 0.5 checks boot sequence changes for degraded-mode compliance, fresh-clone resilience, and startup crash prevention.
 - **Lv.4** — Enhanced Review: 5-axis framework (correctness/security/readability/architecture/performance), honesty directives, dead code hunting, dependency discipline, common rationalizations, red flags, "demand evidence" rule, verification checklist.
+- **Lv.5** — Verifier Integration: Continuous quality scoring with repeated evaluation (K=3), criteria decomposition and ensemble (5 axes), multi-candidate comparison with ring pass and PPT, VOC progress tracking.
+
+---
+
+### Phase 6: Continuous Quality Scoring (Verifier Pattern)
+
+After the Phase 5 gate verdict, when a finer-grained quality assessment is needed (or when comparing multiple candidate implementations), apply continuous scoring using the verifier methodology.
+
+**Replace discrete severity counts with continuous scores:**
+
+For each of the 5 axes, produce a continuous quality score in [0.0, 1.0]:
+
+```
+Axis Score = (1/K) · Σ_k Score_k
+```
+
+Where K = 3 (repeated evaluations) and each Score_k is a continuous rating of the axis quality.
+
+#### Scoring Protocol
+
+For each axis, evaluate independently:
+
+| Axis | Sub-questions to Score | Weight |
+|------|----------------------|--------|
+| Correctness | Does it meet requirements? Edge cases handled? Error paths covered? | 0.30 |
+| Security | Auth enforced? Inputs validated? Secrets exposed? | 0.25 |
+| Readability | Clear names? Straightforward flow? No over-engineering? | 0.15 |
+| Architecture | Clean boundaries? Right abstraction level? No dead code? | 0.15 |
+| Performance | N+1 queries? Unbounded loops? Sync vs async? | 0.15 |
+
+For each sub-question, rate 0.0-1.0:
+- 0.0 = completely fails
+- 0.25 = major issues
+- 0.5 = adequate
+- 0.75 = good
+- 1.0 = excellent
+
+Average sub-questions within each axis, then ensemble:
+
+```
+Quality Score = Σ(weight_i · score_i)
+```
+
+#### Repeated Evaluation (K=3)
+
+For high-stakes reviews, run each scoring pass 3 times:
+- Rephrase the evaluation prompt slightly each time (e.g., "focus on edge cases", "focus on correctness", "focus on maintainability")
+- Average the 3 scores for each axis
+- Report the mean and the min-max range (shows uncertainty)
+
+### Phase 7: Multi-Candidate Comparison
+
+When reviewing N candidate implementations of the same feature:
+
+1. **Score each independently** using Phase 6, producing continuous scores R_i
+2. **Run ring pass** — compare pairs with A/B ordering swapped to cancel positional bias
+3. **Compute pairwise preferences**:
+
+   ```
+   P(i ≻ j) = 1 / (1 + exp(-(R_i - R_j)))
+   ```
+
+4. **Rank by cumulative preference** — aggregate wins across all pairings
+5. **Select best candidate** — highest normalized win count
+
+For N ≥ 5 candidates, use the Probabilistic Pivot Tournament (PPT) from the verifier skill:
+- Ring pass scores all N adjacent pairs (N comparisons)
+- Top-k pivots selected by mean preference
+- Non-pivots compared only against pivots (O(Nk²) total)
+
+### Phase 8: Progress Tracking (VOC)
+
+When reviewing code across multiple iterations of the dev-loop:
+
+1. Track the continuous quality score at each iteration
+2. Compute Value-Order Correlation (VOC) — Spearman rank correlation between iteration index and quality score
+3. Interpretation:
+   - VOC > 0.8: quality improving steadily — good trajectory
+   - VOC 0.5-0.8: quality improving slowly — may need attention
+   - VOC < 0.5: quality not improving — escalate
+   - Negative VOC: quality decreasing — stop and reassess
+
+### Output Format for Continuous Review
+
+When the verifier methodology is active, produce an extended verdict:
+
+```
+## Verifier Gate Results
+
+### Continuous Quality Scores
+| Axis | Score (0-1) | Weight | Weighted |
+|------|-------------|--------|----------|
+| Correctness | 0.85 | 0.30 | 0.255 |
+| Security | 0.92 | 0.25 | 0.230 |
+| Readability | 0.70 | 0.15 | 0.105 |
+| Architecture | 0.75 | 0.15 | 0.113 |
+| Performance | 0.80 | 0.15 | 0.120 |
+
+**Ensemble Quality Score: 0.823** (K=3 evaluations, range: 0.78-0.86)
+**VOC: 0.82** (across 4 iterations — quality improving steadily)
+
+### Pairwise Rankings (N=3 candidates)
+| Rank | Candidate | Score | Preference Mass |
+|------|-----------|-------|-----------------|
+| 1 | Candidate B | 0.823 | 0.67 |
+| 2 | Candidate A | 0.745 | 0.21 |
+| 3 | Candidate C | 0.612 | 0.12 |
+
+### Gate Verdict
+✅ PASS — Quality score 0.823 above threshold (0.70)
+```
+
+## Thresholds
+
+| Quality Score | Verdict |
+|---------------|---------|
+| ≥ 0.85 | ✅ Excellent — pass with praise |
+| 0.70 - 0.84 | ✅ Pass — minor issues noted |
+| 0.50 - 0.69 | ⚠️ Conditional — must fix below-threshold axes |
+| < 0.50 | ❌ Fail — fundamental issues |

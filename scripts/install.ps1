@@ -46,6 +46,37 @@ function Write-Warn   { param([string]$msg) Write-Host "  $msg" -ForegroundColor
 function Write-Error  { param([string]$msg) Write-Host "  $msg" -ForegroundColor Red }
 function Write-Prompt { param([string]$msg) Write-Host "  $msg" -NoNewline -ForegroundColor Cyan }
 
+# ── Spinner helper for long operations ──
+function Invoke-WithSpinner {
+  param([string]$Label, [scriptblock]$ScriptBlock)
+  
+  $state = [hashtable]@{ running = $true; startTick = [Environment]::TickCount }
+  $sw = [System.Diagnostics.Stopwatch]::StartNew()
+  
+  $thread = [System.Threading.Thread]::new([System.Threading.ParameterizedThreadStart]{
+    param($s, $l)
+    $chars = '-\|/'
+    $i = 0
+    while ($s.running) {
+      $elapsed = ([Environment]::TickCount - $s.startTick) / 1000
+      try { [System.Console]::Write("`r  $l $($chars[$i % 4]) ($($elapsed.ToString('F0'))s)") } catch {}
+      [System.Threading.Thread]::Sleep(200)
+      $i++
+    }
+    try { [System.Console]::Write("`r" + (" " * 60) + "`r") } catch {}
+  })
+  $thread.IsBackground = $true
+  $thread.Start(@($state, $Label))
+  
+  try {
+    $null = & $ScriptBlock
+  } finally {
+    $state.running = $false
+    $thread.Join(2000) | Out-Null
+    $sw.Stop()
+  }
+}
+
 # Show help
 if ($Help) {
     Write-Host @"
@@ -139,12 +170,14 @@ if (-not $gitPath) {
         
         $tempZip = Join-Path $env:TEMP "mingit.zip"
         try {
-            Write-Step "  Downloading..."
-            Invoke-WebRequest -Uri $downloadUrl -OutFile $tempZip -UseBasicParsing -TimeoutSec 120
+            Invoke-WithSpinner -Label "Downloading MinGit (40MB)" -ScriptBlock {
+              Invoke-WebRequest -Uri $using:downloadUrl -OutFile $using:tempZip -UseBasicParsing -TimeoutSec 120
+            }
             
             New-Item -ItemType Directory -Path $gitToolsDir -Force | Out-Null
-            Write-Step "  Extracting..."
-            Expand-Archive -Path $tempZip -DestinationPath $gitToolsDir -Force
+            Invoke-WithSpinner -Label "Extracting MinGit" -ScriptBlock {
+              Expand-Archive -Path $using:tempZip -DestinationPath $using:gitToolsDir -Force
+            }
             Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
             
             if (-not (Test-Path $gitBin)) {
@@ -233,8 +266,12 @@ if (-not (Test-Path "$InstallDir\.git")) {
     }
     
     Write-Step "Cloning Glitch AI repository..."
-    $result = git clone --recursive https://github.com/Cothek/glitch-ai.git "$InstallDir" 2>&1
-    $exitCode = $LASTEXITCODE
+    $result = ""
+    $exitCode = 0
+    Invoke-WithSpinner -Label "Cloning Glitch AI repository" -ScriptBlock {
+      $script:result = git clone --recursive https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
+      $script:exitCode = $LASTEXITCODE
+    }
     if ($exitCode -ne 0) {
         Write-Error "Clone failed: $result"
         exit 1
