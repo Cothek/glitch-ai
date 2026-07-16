@@ -199,6 +199,7 @@ async function handler(req, res) {
 
       const providers = [...new Set((registry.models || []).map((m) => m.source).filter(Boolean))];
       const tiers = [...new Set((registry.models || []).map((m) => m.tier).filter(Boolean))];
+      const capabilities = [...new Set((registry.models || []).flatMap(m => m.capabilities || []))].sort();
 
       sendJson(res, 200, {
         models: models.map((m) => ({
@@ -216,6 +217,7 @@ async function handler(req, res) {
         total: models.length,
         providers,
         tiers,
+        capabilities,
       });
       return;
     }

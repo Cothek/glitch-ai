@@ -410,6 +410,13 @@
         </div>
 
         <div class="filter-bar">
+          <span class="gl-text-xs gl-text-muted" style="text-transform: uppercase; letter-spacing: var(--glitch-tracking-wider);">Capability:</span>
+          <div class="filter-chips" id="capability-filters">
+            <button class="filter-chip active" data-capability="">All</button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
           <label class="checkbox-wrapper">
             <input type="checkbox" id="filter-compatible">
             Show only compatible models
@@ -451,7 +458,7 @@
       pendingChanges: [],
       selectedModel: null,
       currentAgent: null,
-      filters: { search: '', tier: '', provider: '', compatible: false },
+      filters: { search: '', tier: '', provider: '', capability: '', compatible: false },
       models: [],
       loading: { agents: false, models: false, status: false }
     };
@@ -610,7 +617,7 @@
     async function openModelPicker(agentName) {
       state.currentAgent = agentName;
       state.selectedModel = null;
-      state.filters = { search: '', tier: '', provider: '', compatible: false };
+      state.filters = { search: '', tier: '', provider: '', capability: '', compatible: false };
 
       document.getElementById('modal-title').textContent = `Select Model for @${agentName}`;
       document.getElementById('model-search').value = '';
@@ -620,6 +627,7 @@
 
       document.querySelectorAll('#tier-filters .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.tier === ''));
       document.querySelectorAll('#provider-filters .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.provider === ''));
+      document.querySelectorAll('#capability-filters .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.capability === ''));
 
       document.getElementById('modal-backdrop').classList.remove('gl-hidden');
       await fetchModels();
@@ -643,10 +651,25 @@
         if (state.filters.search) params.set('search', state.filters.search);
         if (state.filters.tier) params.set('tier', state.filters.tier);
         if (state.filters.provider) params.set('provider', state.filters.provider);
+        if (state.filters.capability) params.set('capability', state.filters.capability);
         if (state.currentAgent) params.set('agent', state.currentAgent);
 
         const data = await api(`models?${params.toString()}`);
         state.models = data.models || [];
+
+        if (data.capabilities) {
+          const container = document.getElementById('capability-filters');
+          const allChip = container.querySelector('[data-capability=""]');
+          container.innerHTML = '';
+          container.appendChild(allChip);
+          data.capabilities.forEach(cap => {
+            const chip = document.createElement('button');
+            chip.className = 'filter-chip' + (state.filters.capability === cap ? ' active' : '');
+            chip.dataset.capability = cap;
+            chip.textContent = cap.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+            container.appendChild(chip);
+          });
+        }
 
         if (state.filters.compatible && state.currentAgent) {
           const agent = state.agents.find(a => a.name === state.currentAgent);
@@ -699,6 +722,7 @@
             <div class="model-card__header">
               <span class="model-card__name">${escapeHtml(model.name || model.id)}</span>
               ${isCurrent ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Current</span>' : ''}
+              ${model.vision ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Vision</span>' : ''}
             </div>
             <div class="model-card__id">${escapeHtml(model.id)}</div>
             <div class="model-card__meta">
@@ -792,6 +816,15 @@
       document.querySelectorAll('#provider-filters .filter-chip').forEach(c => c.classList.remove('active'));
       chip.classList.add('active');
       state.filters.provider = chip.dataset.provider;
+      fetchModels();
+    });
+
+    document.getElementById('capability-filters').addEventListener('click', (e) => {
+      const chip = e.target.closest('.filter-chip');
+      if (!chip) return;
+      document.querySelectorAll('#capability-filters .filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      state.filters.capability = chip.dataset.capability;
       fetchModels();
     });
 
