@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Glitch — Model Management</title>
+  <link rel="stylesheet" href="../plugins/glitch-ui/tokens.css">
+  <link rel="stylesheet" href="../plugins/glitch-ui/components.css">
+  <link rel="stylesheet" href="../plugins/glitch-ui/layout.css">
+  <style>
+    .model-id {
+      font-family: var(--glitch-font-mono);
+      font-size: var(--glitch-text-xs);
+      color: var(--glitch-text-secondary);
+    }
+
+    .model-name {
+      font-weight: var(--glitch-font-medium);
+      color: var(--glitch-text-primary);
+    }
+
+    .agent-name {
+      font-weight: var(--glitch-font-semibold);
+      color: var(--glitch-accent-text-muted);
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: var(--glitch-space-4);
+      margin-bottom: var(--glitch-space-6);
+    }
+
+    @media (max-width: 1023px) {
+      .status-grid { grid-template-columns: repeat(2, 1fr); }
+    }
+
+    @media (max-width: 767px) {
+      .status-grid { grid-template-columns: 1fr; }
+    }
+
+    .status-card .gl-card-body {
+      display: flex;
+      flex-direction: column;
+      gap: var(--glitch-space-1);
+    }
+
+    .status-card__label {
+      font-size: var(--glitch-text-xs);
+      color: var(--glitch-text-muted);
+      text-transform: uppercase;
+      letter-spacing: var(--glitch-tracking-wider);
+    }
+
+    .status-card__value {
+      font-size: var(--glitch-text-2xl);
+      font-weight: var(--glitch-font-bold);
+      color: var(--glitch-text-primary);
+    }
+
+    .status-card__sub {
+      font-size: var(--glitch-text-xs);
+      color: var(--glitch-text-secondary);
+    }
+
+    .capability-badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--glitch-space-1);
+    }
+
+    .gl-badge--capability {
+      background-color: var(--glitch-bg-elevated);
+      color: var(--glitch-text-secondary);
+      font-size: 11px;
+      padding: 1px 6px;
+    }
+
+    .filter-bar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--glitch-space-3);
+      align-items: center;
+      margin-bottom: var(--glitch-space-4);
+    }
+
+    .filter-chips {
+      display: flex;
+      gap: var(--glitch-space-1);
+      flex-wrap: wrap;
+    }
+
+    .filter-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 10px;
+      font-size: var(--glitch-text-xs);
+      font-weight: var(--glitch-font-medium);
+      border-radius: var(--glitch-radius-full);
+      border: 1px solid var(--glitch-border);
+      background: transparent;
+      color: var(--glitch-text-secondary);
+      cursor: pointer;
+      transition: all var(--glitch-transition-fast);
+    }
+
+    .filter-chip:hover {
+      border-color: var(--glitch-border-strong);
+      color: var(--glitch-text-primary);
+    }
+
+    .filter-chip.active {
+      background-color: var(--glitch-accent);
+      border-color: var(--glitch-accent);
+      color: var(--glitch-accent-text);
+    }
+
+    .model-list {
+      display: flex;
+      flex-direction: column;
+      gap: var(--glitch-space-2);
+      max-height: 400px;
+      overflow-y: auto;
+    }
+
+    .model-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: var(--glitch-space-3) var(--glitch-space-4);
+      background-color: var(--glitch-bg-elevated);
+      border: 1px solid var(--glitch-border);
+      border-radius: var(--glitch-radius-md);
+      cursor: pointer;
+      transition: all var(--glitch-transition-fast);
+    }
+
+    .model-card:hover {
+      border-color: var(--glitch-border-strong);
+      background-color: var(--glitch-bg-hover);
+    }
+
+    .model-card.selected {
+      border-color: var(--glitch-accent);
+      box-shadow: var(--glitch-shadow-accent-sm);
+    }
+
+    .model-card.current {
+      border-left: 3px solid var(--glitch-accent);
+    }
+
+    .model-card__info {
+      display: flex;
+      flex-direction: column;
+      gap: var(--glitch-space-1);
+      flex: 1;
+      min-width: 0;
+    }
+
+    .model-card__header {
+      display: flex;
+      align-items: center;
+      gap: var(--glitch-space-2);
+      flex-wrap: wrap;
+    }
+
+    .model-card__name {
+      font-weight: var(--glitch-font-semibold);
+      font-size: var(--glitch-text-sm);
+      color: var(--glitch-text-primary);
+    }
+
+    .model-card__id {
+      font-family: var(--glitch-font-mono);
+      font-size: 11px;
+      color: var(--glitch-text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .model-card__meta {
+      display: flex;
+      align-items: center;
+      gap: var(--glitch-space-2);
+      flex-wrap: wrap;
+    }
+
+    .model-card__cost {
+      font-size: 11px;
+      color: var(--glitch-text-muted);
+    }
+
+    .model-card__action {
+      flex-shrink: 0;
+      margin-left: var(--glitch-space-3);
+    }
+
+    .pending-table tr.changed {
+      background-color: var(--glitch-accent-bg);
+    }
+
+    .pending-change-arrow {
+      color: var(--glitch-accent);
+      font-weight: var(--glitch-font-bold);
+      margin: 0 var(--glitch-space-1);
+    }
+
+    .page-header-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: var(--glitch-space-4);
+    }
+
+    .page-header-text {
+      display: flex;
+      flex-direction: column;
+      gap: var(--glitch-space-1);
+    }
+
+    .checkbox-wrapper {
+      display: flex;
+      align-items: center;
+      gap: var(--glitch-space-2);
+      font-size: var(--glitch-text-sm);
+      color: var(--glitch-text-secondary);
+      cursor: pointer;
+    }
+
+    .checkbox-wrapper input[type="checkbox"] {
+      accent-color: var(--glitch-accent);
+      width: 16px;
+      height: 16px;
+      cursor: pointer;
+    }
+
+    .table-container {
+      border: 1px solid var(--glitch-border);
+      border-radius: var(--glitch-radius-lg);
+      overflow: hidden;
+    }
+  </style>
+</head>
+<body>
+  <div class="glitch-layout">
+    <aside class="glitch-sidebar">
+      <div class="glitch-sidebar__brand">
+        <span class="glitch-sidebar__logo">&#9670;</span>
+        <span class="glitch-sidebar__title">Glitch</span>
+        <span class="glitch-sidebar__version">v1.0</span>
+      </div>
+      <nav class="glitch-sidebar__nav">
+        <a href="#" class="glitch-sidebar__link glitch-sidebar__link--active">&#9673; Dashboard</a>
+        <a href="#" class="glitch-sidebar__link">&#9674; Agents</a>
+        <a href="#" class="glitch-sidebar__link">&#9670; Models</a>
+      </nav>
+    </aside>
+
+    <main class="glitch-main">
+      <div class="glitch-page-header">
+        <div class="page-header-row">
+          <div class="page-header-text">
+            <h1 class="glitch-page-header__title">Model Management</h1>
+            <p class="glitch-page-header__desc">Browse and manage agent model assignments. Changes are staged until you apply them.</p>
+          </div>
+          <div class="gl-flex gl-gap-3">
+            <button class="gl-btn gl-btn--secondary gl-btn--md" id="btn-rollback" disabled>&#8634; Rollback</button>
+            <button class="gl-btn gl-btn--primary gl-btn--md" id="btn-apply" disabled>&#10003; Apply Changes</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="glitch-section">
+        <div class="status-grid" id="status-grid">
+          <div class="gl-card status-card">
+            <div class="gl-card-body">
+              <span class="status-card__label">Registry Age</span>
+              <span class="status-card__value" id="stat-registry-age">&mdash;</span>
+              <span class="status-card__sub" id="stat-registry-sub">Loading...</span>
+            </div>
+          </div>
+          <div class="gl-card status-card">
+            <div class="gl-card-body">
+              <span class="status-card__label">Total Models</span>
+              <span class="status-card__value" id="stat-total-models">&mdash;</span>
+              <span class="status-card__sub" id="stat-models-sub">Loading...</span>
+            </div>
+          </div>
+          <div class="gl-card status-card">
+            <div class="gl-card-body">
+              <span class="status-card__label">Pending Changes</span>
+              <span class="status-card__value" id="stat-pending">&mdash;</span>
+              <span class="status-card__sub" id="stat-pending-sub">Loading...</span>
+            </div>
+          </div>
+          <div class="gl-card status-card">
+            <div class="gl-card-body">
+              <span class="status-card__label">Config Status</span>
+              <span class="status-card__value" id="stat-config">&mdash;</span>
+              <span class="status-card__sub" id="stat-config-sub">Loading...</span>
+            </div>
+          </div>
+        </div>
+
+        <div id="pending-section" class="gl-hidden">
+          <div class="gl-card gl-card--accent gl-m-4" style="margin-bottom: var(--glitch-space-6);">
+            <div class="gl-card-header">
+              <span>&#9888; Pending Changes</span>
+              <div class="gl-flex gl-gap-2">
+                <button class="gl-btn gl-btn--ghost gl-btn--sm" id="btn-pending-rollback">Rollback All</button>
+                <button class="gl-btn gl-btn--primary gl-btn--sm" id="btn-pending-apply">Apply All</button>
+              </div>
+            </div>
+            <div class="table-wrapper" style="border: none; border-radius: 0;">
+              <table class="gl-table pending-table">
+                <thead>
+                  <tr>
+                    <th>Agent</th>
+                    <th>Old Model</th>
+                    <th></th>
+                    <th>New Model</th>
+                    <th>Tier</th>
+                  </tr>
+                </thead>
+                <tbody id="pending-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="gl-section-header">
+          <div>
+            <h2 class="gl-section-title">Agents</h2>
+            <p class="gl-section-desc">Current model assignments for all configured agents</p>
+          </div>
+        </div>
+
+        <div class="table-container">
+          <div id="agent-table-loading" class="gl-flex gl-items-center gl-justify-center gl-p-8">
+            <span class="gl-spinner gl-spinner--lg gl-text-accent"></span>
+          </div>
+          <div id="agent-table-error" class="gl-hidden">
+            <div class="gl-empty">
+              <div class="gl-empty-icon">&#9888;</div>
+              <div class="gl-empty-title">Failed to Load Agents</div>
+              <div class="gl-empty-text" id="agent-error-msg">Could not connect to the API server.</div>
+              <button class="gl-btn gl-btn--secondary gl-btn--md" style="margin-top: 16px;" onclick="loadAgents()">Retry</button>
+            </div>
+          </div>
+          <table class="gl-table" id="agent-table" style="display: none;">
+            <thead>
+              <tr>
+                <th>Agent</th>
+                <th>Current Model</th>
+                <th>Tier</th>
+                <th>Capabilities</th>
+                <th>Context</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="agent-tbody"></tbody>
+          </table>
+          <div id="agent-table-empty" class="gl-hidden">
+            <div class="gl-empty">
+              <div class="gl-empty-icon">&#9674;</div>
+              <div class="gl-empty-title">No Agents Found</div>
+              <div class="gl-empty-text">No agents are configured in opencode.json.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div class="gl-modal-backdrop gl-hidden" id="modal-backdrop">
+    <div class="gl-modal gl-modal--lg" role="dialog" aria-labelledby="modal-title">
+      <div class="gl-modal-header">
+        <h2 id="modal-title">Select Model</h2>
+        <button class="gl-modal-close" id="modal-close" aria-label="Close">&#10005;</button>
+      </div>
+      <div class="gl-modal-body">
+        <div class="filter-bar">
+          <div class="gl-input-wrapper" style="flex: 1; min-width: 200px;">
+            <span class="gl-input-icon">&#9906;</span>
+            <input type="text" class="gl-input gl-input-search gl-input--with-icon" id="model-search" placeholder="Search models by name or ID...">
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <span class="gl-text-xs gl-text-muted" style="text-transform: uppercase; letter-spacing: var(--glitch-tracking-wider);">Tier:</span>
+          <div class="filter-chips" id="tier-filters">
+            <button class="filter-chip active" data-tier="">All</button>
+            <button class="filter-chip" data-tier="free">Free</button>
+            <button class="filter-chip" data-tier="budget">Budget</button>
+            <button class="filter-chip" data-tier="mid">Mid</button>
+            <button class="filter-chip" data-tier="premium">Premium</button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <span class="gl-text-xs gl-text-muted" style="text-transform: uppercase; letter-spacing: var(--glitch-tracking-wider);">Provider:</span>
+          <div class="filter-chips" id="provider-filters">
+            <button class="filter-chip active" data-provider="">All</button>
+            <button class="filter-chip" data-provider="zen">Zen</button>
+            <button class="filter-chip" data-provider="go">Go</button>
+            <button class="filter-chip" data-provider="nvidia">NVIDIA</button>
+            <button class="filter-chip" data-provider="openrouter">OpenRouter</button>
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          <label class="checkbox-wrapper">
+            <input type="checkbox" id="filter-compatible">
+            Show only compatible models
+          </label>
+        </div>
+
+        <div id="model-list-loading" class="gl-flex gl-items-center gl-justify-center gl-p-8">
+          <span class="gl-spinner gl-spinner--lg gl-text-accent"></span>
+        </div>
+        <div id="model-list-error" class="gl-hidden">
+          <div class="gl-empty">
+            <div class="gl-empty-icon">&#9888;</div>
+            <div class="gl-empty-title">Failed to Load Models</div>
+            <div class="gl-empty-text" id="model-error-msg">Could not fetch available models.</div>
+            <button class="gl-btn gl-btn--secondary gl-btn--md" style="margin-top: 16px;" id="model-retry-btn">Retry</button>
+          </div>
+        </div>
+        <div class="model-list" id="model-list"></div>
+        <div id="model-list-empty" class="gl-hidden">
+          <div class="gl-empty">
+            <div class="gl-empty-icon">&#9670;</div>
+            <div class="gl-empty-title">No Models Match</div>
+            <div class="gl-empty-text">No models match your current filters. Try adjusting your search criteria.</div>
+          </div>
+        </div>
+      </div>
+      <div class="gl-modal-footer">
+        <button class="gl-btn gl-btn--ghost gl-btn--md" id="modal-cancel">Cancel</button>
+        <button class="gl-btn gl-btn--primary gl-btn--md" id="modal-confirm" disabled>Select a Model</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="gl-toast-container" id="toast-container"></div>
+
+  <script>
+    const state = {
+      agents: [],
+      pendingChanges: [],
+      selectedModel: null,
+      currentAgent: null,
+      filters: { search: '', tier: '', provider: '', compatible: false },
+      models: [],
+      loading: { agents: false, models: false, status: false }
+    };
+
+    async function api(path, options = {}) {
+      const res = await fetch(`/api/${path}`, {
+        headers: { 'Content-Type': 'application/json' },
+        ...options
+      });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error || `API error: ${res.status}`);
+      }
+      return res.json();
+    }
+
+    function showToast(message, type = 'info') {
+      const container = document.getElementById('toast-container');
+      const icons = { success: '&#10003;', warning: '&#9888;', error: '&#10007;', info: '&#8505;' };
+      const toast = document.createElement('div');
+      toast.className = `gl-toast gl-toast--${type}`;
+      toast.innerHTML = `
+        <span class="gl-toast-icon">${icons[type] || icons.info}</span>
+        <span class="gl-toast-content">${escapeHtml(message)}</span>
+        <button class="gl-toast-dismiss" onclick="this.parentElement.remove()">&#10005;</button>
+      `;
+      container.appendChild(toast);
+      setTimeout(() => { if (toast.parentElement) toast.remove(); }, 5000);
+    }
+
+    function escapeHtml(str) {
+      const div = document.createElement('div');
+      div.textContent = str;
+      return div.innerHTML;
+    }
+
+    function tierBadgeClass(tier) {
+      const map = { free: 'free', budget: 'budget', mid: 'mid', premium: 'premium' };
+      return `gl-badge--${map[tier] || 'neutral'}`;
+    }
+
+    async function loadStatus() {
+      try {
+        const data = await api('status');
+        document.getElementById('stat-registry-age').textContent = data.registry_age_hours != null ? `${Math.round(data.registry_age_hours)}h` : '--';
+        document.getElementById('stat-registry-sub').textContent = data.registry ? 'Model registry loaded' : 'No registry found';
+        document.getElementById('stat-total-models').textContent = data.registry_models || '--';
+        document.getElementById('stat-models-sub').textContent = 'available models';
+        document.getElementById('stat-pending').textContent = data.pending_changes || 0;
+        document.getElementById('stat-pending-sub').textContent = data.pending_changes === 1 ? 'change staged' : 'changes staged';
+        const configStatus = data.opencode_config ? 'OK' : 'Missing';
+        document.getElementById('stat-config').textContent = configStatus;
+        document.getElementById('stat-config-sub').textContent = data.opencode_config || 'No config found';
+        document.getElementById('stat-config').className = `status-card__value ${data.opencode_config ? 'gl-text-success' : 'gl-text-error'}`;
+      } catch (err) {
+        document.getElementById('stat-registry-age').textContent = '!';
+        document.getElementById('stat-registry-sub').textContent = 'Error loading status';
+      }
+    }
+
+    async function loadAgents() {
+      state.loading.agents = true;
+      document.getElementById('agent-table-loading').classList.remove('gl-hidden');
+      document.getElementById('agent-table').style.display = 'none';
+      document.getElementById('agent-table-error').classList.add('gl-hidden');
+      document.getElementById('agent-table-empty').classList.add('gl-hidden');
+
+      try {
+        const data = await api('agents');
+        state.agents = data.agents || [];
+        renderAgentTable();
+      } catch (err) {
+        document.getElementById('agent-table-loading').classList.add('gl-hidden');
+        document.getElementById('agent-table-error').classList.remove('gl-hidden');
+        document.getElementById('agent-error-msg').textContent = err.message;
+      } finally {
+        state.loading.agents = false;
+      }
+    }
+
+    function renderAgentTable() {
+      document.getElementById('agent-table-loading').classList.add('gl-hidden');
+
+      if (state.agents.length === 0) {
+        document.getElementById('agent-table').style.display = 'none';
+        document.getElementById('agent-table-empty').classList.remove('gl-hidden');
+        return;
+      }
+
+      const tbody = document.getElementById('agent-tbody');
+      tbody.innerHTML = state.agents.map(agent => {
+        const caps = (agent.capabilities || []).map(c =>
+          `<span class="gl-badge gl-badge--capability">${escapeHtml(c)}</span>`
+        ).join('');
+
+        const pendingChange = state.pendingChanges.find(c => c.agent === agent.name);
+        const displayModel = pendingChange ? pendingChange.new_model : agent.current_model;
+        const displayTier = pendingChange ? pendingChange.tier : agent.tier;
+        const changedClass = pendingChange ? ' style="background-color: var(--glitch-accent-bg);"' : '';
+
+        return `<tr${changedClass}>
+          <td><span class="agent-name">@${escapeHtml(agent.name)}</span></td>
+          <td>
+            <div class="model-name">${escapeHtml(agent.model_name || displayModel)}</div>
+            <div class="model-id">${escapeHtml(displayModel)}</div>
+            ${pendingChange ? `<div class="gl-text-xs gl-text-accent" style="margin-top:2px;">&#9888; Pending: ${escapeHtml(pendingChange.old_model)} &rarr; ${escapeHtml(pendingChange.new_model)}</div>` : ''}
+          </td>
+          <td><span class="gl-badge ${tierBadgeClass(displayTier)}"><span class="gl-badge-dot"></span>${escapeHtml(displayTier || 'unknown')}</span></td>
+          <td><div class="capability-badges">${caps || '<span class="gl-text-muted gl-text-xs">None</span>'}</div></td>
+          <td class="gl-text-sm">${agent.context_length ? `${(agent.context_length / 1000).toFixed(0)}K` : '--'}</td>
+          <td><button class="gl-btn gl-btn--secondary gl-btn--sm" onclick="openModelPicker('${escapeHtml(agent.name)}')">Change</button></td>
+        </tr>`;
+      }).join('');
+
+      document.getElementById('agent-table').style.display = '';
+    }
+
+    async function loadPending() {
+      try {
+        const data = await api('pending');
+        state.pendingChanges = data.changes || [];
+        updatePendingUI();
+      } catch (err) {
+        state.pendingChanges = [];
+        updatePendingUI();
+      }
+    }
+
+    function updatePendingUI() {
+      const hasPending = state.pendingChanges.length > 0;
+      document.getElementById('btn-apply').disabled = !hasPending;
+      document.getElementById('btn-rollback').disabled = !hasPending;
+      document.getElementById('stat-pending').textContent = state.pendingChanges.length;
+      document.getElementById('stat-pending-sub').textContent = state.pendingChanges.length === 1 ? 'change staged' : 'changes staged';
+
+      const section = document.getElementById('pending-section');
+      if (hasPending) {
+        section.classList.remove('gl-hidden');
+        const tbody = document.getElementById('pending-tbody');
+        tbody.innerHTML = state.pendingChanges.map(c => `
+          <tr class="changed">
+            <td><span class="agent-name">@${escapeHtml(c.agent)}</span></td>
+            <td class="model-id">${escapeHtml(c.old_model)}</td>
+            <td><span class="pending-change-arrow">&rarr;</span></td>
+            <td class="model-id">${escapeHtml(c.new_model)}</td>
+            <td><span class="gl-badge ${tierBadgeClass(c.tier)}"><span class="gl-badge-dot"></span>${escapeHtml(c.tier || '')}</span></td>
+          </tr>
+        `).join('');
+      } else {
+        section.classList.add('gl-hidden');
+      }
+
+      renderAgentTable();
+    }
+
+    async function openModelPicker(agentName) {
+      state.currentAgent = agentName;
+      state.selectedModel = null;
+      state.filters = { search: '', tier: '', provider: '', compatible: false };
+
+      document.getElementById('modal-title').textContent = `Select Model for @${agentName}`;
+      document.getElementById('model-search').value = '';
+      document.getElementById('filter-compatible').checked = false;
+      document.getElementById('modal-confirm').disabled = true;
+      document.getElementById('modal-confirm').textContent = 'Select a Model';
+
+      document.querySelectorAll('#tier-filters .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.tier === ''));
+      document.querySelectorAll('#provider-filters .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.provider === ''));
+
+      document.getElementById('modal-backdrop').classList.remove('gl-hidden');
+      await fetchModels();
+    }
+
+    function closeModal() {
+      document.getElementById('modal-backdrop').classList.add('gl-hidden');
+      state.currentAgent = null;
+      state.selectedModel = null;
+    }
+
+    async function fetchModels() {
+      state.loading.models = true;
+      document.getElementById('model-list-loading').classList.remove('gl-hidden');
+      document.getElementById('model-list').innerHTML = '';
+      document.getElementById('model-list-error').classList.add('gl-hidden');
+      document.getElementById('model-list-empty').classList.add('gl-hidden');
+
+      try {
+        const params = new URLSearchParams();
+        if (state.filters.search) params.set('search', state.filters.search);
+        if (state.filters.tier) params.set('tier', state.filters.tier);
+        if (state.filters.provider) params.set('provider', state.filters.provider);
+        if (state.currentAgent) params.set('agent', state.currentAgent);
+
+        const data = await api(`models?${params.toString()}`);
+        state.models = data.models || [];
+
+        if (state.filters.compatible && state.currentAgent) {
+          const agent = state.agents.find(a => a.name === state.currentAgent);
+          if (agent && agent.capabilities && agent.capabilities.includes('vision')) {
+            state.models = state.models.filter(m => m.vision);
+          }
+        }
+
+        renderModelList();
+      } catch (err) {
+        document.getElementById('model-list-loading').classList.add('gl-hidden');
+        document.getElementById('model-list-error').classList.remove('gl-hidden');
+        document.getElementById('model-error-msg').textContent = err.message;
+      } finally {
+        state.loading.models = false;
+      }
+    }
+
+    function renderModelList() {
+      document.getElementById('model-list-loading').classList.add('gl-hidden');
+
+      if (state.models.length === 0) {
+        document.getElementById('model-list').innerHTML = '';
+        document.getElementById('model-list-empty').classList.remove('gl-hidden');
+        return;
+      }
+
+      document.getElementById('model-list-empty').classList.add('gl-hidden');
+      const agent = state.agents.find(a => a.name === state.currentAgent);
+      const currentModelId = agent ? agent.current_model : null;
+
+      const list = document.getElementById('model-list');
+      list.innerHTML = state.models.map(model => {
+        const isCurrent = model.id === currentModelId;
+        const isSelected = state.selectedModel && state.selectedModel.id === model.id;
+        const classes = ['model-card'];
+        if (isSelected) classes.push('selected');
+        if (isCurrent) classes.push('current');
+
+        const caps = (model.capabilities || []).map(c =>
+          `<span class="gl-badge gl-badge--capability">${escapeHtml(c)}</span>`
+        ).join('');
+
+        const cost = model.cost_per_million_input
+          ? `$${model.cost_per_million_input.toFixed(2)} / $${(model.cost_per_million_output || 0).toFixed(2)} per 1M tokens`
+          : '';
+
+        return `<div class="${classes.join(' ')}" onclick="selectModel('${escapeHtml(model.id)}')" data-model-id="${escapeHtml(model.id)}">
+          <div class="model-card__info">
+            <div class="model-card__header">
+              <span class="model-card__name">${escapeHtml(model.name || model.id)}</span>
+              ${isCurrent ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Current</span>' : ''}
+            </div>
+            <div class="model-card__id">${escapeHtml(model.id)}</div>
+            <div class="model-card__meta">
+              <span class="gl-badge ${tierBadgeClass(model.tier)}"><span class="gl-badge-dot"></span>${escapeHtml(model.tier || 'unknown')}</span>
+              <span class="gl-badge gl-badge--neutral">${escapeHtml(model.provider || model.source || '')}</span>
+              ${model.context_length ? `<span class="gl-text-xs gl-text-muted">${(model.context_length / 1000).toFixed(0)}K ctx</span>` : ''}
+              ${cost ? `<span class="model-card__cost">${cost}</span>` : ''}
+            </div>
+            ${caps ? `<div class="capability-badges" style="margin-top: 4px;">${caps}</div>` : ''}
+          </div>
+          <div class="model-card__action">
+            <button class="gl-btn ${isSelected ? 'gl-btn--primary' : 'gl-btn--secondary'} gl-btn--sm">${isSelected ? '&#10003; Selected' : 'Select'}</button>
+          </div>
+        </div>`;
+      }).join('');
+    }
+
+    function selectModel(modelId) {
+      const model = state.models.find(m => m.id === modelId);
+      if (!model) return;
+      state.selectedModel = model;
+      document.getElementById('modal-confirm').disabled = false;
+      document.getElementById('modal-confirm').textContent = `Confirm: ${model.name || model.id}`;
+      renderModelList();
+    }
+
+    async function confirmAssignment() {
+      if (!state.selectedModel || !state.currentAgent) return;
+
+      try {
+        await api('assign', {
+          method: 'POST',
+          body: JSON.stringify({ agent: state.currentAgent, model: state.selectedModel.id })
+        });
+        showToast(`Model assigned to @${state.currentAgent}. Apply changes to save.`, 'info');
+        closeModal();
+        await loadPending();
+        await loadStatus();
+      } catch (err) {
+        showToast(`Failed to assign model: ${err.message}`, 'error');
+      }
+    }
+
+    async function applyChanges() {
+      try {
+        const data = await api('apply', { method: 'POST' });
+        showToast(`${data.applied || data.changes?.length || 0} changes applied successfully.`, 'success');
+        state.pendingChanges = [];
+        updatePendingUI();
+        await loadAgents();
+        await loadStatus();
+      } catch (err) {
+        showToast(`Failed to apply changes: ${err.message}`, 'error');
+      }
+    }
+
+    async function rollbackChanges() {
+      try {
+        await api('rollback', { method: 'POST' });
+        showToast('Changes rolled back.', 'warning');
+        state.pendingChanges = [];
+        updatePendingUI();
+        await loadAgents();
+        await loadStatus();
+      } catch (err) {
+        showToast(`Failed to rollback: ${err.message}`, 'error');
+      }
+    }
+
+    let searchDebounce = null;
+    document.getElementById('model-search').addEventListener('input', (e) => {
+      clearTimeout(searchDebounce);
+      searchDebounce = setTimeout(() => {
+        state.filters.search = e.target.value.trim();
+        fetchModels();
+      }, 250);
+    });
+
+    document.getElementById('tier-filters').addEventListener('click', (e) => {
+      const chip = e.target.closest('.filter-chip');
+      if (!chip) return;
+      document.querySelectorAll('#tier-filters .filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      state.filters.tier = chip.dataset.tier;
+      fetchModels();
+    });
+
+    document.getElementById('provider-filters').addEventListener('click', (e) => {
+      const chip = e.target.closest('.filter-chip');
+      if (!chip) return;
+      document.querySelectorAll('#provider-filters .filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      state.filters.provider = chip.dataset.provider;
+      fetchModels();
+    });
+
+    document.getElementById('filter-compatible').addEventListener('change', (e) => {
+      state.filters.compatible = e.target.checked;
+      fetchModels();
+    });
+
+    document.getElementById('modal-close').addEventListener('click', closeModal);
+    document.getElementById('modal-cancel').addEventListener('click', closeModal);
+    document.getElementById('modal-confirm').addEventListener('click', confirmAssignment);
+    document.getElementById('modal-backdrop').addEventListener('click', (e) => {
+      if (e.target === e.currentTarget) closeModal();
+    });
+    document.getElementById('model-retry-btn').addEventListener('click', fetchModels);
+
+    document.getElementById('btn-apply').addEventListener('click', applyChanges);
+    document.getElementById('btn-rollback').addEventListener('click', rollbackChanges);
+    document.getElementById('btn-pending-apply').addEventListener('click', applyChanges);
+    document.getElementById('btn-pending-rollback').addEventListener('click', rollbackChanges);
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape' && !document.getElementById('modal-backdrop').classList.contains('gl-hidden')) {
+        closeModal();
+      }
+    });
+
+    async function init() {
+      await Promise.all([loadStatus(), loadAgents(), loadPending()]);
+    }
+
+    init();
+  </script>
+</body>
+</html>

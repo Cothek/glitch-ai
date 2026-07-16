@@ -436,6 +436,27 @@ export async function launchServer(options = {}) {
     log(YELLOW, `  Auth proxy start failed: ${e.message}`);
   }
 
+  // ---- Start Model UI Server ----
+  const MODEL_UI_SCRIPT = join(ROOT_DIR, 'scripts', 'model-ui.mjs');
+  const MODEL_UI_PORT = 4104;
+  if (existsSync(MODEL_UI_SCRIPT)) {
+    log(CYAN, `  Starting model UI server (port ${MODEL_UI_PORT})...`);
+    try {
+      const modelUIProc = spawn('node', [MODEL_UI_SCRIPT], {
+        stdio: 'ignore',
+        windowsHide: true
+      });
+      modelUIProc.on('error', (err) => {
+        log(YELLOW, `  Model UI server failed to start: ${err.message}`);
+      });
+      modelUIProc.unref();
+      trackProcess(modelUIProc);
+      await new Promise(r => setTimeout(r, 1000));
+    } catch (e) {
+      log(YELLOW, `  Model UI server start failed: ${e.message}`);
+    }
+  }
+
   // ---- Display URLs ----
   log('');
   log(YELLOW, `  Server password: ${pw}`);
@@ -444,6 +465,10 @@ export async function launchServer(options = {}) {
     log(GREEN, `  Web access URL: https://${cloudflareDomain}/${dirSlug}/?auth_token=${authToken}`);
   }
   log(GREEN, `  Local URL: http://localhost:${TARGET_PORT}`);
+  log(DARK_GREEN, `  Model UI: http://localhost:${MODEL_UI_PORT}`);
+  if (cloudflareDomain) {
+    log(DARK_GREEN, `  Model UI (tunnel): https://${cloudflareDomain}/models/?auth_token=${authToken}`);
+  }
   log('');
 
   // ---- Periodic path fixer (runs every 5 min) ----
