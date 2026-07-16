@@ -473,6 +473,27 @@
           </div>
         </div>
       </div>
+
+      <div class="glitch-section">
+        <div class="gl-section-header">
+          <div>
+            <h2 class="gl-section-title">Settings</h2>
+            <p class="gl-section-desc">Plugin configuration and system preferences</p>
+          </div>
+        </div>
+        <div class="gl-card" id="plugin-card">
+          <div class="gl-card-body" style="display: flex; align-items: center; justify-content: space-between; padding: var(--glitch-space-4);">
+            <div style="display: flex; flex-direction: column; gap: 2px;">
+              <div class="gl-text-sm" style="font-weight: var(--glitch-font-medium);">Model Management Plugin</div>
+              <div class="gl-text-xs gl-text-muted" id="plugin-status">Loading...</div>
+            </div>
+            <div style="display: flex; align-items: center; gap: var(--glitch-space-3);">
+              <span class="gl-text-xs gl-text-muted" id="plugin-state-label">Enabled</span>
+              <button class="gl-btn gl-btn--secondary gl-btn--sm" id="btn-plugin-toggle">Disable</button>
+            </div>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -703,6 +724,24 @@
       } catch (err) {
         state.pendingChanges = [];
         updatePendingUI();
+      }
+    }
+
+    async function loadPluginStatus() {
+      try {
+        const data = await api('plugins');
+        const plugin = data.plugins?.find(p => p.name === 'model-ui');
+        if (plugin) {
+          const statusEl = document.getElementById('plugin-status');
+          const labelEl = document.getElementById('plugin-state-label');
+          const btnEl = document.getElementById('btn-plugin-toggle');
+          statusEl.textContent = `v${plugin.version} · ${plugin.description}`;
+          labelEl.textContent = plugin.enabled ? 'Enabled' : 'Disabled';
+          labelEl.style.color = plugin.enabled ? 'var(--glitch-success)' : 'var(--glitch-text-muted)';
+          btnEl.textContent = plugin.enabled ? 'Disable' : 'Enable';
+        }
+      } catch (err) {
+        document.getElementById('plugin-status').textContent = 'Could not load plugin status';
       }
     }
 
@@ -972,6 +1011,23 @@
     document.getElementById('btn-pending-apply').addEventListener('click', applyChanges);
     document.getElementById('btn-pending-rollback').addEventListener('click', rollbackChanges);
 
+    document.getElementById('btn-plugin-toggle').addEventListener('click', async () => {
+      try {
+        const data = await api('plugins/toggle', {
+          method: 'POST',
+          body: JSON.stringify({ name: 'model-ui' })
+        });
+        const labelEl = document.getElementById('plugin-state-label');
+        const btnEl = document.getElementById('btn-plugin-toggle');
+        labelEl.textContent = data.enabled ? 'Enabled' : 'Disabled';
+        labelEl.style.color = data.enabled ? 'var(--glitch-success)' : 'var(--glitch-text-muted)';
+        btnEl.textContent = data.enabled ? 'Disable' : 'Enable';
+        showToast(data.message, 'info');
+      } catch (err) {
+        showToast(`Failed to toggle plugin: ${err.message}`, 'error');
+      }
+    });
+
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape' && !document.getElementById('modal-backdrop').classList.contains('gl-hidden')) {
         closeModal();
@@ -979,7 +1035,7 @@
     });
 
     async function init() {
-      await Promise.all([loadStatus(), loadAgents(), loadPending()]);
+      await Promise.all([loadStatus(), loadAgents(), loadPending(), loadPluginStatus()]);
     }
 
     init();

@@ -436,25 +436,20 @@ export async function launchServer(options = {}) {
     log(YELLOW, `  Auth proxy start failed: ${e.message}`);
   }
 
-  // ---- Start Model UI Server ----
-  const MODEL_UI_SCRIPT = join(ROOT_DIR, 'scripts', 'model-ui.mjs');
-  const MODEL_UI_PORT = 4104;
-  if (existsSync(MODEL_UI_SCRIPT)) {
-    log(CYAN, `  Starting model UI server (port ${MODEL_UI_PORT})...`);
-    try {
-      const modelUIProc = spawn('node', [MODEL_UI_SCRIPT], {
-        stdio: 'ignore',
-        windowsHide: true
-      });
-      modelUIProc.on('error', (err) => {
-        log(YELLOW, `  Model UI server failed to start: ${err.message}`);
-      });
-      modelUIProc.unref();
-      trackProcess(modelUIProc);
-      await new Promise(r => setTimeout(r, 1000));
-    } catch (e) {
-      log(YELLOW, `  Model UI server start failed: ${e.message}`);
+  // ---- Start enabled plugins ----
+  log(CYAN, '  Starting enabled plugins...');
+  try {
+    const { startEnabledPlugins, listPlugins } = await import('./plugin-manager.mjs');
+    const results = await startEnabledPlugins();
+    for (const r of results) {
+      if (r.success) {
+        log(DARK_GREEN, `  Plugin: ${r.name} (PID ${r.pid})`);
+      } else if (r.error && !r.error.includes('already running')) {
+        log(YELLOW, `  Plugin ${r.name}: ${r.error}`);
+      }
     }
+  } catch (e) {
+    log(YELLOW, `  Plugin manager error: ${e.message}`);
   }
 
   // ---- Display URLs ----
@@ -465,9 +460,17 @@ export async function launchServer(options = {}) {
     log(GREEN, `  Web access URL: https://${cloudflareDomain}/${dirSlug}/?auth_token=${authToken}`);
   }
   log(GREEN, `  Local URL: http://localhost:${TARGET_PORT}`);
-  log(DARK_GREEN, `  Model UI: http://localhost:${MODEL_UI_PORT}`);
-  if (cloudflareDomain) {
-    log(DARK_GREEN, `  Model UI (tunnel): https://${cloudflareDomain}/models/?auth_token=${authToken}`);
+  // Show enabled plugin URLs
+  const { listPlugins } = await import('./plugin-manager.mjs');
+  const allPlugins = listPlugins();
+  for (const plugin of allPlugins) {
+    if (plugin.enabled && plugin.port) {
+      const webPath = plugin.web_path || `/${plugin.name}/`;
+      log(DARK_GREEN, `  ${plugin.name}: http://localhost:${plugin.port}`);
+      if (cloudflareDomain) {
+        log(DARK_GREEN, `  ${plugin.name} (tunnel): https://${cloudflareDomain}${webPath}?auth_token=${authToken}`);
+      }
+    }
   }
   log('');
 

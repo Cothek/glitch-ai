@@ -137,6 +137,27 @@ async function handler(req, res) {
       return;
     }
 
+    if (req.method === 'GET' && pathname === '/api/plugins') {
+      const { listPlugins } = await import('../scripts/lib/plugin-manager.mjs');
+      const plugins = listPlugins();
+      sendJson(res, 200, { plugins });
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/plugins/toggle') {
+      const body = await parseBody(req);
+      const name = body?.name || 'model-ui';
+      const { isEnabled, setEnabled } = await import('../scripts/lib/plugin-manager.mjs');
+      const currently = isEnabled(name);
+      setEnabled(name, !currently);
+      sendJson(res, 200, {
+        name,
+        enabled: !currently,
+        message: `Plugin "${name}" ${!currently ? 'enabled' : 'disabled'}. Will take effect on next restart.`,
+      });
+      return;
+    }
+
     if (req.method === 'GET' && pathname === '/api/agents') {
       const config = readJson(join(ROOT_DIR, 'opencode.json'));
       if (!config) {
