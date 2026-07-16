@@ -118,21 +118,21 @@
     .model-list {
       display: flex;
       flex-direction: column;
-      gap: var(--glitch-space-2);
-      max-height: 400px;
+      gap: 3px;
+      max-height: 420px;
       overflow-y: auto;
     }
 
     .model-card {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      padding: var(--glitch-space-3) var(--glitch-space-4);
+      padding: 4px 10px;
       background-color: var(--glitch-bg-elevated);
       border: 1px solid var(--glitch-border);
       border-radius: var(--glitch-radius-md);
       cursor: pointer;
       transition: all var(--glitch-transition-fast);
+      gap: 4px;
     }
 
     .model-card:hover {
@@ -150,50 +150,74 @@
     }
 
     .model-card__info {
-      display: flex;
-      flex-direction: column;
-      gap: var(--glitch-space-1);
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
       flex: 1;
       min-width: 0;
-    }
-
-    .model-card__header {
-      display: flex;
-      align-items: center;
-      gap: var(--glitch-space-2);
-      flex-wrap: wrap;
+      line-height: 1.3;
     }
 
     .model-card__name {
-      font-weight: var(--glitch-font-semibold);
+      font-weight: var(--glitch-font-medium);
       font-size: var(--glitch-text-sm);
       color: var(--glitch-text-primary);
+      white-space: nowrap;
     }
 
     .model-card__id {
       font-family: var(--glitch-font-mono);
-      font-size: 11px;
+      font-size: 10px;
       color: var(--glitch-text-muted);
       overflow: hidden;
       text-overflow: ellipsis;
+      max-width: 220px;
       white-space: nowrap;
     }
 
-    .model-card__meta {
-      display: flex;
-      align-items: center;
-      gap: var(--glitch-space-2);
-      flex-wrap: wrap;
-    }
-
     .model-card__cost {
-      font-size: 11px;
+      font-size: 10px;
       color: var(--glitch-text-muted);
+      white-space: nowrap;
     }
 
     .model-card__action {
       flex-shrink: 0;
-      margin-left: var(--glitch-space-3);
+      margin-left: auto;
+    }
+
+    .model-card .gl-badge {
+      font-size: 10px;
+      padding: 1px 5px;
+      gap: 2px;
+      line-height: 1.3;
+    }
+
+    .model-card .gl-badge-dot {
+      width: 4px;
+      height: 4px;
+    }
+
+    .model-card .gl-badge--info {
+      font-size: 10px;
+      padding: 1px 5px;
+    }
+
+    .model-card .ctx-badge {
+      font-size: 10px;
+      color: var(--glitch-text-muted);
+      font-family: var(--glitch-font-mono);
+      white-space: nowrap;
+    }
+
+    .model-card .model-sep {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--glitch-border);
+      display: inline-block;
+      flex-shrink: 0;
     }
 
     .pending-table tr.changed {
@@ -809,27 +833,34 @@
         ).join('');
 
         const cost = model.cost_per_million_input
-          ? `$${model.cost_per_million_input.toFixed(2)} / $${(model.cost_per_million_output || 0).toFixed(2)} per 1M tokens`
+          ? `$${model.cost_per_million_input.toFixed(2)}/$${(model.cost_per_million_output || 0).toFixed(2)}`
           : '';
+
+          const tierBadgeClass = model.tier === 'free' ? 'gl-badge--free'
+          : model.tier === 'budget' ? 'gl-badge--budget'
+          : model.tier === 'mid' ? 'gl-badge--mid'
+          : model.tier === 'premium' ? 'gl-badge--premium'
+          : 'gl-badge--neutral';
+
+        const contextText = model.context_length ? `${(model.context_length / 1000).toFixed(0)}K` : '';
 
         return `<div class="${classes.join(' ')}" onclick="selectModel('${escapeHtml(model.id)}')" data-model-id="${escapeHtml(model.id)}">
           <div class="model-card__info">
-            <div class="model-card__header">
-              <span class="model-card__name">${escapeHtml(model.name || model.id)}</span>
-              ${isCurrent ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Current</span>' : ''}
-              ${model.vision ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Vision</span>' : ''}
-            </div>
-            <div class="model-card__id">${escapeHtml(model.id)}</div>
-            <div class="model-card__meta">
-              <span class="gl-badge ${tierBadgeClass(model.tier)}"><span class="gl-badge-dot"></span>${escapeHtml(model.tier || 'unknown')}</span>
-              <span class="gl-badge gl-badge--neutral">${escapeHtml(model.provider || model.source || '')}</span>
-              ${model.context_length ? `<span class="gl-text-xs gl-text-muted">${(model.context_length / 1000).toFixed(0)}K ctx</span>` : ''}
-              ${cost ? `<span class="model-card__cost">${cost}</span>` : ''}
-            </div>
-            ${caps ? `<div class="capability-badges" style="margin-top: 4px;">${caps}</div>` : ''}
+            <span class="model-card__name">${escapeHtml(model.name || model.id)}</span>
+            ${isCurrent ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Current</span>' : ''}
+            ${model.vision ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Vision</span>' : ''}
+            <span class="model-sep"></span>
+            <span class="model-card__id">${escapeHtml(model.id)}</span>
+            ${caps ? '<span class="model-sep"></span>' + caps : ''}
+            <span class="model-sep"></span>
+            <span class="gl-badge ${tierBadgeClass}"><span class="gl-badge-dot"></span>${escapeHtml(model.tier || 'unknown')}</span>
+            <span class="model-sep"></span>
+            <span class="gl-badge gl-badge--neutral">${escapeHtml(model.provider || model.source || '')}</span>
+            ${contextText ? '<span class="model-sep"></span><span class="ctx-badge">' + contextText + '</span>' : ''}
+            ${cost ? '<span class="model-sep"></span><span class="model-card__cost">' + cost + '</span>' : ''}
           </div>
           <div class="model-card__action">
-            <button class="gl-btn ${isSelected ? 'gl-btn--primary' : 'gl-btn--secondary'} gl-btn--sm">${isSelected ? '&#10003; Selected' : 'Select'}</button>
+            <button class="gl-btn ${isSelected ? 'gl-btn--primary' : 'gl-btn--secondary'} gl-btn--sm">${isSelected ? '&#10003;' : 'Select'}</button>
           </div>
         </div>`;
       }).join('');
