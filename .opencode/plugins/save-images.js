@@ -104,6 +104,14 @@ export const SaveImagesPlugin = async ({ directory }) => {
             const triggerPath = join(screenshotsDir, ".new-image");
             writeFileSync(triggerPath, filepath + "\n");
 
+            // Inject image path into message parts so the AI automatically sees it
+            if (parts && Array.isArray(parts)) {
+              parts.push({
+                type: "text",
+                text: `📷 Image saved: screenshots/${filename} (${filepath})`
+              });
+            }
+
             console.log(
               `[save-images] Saved: screenshots/${filename} (${(buffer.length / 1024).toFixed(1)} KB, ${part.mime})`
             );

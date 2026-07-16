@@ -240,6 +240,88 @@
       border-radius: var(--glitch-radius-lg);
       overflow: hidden;
     }
+
+    /* Compact agent table */
+    #agent-table td {
+      padding: 5px 8px;
+      vertical-align: middle;
+    }
+
+    #agent-table th {
+      padding: 6px 8px;
+      font-size: 10px;
+    }
+
+    #agent-table .col-agent {
+      width: 1%;
+      white-space: nowrap;
+      padding-right: 2px;
+    }
+
+    #agent-table .col-action {
+      width: 1%;
+      white-space: nowrap;
+      text-align: right;
+    }
+
+    .model-line {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      flex-wrap: wrap;
+      line-height: 1.3;
+    }
+
+    .model-line .model-name {
+      font-weight: var(--glitch-font-medium);
+      color: var(--glitch-text-primary);
+      white-space: nowrap;
+    }
+
+    .model-line .model-id {
+      font-family: var(--glitch-font-mono);
+      font-size: 11px;
+      color: var(--glitch-text-muted);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 260px;
+    }
+
+    .model-sep {
+      width: 3px;
+      height: 3px;
+      border-radius: 50%;
+      background: var(--glitch-border);
+      display: inline-block;
+      flex-shrink: 0;
+    }
+
+    .model-line .gl-badge {
+      font-size: 10px;
+      padding: 1px 5px;
+      gap: 2px;
+      line-height: 1.3;
+    }
+
+    .model-line .gl-badge-dot {
+      width: 4px;
+      height: 4px;
+    }
+
+    .model-line .ctx-badge {
+      font-size: 10px;
+      color: var(--glitch-text-muted);
+      font-family: var(--glitch-font-mono);
+      white-space: nowrap;
+    }
+
+    .model-pending {
+      display: block;
+      font-size: 11px;
+      color: var(--glitch-accent);
+      line-height: 1.3;
+      margin-top: 1px;
+    }
   </style>
 </head>
 <body>
@@ -351,12 +433,9 @@
           <table class="gl-table" id="agent-table" style="display: none;">
             <thead>
               <tr>
-                <th>Agent</th>
-                <th>Current Model</th>
-                <th>Tier</th>
-                <th>Capabilities</th>
-                <th>Context</th>
-                <th>Actions</th>
+                <th class="col-agent">Agent</th>
+                <th class="col-model">Model &amp; Info</th>
+                <th class="col-action">Action</th>
               </tr>
             </thead>
             <tbody id="agent-tbody"></tbody>
@@ -557,19 +636,35 @@
         const pendingChange = state.pendingChanges.find(c => c.agent === agent.name);
         const displayModel = pendingChange ? pendingChange.new_model : agent.current_model;
         const displayTier = pendingChange ? pendingChange.tier : agent.tier;
+        const tierBadgeClass = displayTier === 'free' ? 'gl-badge--free'
+          : displayTier === 'budget' ? 'gl-badge--budget'
+          : displayTier === 'mid' ? 'gl-badge--mid'
+          : displayTier === 'premium' ? 'gl-badge--premium'
+          : 'gl-badge--neutral';
         const changedClass = pendingChange ? ' style="background-color: var(--glitch-accent-bg);"' : '';
 
+        const pendingHtml = pendingChange
+          ? `<span class="model-pending">&#9888; ${escapeHtml(pendingChange.old_model)} &rarr; ${escapeHtml(pendingChange.new_model)}</span>`
+          : '';
+
+        const contextText = agent.context_length ? `${(agent.context_length / 1000).toFixed(0)}K` : '--';
+
         return `<tr${changedClass}>
-          <td><span class="agent-name">@${escapeHtml(agent.name)}</span></td>
+          <td class="col-agent"><span class="agent-name">@${escapeHtml(agent.name)}</span></td>
           <td>
-            <div class="model-name">${escapeHtml(agent.model_name || displayModel)}</div>
-            <div class="model-id">${escapeHtml(displayModel)}</div>
-            ${pendingChange ? `<div class="gl-text-xs gl-text-accent" style="margin-top:2px;">&#9888; Pending: ${escapeHtml(pendingChange.old_model)} &rarr; ${escapeHtml(pendingChange.new_model)}</div>` : ''}
+            <span class="model-line">
+              <span class="model-name">${escapeHtml(agent.model_name || displayModel)}</span>
+              <span class="model-sep"></span>
+              <span class="model-id">${escapeHtml(displayModel)}</span>
+              ${caps ? '<span class="model-sep"></span>' + caps : ''}
+              <span class="model-sep"></span>
+              <span class="gl-badge ${tierBadgeClass}"><span class="gl-badge-dot"></span>${escapeHtml(displayTier || 'unknown')}</span>
+              <span class="model-sep"></span>
+              <span class="ctx-badge">${contextText}</span>
+            </span>
+            ${pendingHtml}
           </td>
-          <td><span class="gl-badge ${tierBadgeClass(displayTier)}"><span class="gl-badge-dot"></span>${escapeHtml(displayTier || 'unknown')}</span></td>
-          <td><div class="capability-badges">${caps || '<span class="gl-text-muted gl-text-xs">None</span>'}</div></td>
-          <td class="gl-text-sm">${agent.context_length ? `${(agent.context_length / 1000).toFixed(0)}K` : '--'}</td>
-          <td><button class="gl-btn gl-btn--secondary gl-btn--sm" onclick="openModelPicker('${escapeHtml(agent.name)}')">Change</button></td>
+          <td class="col-action"><button class="gl-btn gl-btn--secondary gl-btn--sm" onclick="openModelPicker('${escapeHtml(agent.name)}')">Change</button></td>
         </tr>`;
       }).join('');
 
