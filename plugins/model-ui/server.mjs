@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const ROOT_DIR = resolve(__dirname, '..');
+const ROOT_DIR = resolve(__dirname, '..', '..');
 const PORT = parseInt(process.env.MODEL_UI_PORT || '4104', 10);
 
 const MIME_TYPES = {
@@ -111,9 +111,9 @@ async function handler(req, res) {
 
   try {
     if (req.method === 'GET' && pathname === '/') {
-      const htmlPath = join(ROOT_DIR, 'plugins', 'model-ui.html');
+      const htmlPath = join(ROOT_DIR, 'plugins', 'model-ui', 'index.html');
       if (!existsSync(htmlPath)) {
-        sendJson(res, 404, { error: 'model-ui.html not found' });
+        sendJson(res, 404, { error: 'index.html not found' });
         return;
       }
       const html = readFileSync(htmlPath, 'utf-8');
@@ -138,7 +138,7 @@ async function handler(req, res) {
     }
 
     if (req.method === 'GET' && pathname === '/api/plugins') {
-      const { listPlugins } = await import('../scripts/lib/plugin-manager.mjs');
+      const { listPlugins } = await import('../../scripts/lib/plugin-manager.mjs');
       const plugins = listPlugins();
       sendJson(res, 200, { plugins });
       return;
@@ -147,7 +147,7 @@ async function handler(req, res) {
     if (req.method === 'POST' && pathname === '/api/plugins/toggle') {
       const body = await parseBody(req);
       const name = body?.name || 'model-ui';
-      const { isEnabled, setEnabled } = await import('../scripts/lib/plugin-manager.mjs');
+      const { isEnabled, setEnabled } = await import('../../scripts/lib/plugin-manager.mjs');
       const currently = isEnabled(name);
       setEnabled(name, !currently);
       sendJson(res, 200, {
