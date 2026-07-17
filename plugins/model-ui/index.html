@@ -78,26 +78,47 @@
 
     .filter-bar {
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
       gap: 6px;
       margin-bottom: 6px;
       padding: 4px 0;
+      flex-wrap: nowrap;
     }
 
     .gl-select--sm {
       font-size: 12px;
-      padding: 4px 8px;
+      padding: 5px 24px 5px 8px;
       border: 1px solid var(--glitch-border);
-      border-radius: 4px;
+      border-radius: 5px;
       background: var(--glitch-bg-secondary);
       color: var(--glitch-text-primary);
       cursor: pointer;
-      min-width: 110px;
+      min-width: 120px;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      line-height: 1.4;
+    }
+    .gl-select--sm:hover {
+      border-color: var(--glitch-text-secondary);
     }
     .gl-select--sm:focus {
       outline: none;
       border-color: var(--glitch-accent);
+      box-shadow: 0 0 0 2px color-mix(in srgb, var(--glitch-accent) 20%, transparent);
+    }
+
+    .gl-select--sm, .gl-input-search {
+      height: 28px;
+      box-sizing: border-box;
+    }
+
+    #capability-filter {
+      min-width: 140px;
     }
 
     .model-list {
