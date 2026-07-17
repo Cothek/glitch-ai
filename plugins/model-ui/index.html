@@ -663,10 +663,7 @@
             </select>
           </div>
 
-          <label class="checkbox-wrapper" style="white-space: nowrap; margin-left: 2px;">
-            <input type="checkbox" id="filter-compatible">
-            <span class="gl-text-xs" style="font-size: 10px;">Compat</span>
-          </label>
+
         </div>
 
         <div id="model-list-loading" class="gl-flex gl-items-center gl-justify-center gl-p-8">
@@ -704,7 +701,7 @@
       pendingChanges: [],
       selectedModel: null,
       currentAgent: null,
-      filters: { search: '', tier: '', provider: '', capability: '', compatible: false },
+      filters: { search: '', tier: '', provider: '', capability: '' },
       models: [],
       loading: { agents: false, models: false, status: false }
     };
@@ -897,11 +894,10 @@
     async function openModelPicker(agentName) {
       state.currentAgent = agentName;
       state.selectedModel = null;
-      state.filters = { search: '', tier: '', provider: '', capability: '', compatible: false };
+      state.filters = { search: '', tier: '', provider: '', capability: '' };
 
       document.getElementById('modal-title').textContent = `Select Model for @${agentName}`;
       document.getElementById('model-search').value = '';
-      document.getElementById('filter-compatible').checked = false;
       document.getElementById('modal-confirm').disabled = true;
       document.getElementById('modal-confirm').textContent = 'Select a Model';
 
@@ -950,13 +946,6 @@
               capSelect.appendChild(opt);
             }
           });
-        }
-
-        if (state.filters.compatible && state.currentAgent) {
-          const agent = state.agents.find(a => a.name === state.currentAgent);
-          if (agent && agent.capabilities && agent.capabilities.includes('vision')) {
-            state.models = state.models.filter(m => m.vision);
-          }
         }
 
         renderModelList();
@@ -1101,11 +1090,6 @@
 
     document.getElementById('capability-filter').addEventListener('change', (e) => {
       state.filters.capability = e.target.value;
-      fetchModels();
-    });
-
-    document.getElementById('filter-compatible').addEventListener('change', (e) => {
-      state.filters.compatible = e.target.checked;
       fetchModels();
     });
 
