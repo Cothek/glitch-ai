@@ -21,6 +21,34 @@ const MIME_TYPES = {
 let pendingChanges = [];
 let lastBackupPath = null;
 
+let registryCache = null;
+let registryCacheTime = 0;
+const REGISTRY_CACHE_TTL = 30_000; // 30 seconds
+
+let configCache = null;
+let configCacheTime = 0;
+const CONFIG_CACHE_TTL = 5_000; // 5 seconds
+
+function getRegistry() {
+  const now = Date.now();
+  if (registryCache && now - registryCacheTime < REGISTRY_CACHE_TTL) {
+    return registryCache;
+  }
+  registryCache = readJson(join(ROOT_DIR, 'data', 'model-registry.json'));
+  registryCacheTime = now;
+  return registryCache;
+}
+
+function getConfig() {
+  const now = Date.now();
+  if (configCache && now - configCacheTime < CONFIG_CACHE_TTL) {
+    return configCache;
+  }
+  configCache = readJson(join(ROOT_DIR, 'opencode.json'));
+  configCacheTime = now;
+  return configCache;
+}
+
 function readJson(path) {
   try {
     if (!existsSync(path)) return null;
@@ -159,12 +187,12 @@ async function handler(req, res) {
     }
 
     if (req.method === 'GET' && pathname === '/api/agents') {
-      const config = readJson(join(ROOT_DIR, 'opencode.json'));
+      const config = getConfig();
       if (!config) {
         sendJson(res, 500, { error: 'opencode.json not found or invalid' });
         return;
       }
-      const registry = readJson(join(ROOT_DIR, 'data', 'model-registry.json'));
+      const registry = getRegistry();
       const rawAgents = extractAgents(config);
       const agents = rawAgents.map((a) => {
         const model = lookupModel(a.model, registry);
@@ -182,7 +210,7 @@ async function handler(req, res) {
     }
 
     if (req.method === 'GET' && pathname === '/api/models') {
-      const registry = readJson(join(ROOT_DIR, 'data', 'model-registry.json'));
+      const registry = getRegistry();
       if (!registry) {
         sendJson(res, 500, { error: 'model-registry.json not found' });
         return;
@@ -250,13 +278,13 @@ async function handler(req, res) {
         return;
       }
 
-      const config = readJson(join(ROOT_DIR, 'opencode.json'));
+      const config = getConfig();
       if (!config) {
         sendJson(res, 500, { error: 'opencode.json not found or invalid' });
         return;
       }
 
-      const registry = readJson(join(ROOT_DIR, 'data', 'model-registry.json'));
+      const registry = getRegistry();
       const agentDef = config.agent?.[body.agent];
       if (!agentDef) {
         sendJson(res, 400, { error: `Agent "${body.agent}" not found in config` });
@@ -314,7 +342,7 @@ async function handler(req, res) {
         return;
       }
 
-      const config = readJson(join(ROOT_DIR, 'opencode.json'));
+      const config = getConfig();
       if (!config) {
         sendJson(res, 500, { error: 'opencode.json not found or invalid' });
         return;
@@ -349,8 +377,8 @@ async function handler(req, res) {
     }
 
     if (req.method === 'GET' && pathname === '/api/status') {
-      const config = readJson(join(ROOT_DIR, 'opencode.json'));
-      const registry = readJson(join(ROOT_DIR, 'data', 'model-registry.json'));
+      const config = getConfig();
+      const registry = getRegistry();
       const backupDir = join(ROOT_DIR, 'data', 'backups');
 
       let registryAgeHours = null;
