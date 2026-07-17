@@ -436,6 +436,22 @@ export async function launchServer(options = {}) {
     log(YELLOW, `  Auth proxy start failed: ${e.message}`);
   }
 
+  // ---- Start enabled plugins ----
+  log(CYAN, '  Starting enabled plugins...');
+  try {
+    const { startEnabledPlugins, listPlugins } = await import('./plugin-manager.mjs');
+    const results = await startEnabledPlugins();
+    for (const r of results) {
+      if (r.success) {
+        log(DARK_GREEN, `  Plugin: ${r.name} (PID ${r.pid})`);
+      } else if (r.error && !r.error.includes('already running')) {
+        log(YELLOW, `  Plugin ${r.name}: ${r.error}`);
+      }
+    }
+  } catch (e) {
+    log(YELLOW, `  Plugin manager error: ${e.message}`);
+  }
+
   // ---- Display URLs ----
   log('');
   log(YELLOW, `  Server password: ${pw}`);
@@ -444,6 +460,18 @@ export async function launchServer(options = {}) {
     log(GREEN, `  Web access URL: https://${cloudflareDomain}/${dirSlug}/?auth_token=${authToken}`);
   }
   log(GREEN, `  Local URL: http://localhost:${TARGET_PORT}`);
+  // Show enabled plugin URLs
+  const { listPlugins } = await import('./plugin-manager.mjs');
+  const allPlugins = listPlugins();
+  for (const plugin of allPlugins) {
+    if (plugin.enabled && plugin.port) {
+      const webPath = plugin.web_path || `/${plugin.name}/`;
+      log(DARK_GREEN, `  ${plugin.name}: http://localhost:${plugin.port}`);
+      if (cloudflareDomain) {
+        log(DARK_GREEN, `  ${plugin.name} (tunnel): https://${cloudflareDomain}${webPath}?auth_token=${authToken}`);
+      }
+    }
+  }
   log('');
 
   // ---- Periodic path fixer (runs every 5 min) ----

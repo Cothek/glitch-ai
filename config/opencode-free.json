@@ -98,10 +98,12 @@
       "permission": {
         "read": "allow",
         "bash": "deny",
-        "glob": "deny",
+        "glob": "allow",
         "grep": "deny",
         "edit": "deny",
-        "skill": "deny"
+        "skill": "deny",
+        "list": "allow",
+        "webfetch": "allow"
       },
       "temperature": 0.2
     },
