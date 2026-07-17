@@ -79,108 +79,54 @@
     .filter-bar {
       display: flex;
       align-items: center;
-      gap: 6px;
-      margin-bottom: 6px;
+      gap: 8px;
+      margin-bottom: 8px;
       padding: 4px 0;
-      flex-wrap: nowrap;
+      flex-wrap: wrap;
     }
 
-    .gl-dropdown {
-      position: relative;
-      display: inline-block;
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 4px;
     }
 
-    .gl-dropdown__trigger {
-      font-size: 12px;
-      padding: 5px 24px 5px 8px;
-      border: 1px solid var(--glitch-border);
-      border-radius: 5px;
-      background: var(--glitch-bg-secondary);
-      color: var(--glitch-text-primary);
-      cursor: pointer;
-      min-width: 120px;
-      text-align: left;
-      line-height: 1.4;
+    .filter-group__label {
+      font-size: 11px;
+      color: var(--glitch-text-muted);
       white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      transition: border-color 0.15s ease, box-shadow 0.15s ease;
-      position: relative;
-    }
-    .gl-dropdown__trigger::after {
-      content: '';
-      position: absolute;
-      right: 8px;
-      top: 50%;
-      transform: translateY(-50%);
-      width: 0;
-      height: 0;
-      border-left: 4px solid transparent;
-      border-right: 4px solid transparent;
-      border-top: 5px solid var(--glitch-text-secondary);
-      transition: transform 0.15s ease;
-    }
-    .gl-dropdown__trigger:hover {
-      border-color: var(--glitch-text-secondary);
-    }
-    .gl-dropdown__trigger:focus {
-      outline: none;
-      border-color: var(--glitch-accent);
-      box-shadow: 0 0 0 2px color-mix(in srgb, var(--glitch-accent) 20%, transparent);
-    }
-    .gl-dropdown.open .gl-dropdown__trigger::after {
-      transform: translateY(-50%) rotate(180deg);
     }
 
-    .gl-dropdown__menu {
-      position: absolute;
-      top: calc(100% + 2px);
-      left: 0;
-      min-width: 100%;
-      background: var(--glitch-bg-elevated, #1e1e2e);
-      border: 1px solid var(--glitch-border);
-      border-radius: 6px;
-      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-      z-index: 100;
-      display: none;
-      overflow: hidden;
-      padding: 4px;
-    }
-    .gl-dropdown.open .gl-dropdown__menu {
-      display: block;
-    }
-
-    .gl-dropdown__option {
-      display: block;
-      width: 100%;
-      padding: 6px 10px;
+    .filter-select {
       font-size: 12px;
-      color: var(--glitch-text-primary);
-      background: transparent;
-      border: none;
-      text-align: left;
-      cursor: pointer;
+      padding: 4px 20px 4px 6px;
+      border: 1px solid var(--glitch-border);
       border-radius: 4px;
-      white-space: nowrap;
-    }
-    .gl-dropdown__option:hover {
-      background: color-mix(in srgb, var(--glitch-accent) 15%, transparent);
-    }
-    .gl-dropdown__option.active {
-      background: color-mix(in srgb, var(--glitch-accent) 25%, transparent);
-      color: var(--glitch-accent);
-    }
-
-    .gl-dropdown__trigger, .gl-input-search {
-      height: 28px;
+      background: var(--glitch-bg);
+      color: var(--glitch-text-primary);
+      cursor: pointer;
+      min-width: 80px;
+      appearance: none;
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23888'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 5px center;
+      line-height: 1.4;
+      height: 26px;
       box-sizing: border-box;
     }
-
-    #capability-dropdown {
-      min-width: 140px;
+    .filter-select:hover {
+      border-color: var(--glitch-text-muted);
     }
-    #capability-dropdown .gl-dropdown__trigger {
-      min-width: 140px;
+    .filter-select:focus {
+      outline: none;
+      border-color: var(--glitch-accent);
+    }
+
+    .gl-input-search {
+      height: 28px;
+      box-sizing: border-box;
     }
 
     .model-list {
@@ -688,33 +634,33 @@
             <input type="text" class="gl-input gl-input-search gl-input--with-icon" id="model-search" placeholder="Search models..." style="font-size: 12px; padding: 4px 8px 4px 26px;">
           </div>
 
-          <div class="gl-dropdown" id="tier-dropdown">
-            <button class="gl-dropdown__trigger" data-value="" data-label="All Tiers">All Tiers</button>
-            <div class="gl-dropdown__menu">
-              <button class="gl-dropdown__option active" data-value="">All Tiers</button>
-              <button class="gl-dropdown__option" data-value="free">Free</button>
-              <button class="gl-dropdown__option" data-value="budget">Budget</button>
-              <button class="gl-dropdown__option" data-value="mid">Mid</button>
-              <button class="gl-dropdown__option" data-value="premium">Premium</button>
-            </div>
+          <div class="filter-group">
+            <span class="filter-group__label">Tier</span>
+            <select class="filter-select" id="tier-filter">
+              <option value="">All</option>
+              <option value="free">Free</option>
+              <option value="budget">Budget</option>
+              <option value="mid">Mid</option>
+              <option value="premium">Premium</option>
+            </select>
           </div>
 
-          <div class="gl-dropdown" id="provider-dropdown">
-            <button class="gl-dropdown__trigger" data-value="" data-label="All Providers">All Providers</button>
-            <div class="gl-dropdown__menu">
-              <button class="gl-dropdown__option active" data-value="">All Providers</button>
-              <button class="gl-dropdown__option" data-value="zen">Zen</button>
-              <button class="gl-dropdown__option" data-value="go">Go</button>
-              <button class="gl-dropdown__option" data-value="nvidia">NVIDIA</button>
-              <button class="gl-dropdown__option" data-value="openrouter">OpenRouter</button>
-            </div>
+          <div class="filter-group">
+            <span class="filter-group__label">Prov</span>
+            <select class="filter-select" id="provider-filter">
+              <option value="">All</option>
+              <option value="zen">Zen</option>
+              <option value="go">Go</option>
+              <option value="nvidia">NVIDIA</option>
+              <option value="openrouter">OpenRouter</option>
+            </select>
           </div>
 
-          <div class="gl-dropdown" id="capability-dropdown">
-            <button class="gl-dropdown__trigger" data-value="" data-label="All Capabilities">All Capabilities</button>
-            <div class="gl-dropdown__menu">
-              <button class="gl-dropdown__option active" data-value="">All Capabilities</button>
-            </div>
+          <div class="filter-group">
+            <span class="filter-group__label">Cap</span>
+            <select class="filter-select" id="capability-filter">
+              <option value="">All</option>
+            </select>
           </div>
 
           <label class="checkbox-wrapper" style="white-space: nowrap; margin-left: 2px;">
@@ -959,12 +905,9 @@
       document.getElementById('modal-confirm').disabled = true;
       document.getElementById('modal-confirm').textContent = 'Select a Model';
 
-      document.querySelectorAll('.gl-dropdown__trigger').forEach(t => {
-        t.textContent = t.dataset.label || t.textContent;
-        t.dataset.value = '';
-      });
-      document.querySelectorAll('.gl-dropdown__option').forEach(o => o.classList.remove('active'));
-      document.querySelectorAll('.gl-dropdown__option[data-value=""]').forEach(o => o.classList.add('active'));
+      document.getElementById('tier-filter').value = '';
+      document.getElementById('provider-filter').value = '';
+      document.getElementById('capability-filter').value = '';
 
       document.getElementById('modal-backdrop').classList.remove('gl-hidden');
       await fetchModels();
@@ -995,17 +938,16 @@
         state.models = data.models || [];
 
         if (data.capabilities) {
-          const capMenu = document.querySelector('#capability-dropdown .gl-dropdown__menu');
-          capMenu.innerHTML = '<button class="gl-dropdown__option active" data-value="">All Capabilities</button>';
+          const capSelect = document.getElementById('capability-filter');
+          capSelect.innerHTML = '<option value="">All</option>';
           const seen = new Set();
           data.capabilities.forEach(cap => {
             if (!seen.has(cap)) {
               seen.add(cap);
-              const opt = document.createElement('button');
-              opt.className = 'gl-dropdown__option';
-              opt.dataset.value = cap;
-              opt.textContent = cap.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-              capMenu.appendChild(opt);
+              const opt = document.createElement('option');
+              opt.value = cap;
+              opt.textContent = cap;
+              capSelect.appendChild(opt);
             }
           });
         }
@@ -1147,36 +1089,19 @@
       }, 250);
     });
 
-    document.querySelectorAll('.gl-dropdown__trigger').forEach(trigger => {
-      trigger.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const dropdown = trigger.closest('.gl-dropdown');
-        const isOpen = dropdown.classList.contains('open');
-        document.querySelectorAll('.gl-dropdown.open').forEach(d => d.classList.remove('open'));
-        if (!isOpen) dropdown.classList.add('open');
-      });
+    document.getElementById('tier-filter').addEventListener('change', (e) => {
+      state.filters.tier = e.target.value;
+      fetchModels();
     });
 
-    document.querySelectorAll('.gl-dropdown__menu').forEach(menu => {
-      menu.addEventListener('click', (e) => {
-        const option = e.target.closest('.gl-dropdown__option');
-        if (!option) return;
-        const dropdown = menu.closest('.gl-dropdown');
-        const trigger = dropdown.querySelector('.gl-dropdown__trigger');
-        menu.querySelectorAll('.gl-dropdown__option').forEach(o => o.classList.remove('active'));
-        option.classList.add('active');
-        trigger.textContent = option.textContent;
-        trigger.dataset.value = option.dataset.value;
-        dropdown.classList.remove('open');
-        const filterId = dropdown.id.replace('-dropdown', '');
-        const filterKey = filterId === 'tier' ? 'tier' : filterId === 'provider' ? 'provider' : 'capability';
-        state.filters[filterKey] = option.dataset.value;
-        fetchModels();
-      });
+    document.getElementById('provider-filter').addEventListener('change', (e) => {
+      state.filters.provider = e.target.value;
+      fetchModels();
     });
 
-    document.addEventListener('click', () => {
-      document.querySelectorAll('.gl-dropdown.open').forEach(d => d.classList.remove('open'));
+    document.getElementById('capability-filter').addEventListener('change', (e) => {
+      state.filters.capability = e.target.value;
+      fetchModels();
     });
 
     document.getElementById('filter-compatible').addEventListener('change', (e) => {
