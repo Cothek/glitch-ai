@@ -108,6 +108,32 @@ _Category: WORKFLOW_RULES_ (or appropriate category)
 [Description]
 ```
 
+## Phase 3: Proactive Promotion Scan (Always Run After Write)
+
+After writing the requested content, autonomously scan for promotion candidates:
+
+1. Read `user/current-session.md` and find the Working Memory (Scratchpad) section
+2. Scan for `🔧 PATTERN:` entries:
+   - Extract the pattern title from each entry
+   - Use grep to check `user/patterns.md` for the title/keywords
+   - If NOT already present, append a new entry to `user/patterns.md` with today's date, the pattern title, and the description from the scratchpad entry
+   - Use the patterns.md append format defined in this skill
+3. Scan for `🔧 OPERATIONAL:` entries:
+   - Extract the operation description from each entry
+   - Use grep to check `user/forge-log.md` for the description
+   - If NOT already present, append a new entry to `user/forge-log.md` with today's date and the operation details
+   - Use the forge-log.md append format defined in this skill
+4. In your confirmation response, include a "Promotion Summary" listing what was promoted (file + entry title) and what was skipped (already existed)
+
+### Dedup Logic
+- Before appending, always grep the target file to check if the entry already exists
+- Compare by title/description keywords, not exact match
+- If an entry is already present (even with different wording), skip it
+- Report skipped entries in your confirmation
+
+### Why This Exists
+Without this, promotion from scratchpad to patterns.md/forge-log.md only happens when Glitch explicitly remembers at compaction time. By making it an automatic post-write reflex, patterns and operational learnings get captured while context is fresh.
+
 ## Format Rules
 1. **Timestamp format**: `YYYY-MM-DD` for dates, `YYYY-MM-DDT00:00:00Z` for ISO timestamps
 2. **Category tags**: Use `_Category: NAME_` on the line after the heading. Valid values:

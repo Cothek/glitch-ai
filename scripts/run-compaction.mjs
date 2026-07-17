@@ -174,6 +174,55 @@ async function checkGit() {
   }
 }
 
+// --- Step 4d: Memory file staleness check ---
+async function checkMemoryStaleness() {
+  const userDir = path.join(CWD, "user");
+  const filesToCheck = [
+    { name: "patterns.md", path: path.join(userDir, "patterns.md") },
+    { name: "forge-log.md", path: path.join(userDir, "forge-log.md") },
+    { name: "external-sources.md", path: path.join(userDir, "library", "external-sources.md") },
+  ];
+
+  const results = [];
+  const staleFiles = [];
+
+  for (const file of filesToCheck) {
+    try {
+      const content = await readFile(file.path, "utf-8");
+      const match = content.match(/^\s*timestamp:\s*(.+)$/m);
+      if (match) {
+        const tsStr = match[1].trim();
+        const ts = new Date(tsStr);
+        if (isNaN(ts.getTime())) {
+          results.push(`⚠ ${file.name} — invalid timestamp format: ${tsStr}`);
+        } else {
+          const days = daysSince(ts);
+          const dateStr = formatDate(ts);
+          if (days > 14) {
+            results.push(`⚠ ${file.name} — last updated ${dateStr} (${days} days ago) — review for promotion`);
+            staleFiles.push(file.name);
+          } else {
+            results.push(`✓ ${file.name} — current (${days} days ago)`);
+          }
+        }
+      } else {
+        results.push(`⚠ ${file.name} — not found or no timestamp`);
+        staleFiles.push(file.name);
+      }
+    } catch (e) {
+      if (e.code === "ENOENT") {
+        results.push(`⚠ ${file.name} — not found or no timestamp`);
+        staleFiles.push(file.name);
+      } else {
+        warn(`Memory staleness check failed for ${file.name}: ${e.message}`);
+        results.push(`✗ ${file.name}: FAILED (${e.message})`);
+      }
+    }
+  }
+
+  return { lines: results, hasStale: staleFiles.length > 0 };
+}
+
 // --- Step 4b: Touch timestamps on all user memory files ---
 async function touchAllTimestamps() {
   const userDir = path.join(CWD, "user");
@@ -250,6 +299,7 @@ async function main() {
     gc: await checkImageGC(),
     git: await checkGit(),
     touches: await touchAllTimestamps(),
+    staleness: await checkMemoryStaleness(),
   };
 
   // Split GC result into main line + potential alert
@@ -275,6 +325,12 @@ async function main() {
     "⚠️ Step 8 — Curriculum: Verify next challenge or check cooldown",
     "⚠️ Step 9 — Staleness: Scan main-memory.md for stale refs",
     ...gcAlert,
+    "",
+    "=== Memory File Staleness ===",
+    ...results.staleness.lines,
+    ...(results.staleness.hasStale
+      ? ["", "📋 Action: Review stale memory files above — promote scratchpad entries, update patterns/forge-log as needed"]
+      : []),
     "",
     "=== Suggested Command ===",
     `git add -A && git commit -m "memory: compaction ${todayStr}"`,
