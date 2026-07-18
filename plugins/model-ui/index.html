@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Glitch — Model Management</title>
-  <link rel="stylesheet" href="../glitch-ui/tokens.css">
-  <link rel="stylesheet" href="../glitch-ui/components.css">
-  <link rel="stylesheet" href="../glitch-ui/layout.css">
+  <link rel="stylesheet" href="/plugins/glitch-ui/tokens.css">
+  <link rel="stylesheet" href="/plugins/glitch-ui/components.css">
+  <link rel="stylesheet" href="/plugins/glitch-ui/layout.css">
   <style>
     .model-id {
       font-family: var(--glitch-font-mono);
@@ -78,59 +78,27 @@
 
     .filter-bar {
       display: flex;
-      flex-wrap: wrap;
       align-items: center;
-      gap: 4px;
-      margin-bottom: 6px;
+      gap: 8px;
+      margin-bottom: 8px;
       padding: 4px 0;
+      flex-wrap: wrap;
     }
 
     .filter-group {
-      display: inline-flex;
+      display: flex;
       align-items: center;
-      gap: 2px;
+      gap: 4px;
+    }
+    .filter-group__label {
+      font-size: 11px;
+      color: var(--glitch-text-muted);
       white-space: nowrap;
     }
 
-    .filter-group__label {
-      font-size: 10px;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: var(--glitch-text-muted);
-      margin-right: 1px;
-      user-select: none;
-    }
-
-    .filter-chips {
-      display: inline-flex;
-      gap: 2px;
-      flex-wrap: nowrap;
-    }
-
-    .filter-chip {
-      display: inline-flex;
-      align-items: center;
-      padding: 2px 6px;
-      font-size: 10px;
-      font-weight: var(--glitch-font-medium);
-      border-radius: var(--glitch-radius-full);
-      border: 1px solid var(--glitch-border);
-      background: transparent;
-      color: var(--glitch-text-secondary);
-      cursor: pointer;
-      transition: all var(--glitch-transition-fast);
-      line-height: 1.3;
-    }
-
-    .filter-chip:hover {
-      border-color: var(--glitch-border-strong);
-      color: var(--glitch-text-primary);
-    }
-
-    .filter-chip.active {
-      background-color: var(--glitch-accent);
-      border-color: var(--glitch-accent);
-      color: var(--glitch-accent-text);
+    .gl-input-search {
+      height: 28px;
+      box-sizing: border-box;
     }
 
     .model-list {
@@ -300,12 +268,6 @@
       padding-right: 2px;
     }
 
-    #agent-table .col-action {
-      width: 1%;
-      white-space: nowrap;
-      text-align: right;
-    }
-
     .model-line {
       display: inline-flex;
       align-items: center;
@@ -364,24 +326,134 @@
       line-height: 1.3;
       margin-top: 1px;
     }
+
+    /* ===== Animations ===== */
+    @keyframes fade-in-up {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    @keyframes slide-in-left {
+      from {
+        opacity: 0;
+        transform: translateX(-12px);
+      }
+      to {
+        opacity: 1;
+        transform: translateX(0);
+      }
+    }
+
+    @keyframes modal-fade-in {
+      from { opacity: 0; }
+      to { opacity: 1; }
+    }
+
+    @keyframes modal-scale-in {
+      from {
+        opacity: 0;
+        transform: scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+
+    /* Status cards: staggered fade-in */
+    .status-card {
+      animation: fade-in-up 0.4s ease-out forwards;
+      opacity: 0;
+    }
+    .status-card:nth-child(1) { animation-delay: 0.05s; }
+    .status-card:nth-child(2) { animation-delay: 0.1s; }
+    .status-card:nth-child(3) { animation-delay: 0.15s; }
+    .status-card:nth-child(4) { animation-delay: 0.2s; }
+
+    /* Agent table rows: staggered slide-in */
+    #agent-table tbody tr {
+      animation: slide-in-left 0.35s ease-out forwards;
+      opacity: 0;
+    }
+    #agent-table tbody tr:nth-child(1) { animation-delay: 0.05s; }
+    #agent-table tbody tr:nth-child(2) { animation-delay: 0.1s; }
+    #agent-table tbody tr:nth-child(3) { animation-delay: 0.15s; }
+    #agent-table tbody tr:nth-child(4) { animation-delay: 0.2s; }
+    #agent-table tbody tr:nth-child(5) { animation-delay: 0.25s; }
+    #agent-table tbody tr:nth-child(6) { animation-delay: 0.3s; }
+    #agent-table tbody tr:nth-child(7) { animation-delay: 0.35s; }
+    #agent-table tbody tr:nth-child(8) { animation-delay: 0.4s; }
+    #agent-table tbody tr:nth-child(9) { animation-delay: 0.45s; }
+    #agent-table tbody tr:nth-child(10) { animation-delay: 0.5s; }
+
+    /* Model picker modal */
+    .gl-modal-backdrop:not(.gl-hidden) {
+      animation: modal-fade-in 0.2s ease-out forwards;
+    }
+    .gl-modal-backdrop:not(.gl-hidden) .gl-modal {
+      animation: modal-scale-in 0.25s ease-out forwards;
+    }
+
+    /* Apply/Rollback buttons: subtle hover transitions */
+    .gl-btn--primary,
+    .gl-btn--secondary,
+    .gl-btn--ghost {
+      transition: background-color var(--glitch-transition-fast),
+                  border-color var(--glitch-transition-fast),
+                  color var(--glitch-transition-fast),
+                  transform var(--glitch-transition-fast),
+                  box-shadow var(--glitch-transition-fast);
+    }
+    .gl-btn--primary:hover,
+    .gl-btn--secondary:hover,
+    .gl-btn--ghost:hover {
+      transform: translateY(-1px);
+    }
+    .gl-btn--primary:active,
+    .gl-btn--secondary:active,
+    .gl-btn--ghost:active {
+      transform: translateY(0);
+    }
+
+    /* Model cards in modal: subtle entrance */
+    .model-card {
+      animation: fade-in-up 0.25s ease-out forwards;
+      opacity: 0;
+    }
+    .model-list .model-card:nth-child(1) { animation-delay: 0.02s; }
+    .model-list .model-card:nth-child(2) { animation-delay: 0.04s; }
+    .model-list .model-card:nth-child(3) { animation-delay: 0.06s; }
+    .model-list .model-card:nth-child(4) { animation-delay: 0.08s; }
+    .model-list .model-card:nth-child(5) { animation-delay: 0.1s; }
+    .model-list .model-card:nth-child(6) { animation-delay: 0.12s; }
+    .model-list .model-card:nth-child(7) { animation-delay: 0.14s; }
+    .model-list .model-card:nth-child(8) { animation-delay: 0.16s; }
+    .model-list .model-card:nth-child(9) { animation-delay: 0.18s; }
+    .model-list .model-card:nth-child(10) { animation-delay: 0.2s; }
+
+    /* Respect reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      .status-card,
+      #agent-table tbody tr,
+      .gl-modal-backdrop:not(.gl-hidden),
+      .gl-modal-backdrop:not(.gl-hidden) .gl-modal,
+      .model-card {
+        animation: none !important;
+        opacity: 1 !important;
+        transform: none !important;
+      }
+    }
   </style>
 </head>
 <body>
   <div class="glitch-layout">
-    <aside class="glitch-sidebar">
-      <div class="glitch-sidebar__brand">
-        <span class="glitch-sidebar__logo">&#9670;</span>
-        <span class="glitch-sidebar__title">Glitch</span>
-        <span class="glitch-sidebar__version">v1.0</span>
-      </div>
-      <nav class="glitch-sidebar__nav">
-        <a href="#" class="glitch-sidebar__link glitch-sidebar__link--active">&#9673; Dashboard</a>
-        <a href="#" class="glitch-sidebar__link">&#9674; Agents</a>
-        <a href="#" class="glitch-sidebar__link">&#9670; Models</a>
-      </nav>
-    </aside>
-
-    <main class="glitch-main">
+    <main class="glitch-main" style="width: 100%; max-width: none; margin: 0;">
       <div class="glitch-page-header">
         <div class="page-header-row">
           <div class="page-header-text">
@@ -477,7 +549,6 @@
               <tr>
                 <th class="col-agent">Agent</th>
                 <th class="col-model">Model &amp; Info</th>
-                <th class="col-action">Action</th>
               </tr>
             </thead>
             <tbody id="agent-tbody"></tbody>
@@ -523,44 +594,41 @@
       </div>
       <div class="gl-modal-body">
         <div class="filter-bar">
-          <div class="gl-input-wrapper" style="flex: 0 1 180px; min-width: 120px;">
+          <div class="gl-input-wrapper" style="flex: 1; min-width: 120px;">
             <span class="gl-input-icon">&#9906;</span>
             <input type="text" class="gl-input gl-input-search gl-input--with-icon" id="model-search" placeholder="Search models..." style="font-size: 12px; padding: 4px 8px 4px 26px;">
           </div>
 
-          <div class="filter-group">
-            <span class="filter-group__label">Tier</span>
-            <div class="filter-chips" id="tier-filters">
-              <button class="filter-chip active" data-tier="">All</button>
-              <button class="filter-chip" data-tier="free">Free</button>
-              <button class="filter-chip" data-tier="budget">Budget</button>
-              <button class="filter-chip" data-tier="mid">Mid</button>
-              <button class="filter-chip" data-tier="premium">Premium</button>
+          <div class="gl-dropdown" data-filter="tier">
+            <button class="gl-dropdown__trigger" data-value="" data-label="All Tiers">All Tiers</button>
+            <div class="gl-dropdown__menu">
+              <button class="gl-dropdown__option active" data-value="">All Tiers</button>
+              <button class="gl-dropdown__option" data-value="free">Free</button>
+              <button class="gl-dropdown__option" data-value="budget">Budget</button>
+              <button class="gl-dropdown__option" data-value="mid">Mid</button>
+              <button class="gl-dropdown__option" data-value="premium">Premium</button>
             </div>
           </div>
 
-          <div class="filter-group">
-            <span class="filter-group__label">Prov</span>
-            <div class="filter-chips" id="provider-filters">
-              <button class="filter-chip active" data-provider="">All</button>
-              <button class="filter-chip" data-provider="zen">Zen</button>
-              <button class="filter-chip" data-provider="go">Go</button>
-              <button class="filter-chip" data-provider="nvidia">NVIDIA</button>
-              <button class="filter-chip" data-provider="openrouter">OpenRouter</button>
+          <div class="gl-dropdown" data-filter="provider">
+            <button class="gl-dropdown__trigger" data-value="" data-label="All Providers">All Providers</button>
+            <div class="gl-dropdown__menu">
+              <button class="gl-dropdown__option active" data-value="">All Providers</button>
+              <button class="gl-dropdown__option" data-value="zen">Zen</button>
+              <button class="gl-dropdown__option" data-value="go">Go</button>
+              <button class="gl-dropdown__option" data-value="nvidia">NVIDIA</button>
+              <button class="gl-dropdown__option" data-value="openrouter">OpenRouter</button>
             </div>
           </div>
 
-          <div class="filter-group">
-            <span class="filter-group__label">Cap</span>
-            <div class="filter-chips" id="capability-filters">
-              <button class="filter-chip active" data-capability="">All</button>
+          <div class="gl-dropdown" data-filter="capability">
+            <button class="gl-dropdown__trigger" data-value="" data-label="All Capabilities">All Capabilities</button>
+            <div class="gl-dropdown__menu">
+              <button class="gl-dropdown__option active" data-value="">All Capabilities</button>
             </div>
           </div>
 
-          <label class="checkbox-wrapper" style="white-space: nowrap; margin-left: 2px;">
-            <input type="checkbox" id="filter-compatible">
-            <span class="gl-text-xs" style="font-size: 10px;">Compat</span>
-          </label>
+
         </div>
 
         <div id="model-list-loading" class="gl-flex gl-items-center gl-justify-center gl-p-8">
@@ -598,7 +666,7 @@
       pendingChanges: [],
       selectedModel: null,
       currentAgent: null,
-      filters: { search: '', tier: '', provider: '', capability: '', compatible: false },
+      filters: { search: '', tier: '', provider: '', capability: '' },
       models: [],
       loading: { agents: false, models: false, status: false }
     };
@@ -702,7 +770,7 @@
           : displayTier === 'mid' ? 'gl-badge--mid'
           : displayTier === 'premium' ? 'gl-badge--premium'
           : 'gl-badge--neutral';
-        const changedClass = pendingChange ? ' style="background-color: var(--glitch-accent-bg);"' : '';
+        const rowStyle = pendingChange ? ' style="cursor: pointer; background-color: var(--glitch-accent-bg);"' : ' style="cursor: pointer;"';
 
         const pendingHtml = pendingChange
           ? `<span class="model-pending">&#9888; ${escapeHtml(pendingChange.old_model)} &rarr; ${escapeHtml(pendingChange.new_model)}</span>`
@@ -710,7 +778,7 @@
 
         const contextText = agent.context_length ? `${(agent.context_length / 1000).toFixed(0)}K` : '--';
 
-        return `<tr${changedClass}>
+        return `<tr onclick="openModelPicker('${escapeHtml(agent.name)}')"${rowStyle}>
           <td class="col-agent"><span class="agent-name">@${escapeHtml(agent.name)}</span></td>
           <td>
             <span class="model-line">
@@ -725,7 +793,6 @@
             </span>
             ${pendingHtml}
           </td>
-          <td class="col-action"><button class="gl-btn gl-btn--secondary gl-btn--sm" onclick="openModelPicker('${escapeHtml(agent.name)}')">Change</button></td>
         </tr>`;
       }).join('');
 
@@ -791,17 +858,19 @@
     async function openModelPicker(agentName) {
       state.currentAgent = agentName;
       state.selectedModel = null;
-      state.filters = { search: '', tier: '', provider: '', capability: '', compatible: false };
+      state.filters = { search: '', tier: '', provider: '', capability: '' };
 
       document.getElementById('modal-title').textContent = `Select Model for @${agentName}`;
       document.getElementById('model-search').value = '';
-      document.getElementById('filter-compatible').checked = false;
       document.getElementById('modal-confirm').disabled = true;
       document.getElementById('modal-confirm').textContent = 'Select a Model';
 
-      document.querySelectorAll('#tier-filters .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.tier === ''));
-      document.querySelectorAll('#provider-filters .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.provider === ''));
-      document.querySelectorAll('#capability-filters .filter-chip').forEach(c => c.classList.toggle('active', c.dataset.capability === ''));
+      document.querySelectorAll('.gl-dropdown__trigger').forEach(t => {
+        t.textContent = t.dataset.label || t.textContent;
+        t.dataset.value = '';
+      });
+      document.querySelectorAll('.gl-dropdown__option').forEach(o => o.classList.remove('active'));
+      document.querySelectorAll('.gl-dropdown__option[data-value=""]').forEach(o => o.classList.add('active'));
 
       document.getElementById('modal-backdrop').classList.remove('gl-hidden');
       await fetchModels();
@@ -832,24 +901,21 @@
         state.models = data.models || [];
 
         if (data.capabilities) {
-          const container = document.getElementById('capability-filters');
-          const allChip = container.querySelector('[data-capability=""]');
-          container.innerHTML = '';
-          container.appendChild(allChip);
+          const capDropdown = document.querySelector('.gl-dropdown[data-filter="capability"]');
+          const capMenu = capDropdown.querySelector('.gl-dropdown__menu');
+          const capTrigger = capDropdown.querySelector('.gl-dropdown__trigger');
+          capMenu.innerHTML = '<button class="gl-dropdown__option active" data-value="">All Capabilities</button>';
+          const seen = new Set();
           data.capabilities.forEach(cap => {
-            const chip = document.createElement('button');
-            chip.className = 'filter-chip' + (state.filters.capability === cap ? ' active' : '');
-            chip.dataset.capability = cap;
-            chip.textContent = cap.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
-            container.appendChild(chip);
+            if (!seen.has(cap)) {
+              seen.add(cap);
+              const opt = document.createElement('button');
+              opt.className = 'gl-dropdown__option';
+              opt.dataset.value = cap;
+              opt.textContent = cap;
+              capMenu.appendChild(opt);
+            }
           });
-        }
-
-        if (state.filters.compatible && state.currentAgent) {
-          const agent = state.agents.find(a => a.name === state.currentAgent);
-          if (agent && agent.capabilities && agent.capabilities.includes('vision')) {
-            state.models = state.models.filter(m => m.vision);
-          }
         }
 
         renderModelList();
@@ -982,37 +1048,66 @@
       }, 250);
     });
 
-    document.getElementById('tier-filters').addEventListener('click', (e) => {
-      const chip = e.target.closest('.filter-chip');
-      if (!chip) return;
-      document.querySelectorAll('#tier-filters .filter-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      state.filters.tier = chip.dataset.tier;
-      fetchModels();
+    // Custom dropdown system
+    const dropdownTriggers = document.querySelectorAll('.gl-dropdown__trigger');
+
+    function positionDropdown(trigger, menu) {
+      const rect = trigger.getBoundingClientRect();
+      menu.style.position = 'fixed';
+      menu.style.top = (rect.bottom + 4) + 'px';
+      menu.style.left = Math.min(rect.left, Math.max(8, window.innerWidth - menu.offsetWidth - 8)) + 'px';
+      menu.style.minWidth = Math.max(rect.width, 140) + 'px';
+    }
+
+    dropdownTriggers.forEach(trigger => {
+      trigger.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const dropdown = trigger.closest('.gl-dropdown');
+        const menu = dropdown.querySelector('.gl-dropdown__menu');
+        const isOpen = dropdown.classList.contains('open');
+
+        document.querySelectorAll('.gl-dropdown.open').forEach(d => {
+          if (d !== dropdown) d.classList.remove('open');
+        });
+
+        if (isOpen) {
+          dropdown.classList.remove('open');
+        } else {
+          positionDropdown(trigger, menu);
+          dropdown.classList.add('open');
+        }
+      });
     });
 
-    document.getElementById('provider-filters').addEventListener('click', (e) => {
-      const chip = e.target.closest('.filter-chip');
-      if (!chip) return;
-      document.querySelectorAll('#provider-filters .filter-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      state.filters.provider = chip.dataset.provider;
-      fetchModels();
+    document.querySelectorAll('.gl-dropdown__menu').forEach(menu => {
+      menu.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const option = e.target.closest('.gl-dropdown__option');
+        if (!option) return;
+        const dropdown = menu.closest('.gl-dropdown');
+        const trigger = dropdown.querySelector('.gl-dropdown__trigger');
+
+        menu.querySelectorAll('.gl-dropdown__option').forEach(o => o.classList.remove('active'));
+        option.classList.add('active');
+        trigger.textContent = option.textContent;
+        trigger.dataset.value = option.dataset.value;
+        dropdown.classList.remove('open');
+
+        const filterKey = dropdown.dataset.filter;
+        state.filters[filterKey] = option.dataset.value;
+        fetchModels();
+      });
     });
 
-    document.getElementById('capability-filters').addEventListener('click', (e) => {
-      const chip = e.target.closest('.filter-chip');
-      if (!chip) return;
-      document.querySelectorAll('#capability-filters .filter-chip').forEach(c => c.classList.remove('active'));
-      chip.classList.add('active');
-      state.filters.capability = chip.dataset.capability;
-      fetchModels();
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.gl-dropdown')) {
+        document.querySelectorAll('.gl-dropdown.open').forEach(d => d.classList.remove('open'));
+      }
     });
 
-    document.getElementById('filter-compatible').addEventListener('change', (e) => {
-      state.filters.compatible = e.target.checked;
-      fetchModels();
-    });
+    window.addEventListener('scroll', () => {
+      document.querySelectorAll('.gl-dropdown.open').forEach(d => d.classList.remove('open'));
+    }, true);
 
     document.getElementById('modal-close').addEventListener('click', closeModal);
     document.getElementById('modal-cancel').addEventListener('click', closeModal);

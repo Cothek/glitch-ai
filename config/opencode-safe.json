@@ -1,5 +1,6 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "plugin": [".opencode/plugins/save-images.js"],
   "agent": {
     "glitch": {
       "model": "opencode-go/deepseek-v4-flash",

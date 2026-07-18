@@ -104,22 +104,6 @@ export const SaveImagesPlugin = async ({ directory }) => {
             const triggerPath = join(screenshotsDir, ".new-image");
             writeFileSync(triggerPath, filepath + "\n");
 
-            // Inject image path into message text for AI auto-detection
-            // This makes the AI see the file path without needing to check .new-image
-            try {
-              if (message && typeof message === 'object') {
-                const ref = `[📷 Image saved: screenshots/${filename}]`;
-                if (message.content) {
-                  message.content += `\n${ref}`;
-                } else if (parts && Array.isArray(parts)) {
-                  // Fallback: add as a text part if no message content field
-                  parts.push({ type: 'text', text: ref });
-                }
-              }
-            } catch (e) {
-              console.error(`[save-images] Error injecting image ref: ${e.message}`);
-            }
-
             console.log(
               `[save-images] Saved: screenshots/${filename} (${(buffer.length / 1024).toFixed(1)} KB, ${part.mime})`
             );
