@@ -223,6 +223,103 @@ async function checkMemoryStaleness() {
   return { lines: results, hasStale: staleFiles.length > 0 };
 }
 
+// --- Step 5.5: Skill improvement review ---
+async function checkSkillImprovements() {
+  const fp = path.join(CWD, "user", "pending-skill-improvements.md");
+  try {
+    const content = await readFile(fp, "utf-8");
+
+    const skillCounts = {};
+    const lines = content.split("\n");
+    let currentSkill = null;
+    let totalEntries = 0;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+
+      const headingMatch = line.match(/^###\s+(.+)/);
+      if (headingMatch) {
+        currentSkill = headingMatch[1].trim();
+        continue;
+      }
+
+      const entryMatch = line.match(/^- \[(\d{4}-\d{2}-\d{2})\]/);
+      if (entryMatch && currentSkill) {
+        totalEntries++;
+
+        let significance = "minor";
+        let status = "pending";
+        for (let j = i + 1; j < Math.min(i + 5, lines.length); j++) {
+          const meta = lines[j];
+          if (meta.includes("→ Significance:")) {
+            const sigMatch = meta.match(/→ Significance:\s*(\S+)/i);
+            if (sigMatch) significance = sigMatch[1].toLowerCase();
+          } else if (meta.includes("→ Status:")) {
+            const statMatch = meta.match(/→ Status:\s*(\S+)/i);
+            if (statMatch) status = statMatch[1].toLowerCase();
+          }
+          if (meta.match(/^- \[|^###/)) break;
+        }
+
+        if (!skillCounts[currentSkill]) {
+          skillCounts[currentSkill] = { total: 0, pending: 0, major: 0, critical: 0, notable: 0 };
+        }
+        skillCounts[currentSkill].total++;
+        if (status === "pending") {
+          skillCounts[currentSkill].pending++;
+        }
+        if (significance === "major") skillCounts[currentSkill].major++;
+        else if (significance === "critical") skillCounts[currentSkill].critical++;
+        else if (significance === "notable") skillCounts[currentSkill].notable++;
+      }
+    }
+
+    if (totalEntries === 0) {
+      return { lines: ["✓ Skill improvements: none pending"], hasPending: false, skills: {} };
+    }
+
+    const resultLines = [];
+    let totalPending = 0;
+    for (const [skill, counts] of Object.entries(skillCounts)) {
+      if (counts.pending > 0) {
+        let signal = "minor";
+        if (counts.critical >= 1) signal = "CRITICAL — present immediately";
+        else if (counts.major >= 1) signal = "SIGNIFICANT — present at next compaction";
+        else if (counts.pending >= 2) signal = "SIGNIFICANT — 2+ entries";
+        else if (counts.notable >= 1) signal = "notable — needs 2nd occurrence";
+
+        resultLines.push(
+          `  ${skill}: ${counts.pending} pending (${counts.total} total)` +
+          (counts.critical > 0 ? `, ${counts.critical} critical` : "") +
+          (counts.major > 0 ? `, ${counts.major} major` : "") +
+          ` — ${signal}`
+        );
+        totalPending += counts.pending;
+      }
+    }
+
+    if (totalPending === 0) {
+      return { lines: ["✓ Skill improvements: all applied or rejected"], hasPending: false, skills: {} };
+    }
+
+    return {
+      lines: [
+        `📋 Skill improvements: ${totalPending} pending across ${Object.keys(skillCounts).filter(s => skillCounts[s].pending > 0).length} skills`,
+        ...resultLines,
+        "  → Load forge skill (`skill \"forge\"`) to review and apply level-ups",
+      ],
+      hasPending: true,
+      skills: skillCounts,
+    };
+  } catch (e) {
+    if (e.code === "ENOENT") {
+      return { lines: ["✓ Skill improvements: N/A (no pending-skill-improvements.md)"], hasPending: false, skills: {} };
+    }
+    warn(`Skill improvement check failed: ${e.message}`);
+    return { lines: [`⚠ Skill improvements: check failed (${e.message})`], hasPending: false, skills: {} };
+  }
+}
+
 // --- Step 4b: Touch timestamps on all user memory files ---
 async function touchAllTimestamps() {
   const userDir = path.join(CWD, "user");
@@ -300,6 +397,7 @@ async function main() {
     git: await checkGit(),
     touches: await touchAllTimestamps(),
     staleness: await checkMemoryStaleness(),
+    skillImp: await checkSkillImprovements(),
   };
 
   // Split GC result into main line + potential alert
@@ -330,6 +428,9 @@ async function main() {
     ...results.staleness.lines,
     ...(results.staleness.hasStale
       ? ["", "📋 Action: Review stale memory files above — promote scratchpad entries, update patterns/forge-log as needed"]
+      : []),
+    ...(results.skillImp.hasPending
+      ? ["", "=== Skill Improvements Pending ===", ...results.skillImp.lines]
       : []),
     "",
     "=== Suggested Command ===",

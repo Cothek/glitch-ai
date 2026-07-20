@@ -1,0 +1,617 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Quarterly Review</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;0,900;1,400;1,700&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;0,8..60,600;1,8..60,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #f8f4ef;
+    --paper-warm: #ece4d5;
+    --ink: #2c2418;
+    --ink-light: #5a4e3c;
+    --rule: #d4c9b8;
+    --forest: #1a3a2a;
+    --rust: #c25a3c;
+    --gold: #c9a84c;
+    --cream: #f3ede4;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html {
+    scroll-behavior: smooth;
+    font-size: 18px;
+  }
+
+  body {
+    font-family: 'Source Serif 4', 'Georgia', serif;
+    background-color: var(--paper);
+    color: var(--ink);
+    line-height: 1.7;
+    -webkit-font-smoothing: antialiased;
+    position: relative;
+    overflow-x: hidden;
+  }
+
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 9999;
+    opacity: 0.03;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    background-size: 256px 256px;
+  }
+
+  .scroll-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--rust), var(--gold));
+    width: 0%;
+    z-index: 10000;
+    transition: width 50ms linear;
+  }
+
+  .page {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 clamp(40px, 12vw, 200px);
+  }
+
+  .fade-in {
+    opacity: 0;
+    transform: translateY(16px);
+    animation: fadeUp 800ms ease forwards;
+  }
+
+  .fade-in-delay-1 { animation-delay: 200ms; }
+  .fade-in-delay-2 { animation-delay: 400ms; }
+  .fade-in-delay-3 { animation-delay: 600ms; }
+  .fade-in-delay-4 { animation-delay: 800ms; }
+  .fade-in-delay-5 { animation-delay: 1000ms; }
+
+  @keyframes fadeUp {
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes scaleIn {
+    0% {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+    100% {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes drawLine {
+    to { stroke-dashoffset: 0; }
+  }
+
+  @keyframes dropCapReveal {
+    0% {
+      opacity: 0;
+      color: var(--gold);
+    }
+    100% {
+      opacity: 1;
+      color: var(--forest);
+    }
+  }
+
+  .folio {
+    padding: 28px 0 20px;
+    border-bottom: 1px solid var(--rule);
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+  }
+
+  .folio-left {
+    font-weight: 600;
+  }
+
+  .folio-right {
+    font-style: italic;
+    letter-spacing: 0.12em;
+  }
+
+  .hero {
+    padding: 80px 0 60px;
+    text-align: left;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .hero-label {
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--rust);
+    margin-bottom: 24px;
+    font-weight: 600;
+  }
+
+  .hero-title {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(2.4rem, 5vw, 3.8rem);
+    font-weight: 400;
+    line-height: 1.1;
+    color: var(--ink);
+    margin-bottom: 48px;
+    max-width: 700px;
+    letter-spacing: -0.01em;
+  }
+
+  .hero-title em {
+    font-style: italic;
+    color: var(--forest);
+  }
+
+  .hero-metric {
+    display: inline-block;
+    animation: scaleIn 1200ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    animation-delay: 600ms;
+    opacity: 0;
+  }
+
+  .hero-number {
+    font-family: 'Playfair Display', serif;
+    font-size: clamp(6rem, 14vw, 11rem);
+    font-weight: 900;
+    line-height: 0.85;
+    color: var(--forest);
+    letter-spacing: -0.03em;
+    display: block;
+    position: relative;
+  }
+
+  .hero-number::after {
+    content: '';
+    position: absolute;
+    bottom: 0.05em;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: var(--gold);
+    opacity: 0.5;
+  }
+
+  .hero-caption {
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    margin-top: 20px;
+    font-weight: 400;
+  }
+
+  .content-spread {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: clamp(40px, 6vw, 100px);
+    padding: 60px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .narrative {
+    padding-right: 20px;
+  }
+
+  .narrative-text {
+    font-family: 'Source Serif 4', serif;
+    font-size: 1.05rem;
+    line-height: 1.8;
+    color: var(--ink);
+    text-align: left;
+  }
+
+  .narrative-text::first-letter {
+    font-family: 'Playfair Display', serif;
+    font-size: 4.2em;
+    font-weight: 900;
+    float: left;
+    line-height: 0.75;
+    margin-right: 0.12em;
+    margin-top: 0.08em;
+    color: var(--forest);
+    animation: dropCapReveal 1200ms ease forwards;
+    animation-delay: 1000ms;
+    opacity: 0;
+  }
+
+  .narrative-text + .narrative-text {
+    margin-top: 1.4em;
+    text-indent: 1.4em;
+  }
+
+  .pull-quote {
+    margin: 40px 0;
+    padding: 24px 0 24px 28px;
+    border-left: 2px solid var(--gold);
+    font-family: 'Playfair Display', serif;
+    font-style: italic;
+    font-size: 1.3rem;
+    line-height: 1.5;
+    color: var(--forest);
+    letter-spacing: -0.005em;
+  }
+
+  .metrics-column {
+    padding-top: 8px;
+  }
+
+  .metrics-column-title {
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    margin-bottom: 32px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--rule);
+    font-weight: 600;
+  }
+
+  .vignette {
+    padding: 24px 0;
+    border-bottom: 1px solid var(--rule);
+    transition: background-color 500ms ease, padding-left 500ms ease;
+    cursor: default;
+    margin: 0 -16px;
+    padding-left: 16px;
+    padding-right: 16px;
+    border-radius: 2px;
+  }
+
+  .vignette:last-child {
+    border-bottom: none;
+  }
+
+  .vignette:hover {
+    background-color: var(--paper-warm);
+    padding-left: 22px;
+  }
+
+  .vignette-label {
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    margin-bottom: 6px;
+    font-weight: 600;
+  }
+
+  .vignette-value {
+    font-family: 'Playfair Display', serif;
+    font-size: 2.4rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+  }
+
+  .vignette-change {
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.75rem;
+    color: var(--forest);
+    margin-top: 4px;
+    font-weight: 400;
+    letter-spacing: 0.02em;
+  }
+
+  .vignette-change .arrow {
+    display: inline-block;
+    margin-right: 3px;
+    font-size: 0.65rem;
+  }
+
+  .chart-section {
+    padding: 60px 0;
+    border-bottom: 1px solid var(--rule);
+  }
+
+  .chart-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    margin-bottom: 40px;
+  }
+
+  .chart-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5rem;
+    font-weight: 400;
+    color: var(--ink);
+    font-style: italic;
+  }
+
+  .chart-subtitle {
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    font-weight: 600;
+  }
+
+  .chart-container {
+    position: relative;
+    width: 100%;
+    height: 280px;
+  }
+
+  .chart-container svg {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .chart-line {
+    fill: none;
+    stroke: var(--forest);
+    stroke-width: 2;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+    animation: drawLine 2000ms cubic-bezier(0.4, 0, 0.2, 1) forwards;
+    animation-delay: 1200ms;
+  }
+
+  .chart-area {
+    fill: url(#chartGradient);
+    opacity: 0;
+    animation: fadeUp 800ms ease forwards;
+    animation-delay: 2400ms;
+  }
+
+  .chart-dot {
+    fill: var(--paper);
+    stroke: var(--forest);
+    stroke-width: 2;
+    opacity: 0;
+    animation: fadeUp 400ms ease forwards;
+  }
+
+  .chart-dot:nth-child(1) { animation-delay: 2600ms; }
+  .chart-dot:nth-child(2) { animation-delay: 2750ms; }
+  .chart-dot:nth-child(3) { animation-delay: 2900ms; }
+  .chart-dot:nth-child(4) { animation-delay: 3050ms; }
+  .chart-dot:nth-child(5) { animation-delay: 3200ms; }
+
+  .chart-axis-label {
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.55rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    fill: var(--ink-light);
+  }
+
+  .chart-grid-line {
+    stroke: var(--rule);
+    stroke-width: 0.5;
+    stroke-dasharray: 4 4;
+  }
+
+  .chart-value-label {
+    font-family: 'Playfair Display', serif;
+    font-size: 0.65rem;
+    fill: var(--ink);
+    font-weight: 700;
+    opacity: 0;
+    animation: fadeUp 400ms ease forwards;
+  }
+
+  .chart-value-label:nth-child(1) { animation-delay: 2800ms; }
+  .chart-value-label:nth-child(2) { animation-delay: 2950ms; }
+  .chart-value-label:nth-child(3) { animation-delay: 3100ms; }
+  .chart-value-label:nth-child(4) { animation-delay: 3250ms; }
+  .chart-value-label:nth-child(5) { animation-delay: 3400ms; }
+
+  .colophon {
+    padding: 32px 0 60px;
+  }
+
+  .colophon-text {
+    font-family: 'Source Serif 4', serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-light);
+    line-height: 1.8;
+  }
+
+  .colophon-text span {
+    display: inline;
+    margin-right: 2em;
+  }
+
+  .ornament {
+    text-align: center;
+    padding: 20px 0;
+    color: var(--rule);
+    font-size: 1.2rem;
+    letter-spacing: 0.5em;
+  }
+
+  .section-rule {
+    width: 40px;
+    height: 1px;
+    background: var(--gold);
+    margin: 24px 0;
+  }
+
+  @media (max-width: 900px) {
+    .content-spread {
+      grid-template-columns: 1fr;
+      gap: 40px;
+    }
+
+    .hero-number {
+      font-size: clamp(4rem, 16vw, 7rem);
+    }
+
+    .page {
+      padding: 0 clamp(24px, 6vw, 60px);
+    }
+  }
+</style>
+</head>
+<body>
+
+<div class="scroll-progress" id="scrollProgress"></div>
+
+<div class="page">
+
+  <header class="folio fade-in">
+    <div class="folio-left">The Quarterly Review</div>
+    <div class="folio-right">Q3 &middot; July&ndash;September 2026</div>
+  </header>
+
+  <section class="hero">
+    <div class="hero-label fade-in fade-in-delay-1">The Lead</div>
+    <h1 class="hero-title fade-in fade-in-delay-2">This Quarter <em>in Review</em></h1>
+    <div class="hero-metric">
+      <span class="hero-number">$2.48M</span>
+      <div class="hero-caption">Total Revenue &middot; Q3 2026</div>
+    </div>
+  </section>
+
+  <section class="content-spread">
+    <div class="narrative fade-in fade-in-delay-3">
+      <p class="narrative-text">
+        Revenue grew 12.4% year over year, driven primarily by expansion in the Asia-Pacific region and improved conversion on mobile web. The quarter marked a turning point in how the business approaches its core markets, with a deliberate shift toward long-term customer relationships over transactional volume.
+      </p>
+      <div class="pull-quote">
+        &ldquo;The numbers tell a story of patience rewarded&thinsp;&mdash;&thinsp;compounding gains in markets where we invested early.&rdquo;
+      </div>
+      <p class="narrative-text">
+        Subscriber acquisition costs fell for the third consecutive quarter, while lifetime value metrics climbed to their highest point in company history. The combination suggests a business finding its stride, not through any single initiative, but through the accumulated effect of consistent, measured decisions.
+      </p>
+    </div>
+
+    <aside class="metrics-column fade-in fade-in-delay-4">
+      <div class="metrics-column-title">Supporting Figures</div>
+
+      <div class="vignette">
+        <div class="vignette-label">Active Subscribers</div>
+        <div class="vignette-value">48,294</div>
+        <div class="vignette-change"><span class="arrow">&#9650;</span> 8.2% from prior quarter</div>
+      </div>
+
+      <div class="vignette">
+        <div class="vignette-label">Avg. Order Value</div>
+        <div class="vignette-value">$194</div>
+        <div class="vignette-change"><span class="arrow">&#9650;</span> 3.1% from prior quarter</div>
+      </div>
+
+      <div class="vignette">
+        <div class="vignette-label">Net Promoter Score</div>
+        <div class="vignette-value">72</div>
+        <div class="vignette-change"><span class="arrow">&#9650;</span> 5 pts from prior quarter</div>
+      </div>
+    </aside>
+  </section>
+
+  <section class="chart-section fade-in fade-in-delay-5">
+    <div class="chart-header">
+      <h2 class="chart-title">Monthly Revenue, May&ndash;September</h2>
+      <div class="chart-subtitle">In Millions</div>
+    </div>
+    <div class="chart-container">
+      <svg viewBox="0 0 800 280" preserveAspectRatio="xMidYMid meet">
+        <defs>
+          <linearGradient id="chartGradient" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1a3a2a" stop-opacity="0.08"/>
+            <stop offset="100%" stop-color="#1a3a2a" stop-opacity="0"/>
+          </linearGradient>
+        </defs>
+
+        <line class="chart-grid-line" x1="80" y1="40" x2="760" y2="40"/>
+        <line class="chart-grid-line" x1="80" y1="100" x2="760" y2="100"/>
+        <line class="chart-grid-line" x1="80" y1="160" x2="760" y2="160"/>
+        <line class="chart-grid-line" x1="80" y1="220" x2="760" y2="220"/>
+
+        <text class="chart-axis-label" x="70" y="44" text-anchor="end">2.5</text>
+        <text class="chart-axis-label" x="70" y="104" text-anchor="end">2.0</text>
+        <text class="chart-axis-label" x="70" y="164" text-anchor="end">1.5</text>
+        <text class="chart-axis-label" x="70" y="224" text-anchor="end">1.0</text>
+
+        <text class="chart-axis-label" x="140" y="255" text-anchor="middle">May</text>
+        <text class="chart-axis-label" x="280" y="255" text-anchor="middle">Jun</text>
+        <text class="chart-axis-label" x="420" y="255" text-anchor="middle">Jul</text>
+        <text class="chart-axis-label" x="560" y="255" text-anchor="middle">Aug</text>
+        <text class="chart-axis-label" x="700" y="255" text-anchor="middle">Sep</text>
+
+        <path class="chart-area"
+              d="M140,172 C210,160 240,140 280,128 C320,116 380,108 420,92 C460,76 520,68 560,56 C600,44 660,36 700,28 L700,220 L140,220 Z"/>
+
+        <path class="chart-line"
+              d="M140,172 C210,160 240,140 280,128 C320,116 380,108 420,92 C460,76 520,68 560,56 C600,44 660,36 700,28"/>
+
+        <g>
+          <circle class="chart-dot" cx="140" cy="172" r="4"/>
+          <circle class="chart-dot" cx="280" cy="128" r="4"/>
+          <circle class="chart-dot" cx="420" cy="92" r="4"/>
+          <circle class="chart-dot" cx="560" cy="56" r="4"/>
+          <circle class="chart-dot" cx="700" cy="28" r="5" style="stroke: var(--rust); stroke-width: 2.5;"/>
+        </g>
+
+        <g>
+          <text class="chart-value-label" x="140" y="162" text-anchor="middle">1.38</text>
+          <text class="chart-value-label" x="280" y="118" text-anchor="middle">1.62</text>
+          <text class="chart-value-label" x="420" y="82" text-anchor="middle">1.86</text>
+          <text class="chart-value-label" x="560" y="46" text-anchor="middle">2.14</text>
+          <text class="chart-value-label" x="700" y="18" text-anchor="middle" style="fill: var(--rust); font-size: 0.75rem;">2.48</text>
+        </g>
+      </svg>
+    </div>
+  </section>
+
+  <div class="ornament fade-in fade-in-delay-5">&lowast; &lowast; &lowast;</div>
+
+  <footer class="colophon fade-in fade-in-delay-5">
+    <div class="colophon-text">
+      <span>Data Sources: Internal financial systems, audited quarterly</span>
+      <span>Methodology: GAAP basis, constant currency</span>
+      <span>Published: October 2026</span>
+    </div>
+  </footer>
+
+</div>
+
+<script>
+  const progressBar = document.getElementById('scrollProgress');
+
+  function updateProgress() {
+    const scrollTop = window.scrollY;
+    const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+    const progress = docHeight > 0 ? (scrollTop / docHeight) * 100 : 0;
+    progressBar.style.width = progress + '%';
+  }
+
+  window.addEventListener('scroll', updateProgress, { passive: true });
+  updateProgress();
+</script>
+
+</body>
+</html>

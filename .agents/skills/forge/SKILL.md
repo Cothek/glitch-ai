@@ -4,7 +4,8 @@ description: "MUST use when user says 'create skill', 'new skill', 'forge this',
              'level up', 'upgrade skill', 'self improve',
              or when Glitch detects a repeated pattern (3+ occurrences),
              or after complex task completion (5+ steps), error recovery,
-             or user corrections of approach."
+             or user corrections of approach,
+             or when accumulated user feedback for a skill reaches 2+ entries."
 ---
 
 # Forge Self-Improvement
@@ -49,6 +50,46 @@ Before creating, verify:
 3. Output: "Created new skill: [name] — triggers on [patterns]"
 4. No approval needed — skill is live immediately
 
+## Level-Up Existing Skill
+
+Triggered when `user/pending-skill-improvements.md` has 2+ entries for the same skill, or 1 entry with `major`/`critical` significance.
+
+### Level-Up Flow
+1. **Load the feedback** — Read `user/pending-skill-improvements.md` to get the accumulated feedback for the target skill
+2. **Load the target skill** — Read the skill's SKILL.md to understand current content
+3. **Group feedback** — Group entries by topic (e.g., "anti-slop rules", "trigger descriptions", "edge case handling")
+4. **Generate candidate diffs** — For each group of feedback, propose a specific change to the skill:
+   - "Add to anti-slop rules: [new rule]"
+   - "Update trigger description: [change]"
+   - "Add verification step: [new step]"
+5. **Present for approval** — Show the user: "Skill [name] has [N] accumulated feedback entries. Proposed changes: [diffs]. Apply? (Y/n)"
+6. **Apply with approval** — If approved, dispatch the appropriate agent to edit the SKILL.md and update the entry status in `pending-skill-improvements.md`
+7. **Log** — Record the level-up in `user/forge-log.md` with the skill name, what changed, and which feedback entries triggered it
+
+### Significance Thresholds
+| Pending Entries | Significance Level | Action |
+|----------------|-------------------|--------|
+| 1, minor | One-off nitpick | Hold for another occurrence |
+| 1, notable | Clear preference | Present for approval at next compaction |
+| 1, major | Explicit directive or repeat pattern | Present for approval at next compaction |
+| 1, critical | Structural problem causing repeated failure | Present for approval immediately |
+| 2+ (any significance) | Repeat feedback | Present for approval at next compaction |
+| 3+ same topic | Crystallized pattern | Auto-promote to level-up (no approval needed for mechanical changes) |
+
+### Example Level-Up
+```
+User feedback accumulated for 'ui-craft':
+  1. "This dialog is too busy" — overlay had 5+ sections visible
+  2. "Why are all the cards the same size?" — no visual hierarchy
+  → Proposed: Add 2 new anti-slop rules (progressive disclosure, visual hierarchy)
+  → Forge applies after user approval
+  → Entry status → "applied"
+```
+
+### Contrast with Creation
+- **Creation**: New skill from scratch, triggered by 3x+ workflow patterns or complex task completion
+- **Level-Up**: Existing skill improvement, triggered by user feedback accumulation or directives
+
 ## Manual Trigger
 User says "create skill" / "forge this" / "self improve":
 1. Analyze recent patterns
@@ -60,8 +101,9 @@ User says "create skill" / "forge this" / "self improve":
 ```
 Pattern detected or user triggers Forge
   → Gather evidence
+  → Accumulated feedback for existing skill? → Level-Up flow (user approval required)
   → Autonomous triggers? Create directly + register in index
-  → Manual trigger? Propose → User approves → Create
+  → Manual trigger? Propose → User approves → Create or Level-Up
   → Skill is live and auto-triggers in future
 ```
 
