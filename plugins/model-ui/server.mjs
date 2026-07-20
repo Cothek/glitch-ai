@@ -7,6 +7,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = resolve(__dirname, '..', '..');
 const PORT = parseInt(process.env.MODEL_UI_PORT || '4104', 10);
+const TEMPLATE_PATH = join(ROOT_DIR, 'config', 'opencode-normal.json');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -70,6 +71,12 @@ function backupConfig() {
   const ts = new Date().toISOString().replace(/[:.]/g, '-');
   const backupPath = join(backupDir, `opencode-pre-model-ui-${ts}.json`);
   copyFileSync(join(ROOT_DIR, 'opencode.json'), backupPath);
+  // Also back up the template (source of truth for normal mode)
+  const templatePath = TEMPLATE_PATH;
+  if (existsSync(templatePath)) {
+    const templateBackupPath = join(backupDir, `opencode-normal-pre-model-ui-${ts}.json`);
+    copyFileSync(templatePath, templateBackupPath);
+  }
   return backupPath;
 }
 
@@ -354,7 +361,20 @@ async function handler(req, res) {
         }
       }
 
+      // Write to both runtime config and template
       writeJson(join(ROOT_DIR, 'opencode.json'), config);
+      const templatePath = TEMPLATE_PATH;
+      if (existsSync(templatePath)) {
+        let templateConfig = readJson(templatePath);
+        if (templateConfig) {
+          for (const change of pendingChanges) {
+            if (templateConfig.agent?.[change.agent]) {
+              templateConfig.agent[change.agent].model = change.new_model;
+            }
+          }
+          writeJson(templatePath, templateConfig);
+        }
+      }
       const applied = pendingChanges.length;
       const changes = [...pendingChanges];
       pendingChanges = [];
