@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sprout — Playful Analytics</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    * {
+      font-family: 'Outfit', sans-serif;
+    }
+
+    :root {
+      --canvas: #faf6f2;
+      --coral: #ff6b6b;
+      --teal: #2ec4b6;
+      --yellow: #ffd93d;
+      --purple: #a29bfe;
+      --shadow-coral: rgba(255, 107, 107, 0.15);
+      --shadow-teal: rgba(46, 196, 182, 0.15);
+      --shadow-yellow: rgba(255, 217, 61, 0.15);
+      --shadow-purple: rgba(162, 155, 254, 0.15);
+    }
+
+    body {
+      background: var(--canvas);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Organic blob backgrounds */
+    .blob {
+      position: fixed;
+      border-radius: 50%;
+      filter: blur(80px);
+      opacity: 0.4;
+      z-index: 0;
+      animation: blobFloat 20s ease-in-out infinite;
+    }
+
+    .blob-1 {
+      width: 400px;
+      height: 400px;
+      background: var(--coral);
+      top: -100px;
+      right: -100px;
+      animation-delay: 0s;
+    }
+
+    .blob-2 {
+      width: 350px;
+      height: 350px;
+      background: var(--teal);
+      bottom: -50px;
+      left: -100px;
+      animation-delay: -7s;
+    }
+
+    .blob-3 {
+      width: 300px;
+      height: 300px;
+      background: var(--yellow);
+      top: 40%;
+      right: 20%;
+      animation-delay: -14s;
+    }
+
+    @keyframes blobFloat {
+      0%, 100% { transform: translate(0, 0) scale(1); }
+      33% { transform: translate(30px, -30px) scale(1.1); }
+      66% { transform: translate(-20px, 20px) scale(0.9); }
+    }
+
+    /* Floating top bar */
+    .top-bar {
+      background: rgba(255, 255, 255, 0.85);
+      backdrop-filter: blur(20px);
+      border-radius: 24px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.06);
+      border: 1px solid rgba(255, 255, 255, 0.8);
+    }
+
+    /* Metric cards */
+    .metric-card {
+      background: white;
+      border-radius: 20px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .metric-card::before {
+      content: '';
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 6px;
+      border-radius: 20px 0 0 20px;
+    }
+
+    .metric-card.coral::before { background: var(--coral); }
+    .metric-card.teal::before { background: var(--teal); }
+    .metric-card.yellow::before { background: var(--yellow); }
+    .metric-card.purple::before { background: var(--purple); }
+
+    .metric-card:hover {
+      transform: translateY(-4px) scale(1.01);
+      box-shadow: 0 12px 40px rgba(0, 0, 0, 0.08);
+    }
+
+    .metric-card.coral:hover { box-shadow: 0 12px 40px var(--shadow-coral); }
+    .metric-card.teal:hover { box-shadow: 0 12px 40px var(--shadow-teal); }
+    .metric-card.yellow:hover { box-shadow: 0 12px 40px var(--shadow-yellow); }
+    .metric-card.purple:hover { box-shadow: 0 12px 40px var(--shadow-purple); }
+
+    /* Staggered entry animation */
+    .card-enter {
+      opacity: 0;
+      transform: translateY(40px);
+      animation: cardBounceIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+    }
+
+    @keyframes cardBounceIn {
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* Filter chips */
+    .filter-chip {
+      background: white;
+      border-radius: 40px;
+      padding: 8px 20px;
+      font-weight: 500;
+      font-size: 14px;
+      color: #666;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+      border: 2px solid transparent;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    .filter-chip:hover {
+      transform: scale(1.05);
+    }
+
+    .filter-chip.active {
+      background: var(--coral);
+      color: white;
+      border-color: var(--coral);
+      box-shadow: 0 4px 16px var(--shadow-coral);
+    }
+
+    .filter-chip.active:hover {
+      transform: scale(1.08);
+    }
+
+    /* Activity bubbles */
+    .activity-bubble {
+      background: white;
+      border-radius: 20px;
+      padding: 16px 20px;
+      box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04);
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: pointer;
+    }
+
+    .activity-bubble:hover {
+      transform: translateX(8px) scale(1.02);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    }
+
+    .activity-bubble .detail {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .activity-bubble:hover .detail {
+      max-height: 60px;
+    }
+
+    /* Progress rings */
+    .progress-ring {
+      transform: rotate(-90deg);
+    }
+
+    .progress-ring-circle {
+      transition: stroke-dashoffset 1.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    /* Wobble animation for decorative elements */
+    .wobble {
+      transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
+
+    .wobble:hover {
+      animation: wobbleAnim 0.6s ease-in-out;
+    }
+
+    @keyframes wobbleAnim {
+      0%, 100% { transform: rotate(0deg); }
+      25% { transform: rotate(-8deg); }
+      75% { transform: rotate(8deg); }
+    }
+
+    /* Sparkline animation */
+    .sparkline-path {
+      stroke-dasharray: 200;
+      stroke-dashoffset: 200;
+      animation: sparklineDraw 1.5s ease-out forwards;
+    }
+
+    @keyframes sparklineDraw {
+      to { stroke-dashoffset: 0; }
+    }
+
+    /* Organic circles for monthly stats */
+    .stat-circle {
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+      cursor: pointer;
+    }
+
+    .stat-circle:hover {
+      transform: scale(1.1);
+    }
+
+    /* Avatar */
+    .avatar {
+      border-radius: 12px;
+      width: 40px;
+      height: 40px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+      color: white;
+      font-size: 16px;
+    }
+
+    /* Section cards */
+    .section-card {
+      background: white;
+      border-radius: 24px;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+      padding: 28px;
+    }
+
+    /* Gauge/Bounce rate donut */
+    .gauge-container {
+      position: relative;
+      width: 140px;
+      height: 140px;
+    }
+
+    .gauge-value {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 28px;
+      font-weight: 700;
+    }
+
+    /* Timer display */
+    .timer-display {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+
+    ::-webkit-scrollbar-thumb {
+      background: rgba(0, 0, 0, 0.1);
+      border-radius: 4px;
+    }
+
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(0, 0, 0, 0.2);
+    }
+  </style>
+</head>
+<body class="relative">
+  <!-- Organic blob backgrounds -->
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+
+  <div class="relative z-10 max-w-7xl mx-auto px-6 py-8">
+    <!-- Floating Top Bar -->
+    <header class="top-bar px-8 py-5 mb-10 flex items-center justify-between card-enter" style="animation-delay: 0ms;">
+      <div class="flex items-center gap-4">
+        <div class="w-12 h-12 rounded-2xl bg-gradient-to-br from-[#ff6b6b] to-[#ffd93d] flex items-center justify-center text-2xl wobble">
+          🌱
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold text-gray-800">Sprout</h1>
+          <p class="text-sm text-gray-500">Playful Analytics</p>
+        </div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="filter-chip active" data-filter="week">This Week</div>
+        <div class="filter-chip" data-filter="month">This Month</div>
+        <div class="filter-chip" data-filter="year">This Year</div>
+      </div>
+    </header>
+
+    <!-- Dashboard Title -->
+    <div class="mb-8 card-enter" style="animation-delay: 80ms;">
+      <h2 class="text-3xl font-bold text-gray-800 flex items-center gap-3">
+        <span class="text-4xl wobble inline-block">✨</span>
+        Dashboard Overview
+      </h2>
+      <p class="text-gray-500 mt-2">Your garden is growing beautifully!</p>
+    </div>
+
+    <!-- Metrics Grid -->
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-10">
+      <!-- Page Views -->
+      <div class="metric-card coral p-6 card-enter" style="animation-delay: 160ms;">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <p class="text-sm text-gray-500 font-medium">Page Views</p>
+            <p class="text-3xl font-bold text-gray-800 mt-1" data-counter="847231">0</p>
+            <p class="text-xs text-gray-400 mt-1">847.2K total</p>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-[#ff6b6b]/10 flex items-center justify-center text-xl wobble">
+            👁️
+          </div>
+        </div>
+        <svg class="w-full h-12" viewBox="0 0 200 50" preserveAspectRatio="none">
+          <path class="sparkline-path" d="M0,40 Q25,35 50,30 T100,20 T150,25 T200,10" 
+                fill="none" stroke="#ff6b6b" stroke-width="2.5" stroke-linecap="round"/>
+        </svg>
+      </div>
+
+      <!-- Active Users -->
+      <div class="metric-card teal p-6 card-enter" style="animation-delay: 240ms;">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <p class="text-sm text-gray-500 font-medium">Active Users</p>
+            <p class="text-3xl font-bold text-gray-800 mt-1" data-counter="12847">0</p>
+            <p class="text-xs text-gray-400 mt-1">12.8K happy users</p>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-[#2ec4b6]/10 flex items-center justify-center text-xl wobble">
+            👥
+          </div>
+        </div>
+        <svg class="w-full h-12" viewBox="0 0 200 50" preserveAspectRatio="none">
+          <path class="sparkline-path" d="M0,35 Q30,25 60,30 T120,15 T180,20 T200,8" 
+                fill="none" stroke="#2ec4b6" stroke-width="2.5" stroke-linecap="round" style="animation-delay: 0.2s;"/>
+        </svg>
+      </div>
+
+      <!-- Bounce Rate -->
+      <div class="metric-card yellow p-6 card-enter" style="animation-delay: 320ms;">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <p class="text-sm text-gray-500 font-medium">Bounce Rate</p>
+            <div class="gauge-container mt-2">
+              <svg class="progress-ring" width="140" height="140">
+                <circle cx="70" cy="70" r="60" stroke="#f0f0f0" stroke-width="12" fill="none"/>
+                <circle class="progress-ring-circle" cx="70" cy="70" r="60" 
+                        stroke="#ffd93d" stroke-width="12" fill="none"
+                        stroke-linecap="round"
+                        stroke-dasharray="377"
+                        stroke-dashoffset="377"
+                        data-target="286"/>
+              </svg>
+              <div class="gauge-value text-[#ffd93d]">
+                <span data-counter="24.3" data-decimal="1">0</span>%
+              </div>
+            </div>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-[#ffd93d]/10 flex items-center justify-center text-xl wobble">
+            📉
+          </div>
+        </div>
+      </div>
+
+      <!-- Avg. Time -->
+      <div class="metric-card purple p-6 card-enter" style="animation-delay: 400ms;">
+        <div class="flex items-start justify-between mb-4">
+          <div>
+            <p class="text-sm text-gray-500 font-medium">Avg. Time</p>
+            <p class="text-3xl font-bold text-gray-800 mt-1 timer-display">
+              <span id="timer-minutes">4</span>m 
+              <span id="timer-seconds">32</span>s
+            </p>
+            <p class="text-xs text-gray-400 mt-1">per session</p>
+          </div>
+          <div class="w-10 h-10 rounded-xl bg-[#a29bfe]/10 flex items-center justify-center text-xl wobble">
+            ⏱️
+          </div>
+        </div>
+        <div class="flex items-center gap-2 mt-4">
+          <div class="w-2 h-2 rounded-full bg-[#a29bfe] animate-pulse"></div>
+          <span class="text-xs text-gray-500">Live tracking</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-10">
+      <!-- Monthly Stats (Organic Circles) -->
+      <div class="section-card lg:col-span-2 card-enter" style="animation-delay: 480ms;">
+        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+          <span class="text-2xl wobble inline-block">📊</span>
+          Monthly Growth
+        </h3>
+        <div class="flex items-end justify-around gap-4 h-48">
+          <div class="stat-circle w-20 h-20 bg-[#ff6b6b]/20 hover:bg-[#ff6b6b]/30" data-value="65">
+            <span class="text-lg font-bold text-[#ff6b6b]">Jan</span>
+            <span class="text-xs text-gray-500">65%</span>
+          </div>
+          <div class="stat-circle w-24 h-24 bg-[#2ec4b6]/20 hover:bg-[#2ec4b6]/30" data-value="72">
+            <span class="text-lg font-bold text-[#2ec4b6]">Feb</span>
+            <span class="text-xs text-gray-500">72%</span>
+          </div>
+          <div class="stat-circle w-28 h-28 bg-[#ffd93d]/20 hover:bg-[#ffd93d]/30" data-value="85">
+            <span class="text-lg font-bold text-[#ffd93d]">Mar</span>
+            <span class="text-xs text-gray-500">85%</span>
+          </div>
+          <div class="stat-circle w-32 h-32 bg-[#a29bfe]/20 hover:bg-[#a29bfe]/30" data-value="92">
+            <span class="text-lg font-bold text-[#a29bfe]">Apr</span>
+            <span class="text-xs text-gray-500">92%</span>
+          </div>
+          <div class="stat-circle w-36 h-36 bg-gradient-to-br from-[#ff6b6b]/20 to-[#ffd93d]/20 hover:from-[#ff6b6b]/30 hover:to-[#ffd93d]/30" data-value="100">
+            <span class="text-lg font-bold text-gray-700">May</span>
+            <span class="text-xs text-gray-500">100%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Goals Progress Rings -->
+      <div class="section-card card-enter" style="animation-delay: 560ms;">
+        <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+          <span class="text-2xl wobble inline-block">🎯</span>
+          Goals
+        </h3>
+        <div class="space-y-6">
+          <div class="flex items-center gap-4">
+            <svg class="progress-ring" width="60" height="60">
+              <circle cx="30" cy="30" r="24" stroke="#f0f0f0" stroke-width="6" fill="none"/>
+              <circle class="progress-ring-circle" cx="30" cy="30" r="24" 
+                      stroke="#ff6b6b" stroke-width="6" fill="none"
+                      stroke-linecap="round"
+                      stroke-dasharray="150.8"
+                      stroke-dashoffset="150.8"
+                      data-target="37.7"/>
+            </svg>
+            <div>
+              <p class="font-semibold text-gray-700">User Growth</p>
+              <p class="text-sm text-gray-500">75% complete</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <svg class="progress-ring" width="60" height="60">
+              <circle cx="30" cy="30" r="24" stroke="#f0f0f0" stroke-width="6" fill="none"/>
+              <circle class="progress-ring-circle" cx="30" cy="30" r="24" 
+                      stroke="#2ec4b6" stroke-width="6" fill="none"
+                      stroke-linecap="round"
+                      stroke-dasharray="150.8"
+                      stroke-dashoffset="150.8"
+                      data-target="60.3"/>
+            </svg>
+            <div>
+              <p class="font-semibold text-gray-700">Engagement</p>
+              <p class="text-sm text-gray-500">60% complete</p>
+            </div>
+          </div>
+          <div class="flex items-center gap-4">
+            <svg class="progress-ring" width="60" height="60">
+              <circle cx="30" cy="30" r="24" stroke="#f0f0f0" stroke-width="6" fill="none"/>
+              <circle class="progress-ring-circle" cx="30" cy="30" r="24" 
+                      stroke="#ffd93d" stroke-width="6" fill="none"
+                      stroke-linecap="round"
+                      stroke-dasharray="150.8"
+                      stroke-dashoffset="150.8"
+                      data-target="15.1"/>
+            </svg>
+            <div>
+              <p class="font-semibold text-gray-700">Revenue</p>
+              <p class="text-sm text-gray-500">90% complete</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Activity -->
+    <div class="section-card card-enter" style="animation-delay: 640ms;">
+      <h3 class="text-lg font-bold text-gray-800 mb-6 flex items-center gap-2">
+        <span class="text-2xl wobble inline-block">💬</span>
+        Recent Activity
+      </h3>
+      <div class="space-y-3">
+        <div class="activity-bubble flex items-start gap-4">
+          <div class="avatar bg-[#ff6b6b]">E</div>
+          <div class="flex-1">
+            <p class="font-medium text-gray-800">Emma created a new report</p>
+            <p class="text-sm text-gray-500 mt-1">"Q2 Performance Analysis" — 2 minutes ago</p>
+            <div class="detail mt-3 pt-3 border-t border-gray-100">
+              <p class="text-sm text-gray-600">📊 Includes 12 charts and 3 data sources</p>
+            </div>
+          </div>
+        </div>
+        <div class="activity-bubble flex items-start gap-4">
+          <div class="avatar bg-[#2ec4b6]">M</div>
+          <div class="flex-1">
+            <p class="font-medium text-gray-800">Mike shared the dashboard</p>
+            <p class="text-sm text-gray-500 mt-1">With the marketing team — 15 minutes ago</p>
+            <div class="detail mt-3 pt-3 border-t border-gray-100">
+              <p class="text-sm text-gray-600">🔗 5 team members now have access</p>
+            </div>
+          </div>
+        </div>
+        <div class="activity-bubble flex items-start gap-4">
+          <div class="avatar bg-[#ffd93d]">S</div>
+          <div class="flex-1">
+            <p class="font-medium text-gray-800">Sprout analyzed 2.4K sessions</p>
+            <p class="text-sm text-gray-500 mt-1">Automatic analysis — 1 hour ago</p>
+            <div class="detail mt-3 pt-3 border-t border-gray-100">
+              <p class="text-sm text-gray-600">🌱 Found 3 new growth opportunities</p>
+            </div>
+          </div>
+        </div>
+        <div class="activity-bubble flex items-start gap-4">
+          <div class="avatar bg-[#a29bfe]">A</div>
+          <div class="flex-1">
+            <p class="font-medium text-gray-800">Alex updated the goals</p>
+            <p class="text-sm text-gray-500 mt-1">Revenue target increased by 20% — 3 hours ago</p>
+            <div class="detail mt-3 pt-3 border-t border-gray-100">
+              <p class="text-sm text-gray-600">🎯 New target: $125K quarterly</p>
+            </div>
+          </div>
+        </div>
+        <div class="activity-bubble flex items-start gap-4">
+          <div class="avatar bg-gradient-to-br from-[#ff6b6b] to-[#ffd93d]">🌟</div>
+          <div class="flex-1">
+            <p class="font-medium text-gray-800">Milestone reached!</p>
+            <p class="text-sm text-gray-500 mt-1">10,000 active users — 5 hours ago</p>
+            <div class="detail mt-3 pt-3 border-t border-gray-100">
+              <p class="text-sm text-gray-600">🎉 Team celebration in progress</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Spring animation for counters
+    function springCount(el, target, decimal = 0) {
+      let current = 0;
+      let velocity = 0;
+      const stiffness = 0.01;
+      const damping = 0.8;
+      
+      function tick() {
+        const force = (target - current) * stiffness;
+        velocity = (velocity + force) * damping;
+        current += velocity;
+        
+        const display = decimal > 0 
+          ? current.toFixed(decimal)
+          : Math.round(current).toLocaleString();
+        el.textContent = display;
+        
+        if (Math.abs(target - current) > 0.5 || Math.abs(velocity) > 0.01) {
+          requestAnimationFrame(tick);
+        } else {
+          el.textContent = decimal > 0 
+            ? target.toFixed(decimal)
+            : Math.round(target).toLocaleString();
+        }
+      }
+      
+      requestAnimationFrame(tick);
+    }
+
+    // Initialize counters
+    document.addEventListener('DOMContentLoaded', () => {
+      // Animate counters
+      document.querySelectorAll('[data-counter]').forEach((el, i) => {
+        setTimeout(() => {
+          const target = parseFloat(el.dataset.counter);
+          const decimal = parseInt(el.dataset.decimal || '0');
+          springCount(el, target, decimal);
+        }, i * 100);
+      });
+
+      // Animate progress rings
+      setTimeout(() => {
+        document.querySelectorAll('.progress-ring-circle').forEach(circle => {
+          const target = parseFloat(circle.dataset.target);
+          circle.style.strokeDashoffset = target;
+        });
+      }, 500);
+
+      // Filter chip interactions
+      document.querySelectorAll('.filter-chip').forEach(chip => {
+        chip.addEventListener('click', function() {
+          document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+          this.classList.add('active');
+          
+          // Bounce animation
+          this.style.transform = 'scale(1.15)';
+          setTimeout(() => {
+            this.style.transform = 'scale(1)';
+          }, 200);
+        });
+      });
+
+      // Running timer simulation
+      let seconds = 272; // 4:32
+      setInterval(() => {
+        seconds++;
+        const mins = Math.floor(seconds / 60);
+        const secs = seconds % 60;
+        document.getElementById('timer-minutes').textContent = mins;
+        document.getElementById('timer-seconds').textContent = secs.toString().padStart(2, '0');
+      }, 1000);
+
+      // Stat circle hover effects
+      document.querySelectorAll('.stat-circle').forEach(circle => {
+        circle.addEventListener('mouseenter', function() {
+          this.style.transform = 'scale(1.1) rotate(5deg)';
+        });
+        circle.addEventListener('mouseleave', function() {
+          this.style.transform = 'scale(1) rotate(0deg)';
+        });
+      });
+    });
+  </script>
+</body>
+</html>

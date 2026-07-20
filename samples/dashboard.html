@@ -1,0 +1,200 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Analytics Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+<style>
+:root {
+  --accent: oklch(55% 0.25 270);
+  --accent-muted: oklch(92% 0.05 270);
+  --accent-tint: oklch(75% 0.15 270 / 0.15);
+  --surface: oklch(97% 0.003 250);
+  --surface-raised: oklch(100% 0 0);
+  --sidebar-bg: oklch(96% 0.005 250);
+  --text-primary: oklch(18% 0.01 250);
+  --text-secondary: oklch(46% 0.01 250);
+  --text-tertiary: oklch(62% 0.008 250);
+  --border: oklch(91% 0.005 250);
+  --border-strong: oklch(84% 0.01 250);
+  --success: oklch(60% 0.12 150);
+  --warning: oklch(72% 0.13 75);
+  --danger: oklch(58% 0.15 25);
+}
+* { font-family: 'Inter', system-ui, sans-serif; }
+body { background: var(--surface); color: var(--text-primary); font-size: 14px; margin: 0; }
+.tabular-nums { font-variant-numeric: tabular-nums; }
+.mono { font-family: 'JetBrains Mono', monospace; }
+.metric-card { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 10px; padding: 20px; }
+.metric-card.primary { background: var(--accent-tint); }
+.metric-card:hover { border-color: var(--border-strong); transition: border-color 120ms ease; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th { text-align: left; font-size: 12px; font-weight: 500; color: var(--text-tertiary); text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.data-table td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
+.data-table tr:hover td { background: oklch(96% 0.005 250); transition: background 80ms ease; }
+.data-table tr:last-child td { border-bottom: none; }
+.num { font-variant-numeric: tabular-nums; text-align: right; }
+.status-dot { width: 8px; height: 8px; border-radius: 999px; display: inline-block; margin-right: 6px; }
+.status-live { background: var(--success); }
+.status-draft { background: var(--warning); }
+.status-paused { background: var(--danger); }
+.sidebar-link { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-radius: 6px; font-size: 13px; color: var(--text-secondary); text-decoration: none; transition: all 120ms ease; }
+.sidebar-link:hover { background: oklch(93% 0.005 250); color: var(--text-primary); }
+.sidebar-link.active { background: var(--accent-tint); color: var(--accent); font-weight: 500; }
+.filter-input { padding: 7px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; background: var(--surface-raised); }
+.filter-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px oklch(55% 0.25 270 / 0.2); }
+.btn-sm { padding: 6px 12px; border-radius: 6px; font-size: 12px; font-weight: 500; cursor: pointer; border: 1px solid var(--border); background: var(--surface-raised); color: var(--text-secondary); }
+.btn-sm:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.chart-container { background: var(--surface-raised); border: 1px solid var(--border); border-radius: 10px; padding: 24px; }
+.chip { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 6px; font-size: 12px; border: 1px solid var(--border); background: var(--surface-raised); color: var(--text-secondary); cursor: pointer; }
+.chip:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.chip.active { border-color: var(--accent); color: var(--accent); background: var(--accent-tint); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; } }
+</style>
+</head>
+<body>
+<div class="flex" style="min-height: 100vh;">
+  <!-- Sidebar -->
+  <aside style="width: 224px; flex-shrink: 0; background: var(--sidebar-bg); border-right: 1px solid var(--border); display: flex; flex-direction: column;">
+    <div style="padding: 20px; border-bottom: 1px solid var(--border);">
+      <p style="font-size: 14px; font-weight: 600; color: var(--text-primary); margin: 0;">acme inc</p>
+    </div>
+    <nav style="flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 4px;">
+      <a href="#" class="sidebar-link">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>Dashboard</a>
+      <a href="#" class="sidebar-link active">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M6 1L2 5v8a1 1 0 001 1h10a1 1 0 001-1V5l-4-4H6z"/><path d="M6 11a2 2 0 014 0"/></svg>Analytics</a>
+      <a href="#" class="sidebar-link">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M14 2H2v12h12V2z"/><path d="M2 6h12M8 2v14"/></svg>Projects</a>
+      <a href="#" class="sidebar-link">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2"/></svg>Settings</a>
+    </nav>
+    <div style="padding: 16px; border-top: 1px solid var(--border);">
+      <div style="display: flex; align-items: center; gap: 12px;">
+        <div style="width: 32px; height: 32px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; background: var(--accent-muted); color: var(--accent);">JD</div>
+        <div style="font-size: 12px;"><p style="font-weight: 500; color: var(--text-primary); margin: 0;">Jane Doe</p><p style="color: var(--text-tertiary); margin: 0;">Admin</p></div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div style="flex: 1;">
+    <!-- Top bar -->
+    <header style="height: 56px; display: flex; align-items: center; justify-content: space-between; padding: 0 24px; border-bottom: 1px solid var(--border); background: var(--surface-raised);">
+      <span style="font-size: 14px; color: var(--text-tertiary);">Analytics / Overview</span>
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <input class="filter-input" placeholder="Search..." style="width: 192px;">
+        <div style="width: 28px; height: 28px; border-radius: 999px; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 500; background: var(--accent-muted); color: var(--accent);">JD</div>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div style="padding: 24px; display: flex; flex-direction: column; gap: 24px;">
+      <!-- Filters -->
+      <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+        <span class="chip active">All time</span>
+        <span class="chip">Last 7 days</span>
+        <span class="chip">Last 30 days</span>
+        <span class="chip">This quarter</span>
+        <span class="chip" style="margin-left: auto;">Export</span>
+      </div>
+
+      <!-- Metric cards -->
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;">
+        <div class="metric-card primary">
+          <p style="font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 0 0 4px;">Total Revenue</p>
+          <p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); margin: 0;">$2,418,392</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px;">
+            <svg style="width: 100%; height: 36px;" viewBox="0 0 120 36" preserveAspectRatio="none">
+              <defs><linearGradient id="r1" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="oklch(55% 0.25 270)" stop-opacity="0.4"/><stop offset="100%" stop-color="oklch(55% 0.25 270)" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0 30 L10 28 L20 25 L30 26 L40 22 L50 18 L60 15 L70 16 L80 12 L90 8 L100 6 L110 4 L120 2" fill="none" stroke="oklch(55% 0.25 270)" stroke-width="1.5"/>
+              <path d="M0 30 L10 28 L20 25 L30 26 L40 22 L50 18 L60 15 L70 16 L80 12 L90 8 L100 6 L110 4 L120 2 L120 36 L0 36 Z" fill="url(#r1)" opacity="0.3"/>
+            </svg>
+            <span style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; margin-left: 8px;">+12.5%</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <p style="font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 0 0 4px;">Active Users</p>
+          <p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); margin: 0;">48,294</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px;">
+            <svg style="width: 100%; height: 36px;" viewBox="0 0 120 36" preserveAspectRatio="none">
+              <defs><linearGradient id="r2" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="oklch(55% 0.25 270)" stop-opacity="0.3"/><stop offset="100%" stop-color="oklch(55% 0.25 270)" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0 25 L10 24 L20 27 L30 22 L40 23 L50 20 L60 18 L70 19 L80 15 L90 14 L100 12 L110 10 L120 8" fill="none" stroke="oklch(55% 0.25 270)" stroke-width="1.5"/>
+              <path d="M0 25 L10 24 L20 27 L30 22 L40 23 L50 20 L60 18 L70 19 L80 15 L90 14 L100 12 L110 10 L120 8 L120 36 L0 36 Z" fill="url(#r2)" opacity="0.3"/>
+            </svg>
+            <span style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; margin-left: 8px;">+8.2%</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <p style="font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 0 0 4px;">Conversion Rate</p>
+          <p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); margin: 0;">3.42%</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px;">
+            <svg style="width: 100%; height: 36px;" viewBox="0 0 120 36" preserveAspectRatio="none">
+              <defs><linearGradient id="r3" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="oklch(55% 0.25 270)" stop-opacity="0.3"/><stop offset="100%" stop-color="oklch(55% 0.25 270)" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0 20 L10 22 L20 18 L30 19 L40 16 L50 14 L60 15 L70 12 L80 13 L90 12 L100 10 L110 8 L120 6" fill="none" stroke="oklch(55% 0.25 270)" stroke-width="1.5"/>
+              <path d="M0 20 L10 22 L20 18 L30 19 L40 16 L50 14 L60 15 L70 12 L80 13 L90 12 L100 10 L110 8 L120 6 L120 36 L0 36 Z" fill="url(#r3)" opacity="0.3"/>
+            </svg>
+            <span style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; margin-left: 8px;">+2.1%</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <p style="font-size: 12px; font-weight: 500; color: var(--text-secondary); margin: 0 0 4px;">Avg Session</p>
+          <p style="font-size: 24px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--text-primary); margin: 0;">4m 32s</p>
+          <div style="display: flex; align-items: center; justify-content: space-between; margin-top: 12px;">
+            <svg style="width: 100%; height: 36px;" viewBox="0 0 120 36" preserveAspectRatio="none">
+              <defs><linearGradient id="r4" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="oklch(55% 0.25 270)" stop-opacity="0.3"/><stop offset="100%" stop-color="oklch(55% 0.25 270)" stop-opacity="0"/></linearGradient></defs>
+              <path d="M0 28 L10 26 L20 27 L30 24 L40 22 L50 23 L60 20 L70 18 L80 19 L90 16 L100 15 L110 14 L120 12" fill="none" stroke="oklch(55% 0.25 270)" stroke-width="1.5"/>
+              <path d="M0 28 L10 26 L20 27 L30 24 L40 22 L50 23 L60 20 L70 18 L80 19 L90 16 L100 15 L110 14 L120 12 L120 36 L0 36 Z" fill="url(#r4)" opacity="0.3"/>
+            </svg>
+            <span style="font-size: 12px; color: var(--text-secondary); flex-shrink: 0; margin-left: 8px;">-0.8%</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chart -->
+      <div class="chart-container">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+          <div><p style="font-size: 14px; font-weight: 500; color: var(--text-primary); margin: 0;">Revenue over time</p><p style="font-size: 12px; color: var(--text-secondary); margin: 2px 0 0;">Monthly recurring revenue for the past 12 months</p></div>
+          <select class="filter-input" style="font-size: 12px; padding: 4px 8px;"><option>12 months</option><option>6 months</option><option>30 days</option></select>
+        </div>
+        <svg style="width: 100%; height: 180px;" viewBox="0 0 600 180" preserveAspectRatio="none">
+          <defs><linearGradient id="cf" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="oklch(55% 0.25 270)" stop-opacity="0.4"/><stop offset="100%" stop-color="oklch(55% 0.25 270)" stop-opacity="0"/></linearGradient></defs>
+          <line x1="0" y1="30" x2="600" y2="30" stroke="var(--border)" stroke-width="0.5"/><line x1="0" y1="65" x2="600" y2="65" stroke="var(--border)" stroke-width="0.5"/>
+          <line x1="0" y1="100" x2="600" y2="100" stroke="var(--border)" stroke-width="0.5"/><line x1="0" y1="135" x2="600" y2="135" stroke="var(--border)" stroke-width="0.5"/>
+          <path d="M0 155 L50 150 L100 140 L150 135 L200 120 L250 110 L300 95 L350 80 L400 65 L450 55 L500 45 L550 35 L600 30 L600 180 L0 180 Z" fill="url(#cf)" opacity="0.25"/>
+          <path d="M0 155 L50 150 L100 140 L150 135 L200 120 L250 110 L300 95 L350 80 L400 65 L450 55 L500 45 L550 35 L600 30" fill="none" stroke="oklch(55% 0.25 270)" stroke-width="2"/>
+          <circle cx="600" cy="30" r="3.5" fill="oklch(55% 0.25 270)" stroke="white" stroke-width="2"/>
+        </svg>
+        <div style="display: flex; justify-content: space-between; margin-top: 8px; font-size: 11px; color: var(--text-tertiary);">
+          <span>Jul</span><span>Aug</span><span>Sep</span><span>Oct</span><span>Nov</span><span>Dec</span>
+          <span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div style="background: var(--surface-raised); border: 1px solid var(--border); border-radius: 10px; overflow: hidden;">
+        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-bottom: 1px solid var(--border);">
+          <p style="font-size: 14px; font-weight: 500; color: var(--text-primary); margin: 0;">Recent projects</p>
+          <button class="btn-sm">View all</button>
+        </div>
+        <table class="data-table">
+          <thead><tr><th>Project</th><th>Status</th><th class="num">Revenue</th><th class="num">Users</th><th class="num">Last active</th></tr></thead>
+          <tbody>
+            <tr><td style="font-weight: 500;">Linear redesign</td><td><span class="status-dot status-live"></span>Live</td><td class="num mono">$284,500</td><td class="num">12,847</td><td class="num mono">2m ago</td></tr>
+            <tr><td style="font-weight: 500;">Mobile app v3</td><td><span class="status-dot status-live"></span>Live</td><td class="num mono">$192,300</td><td class="num">8,421</td><td class="num mono">15m ago</td></tr>
+            <tr><td style="font-weight: 500;">Dashboard overhaul</td><td><span class="status-dot status-draft"></span>Draft</td><td class="num mono">$0</td><td class="num">0</td><td class="num mono">1h ago</td></tr>
+            <tr><td style="font-weight: 500;">API integration</td><td><span class="status-dot status-paused"></span>Paused</td><td class="num mono">$45,200</td><td class="num">2,103</td><td class="num mono">3h ago</td></tr>
+            <tr><td style="font-weight: 500;">Analytics suite</td><td><span class="status-dot status-live"></span>Live</td><td class="num mono">$156,800</td><td class="num">6,742</td><td class="num mono">6h ago</td></tr>
+            <tr><td style="font-weight: 500;">User onboarding</td><td><span class="status-dot status-draft"></span>Draft</td><td class="num mono">$0</td><td class="num">0</td><td class="num mono">1d ago</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+  <style>
+    :root {
+      --accent: oklch(65% 0.15 170);
+      --accent-light: oklch(92% 0.06 170);
+      --surface: oklch(99% 0 0);
+      --surface-raised: oklch(100% 0 0);
+      --text-primary: oklch(18% 0.01 250);
+      --text-secondary: oklch(46% 0.01 250);
+      --text-tertiary: oklch(62% 0.01 250);
+      --border: oklch(92% 0.005 250);
+      --border-strong: oklch(86% 0.01 250);
+      --focus-ring: oklch(65% 0.15 170 / 0.35);
+    }
+
+    * { font-family: 'Inter', system-ui, sans-serif; }
+
+    body {
+      background: var(--surface);
+      color: var(--text-primary);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* Tab system */
+    .tab-radio { display: none; }
+
+    .tab-panel { display: none; }
+
+    #tab-profile:checked ~ .layout .panel-profile,
+    #tab-notifications:checked ~ .layout .panel-notifications,
+    #tab-appearance:checked ~ .layout .panel-appearance {
+      display: block;
+    }
+
+    #tab-profile:checked ~ .layout .nav-label-profile,
+    #tab-notifications:checked ~ .layout .nav-label-notifications,
+    #tab-appearance:checked ~ .layout .nav-label-appearance {
+      color: var(--text-primary);
+      font-weight: 500;
+      border-left-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    /* Toggle switch */
+    .toggle-track {
+      width: 36px;
+      height: 20px;
+      background: var(--border-strong);
+      border-radius: 999px;
+      position: relative;
+      cursor: pointer;
+      transition: background 200ms ease;
+      flex-shrink: 0;
+    }
+
+    .toggle-track::after {
+      content: '';
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 16px;
+      height: 16px;
+      background: white;
+      border-radius: 999px;
+      transition: transform 200ms ease, background 200ms ease;
+    }
+
+    .toggle-input { display: none; }
+
+    .toggle-input:checked + .toggle-track {
+      background: var(--accent);
+    }
+
+    .toggle-input:checked + .toggle-track::after {
+      transform: translateX(16px);
+    }
+
+    .toggle-input:focus-visible + .toggle-track {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Theme cards */
+    .theme-card-input { display: none; }
+
+    .theme-card {
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      cursor: pointer;
+      transition: border-color 200ms ease;
+      text-align: center;
+    }
+
+    .theme-card:hover {
+      border-color: var(--border-strong);
+    }
+
+    .theme-card-input:checked + .theme-card {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    .theme-card-input:focus-visible + .theme-card {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Form inputs */
+    .form-input {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      color: var(--text-primary);
+      background: var(--surface-raised);
+      transition: border-color 150ms ease;
+    }
+
+    .form-input:hover {
+      border-color: var(--border-strong);
+    }
+
+    .form-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--focus-ring);
+    }
+
+    .form-input:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--focus-ring);
+    }
+
+    textarea.form-input {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    /* Focus visible for buttons */
+    .btn-primary:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    /* Reduced motion */
+    @media (prefers-reduced-motion: reduce) {
+      .toggle-track,
+      .toggle-track::after,
+      .theme-card {
+        transition: none;
+      }
+    }
+
+    /* Heading styles */
+    h2 {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      text-wrap: balance;
+      color: var(--text-primary);
+    }
+
+    .section-desc {
+      font-size: 13px;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    label.field-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <div class="tab-radio" id="tab-radio-group">
+    <input type="radio" name="settings-tab" id="tab-profile" class="tab-radio" checked>
+    <input type="radio" name="settings-tab" id="tab-notifications" class="tab-radio">
+    <input type="radio" name="settings-tab" id="tab-appearance" class="tab-radio">
+  </div>
+
+  <div class="layout flex min-h-screen">
+
+    <!-- Sidebar navigation -->
+    <nav class="w-56 border-r flex-shrink-0 py-10 px-4" style="border-color: var(--border);">
+      <p class="text-xs font-medium uppercase tracking-wider mb-6" style="color: var(--text-tertiary);">Settings</p>
+      <ul class="space-y-1">
+        <li>
+          <label for="tab-profile" class="nav-label-profile flex items-center gap-3 px-3 py-2 rounded-md text-sm cursor-pointer border-l-2 -ml-px" style="border-left-color: transparent; color: var(--text-secondary);">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="5" r="3"/><path d="M2 14c0-3 2.5-5 6-5s6 2 6 5"/></svg>
+            Profile
+          </label>
+        </li>
+        <li>
+          <label for="tab-notifications" class="nav-label-notifications flex items-center gap-3 px-3 py-2 rounded-md text-sm cursor-pointer border-l-2 -ml-px" style="border-left-color: transparent; color: var(--text-secondary);">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 5.5a4 4 0 0 1 8 0v3l1.5 2H2.5L4 8.5V5.5Z"/><path d="M6 12.5a2 2 0 0 0 4 0"/></svg>
+            Notifications
+          </label>
+        </li>
+        <li>
+          <label for="tab-appearance" class="nav-label-appearance flex items-center gap-3 px-3 py-2 rounded-md text-sm cursor-pointer border-l-2 -ml-px" style="border-left-color: transparent; color: var(--text-secondary);">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="3"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3.05 3.05l1.41 1.41M11.54 11.54l1.41 1.41M3.05 12.95l1.41-1.41M11.54 4.46l1.41-1.41"/></svg>
+            Appearance
+          </label>
+        </li>
+      </ul>
+    </nav>
+
+    <!-- Content area -->
+    <main class="flex-1 py-10 px-16 overflow-y-auto">
+
+      <!-- Profile panel -->
+      <div class="panel-panel panel-profile" style="max-width: 560px;">
+        <h2>Profile</h2>
+        <p class="section-desc">Manage your personal information and how others see you.</p>
+
+        <div class="mt-10 space-y-8">
+          <!-- Avatar -->
+          <div class="flex items-center gap-5">
+            <div class="w-16 h-16 rounded-full flex items-center justify-center text-lg font-semibold flex-shrink-0" style="background: var(--accent-light); color: var(--accent);">
+              JD
+            </div>
+            <div>
+              <p class="text-sm font-medium" style="color: var(--text-primary);">Profile photo</p>
+              <p class="text-xs mt-1" style="color: var(--text-secondary);">A placeholder for your avatar image.</p>
+            </div>
+          </div>
+
+          <!-- Name -->
+          <div>
+            <label for="name" class="field-label">Name</label>
+            <input type="text" id="name" class="form-input" value="Jane Doe" placeholder="Your name">
+          </div>
+
+          <!-- Email -->
+          <div>
+            <label for="email" class="field-label">Email</label>
+            <input type="email" id="email" class="form-input" value="jane@example.com" placeholder="you@example.com">
+          </div>
+
+          <!-- Bio -->
+          <div>
+            <label for="bio" class="field-label">Bio</label>
+            <textarea id="bio" class="form-input" placeholder="A short description about yourself.">Designer and developer working on creative tools.</textarea>
+          </div>
+
+          <!-- Save -->
+          <div class="pt-4">
+            <button class="btn-primary px-5 py-2 rounded-md text-sm font-medium text-white cursor-pointer" style="background: var(--accent);">
+              Save changes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Notifications panel -->
+      <div class="panel-panel panel-notifications" style="max-width: 560px;">
+        <h2>Notifications</h2>
+        <p class="section-desc">Choose what you want to be notified about.</p>
+
+        <div class="mt-10 divide-y" style="border-color: var(--border);">
+
+          <div class="py-5 flex items-start justify-between gap-8">
+            <div>
+              <p class="text-sm font-medium" style="color: var(--text-primary);">Weekly digest</p>
+              <p class="text-xs mt-1" style="color: var(--text-secondary);">A summary of activity from the past week.</p>
+            </div>
+            <label>
+              <input type="checkbox" class="toggle-input" checked>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+          <div class="py-5 flex items-start justify-between gap-8">
+            <div>
+              <p class="text-sm font-medium" style="color: var(--text-primary);">Product updates</p>
+              <p class="text-xs mt-1" style="color: var(--text-secondary);">New features and improvements to the product.</p>
+            </div>
+            <label>
+              <input type="checkbox" class="toggle-input" checked>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+          <div class="py-5 flex items-start justify-between gap-8">
+            <div>
+              <p class="text-sm font-medium" style="color: var(--text-primary);">Security alerts</p>
+              <p class="text-xs mt-1" style="color: var(--text-secondary);">Important notifications about your account security.</p>
+            </div>
+            <label>
+              <input type="checkbox" class="toggle-input" checked>
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+          <div class="py-5 flex items-start justify-between gap-8">
+            <div>
+              <p class="text-sm font-medium" style="color: var(--text-primary);">New features</p>
+              <p class="text-xs mt-1" style="color: var(--text-secondary);">Early access announcements and feature previews.</p>
+            </div>
+            <label>
+              <input type="checkbox" class="toggle-input">
+              <span class="toggle-track"></span>
+            </label>
+          </div>
+
+        </div>
+
+        <div class="pt-8">
+          <button class="btn-primary px-5 py-2 rounded-md text-sm font-medium text-white cursor-pointer" style="background: var(--accent);">
+            Save changes
+          </button>
+        </div>
+      </div>
+
+      <!-- Appearance panel -->
+      <div class="panel-panel panel-appearance" style="max-width: 560px;">
+        <h2>Appearance</h2>
+        <p class="section-desc">Customize how the interface looks and feels.</p>
+
+        <div class="mt-10 space-y-10">
+          <!-- Theme -->
+          <div>
+            <label class="field-label">Theme</label>
+            <div class="grid grid-cols-3 gap-3 mt-2">
+
+              <label>
+                <input type="radio" name="theme" value="light" class="theme-card-input" checked>
+                <div class="theme-card">
+                  <div class="w-full h-16 rounded mb-3" style="background: oklch(100% 0 0); border: 1px solid var(--border);"></div>
+                  <p class="text-sm font-medium" style="color: var(--text-primary);">Light</p>
+                </div>
+              </label>
+
+              <label>
+                <input type="radio" name="theme" value="dark" class="theme-card-input">
+                <div class="theme-card">
+                  <div class="w-full h-16 rounded mb-3" style="background: oklch(18% 0.01 250);"></div>
+                  <p class="text-sm font-medium" style="color: var(--text-primary);">Dark</p>
+                </div>
+              </label>
+
+              <label>
+                <input type="radio" name="theme" value="system" class="theme-card-input">
+                <div class="theme-card">
+                  <div class="w-full h-16 rounded mb-3 flex overflow-hidden" style="border: 1px solid var(--border);">
+                    <div class="w-1/2 h-full" style="background: oklch(100% 0 0);"></div>
+                    <div class="w-1/2 h-full" style="background: oklch(18% 0.01 250);"></div>
+                  </div>
+                  <p class="text-sm font-medium" style="color: var(--text-primary);">System</p>
+                </div>
+              </label>
+
+            </div>
+          </div>
+
+          <!-- Font size -->
+          <div>
+            <label for="font-size" class="field-label">Font size</label>
+            <select id="font-size" class="form-input cursor-pointer" style="appearance: none; background-image: url('data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2216%22 height=%2216%22 viewBox=%220 0 16 16%22 fill=%22none%22 stroke=%22%23666%22 stroke-width=%221.5%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22><path d=%22M4 6l4 4 4-4%22/></svg>'); background-repeat: no-repeat; background-position: right 12px center;">
+              <option value="small">Small (13px)</option>
+              <option value="medium" selected>Medium (14px)</option>
+              <option value="large">Large (16px)</option>
+            </select>
+          </div>
+
+          <!-- Save -->
+          <div class="pt-4">
+            <button class="btn-primary px-5 py-2 rounded-md text-sm font-medium text-white cursor-pointer" style="background: var(--accent);">
+              Save changes
+            </button>
+          </div>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+</body>
+</html>

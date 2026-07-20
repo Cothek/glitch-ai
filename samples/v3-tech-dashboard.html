@@ -1,0 +1,247 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>cyber://dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root { --bg: #0a0a0f; --surface: #12121a; --border: #1e1e2e; --text: #e0e0e0; --muted: #6b6b8a; --cyan: #00f0ff; --magenta: #ff00aa; --yellow: #ffcc00; --green: #00ff87; }
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Space Grotesk', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; overflow-x: hidden; }
+
+/* Grid background */
+body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-image: linear-gradient(rgba(0,240,255,0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(0,240,255,0.03) 1px, transparent 1px); background-size: 40px 40px; pointer-events: none; z-index: 0; }
+
+.page { position: relative; z-index: 1; max-width: 1200px; margin: 0 auto; padding: 20px 32px; }
+
+/* Header */
+.top-bar { display: flex; justify-content: space-between; align-items: center; padding: 16px 24px; background: rgba(18,18,26,0.8); border: 1px solid var(--border); backdrop-filter: blur(12px); margin-bottom: 32px; }
+.logo { font-family: 'JetBrains Mono', monospace; font-size: 18px; font-weight: 700; color: var(--cyan); display: flex; align-items: center; gap: 10px; }
+.logo .prompt { color: var(--green); font-weight: 400; }
+.logo .cursor { display: inline-block; width: 8px; height: 16px; background: var(--cyan); animation: blink 1s step-end infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.connection-status { font-family: 'JetBrains Mono', monospace; font-size: 11px; display: flex; align-items: center; gap: 6px; color: var(--muted); }
+.connection-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); box-shadow: 0 0 6px var(--green); animation: pulse 2s infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+.connection-dot.error { background: #ff3355; box-shadow: 0 0 6px #ff3355; }
+
+/* Metrics grid */
+.metrics { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 16px; margin-bottom: 24px; }
+.glass-card { background: rgba(18,18,26,0.6); border: 1px solid var(--border); backdrop-filter: blur(8px); padding: 20px; position: relative; overflow: hidden; }
+.glass-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 1px; background: linear-gradient(90deg, transparent, var(--cyan), transparent); opacity: 0.5; }
+.glass-card .label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+.glass-card .value { font-size: 32px; font-weight: 700; letter-spacing: -1px; }
+.glass-card .trend { font-family: 'JetBrains Mono', monospace; font-size: 12px; margin-top: 4px; }
+.glass-card .trend.up { color: var(--green); }
+.glass-card .trend.down { color: #ff3355; }
+
+/* Card glowing accents */
+.glass-card.cyan .value { color: var(--cyan); }
+.glass-card.magenta .value { color: var(--magenta); }
+.glass-card.yellow .value { color: var(--yellow); }
+.glass-card.green .value { color: var(--green); }
+
+/* Scan line effect */
+.scanline { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 999; background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px); }
+
+/* Chart row */
+.chart-row { display: grid; grid-template-columns: 2fr 1fr; gap: 16px; margin-bottom: 24px; }
+.chart-card { background: rgba(18,18,26,0.6); border: 1px solid var(--border); backdrop-filter: blur(8px); padding: 20px; }
+.chart-card h3 { font-size: 13px; font-weight: 500; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 16px; }
+
+/* Bar viz */
+.bar-viz { display: flex; align-items: flex-end; gap: 6px; height: 120px; padding: 10px 0; }
+.bar-viz .bar { width: 100%; background: var(--cyan); min-height: 4px; transition: height 600ms cubic-bezier(0.34, 1.56, 0.64, 1); border-radius: 2px 2px 0 0; opacity: 0.7; }
+.bar-viz .bar:nth-child(3n) { background: var(--magenta); }
+.bar-viz .bar:nth-child(5n) { background: var(--yellow); }
+
+/* Data table */
+.data-table { background: rgba(18,18,26,0.6); border: 1px solid var(--border); backdrop-filter: blur(8px); margin-bottom: 32px; }
+.data-table-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.data-table-header h3 { font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+table { width: 100%; border-collapse: collapse; }
+th { text-align: left; padding: 12px 20px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; border-bottom: 1px solid var(--border); font-weight: 400; }
+td { padding: 14px 20px; font-size: 14px; border-bottom: 1px solid rgba(30,30,46,0.5); }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: rgba(0,240,255,0.03); }
+td:last-child, th:last-child { text-align: right; font-family: 'JetBrains Mono', monospace; }
+td:nth-child(3), th:nth-child(3) { text-align: right; font-family: 'JetBrains Mono', monospace; }
+.status { font-family: 'JetBrains Mono', monospace; font-size: 11px; display: inline-flex; align-items: center; gap: 6px; }
+.status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; }
+.status-dot.active { background: var(--green); box-shadow: 0 0 4px var(--green); }
+.status-dot.paused { background: var(--yellow); box-shadow: 0 0 4px var(--yellow); }
+.status-dot.error { background: #ff3355; box-shadow: 0 0 4px #ff3355; }
+
+/* Glow text */
+.glow { text-shadow: 0 0 20px currentColor; }
+
+/* Entry animation */
+@keyframes fadeGlow { from { opacity: 0; transform: translateY(20px); filter: blur(4px); } to { opacity: 1; transform: translateY(0); filter: blur(0); } }
+.animate-in { opacity: 0; }
+.animate-in.done { animation: fadeGlow 500ms ease forwards; }
+
+/* Counter animation */
+.counter { display: inline-block; }
+
+/* Terminal ticker */
+.ticker { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); padding: 8px 0; margin-bottom: 16px; border-bottom: 1px solid var(--border); display: flex; gap: 24px; }
+.ticker span { display: flex; align-items: center; gap: 6px; }
+.ticker .time { color: var(--cyan); }
+
+/* Filter tabs */
+.filter-tabs { display: flex; gap: 4px; margin-bottom: 20px; }
+.filter-tab { padding: 6px 16px; font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--muted); border: 1px solid var(--border); background: transparent; cursor: pointer; transition: all 200ms ease; text-transform: uppercase; letter-spacing: 1px; }
+.filter-tab:hover { border-color: var(--cyan); color: var(--text); }
+.filter-tab.active { background: var(--cyan); color: var(--bg); border-color: var(--cyan); font-weight: 700; }
+</style>
+</head>
+<body>
+<div class="scanline"></div>
+<div class="page">
+  <!-- Top bar -->
+  <div class="top-bar">
+    <div class="logo"><span class="prompt">$</span> cyberdash <span class="cursor"></span></div>
+    <div class="connection-status"><span class="connection-dot" id="connDot"></span><span id="connText">NEXUS SECURE</span></div>
+  </div>
+
+  <!-- Ticker -->
+  <div class="ticker">
+    <span class="time" id="clock">--:--:--</span>
+    <span>NODE v22.4.1</span>
+    <span>UPTIME 142h</span>
+    <span>PEERS 8</span>
+    <span style="color:var(--green);">ALL SYSTEMS OPERATIONAL</span>
+  </div>
+
+  <!-- Filters -->
+  <div class="filter-tabs" id="filters">
+    <button class="filter-tab active" data-p="all">All</button>
+    <button class="filter-tab" data-p="7d">7 Days</button>
+    <button class="filter-tab" data-p="30d">30 Days</button>
+    <button class="filter-tab" data-p="1y">1 Year</button>
+  </div>
+
+  <!-- Metrics -->
+  <div class="metrics">
+    <div class="glass-card cyan animate-in" data-delay="0">
+      <div class="label">Revenue</div>
+      <div class="value glow"><span class="counter" data-target="847200">0</span></div>
+      <div class="trend up">▲ +18.4%</div>
+    </div>
+    <div class="glass-card magenta animate-in" data-delay="100">
+      <div class="label">Users</div>
+      <div class="value glow"><span class="counter" data-target="128430">0</span></div>
+      <div class="trend up">▲ +7.2%</div>
+    </div>
+    <div class="glass-card yellow animate-in" data-delay="200">
+      <div class="label">Conversion</div>
+      <div class="value glow">3.8%</div>
+      <div class="trend up">▲ +1.2%</div>
+    </div>
+    <div class="glass-card green animate-in" data-delay="300">
+      <div class="label">Avg Session</div>
+      <div class="value glow">4m 32s</div>
+      <div class="trend up">▲ +12s</div>
+    </div>
+  </div>
+
+  <!-- Charts -->
+  <div class="chart-row">
+    <div class="chart-card animate-in" data-delay="200">
+      <h3>Signal Strength (30 days)</h3>
+      <div class="bar-viz" id="barChart"></div>
+    </div>
+    <div class="chart-card animate-in" data-delay="300">
+      <h3>Data Transfer</h3>
+      <div style="display:flex;flex-direction:column;gap:12px;justify-content:center;height:120px;">
+        <div><div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:4px;"><span>Download</span><span>847 GB</span></div><div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="height:100%;width:72%;background:linear-gradient(90deg,var(--cyan),var(--magenta));border-radius:3px;"></div></div></div>
+        <div><div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);margin-bottom:4px;"><span>Upload</span><span>234 GB</span></div><div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="height:100%;width:34%;background:linear-gradient(90deg,var(--green),var(--cyan));border-radius:3px;"></div></div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div class="data-table animate-in" data-delay="400">
+    <div class="data-table-header">
+      <h3>Active Connections</h3>
+      <span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--muted);">4 endpoints</span>
+    </div>
+    <table>
+      <thead><tr><th>Endpoint</th><th>Status</th><th>Bandwidth</th><th>Latency</th></tr></thead>
+      <tbody>
+        <tr><td>api.nexus-1</td><td><span class="status"><span class="status-dot active"></span>Active</span></td><td>45 Mbps</td><td>12 ms</td></tr>
+        <tr><td>api.nexus-2</td><td><span class="status"><span class="status-dot active"></span>Active</span></td><td>32 Mbps</td><td>14 ms</td></tr>
+        <tr><td>edge.cache</td><td><span class="status"><span class="status-dot paused"></span>Syncing</span></td><td>18 Mbps</td><td>45 ms</td></tr>
+        <tr><td>db-replica</td><td><span class="status"><span class="status-dot active"></span>Active</span></td><td>72 Mbps</td><td>8 ms</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+// Bar chart
+function initBars() {
+  const container = document.getElementById('barChart');
+  if (!container) return;
+  const heights = [20,45,35,60,40,75,55,80,50,90,65,45,70,38,62,85,48,72,55,78,42,68,30,88,58,82,44,66,92,50];
+  container.innerHTML = heights.map(h => `<div class="bar" style="height:${h}px;"></div>`).join('');
+  
+  // Animate bars
+  const bars = container.querySelectorAll('.bar');
+  bars.forEach((bar, i) => {
+    const h = bar.style.height;
+    bar.style.height = '4px';
+    setTimeout(() => { bar.style.height = h; }, 100 + i * 30);
+  });
+}
+
+// Counters
+function animateCounters() {
+  document.querySelectorAll('.counter').forEach(el => {
+    const target = parseFloat(el.dataset.target);
+    const duration = 1800;
+    const start = performance.now();
+    function update(now) {
+      const p = Math.min((now - start) / duration, 1);
+      const e = 1 - Math.pow(1 - p, 3);
+      el.textContent = Math.round(e * target).toLocaleString();
+      if (p < 1) requestAnimationFrame(update);
+    }
+    requestAnimationFrame(update);
+  });
+}
+
+// Stagger entry
+function stagger() {
+  document.querySelectorAll('.animate-in').forEach(el => {
+    setTimeout(() => el.classList.add('done'), parseInt(el.dataset.delay) || 0);
+  });
+}
+
+// Clock
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toTimeString().slice(0,8);
+}
+updateClock();
+setInterval(updateClock, 1000);
+
+// Filter tabs
+document.querySelectorAll('.filter-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+  });
+});
+
+// Start
+window.addEventListener('load', () => {
+  initBars();
+  animateCounters();
+  stagger();
+});
+</script>
+</body>
+</html>

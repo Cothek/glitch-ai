@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --paper: #f8f4ef;
+  --ink: #2c2420;
+  --ink-light: #6b5e52;
+  --forest: #1a3a2a;
+  --gold: #c9a84c;
+  --rule: #d4c9b8;
+  --rule-light: #e8e0d4;
+  --hover-tint: rgba(201, 168, 76, 0.06);
+}
+
+html {
+  font-size: 17px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Source Serif 4', Georgia, 'Times New Roman', serif;
+  font-size: 1rem;
+  line-height: 1.7;
+  min-height: 100dvh;
+  padding: 0;
+}
+
+/* Reading progress line */
+.progress-line {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--forest), var(--gold));
+  width: 0%;
+  z-index: 100;
+  transition: none;
+}
+
+.progress-line.animate {
+  animation: progressFill 2.4s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes progressFill {
+  0% { width: 0%; }
+  100% { width: 100%; }
+}
+
+/* Page container */
+.page {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 3rem 2.5rem 6rem;
+}
+
+/* Folio rule at top */
+.folio-rule {
+  border: none;
+  height: 1px;
+  background: var(--rule);
+  margin-bottom: 2.5rem;
+}
+
+/* Page header */
+.page-header {
+  margin-bottom: 3.5rem;
+  opacity: 0;
+  animation: fadeIn 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: 100ms;
+}
+
+.page-header .section-label {
+  font-family: 'Source Serif 4', serif;
+  font-size: 0.7rem;
+  font-variant: small-caps;
+  letter-spacing: 0.18em;
+  color: var(--ink-light);
+  margin-bottom: 0.5rem;
+}
+
+.page-header h1 {
+  font-family: 'Playfair Display', serif;
+  font-weight: 400;
+  font-size: 2.4rem;
+  line-height: 1.2;
+  color: var(--ink);
+  letter-spacing: -0.01em;
+}
+
+.page-header .subtitle {
+  font-family: 'Source Serif 4', serif;
+  font-style: italic;
+  font-size: 0.95rem;
+  color: var(--ink-light);
+  margin-top: 0.4rem;
+}
+
+/* Section grid */
+.section {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: 2.5rem;
+  padding: 2rem 0;
+  border-top: 1px solid var(--rule);
+  opacity: 0;
+  transform: translateY(12px);
+}
+
+.section.visible {
+  animation: sectionIn 600ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+@keyframes sectionIn {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeIn {
+  to {
+    opacity: 1;
+  }
+}
+
+.section-heading {
+  font-family: 'Source Serif 4', serif;
+  font-size: 0.7rem;
+  font-variant: small-caps;
+  letter-spacing: 0.2em;
+  color: var(--forest);
+  padding-top: 0.15rem;
+  text-transform: lowercase;
+}
+
+.section-heading .numeral {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-variant: normal;
+  font-size: 0.85rem;
+  color: var(--gold);
+  margin-right: 0.5rem;
+  letter-spacing: 0;
+}
+
+/* Profile section — ruled-line inputs */
+.field-group {
+  margin-bottom: 1.5rem;
+}
+
+.field-group:last-child {
+  margin-bottom: 0;
+}
+
+.field-label {
+  font-size: 0.72rem;
+  font-variant: small-caps;
+  letter-spacing: 0.15em;
+  color: var(--ink-light);
+  margin-bottom: 0.35rem;
+}
+
+.ruled-input {
+  display: block;
+  width: 100%;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  font-family: 'Source Serif 4', serif;
+  font-size: 1.05rem;
+  color: var(--ink);
+  padding: 0.3rem 0;
+  outline: none;
+  transition: border-color 0.3s ease;
+}
+
+.ruled-input:focus {
+  border-bottom-color: var(--forest);
+}
+
+.ruled-input::placeholder {
+  color: var(--rule);
+  font-style: italic;
+}
+
+/* Correspondence — square checkboxes */
+.checklist-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  padding: 0.85rem 0.6rem;
+  margin: 0 -0.6rem;
+  border-radius: 2px;
+  cursor: pointer;
+  transition: background 0.25s ease;
+  user-select: none;
+}
+
+.checklist-item:hover {
+  background: var(--hover-tint);
+}
+
+.check-box {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid var(--rule);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 0.15rem;
+  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  position: relative;
+}
+
+.check-box .check-mark {
+  font-family: 'Playfair Display', serif;
+  font-size: 14px;
+  color: var(--paper);
+  opacity: 0;
+  transform: scale(0.5);
+  transition: all 0.25s cubic-bezier(0.22, 1, 0.36, 1);
+  line-height: 1;
+}
+
+.checklist-item.checked .check-box {
+  background: var(--forest);
+  border-color: var(--forest);
+}
+
+.checklist-item.checked .check-box .check-mark {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.check-content .check-title {
+  font-family: 'Playfair Display', serif;
+  font-size: 1.05rem;
+  color: var(--ink);
+  margin-bottom: 0.15rem;
+}
+
+.check-content .check-desc {
+  font-size: 0.88rem;
+  color: var(--ink-light);
+  line-height: 1.55;
+}
+
+/* Preferences — select + range */
+.pref-select-wrap {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 1.8rem;
+}
+
+.pref-select {
+  appearance: none;
+  -webkit-appearance: none;
+  border: none;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+  font-family: 'Source Serif 4', serif;
+  font-size: 1rem;
+  color: var(--ink);
+  padding: 0.3rem 1.8rem 0.3rem 0;
+  cursor: pointer;
+  outline: none;
+  transition: border-color 0.3s ease;
+}
+
+.pref-select:focus {
+  border-bottom-color: var(--forest);
+}
+
+.pref-select-wrap::after {
+  content: '';
+  position: absolute;
+  right: 0.2rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 0;
+  height: 0;
+  border-left: 4px solid transparent;
+  border-right: 4px solid transparent;
+  border-top: 5px solid var(--ink-light);
+  pointer-events: none;
+}
+
+/* Range slider */
+.range-group {
+  margin-top: 0.5rem;
+}
+
+.range-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 0.6rem;
+}
+
+.range-value {
+  font-family: 'Playfair Display', serif;
+  font-style: italic;
+  font-size: 0.9rem;
+  color: var(--forest);
+}
+
+.range-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  background: var(--rule);
+  outline: none;
+  border: none;
+  cursor: pointer;
+  position: relative;
+}
+
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--gold);
+  cursor: pointer;
+  transition: box-shadow 0.2s ease;
+}
+
+.range-slider::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 0 4px rgba(201, 168, 76, 0.15);
+}
+
+.range-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--gold);
+  cursor: pointer;
+}
+
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 0.5rem;
+  font-size: 0.72rem;
+  font-variant: small-caps;
+  letter-spacing: 0.1em;
+  color: var(--ink-light);
+}
+
+/* Colophon */
+.colophon-content {
+  font-size: 0.9rem;
+  color: var(--ink-light);
+  line-height: 1.8;
+}
+
+.colophon-content .version {
+  font-family: 'Playfair Display', serif;
+  font-size: 1rem;
+  color: var(--ink);
+  margin-bottom: 0.3rem;
+}
+
+.colophon-content .credits {
+  font-style: italic;
+  font-size: 0.85rem;
+}
+
+.colophon-content .gold-rule {
+  display: block;
+  width: 40px;
+  height: 1px;
+  background: var(--gold);
+  margin: 1rem 0;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+  .page {
+    padding: 2rem 1.5rem 4rem;
+  }
+
+  .section {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .page-header h1 {
+    font-size: 1.8rem;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="progress-line" id="progressLine"></div>
+
+<div class="page">
+  <hr class="folio-rule">
+
+  <header class="page-header">
+    <div class="section-label">Volume I</div>
+    <h1>Settings</h1>
+    <p class="subtitle">A reader's preferences, carefully kept</p>
+  </header>
+
+  <!-- I. Profile -->
+  <section class="section" data-section>
+    <div class="section-heading"><span class="numeral">i.</span>Profile</div>
+    <div class="section-content">
+      <div class="field-group">
+        <div class="field-label">Name</div>
+        <input type="text" class="ruled-input" value="Eleanor Vance" spellcheck="false">
+      </div>
+      <div class="field-group">
+        <div class="field-label">Correspondence</div>
+        <input type="email" class="ruled-input" value="evance@folio.design" spellcheck="false">
+      </div>
+    </div>
+  </section>
+
+  <!-- II. Correspondence -->
+  <section class="section" data-section>
+    <div class="section-heading"><span class="numeral">ii.</span>Correspondence</div>
+    <div class="section-content">
+      <div class="checklist-item checked" data-check>
+        <div class="check-box"><span class="check-mark">&#10003;</span></div>
+        <div class="check-content">
+          <div class="check-title">Weekly Dispatch</div>
+          <div class="check-desc">Receive a curated summary of new articles and features each Sunday morning, delivered quietly to your inbox.</div>
+        </div>
+      </div>
+      <div class="checklist-item" data-check>
+        <div class="check-box"><span class="check-mark">&#10003;</span></div>
+        <div class="check-content">
+          <div class="check-title">Editor's Notes</div>
+          <div class="check-desc">Occasional letters from the editor regarding upcoming issues, special editions, and matters of the publication.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- III. Preferences -->
+  <section class="section" data-section>
+    <div class="section-heading"><span class="numeral">iii.</span>Preferences</div>
+    <div class="section-content">
+      <div class="field-group">
+        <div class="field-label">Edition</div>
+        <div class="pref-select-wrap">
+          <select class="pref-select">
+            <option>Standard Edition</option>
+            <option>Collector's Edition</option>
+            <option>Digital Only</option>
+          </select>
+        </div>
+      </div>
+      <div class="range-group">
+        <div class="range-header">
+          <div class="field-label" style="margin-bottom:0">Reading Volume</div>
+          <div class="range-value" id="rangeValue">Each Issue</div>
+        </div>
+        <input type="range" class="range-slider" id="rangeSlider" min="0" max="3" step="1" value="3">
+        <div class="range-labels">
+          <span>Occasional</span>
+          <span>Regular</span>
+          <span>Frequent</span>
+          <span>Each Issue</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- IV. Colophon -->
+  <section class="section" data-section>
+    <div class="section-heading"><span class="numeral">iv.</span>Colophon</div>
+    <div class="section-content">
+      <div class="colophon-content">
+        <div class="version">Folio, Version 2.4.1</div>
+        <span class="gold-rule"></span>
+        <div class="credits">Typeset in Playfair Display &amp; Source Serif</div>
+        <div class="credits">Composed for readers who appreciate the quiet details.</div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script>
+(function() {
+  // Reading progress line on load
+  const progress = document.getElementById('progressLine');
+  requestAnimationFrame(() => {
+    progress.classList.add('animate');
+  });
+
+  // Staggered section fade-in
+  const sections = document.querySelectorAll('[data-section]');
+  sections.forEach((section, i) => {
+    setTimeout(() => {
+      section.classList.add('visible');
+    }, 400 + (i * 200));
+  });
+
+  // Square checkbox toggle
+  document.querySelectorAll('[data-check]').forEach(item => {
+    item.addEventListener('click', () => {
+      item.classList.toggle('checked');
+    });
+  });
+
+  // Range slider
+  const slider = document.getElementById('rangeSlider');
+  const display = document.getElementById('rangeValue');
+  const labels = ['Occasional', 'Regular', 'Frequent', 'Each Issue'];
+
+  function updateRange() {
+    const val = parseInt(slider.value);
+    display.textContent = labels[val];
+    const pct = (val / 3) * 100;
+    slider.style.background = `linear-gradient(90deg, #c9a84c ${pct}%, #d4c9b8 ${pct}%)`;
+  }
+
+  slider.addEventListener('input', updateRange);
+  updateRange();
+})();
+</script>
+
+</body>
+</html>
