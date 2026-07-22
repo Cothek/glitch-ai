@@ -2,6 +2,7 @@ import http from 'node:http';
 import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join, dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawn } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -384,6 +385,76 @@ async function handler(req, res) {
         applied,
         changes,
         backup_path: lastBackupPath ? lastBackupPath.replace(ROOT_DIR + '\\', '').replace(ROOT_DIR + '/', '') : null,
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/apply-and-restart') {
+      const configPath = join(ROOT_DIR, 'opencode.json');
+      const templatePath = join(ROOT_DIR, 'config', 'opencode-normal.json');
+
+      if (!existsSync(configPath)) {
+        sendJson(res, 404, { error: 'opencode.json not found' });
+        return;
+      }
+
+      const config = readJson(configPath);
+      const templateConfig = existsSync(templatePath) ? readJson(templatePath) : null;
+
+      if (!config || pendingChanges.length === 0) {
+        sendJson(res, 400, { error: 'No pending changes to apply' });
+        return;
+      }
+
+      const backupDir = join(ROOT_DIR, 'data', 'backups');
+      mkdirSync(backupDir, { recursive: true });
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const backupPath = join(backupDir, `opencode.json.backup-${timestamp}`);
+      copyFileSync(configPath, backupPath);
+      lastBackupPath = backupPath;
+
+      for (const change of pendingChanges) {
+        if (config.agent?.[change.agent]) {
+          config.agent[change.agent].model = change.new_model;
+        }
+        if (templateConfig?.agent?.[change.agent]) {
+          templateConfig.agent[change.agent].model = change.new_model;
+        }
+      }
+
+      writeJson(configPath, config);
+      if (templateConfig) {
+        writeJson(templatePath, templateConfig);
+      }
+
+      const applied = pendingChanges.length;
+      const changes = [...pendingChanges];
+      pendingChanges = [];
+
+      const restartFlagPath = join(ROOT_DIR, 'data', '.restart-flag');
+      writeFileSync(restartFlagPath, '1', 'utf-8');
+
+      const pidFilePath = join(ROOT_DIR, 'data', 'opencode.pid');
+      const isWindows = process.platform === 'win32';
+      if (isWindows) {
+        // Use PID file to kill only the specific opencode process
+        const psCmd = `Start-Sleep 2; if (Test-Path '${pidFilePath.replace(/'/g, "''")}') { $pid = Get-Content '${pidFilePath.replace(/'/g, "''")}' -Raw; Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue }`;
+        spawn('powershell.exe', [
+          '-NoProfile',
+          '-WindowStyle', 'Hidden',
+          '-Command', psCmd
+        ], { detached: true, stdio: 'ignore' }).unref();
+      } else {
+        // Use PID file to kill only the specific opencode process
+        const shCmd = `sleep 2; if [ -f '${pidFilePath}' ]; then kill $(cat '${pidFilePath}') 2>/dev/null; fi`;
+        spawn('sh', ['-c', shCmd], { detached: true, stdio: 'ignore' }).unref();
+      }
+
+      sendJson(res, 200, {
+        success: true,
+        applied,
+        changes,
+        restarting: true,
       });
       return;
     }

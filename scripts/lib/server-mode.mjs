@@ -488,11 +488,18 @@ export async function launchServer(options = {}) {
   console.log('');
 
   try {
-    run(OpenCodeBin, ['web', '--port', String(TARGET_PORT), '--hostname', '0.0.0.0'], {
+    const opencodeProc = spawn(OpenCodeBin, ['web', '--port', String(TARGET_PORT), '--hostname', '0.0.0.0'], {
       cwd: ROOT_DIR,
       stdio: 'inherit',
-      timeout: 0
     });
+    // Write PID for restart helper
+    writeFileSync(join(ROOT_DIR, 'data', 'opencode.pid'), String(opencodeProc.pid), 'utf-8');
+    await new Promise((resolve) => opencodeProc.on('exit', (code) => {
+      if (code !== 0 && code !== null) {
+        log(RED, `  OpenCode exited with code ${code}`);
+      }
+      resolve();
+    }));
   } catch (e) {
     log(RED, `  OpenCode exited with error: ${e.message || e}`);
   }

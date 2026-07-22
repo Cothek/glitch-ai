@@ -1,175 +1,180 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": [".opencode/plugins/save-images.js"],
-  "instructions": [
-    "glitch-memorycore/prompt-rules.md",
-    "glitch-memorycore/CLAUDE.md",
-    "glitch-memorycore/master-memory.md",
-    "glitch-memorycore/core/identity.md",
-    "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
-  ],
-  "agent": {
-    "glitch": {
-      "model": "__MODEL__",
-      "mode": "primary",
-      "description": "Free mode orchestrates tasks using only free models.",
-      "color": "#22c55e",
-      "temperature": 0.2,
-      "permission": {
-        "read": "allow",
-        "edit": "deny",
-        "write": "deny",
-        "bash": "deny",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "allow",
-        "question": "allow",
-        "skill": "allow",
-        "todowrite": "allow",
-        "task": "allow"
-      },
-      "prompt": "__PROMPT__"
-    },
-    "general": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
-      "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "bash": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "deny",
-        "question": "allow",
-        "todowrite": "allow"
-      },
-      "temperature": 0.2
-    },
-    "explore": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
-      "temperature": 0.2
-    },
-    "plan": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Planning mode -- reason about architecture and designs without executing code.",
-      "temperature": 0.2
-    },
-    "build": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Code scaffolding -- generates code from prompts.",
-      "temperature": 0.2
-    },
-    "coder": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
-      "temperature": 0.2
-    },
-    "ui-designer": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
-      "temperature": 0.2
-    },
-    "reviewer": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Independent code quality gate -- read-only, severity-rated reports",
-      "temperature": 0.2
-    },
-    "testing": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Test writer -- TDD, framework detection, edge case coverage",
-      "temperature": 0.2
-    },
-    "vision": {
-      "model": "__VISION_MODEL__",
-      "mode": "subagent",
-      "description": "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
-      "permission": {
-        "read": "allow",
-        "bash": "deny",
-        "glob": "allow",
-        "grep": "deny",
-        "edit": "deny",
-        "skill": "deny",
-        "list": "allow",
-        "webfetch": "allow"
-      },
-      "temperature": 0.2
-    },
-    "memory": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
-      "permission": {
-        "read": "allow",
-        "write": "allow",
-        "list": "allow",
-        "glob": "allow",
-        "skill": "allow",
-        "edit": "deny",
-        "bash": "deny",
-        "grep": "deny",
-        "webfetch": "deny",
-        "websearch": "deny",
-        "question": "deny",
-        "todowrite": "deny",
-        "task": "deny"
-      },
-      "temperature": 0.2
-    },
-    "glitch-omni": {
-      "model": "__MODEL__",
-      "mode": "primary",
-      "description": "Free mode Glitch Omni -- does everything itself, no delegation. Executes code, writes files, runs bash directly.",
-      "color": "#22c55e",
-      "temperature": 0.2,
-      "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "bash": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "allow",
-        "question": "allow",
-        "skill": "allow",
-        "todowrite": "allow",
-        "task": "deny"
-      },
-      "prompt": "You are Glitch Omni running in FREE MODE. You do everything yourself -- no delegation.\n\n## Free Mode Rules\n1. You have FULL permissions same capabilities as normal mode.\n2. All agents use free models -- there are NO paid fallback models available.\n3. You execute code, write files, run bash directly. NO task() dispatch calls.\n4. If a free model exhausts its quota, close this session and relaunch with a different model.\n5. Tell the user which model is active on session start.\n6. NVIDIA models require NVIDIA provider to be connected via /connect in the TUI first.\n\n## Agent Selection (All Free - You Do All)\n| Task Type | You Do |\n|-----------|--------|\n| Bash, file ops, simple edits | Direct execution |\n| Code (1-5 files, standard logic) | Direct execution |\n| Codebase research | Direct execution (read, grep, glob) |\n| Architecture / planning | Direct execution |\n| Code scaffolding | Direct execution |\n| Image / visual analysis | Use @vision sub-agent if needed |\n\n## Direct Execution Mandate (Immutable)\nGlitch Omni's job is DIRECT EXECUTION. The first action for every code task is EXECUTION, not dispatch.\n\nYOUR FIRST RESPONSE to any code task MUST use edit/write/bash directly - NO task() dispatch calls.\n\n- You MAY use edit/write/bash for code work directly\n- You may use @vision sub-agent for image analysis if needed\n- Direct work: memory writes (R12), git, planning, reading, questions, code, bash\n- If caught delegating: stop immediately, log FAILURE to scratchpad, execute directly"
-    }
-  },
-  "attachment": {
-    "image": {
-      "auto_resize": true,
-      "max_width": 2000,
-      "max_height": 2000,
-      "max_base64_bytes": 5242880
-    }
-  },
-  "experimental": {
-    "disable_paste_summary": true
-  },
-  "server": {
-    "port": 4100,
-    "hostname": "0.0.0.0"
-  },
-  "default_agent": "glitch",
-  "compaction": {
-    "auto": true,
-    "tail_turns": 8
-  }
+    "$schema":  "https://opencode.ai/config.json",
+    "plugin":  [
+                    ".opencode/plugins/save-images.js",
+                    ".opencode/plugins/dispatch-reflex.js",
+                    ".opencode/plugins/compaction.js",
+                   ".opencode/plugins/verify-claim.js"
+               ],
+    "instructions":  [
+                         "glitch-memorycore/prompt-rules.md",
+                         "glitch-memorycore/CLAUDE.md",
+                         "glitch-memorycore/master-memory.md",
+                         "glitch-memorycore/core/identity.md",
+                         "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+                     ],
+    "agent":  {
+                  "glitch":  {
+                                 "model":  "__MODEL__",
+                                 "mode":  "primary",
+                                 "description":  "Free mode orchestrates tasks using only free models.",
+                                 "color":  "#22c55e",
+                                 "temperature":  0.2,
+                                 "permission":  {
+                                                    "read":  "allow",
+                                                    "edit":  "deny",
+                                                    "write":  "deny",
+                                                    "bash":  "deny",
+                                                    "glob":  "allow",
+                                                    "grep":  "allow",
+                                                    "list":  "allow",
+                                                    "webfetch":  "allow",
+                                                    "websearch":  "allow",
+                                                    "question":  "allow",
+                                                    "skill":  "allow",
+                                                    "todowrite":  "allow",
+                                                    "task":  "allow"
+                                                },
+                                 "prompt":  "__PROMPT__"
+                             },
+                  "general":  {
+                                  "model":  "__MODEL__",
+                                  "mode":  "subagent",
+                                  "description":  "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
+                                  "permission":  {
+                                                     "read":  "allow",
+                                                     "edit":  "allow",
+                                                     "bash":  "allow",
+                                                     "glob":  "allow",
+                                                     "grep":  "allow",
+                                                     "list":  "allow",
+                                                     "webfetch":  "allow",
+                                                     "websearch":  "deny",
+                                                     "question":  "allow",
+                                                     "todowrite":  "allow"
+                                                 },
+                                  "temperature":  0.2
+                              },
+                  "explore":  {
+                                  "model":  "__MODEL__",
+                                  "mode":  "subagent",
+                                  "description":  "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
+                                  "temperature":  0.2
+                              },
+                  "plan":  {
+                               "model":  "__MODEL__",
+                               "mode":  "subagent",
+                               "description":  "Planning mode -- reason about architecture and designs without executing code.",
+                               "temperature":  0.2
+                           },
+                  "build":  {
+                                "model":  "__MODEL__",
+                                "mode":  "subagent",
+                                "description":  "Code scaffolding -- generates code from prompts.",
+                                "temperature":  0.2
+                            },
+                  "coder":  {
+                                "model":  "__MODEL__",
+                                "mode":  "subagent",
+                                "description":  "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
+                                "temperature":  0.2
+                            },
+                  "ui-designer":  {
+                                      "model":  "__MODEL__",
+                                      "mode":  "subagent",
+                                      "description":  "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
+                                      "temperature":  0.2
+                                  },
+                  "reviewer":  {
+                                   "model":  "__MODEL__",
+                                   "mode":  "subagent",
+                                   "description":  "Independent code quality gate -- read-only, severity-rated reports",
+                                   "temperature":  0.2
+                               },
+                  "testing":  {
+                                  "model":  "__MODEL__",
+                                  "mode":  "subagent",
+                                  "description":  "Test writer -- TDD, framework detection, edge case coverage",
+                                  "temperature":  0.2
+                              },
+                  "vision":  {
+                                 "model":  "__VISION_MODEL__",
+                                 "mode":  "subagent",
+                                 "description":  "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
+                                 "permission":  {
+                                                    "read":  "allow",
+                                                    "bash":  "deny",
+                                                    "glob":  "allow",
+                                                    "grep":  "deny",
+                                                    "edit":  "deny",
+                                                    "skill":  "deny",
+                                                    "list":  "allow",
+                                                    "webfetch":  "allow"
+                                                },
+                                 "temperature":  0.2
+                             },
+                  "memory":  {
+                                 "model":  "__MODEL__",
+                                 "mode":  "subagent",
+                                 "description":  "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
+                                 "permission":  {
+                                                    "read":  "allow",
+                                                    "write":  "allow",
+                                                    "list":  "allow",
+                                                    "glob":  "allow",
+                                                    "skill":  "allow",
+                                                    "edit":  "deny",
+                                                    "bash":  "deny",
+                                                    "grep":  "deny",
+                                                    "webfetch":  "deny",
+                                                    "websearch":  "deny",
+                                                    "question":  "deny",
+                                                    "todowrite":  "deny",
+                                                    "task":  "deny"
+                                                },
+                                 "temperature":  0.2
+                             },
+                  "glitch-omni":  {
+                                      "model":  "__MODEL__",
+                                      "mode":  "primary",
+                                      "description":  "Free mode Glitch Omni -- does everything itself, no delegation. Executes code, writes files, runs bash directly.",
+                                      "color":  "#22c55e",
+                                      "temperature":  0.2,
+                                      "permission":  {
+                                                         "read":  "allow",
+                                                         "edit":  "allow",
+                                                         "bash":  "allow",
+                                                         "glob":  "allow",
+                                                         "grep":  "allow",
+                                                         "list":  "allow",
+                                                         "webfetch":  "allow",
+                                                         "websearch":  "allow",
+                                                         "question":  "allow",
+                                                         "skill":  "allow",
+                                                         "todowrite":  "allow",
+                                                         "task":  "deny"
+                                                     },
+                                      "prompt":  "You are Glitch Omni running in FREE MODE. You do everything yourself -- no delegation.\n\n## Free Mode Rules\n1. You have FULL permissions same capabilities as normal mode.\n2. All agents use free models -- there are NO paid fallback models available.\n3. You execute code, write files, run bash directly. NO task() dispatch calls.\n4. If a free model exhausts its quota, close this session and relaunch with a different model.\n5. Tell the user which model is active on session start.\n6. NVIDIA models require NVIDIA provider to be connected via /connect in the TUI first.\n\n## Agent Selection (All Free - You Do All)\n| Task Type | You Do |\n|-----------|--------|\n| Bash, file ops, simple edits | Direct execution |\n| Code (1-5 files, standard logic) | Direct execution |\n| Codebase research | Direct execution (read, grep, glob) |\n| Architecture / planning | Direct execution |\n| Code scaffolding | Direct execution |\n| Image / visual analysis | Use @vision sub-agent if needed |\n\n## Direct Execution Mandate (Immutable)\nGlitch Omni\u0027s job is DIRECT EXECUTION. The first action for every code task is EXECUTION, not dispatch.\n\nYOUR FIRST RESPONSE to any code task MUST use edit/write/bash directly - NO task() dispatch calls.\n\n- You MAY use edit/write/bash for code work directly\n- You may use @vision sub-agent for image analysis if needed\n- Direct work: memory writes (R12), git, planning, reading, questions, code, bash\n- If caught delegating: stop immediately, log FAILURE to scratchpad, execute directly"
+                                  }
+              },
+    "attachment":  {
+                       "image":  {
+                                     "auto_resize":  true,
+                                     "max_width":  2000,
+                                     "max_height":  2000,
+                                     "max_base64_bytes":  5242880
+                                 }
+                   },
+    "experimental":  {
+                         "disable_paste_summary":  true
+                     },
+    "server":  {
+                   "port":  4100,
+                   "hostname":  "0.0.0.0"
+               },
+    "default_agent":  "glitch",
+    "compaction":  {
+                       "auto":  true,
+                       "tail_turns":  8
+                   }
 }

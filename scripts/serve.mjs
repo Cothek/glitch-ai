@@ -110,6 +110,12 @@ function askQuestion(query) {
 
 // ---- Branch check: warn if not on main and offer to switch ----
 async function checkAndSwitchToMain() {
+  // Skip branch check on restart (seamless restart, no user input)
+  if (process.argv.includes('--restart')) {
+    log(DARK_GREEN, '  Restart mode -- skipping branch check');
+    return;
+  }
+
   const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
   if (!branch.success) return;
   const current = branch.stdout.trim();
@@ -588,6 +594,24 @@ async function main() {
   // ---- Launch Server ----
   const { launchServer } = await import('./lib/server-mode.mjs');
   await launchServer({ OpenCodeBin, ROOT_DIR, HandyBin });
+
+  // ---- Check for restart flag (seamless restart) ----
+  const restartFlag = join(ROOT_DIR, 'data', '.restart-flag');
+  if (existsSync(restartFlag)) {
+    unlinkSync(restartFlag);
+    log('');
+    log(MAGENTA, '  Restarting Glitch...');
+    log('');
+    // Re-launch with same args + --restart flag
+    const args = process.argv.slice(1);
+    if (!args.includes('--restart')) args.push('--restart');
+    const child = spawn(process.argv[0], args, {
+      stdio: 'inherit',
+      detached: true,
+    });
+    child.unref();
+    process.exit(0);
+  }
 }
 
 main().catch(e => {
