@@ -206,6 +206,48 @@
       flex-shrink: 0;
     }
 
+    /* Agent checkbox */
+    .agent-checkbox {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--glitch-accent);
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .agent-checkbox-header {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--glitch-accent);
+      cursor: pointer;
+    }
+    #agent-tbody tr.selected {
+      background-color: color-mix(in srgb, var(--glitch-accent) 10%, transparent) !important;
+    }
+    #agent-tbody tr.selected:hover {
+      background-color: color-mix(in srgb, var(--glitch-accent) 15%, transparent) !important;
+    }
+
+    /* Batch action bar */
+    #batch-bar {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      background-color: color-mix(in srgb, var(--glitch-accent) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--glitch-accent) 30%, transparent);
+      border-radius: var(--glitch-radius-lg);
+      font-size: 13px;
+    }
+    #batch-bar.visible {
+      display: flex;
+    }
+    #batch-count {
+      font-weight: var(--glitch-font-medium);
+      color: var(--glitch-text-primary);
+      margin-right: auto;
+    }
+
     .pending-table tr.changed {
       background-color: var(--glitch-accent-bg);
     }
@@ -528,6 +570,12 @@
           </div>
         </div>
 
+        <div id="batch-bar">
+          <span id="batch-count">0 selected</span>
+          <button class="gl-btn gl-btn--primary gl-btn--sm" id="btn-batch-change" disabled>Change Model</button>
+          <button class="gl-btn gl-btn--ghost gl-btn--sm" id="btn-batch-clear">Clear</button>
+        </div>
+
         <div class="table-container">
           <div id="agent-table-loading" class="gl-flex gl-items-center gl-justify-center gl-p-8">
             <span class="gl-spinner gl-spinner--lg gl-text-accent"></span>
@@ -541,10 +589,11 @@
             </div>
           </div>
           <table class="gl-table" id="agent-table" style="display: none;">
-            <thead>
+<thead>
               <tr>
+                <th style="width: 40px;"><input type="checkbox" class="agent-checkbox-header" id="select-all-agents" title="Select all"></th>
                 <th class="col-agent">Agent</th>
-                <th class="col-model">Model &amp; Info</th>
+                <th class="col-model">Model & Info</th>
               </tr>
             </thead>
             <tbody id="agent-tbody"></tbody>
@@ -662,6 +711,7 @@
       pendingChanges: [],
       selectedModel: null,
       currentAgent: null,
+      selectedAgents: [],
       filters: { search: '', tier: '', provider: '', capability: '' },
       models: [],
       loading: { agents: false, models: false, status: false }
@@ -774,7 +824,11 @@
 
         const contextText = agent.context_length ? `${(agent.context_length / 1000).toFixed(0)}K` : '--';
 
-        return `<tr onclick="openModelPicker('${escapeHtml(agent.name)}')"${rowStyle}>
+        const isSelected = state.selectedAgents.includes(agent.name);
+        const selClass = isSelected ? ' selected' : '';
+
+        return `<tr class="${selClass}" data-agent="${escapeHtml(agent.name)}">
+          <td style="width: 40px;"><input type="checkbox" class="agent-checkbox" data-agent="${escapeHtml(agent.name)}" ${isSelected ? 'checked' : ''}></td>
           <td class="col-agent"><span class="agent-name">@${escapeHtml(agent.name)}</span></td>
           <td>
             <span class="model-line">
@@ -793,6 +847,75 @@
       }).join('');
 
       document.getElementById('agent-table').style.display = '';
+    }
+
+    // Agent checkbox toggle via event delegation
+    document.getElementById('agent-tbody').addEventListener('click', (e) => {
+      const checkbox = e.target.closest('.agent-checkbox');
+      if (!checkbox) return;
+      const agentName = checkbox.dataset.agent;
+      if (checkbox.checked) {
+        if (!state.selectedAgents.includes(agentName)) state.selectedAgents.push(agentName);
+      } else {
+        state.selectedAgents = state.selectedAgents.filter(a => a !== agentName);
+      }
+      const allChecked = state.selectedAgents.length === state.agents.length;
+      document.getElementById('select-all-agents').checked = allChecked;
+      // Toggle row class directly instead of re-rendering
+      const row = checkbox.closest('tr');
+      if (row) row.classList.toggle('selected', checkbox.checked);
+      updateBatchBar();
+    });
+
+    // Select all
+    document.getElementById('select-all-agents').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        state.selectedAgents = state.agents.map(a => a.name);
+      } else {
+        state.selectedAgents = [];
+      }
+      // Toggle all rows directly instead of re-rendering
+      document.querySelectorAll('#agent-tbody tr').forEach(row => {
+        row.classList.toggle('selected', e.target.checked);
+        const cb = row.querySelector('.agent-checkbox');
+        if (cb) cb.checked = e.target.checked;
+      });
+      updateBatchBar();
+    });
+
+    // Batch change button
+    document.getElementById('btn-batch-change').addEventListener('click', () => {
+      if (state.selectedAgents.length === 0) return;
+      openModelPicker(state.selectedAgents);
+    });
+
+    // Batch clear button
+    document.getElementById('btn-batch-clear').addEventListener('click', () => {
+      state.selectedAgents = [];
+      document.getElementById('select-all-agents').checked = false;
+      // Remove selected class from all rows directly
+      document.querySelectorAll('#agent-tbody tr.selected').forEach(row => {
+        row.classList.remove('selected');
+        const cb = row.querySelector('.agent-checkbox');
+        if (cb) cb.checked = false;
+      });
+      updateBatchBar();
+    });
+
+    function updateBatchBar() {
+      const count = state.selectedAgents.length;
+      const bar = document.getElementById('batch-bar');
+      const countEl = document.getElementById('batch-count');
+      const btn = document.getElementById('btn-batch-change');
+      if (count > 0) {
+        bar.classList.add('visible');
+        countEl.textContent = `${count} agent${count !== 1 ? 's' : ''} selected`;
+        btn.disabled = false;
+        btn.textContent = `Change Model (${count})`;
+      } else {
+        bar.classList.remove('visible');
+        btn.disabled = true;
+      }
     }
 
     async function loadPending() {
@@ -851,12 +974,18 @@
       renderAgentTable();
     }
 
-    async function openModelPicker(agentName) {
-      state.currentAgent = agentName;
+    async function openModelPicker(agents) {
+      if (typeof agents === 'string') agents = [agents];
+      state.currentAgent = agents[0];
+      state.selectedAgents = agents;
       state.selectedModel = null;
       state.filters = { search: '', tier: '', provider: '', capability: '' };
 
-      document.getElementById('modal-title').textContent = `Select Model for @${agentName}`;
+      if (agents.length === 1) {
+        document.getElementById('modal-title').textContent = `Select Model for @${agents[0]}`;
+      } else {
+        document.getElementById('modal-title').textContent = `Select Model for ${agents.length} agents`;
+      }
       document.getElementById('model-search').value = '';
       document.getElementById('modal-confirm').disabled = true;
       document.getElementById('modal-confirm').textContent = 'Select a Model';
@@ -876,6 +1005,15 @@
       document.getElementById('modal-backdrop').classList.add('gl-hidden');
       state.currentAgent = null;
       state.selectedModel = null;
+      state.selectedAgents = [];
+      document.getElementById('select-all-agents').checked = false;
+      // Clear visual selection from all rows
+      document.querySelectorAll('#agent-tbody tr.selected').forEach(row => {
+        row.classList.remove('selected');
+        const cb = row.querySelector('.agent-checkbox');
+        if (cb) cb.checked = false;
+      });
+      updateBatchBar();
     }
 
     async function fetchModels() {
@@ -994,17 +1132,29 @@
     }
 
     async function confirmAssignment() {
-      if (!state.selectedModel || !state.currentAgent) return;
+      if (!state.selectedModel || state.selectedAgents.length === 0) return;
+      const modelId = state.selectedModel.id;
 
       try {
-        await api('assign', {
-          method: 'POST',
-          body: JSON.stringify({ agent: state.currentAgent, model: state.selectedModel.id })
-        });
-        showToast(`Model assigned to @${state.currentAgent}. Apply changes to save.`, 'info');
-        closeModal();
+        for (const agentName of state.selectedAgents) {
+          await api('assign', {
+            method: 'POST',
+            body: JSON.stringify({ agent: agentName, model: modelId })
+          });
+        }
+
         await loadPending();
-        await loadStatus();
+
+        const count = state.selectedAgents.length;
+        const msg = count === 1
+          ? `Model assigned to @${state.selectedAgents[0]}. Apply changes to save.`
+          : `Model assigned to ${count} agents. Apply changes to save.`;
+        showToast(msg, 'info');
+
+        state.selectedAgents = [];
+        document.getElementById('select-all-agents').checked = false;
+        updateBatchBar();
+        closeModal();
       } catch (err) {
         showToast(`Failed to assign model: ${err.message}`, 'error');
       }
