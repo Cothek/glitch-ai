@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aero — Analytics Dashboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --canvas: #f8f9fc;
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  --glass-bg-hover: rgba(255, 255, 255, 0.82);
+  --glass-blur: 20px;
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
+  --accent-purple: #8B5CF6;
+  --accent-cyan: #06B6D4;
+  --accent-pink: #EC4899;
+  --accent-gradient: linear-gradient(135deg, #8B5CF6, #06B6D4, #EC4899);
+  --shadow-card: 0 4px 24px rgba(139, 92, 246, 0.06), 0 1px 4px rgba(0, 0, 0, 0.03);
+  --shadow-card-hover: 0 8px 32px rgba(139, 92, 246, 0.1), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --radius-card: 18px;
+  --radius-btn: 10px;
+  --radius-input: 6px;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--canvas);
+  color: var(--text-primary);
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: -20%;
+  left: -10%;
+  width: 60%;
+  height: 60%;
+  background: radial-gradient(circle, rgba(139, 92, 246, 0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  bottom: -20%;
+  right: -10%;
+  width: 50%;
+  height: 50%;
+  background: radial-gradient(circle, rgba(6, 182, 212, 0.04) 0%, transparent 70%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 32px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Top Bar */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 0;
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 18px;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+}
+
+.logo-mark {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--accent-gradient);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #e0e7ff, #c7d2fe);
+  border: 2px solid rgba(139, 92, 246, 0.15);
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+}
+
+.avatar:hover {
+  border-color: rgba(139, 92, 246, 0.4);
+}
+
+/* Navigation */
+.nav-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-radius: 14px;
+  padding: 5px;
+  margin: 0 auto 40px;
+  width: fit-content;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.03);
+}
+
+.nav-pill {
+  padding: 8px 18px;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  border: none;
+  background: transparent;
+  letter-spacing: 0.01em;
+}
+
+.nav-pill:hover {
+  color: var(--text-primary);
+  background: rgba(139, 92, 246, 0.05);
+}
+
+.nav-pill.active {
+  background: var(--accent-gradient);
+  color: white;
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.25);
+}
+
+/* Page Header */
+.page-header {
+  margin-bottom: 36px;
+}
+
+.page-header h1 {
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  margin-bottom: 6px;
+}
+
+.page-header p {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+}
+
+/* Metric Cards */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.glass-card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--glass-blur));
+  -webkit-backdrop-filter: blur(var(--glass-blur));
+  border-radius: var(--radius-card);
+  padding: 24px;
+  box-shadow: var(--shadow-card);
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease;
+  opacity: 0;
+  transform: translateY(20px);
+}
+
+.glass-card.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.glass-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-card-hover);
+}
+
+.glass-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+  transition: none;
+  pointer-events: none;
+}
+
+.glass-card:hover::after {
+  animation: shimmer 0.8s ease forwards;
+}
+
+@keyframes shimmer {
+  to { left: 120%; }
+}
+
+.metric-accent {
+  position: absolute;
+  top: 0;
+  left: 24px;
+  right: 24px;
+  height: 3px;
+  border-radius: 0 0 3px 3px;
+  opacity: 0.7;
+}
+
+.metric-accent.purple { background: linear-gradient(90deg, #8B5CF6, #a78bfa); }
+.metric-accent.cyan { background: linear-gradient(90deg, #06B6D4, #22d3ee); }
+.metric-accent.pink { background: linear-gradient(90deg, #EC4899, #f472b6); }
+.metric-accent.mixed { background: var(--accent-gradient); }
+
+.metric-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 10px;
+  margin-top: 4px;
+}
+
+.metric-value {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+  font-variant-numeric: tabular-nums;
+}
+
+.metric-change {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 8px;
+  border-radius: 6px;
+}
+
+.metric-change.positive {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.08);
+}
+
+.metric-change.negative {
+  color: #dc2626;
+  background: rgba(220, 38, 38, 0.08);
+}
+
+.metric-change.neutral {
+  color: var(--accent-purple);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+/* Two Column Layout */
+.two-col {
+  display: grid;
+  grid-template-columns: 1.6fr 1fr;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+
+.chart-card {
+  padding: 28px;
+}
+
+.chart-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.chart-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.filter-pills {
+  display: flex;
+  gap: 4px;
+  background: rgba(0, 0, 0, 0.03);
+  border-radius: 8px;
+  padding: 3px;
+}
+
+.filter-pill {
+  padding: 5px 12px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  transition: all 0.3s ease;
+}
+
+.filter-pill:hover {
+  color: var(--text-primary);
+}
+
+.filter-pill.active {
+  background: var(--accent-gradient);
+  color: white;
+  box-shadow: 0 1px 6px rgba(139, 92, 246, 0.2);
+}
+
+.chart-area {
+  width: 100%;
+  height: 200px;
+  position: relative;
+}
+
+.chart-area svg {
+  width: 100%;
+  height: 100%;
+}
+
+/* Activity Feed */
+.activity-card {
+  padding: 24px;
+}
+
+.activity-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+  margin-bottom: 20px;
+}
+
+.activity-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.activity-dot-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 2px;
+}
+
+.activity-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-purple);
+}
+
+.activity-dot.pulse {
+  position: relative;
+}
+
+.activity-dot.pulse::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: transparent;
+  border: 1.5px solid var(--accent-purple);
+  transform: translate(-50%, -50%);
+  animation: pulse-ring 2.5s ease-out infinite;
+}
+
+@keyframes pulse-ring {
+  0% { width: 8px; height: 8px; opacity: 0.6; }
+  100% { width: 22px; height: 22px; opacity: 0; }
+}
+
+.activity-dot.cyan { background: var(--accent-cyan); }
+.activity-dot.cyan.pulse::after { border-color: var(--accent-cyan); }
+.activity-dot.pink { background: var(--accent-pink); }
+.activity-dot.pink.pulse::after { border-color: var(--accent-pink); }
+
+.activity-content {
+  flex: 1;
+}
+
+.activity-text {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+  letter-spacing: 0.005em;
+}
+
+.activity-time {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
+/* Data Table */
+.table-card {
+  padding: 24px;
+  margin-bottom: 40px;
+}
+
+.table-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.table-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: -0.01em;
+}
+
+.table-link {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--accent-purple);
+  cursor: pointer;
+  text-decoration: none;
+  transition: opacity 0.2s;
+}
+
+.table-link:hover {
+  opacity: 0.7;
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.data-table thead th {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  text-align: left;
+  padding: 0 0 14px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.data-table thead th:last-child {
+  text-align: right;
+}
+
+.data-table tbody td {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--text-primary);
+  padding: 14px 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+  letter-spacing: 0.005em;
+}
+
+.data-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+.data-table tbody td:last-child {
+  text-align: right;
+}
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 3px 10px;
+  border-radius: 6px;
+}
+
+.status-badge.active {
+  color: #059669;
+  background: rgba(5, 150, 105, 0.08);
+}
+
+.status-badge.pending {
+  color: #d97706;
+  background: rgba(217, 119, 6, 0.08);
+}
+
+.status-badge.review {
+  color: var(--accent-purple);
+  background: rgba(139, 92, 246, 0.08);
+}
+
+.status-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+}
+
+.status-dot.active { background: #059669; }
+.status-dot.pending { background: #d97706; }
+.status-dot.review { background: var(--accent-purple); }
+
+.growth-positive {
+  font-weight: 500;
+  color: #059669;
+}
+
+.growth-negative {
+  font-weight: 500;
+  color: #dc2626;
+}
+
+/* Chart SVG styles */
+.chart-line {
+  fill: none;
+  stroke: url(#lineGradient);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.chart-glow {
+  fill: none;
+  stroke: url(#lineGradient);
+  stroke-width: 6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.15;
+  filter: blur(4px);
+}
+
+.chart-area-fill {
+  fill: url(#areaGradient);
+  opacity: 0.3;
+}
+
+.chart-grid-line {
+  stroke: rgba(0, 0, 0, 0.04);
+  stroke-width: 1;
+}
+
+.chart-label {
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  fill: var(--text-tertiary);
+  font-weight: 400;
+}
+
+.chart-dot {
+  fill: white;
+  stroke: url(#lineGradient);
+  stroke-width: 2;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+  .two-col { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 600px) {
+  .metrics-grid { grid-template-columns: 1fr; }
+  .container { padding: 0 16px; }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header class="topbar">
+    <div class="logo">
+      <div class="logo-mark">A</div>
+      Aero
+    </div>
+    <div class="avatar"></div>
+  </header>
+
+  <nav class="nav-bar">
+    <button class="nav-pill active">Overview</button>
+    <button class="nav-pill">Analytics</button>
+    <button class="nav-pill">Projects</button>
+    <button class="nav-pill">Reports</button>
+    <button class="nav-pill">Settings</button>
+  </nav>
+
+  <div class="page-header">
+    <h1>Dashboard</h1>
+    <p>Welcome back. Here is what is happening with Aero today.</p>
+  </div>
+
+  <div class="metrics-grid">
+    <div class="glass-card" data-delay="0">
+      <div class="metric-accent purple"></div>
+      <div class="metric-label">Revenue</div>
+      <div class="metric-value" data-target="1840000" data-prefix="$" data-format="compact">$0</div>
+      <span class="metric-change positive">+14.2%</span>
+    </div>
+    <div class="glass-card" data-delay="100">
+      <div class="metric-accent cyan"></div>
+      <div class="metric-label">Users</div>
+      <div class="metric-value" data-target="64230" data-format="comma">0</div>
+      <span class="metric-change positive">+9.7%</span>
+    </div>
+    <div class="glass-card" data-delay="200">
+      <div class="metric-accent pink"></div>
+      <div class="metric-label">Conversion</div>
+      <div class="metric-value" data-target="4.8" data-suffix="%" data-format="decimal">0%</div>
+      <span class="metric-change positive">+0.6%</span>
+    </div>
+    <div class="glass-card" data-delay="300">
+      <div class="metric-accent mixed"></div>
+      <div class="metric-label">Avg. Response</div>
+      <div class="metric-value" data-target="142" data-suffix="ms" data-format="integer">0ms</div>
+      <span class="metric-change neutral">-12ms</span>
+    </div>
+  </div>
+
+  <div class="two-col">
+    <div class="glass-card chart-card" data-delay="400">
+      <div class="chart-header">
+        <span class="chart-title">Revenue Trend</span>
+        <div class="filter-pills">
+          <button class="filter-pill" data-range="3">3M</button>
+          <button class="filter-pill active" data-range="6">6M</button>
+          <button class="filter-pill" data-range="12">1Y</button>
+        </div>
+      </div>
+      <div class="chart-area">
+        <svg viewBox="0 0 560 200" preserveAspectRatio="none">
+          <defs>
+            <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stop-color="#8B5CF6" />
+              <stop offset="50%" stop-color="#06B6D4" />
+              <stop offset="100%" stop-color="#EC4899" />
+            </linearGradient>
+            <linearGradient id="areaGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="#8B5CF6" stop-opacity="0.2" />
+              <stop offset="100%" stop-color="#8B5CF6" stop-opacity="0" />
+            </linearGradient>
+          </defs>
+          <line class="chart-grid-line" x1="0" y1="50" x2="560" y2="50" />
+          <line class="chart-grid-line" x1="0" y1="100" x2="560" y2="100" />
+          <line class="chart-grid-line" x1="0" y1="150" x2="560" y2="150" />
+          <text class="chart-label" x="0" y="195">Jan</text>
+          <text class="chart-label" x="100" y="195">Feb</text>
+          <text class="chart-label" x="210" y="195">Mar</text>
+          <text class="chart-label" x="320" y="195">Apr</text>
+          <text class="chart-label" x="430" y="195">May</text>
+          <text class="chart-label" x="530" y="195">Jun</text>
+          <path class="chart-area-fill" id="chartArea" />
+          <path class="chart-glow" id="chartGlow" />
+          <path class="chart-line" id="chartLine" />
+          <g id="chartDots"></g>
+        </svg>
+      </div>
+    </div>
+
+    <div class="glass-card activity-card" data-delay="500">
+      <div class="activity-title">Recent Activity</div>
+      <div class="activity-list">
+        <div class="activity-item">
+          <div class="activity-dot-wrap">
+            <div class="activity-dot pulse"></div>
+          </div>
+          <div class="activity-content">
+            <div class="activity-text">New team joined</div>
+            <div class="activity-time">2 minutes ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot-wrap">
+            <div class="activity-dot cyan pulse"></div>
+          </div>
+          <div class="activity-content">
+            <div class="activity-text">Report generated</div>
+            <div class="activity-time">18 minutes ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot-wrap">
+            <div class="activity-dot pink"></div>
+          </div>
+          <div class="activity-content">
+            <div class="activity-text">Export completed</div>
+            <div class="activity-time">1 hour ago</div>
+          </div>
+        </div>
+        <div class="activity-item">
+          <div class="activity-dot-wrap">
+            <div class="activity-dot"></div>
+          </div>
+          <div class="activity-content">
+            <div class="activity-text">Billing updated</div>
+            <div class="activity-time">3 hours ago</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="glass-card table-card" data-delay="600">
+    <div class="table-header">
+      <span class="table-title">Projects</span>
+      <a class="table-link">View all</a>
+    </div>
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Project</th>
+          <th>Status</th>
+          <th>Revenue</th>
+          <th>Growth</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Atlas Platform</td>
+          <td><span class="status-badge active"><span class="status-dot active"></span>Active</span></td>
+          <td>$482,000</td>
+          <td><span class="growth-positive">+23.1%</span></td>
+        </tr>
+        <tr>
+          <td>Prism Analytics</td>
+          <td><span class="status-badge active"><span class="status-dot active"></span>Active</span></td>
+          <td>$341,500</td>
+          <td><span class="growth-positive">+11.4%</span></td>
+        </tr>
+        <tr>
+          <td>Orbit Dashboard</td>
+          <td><span class="status-badge pending"><span class="status-dot pending"></span>Pending</span></td>
+          <td>$128,200</td>
+          <td><span class="growth-negative">-3.2%</span></td>
+        </tr>
+        <tr>
+          <td>Nebula API</td>
+          <td><span class="status-badge review"><span class="status-dot review"></span>In Review</span></td>
+          <td>$89,750</td>
+          <td><span class="growth-positive">+7.8%</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+(function() {
+  const datasets = {
+    3: [
+      { x: 40, y: 120 }, { x: 160, y: 80 }, { x: 280, y: 95 },
+      { x: 400, y: 50 }, { x: 520, y: 35 }
+    ],
+    6: [
+      { x: 20, y: 140 }, { x: 115, y: 110 }, { x: 210, y: 125 },
+      { x: 310, y: 70 }, { x: 410, y: 55 }, { x: 520, y: 30 }
+    ],
+    12: [
+      { x: 10, y: 160 }, { x: 55, y: 145 }, { x: 100, y: 150 },
+      { x: 150, y: 130 }, { x: 200, y: 115 }, { x: 250, y: 120 },
+      { x: 300, y: 90 }, { x: 350, y: 75 }, { x: 400, y: 60 },
+      { x: 450, y: 50 }, { x: 500, y: 35 }, { x: 545, y: 20 }
+    ]
+  };
+
+  function buildSmoothPath(points) {
+    if (points.length < 2) return '';
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const p0 = points[Math.max(i - 1, 0)];
+      const p1 = points[i];
+      const p2 = points[i + 1];
+      const p3 = points[Math.min(i + 2, points.length - 1)];
+      const cp1x = p1.x + (p2.x - p0.x) / 6;
+      const cp1y = p1.y + (p2.y - p0.y) / 6;
+      const cp2x = p2.x - (p3.x - p1.x) / 6;
+      const cp2y = p2.y - (p3.y - p1.y) / 6;
+      d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${p2.x} ${p2.y}`;
+    }
+    return d;
+  }
+
+  function buildAreaPath(points) {
+    const linePath = buildSmoothPath(points);
+    const lastPt = points[points.length - 1];
+    const firstPt = points[0];
+    return linePath + ` L ${lastPt.x} 180 L ${firstPt.x} 180 Z`;
+  }
+
+  function renderChart(range) {
+    const points = datasets[range] || datasets[6];
+    const linePath = buildSmoothPath(points);
+    const areaPath = buildAreaPath(points);
+
+    document.getElementById('chartLine').setAttribute('d', linePath);
+    document.getElementById('chartGlow').setAttribute('d', linePath);
+    document.getElementById('chartArea').setAttribute('d', areaPath);
+
+    const dotsGroup = document.getElementById('chartDots');
+    dotsGroup.innerHTML = '';
+    points.forEach(function(pt) {
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', pt.x);
+      circle.setAttribute('cy', pt.y);
+      circle.setAttribute('r', '4');
+      circle.setAttribute('class', 'chart-dot');
+      dotsGroup.appendChild(circle);
+    });
+
+    animateChartLine();
+  }
+
+  function animateChartLine() {
+    const line = document.getElementById('chartLine');
+    const glow = document.getElementById('chartGlow');
+    const area = document.getElementById('chartArea');
+    const length = line.getTotalLength();
+
+    line.style.strokeDasharray = length;
+    line.style.strokeDashoffset = length;
+    glow.style.strokeDasharray = length;
+    glow.style.strokeDashoffset = length;
+    area.style.opacity = '0';
+
+    const dots = document.querySelectorAll('#chartDots circle');
+    dots.forEach(function(dot) { dot.style.opacity = '0'; });
+
+    let start = null;
+    const duration = 1200;
+
+    function step(timestamp) {
+      if (!start) start = timestamp;
+      const progress = Math.min((timestamp - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      line.style.strokeDashoffset = length * (1 - eased);
+      glow.style.strokeDashoffset = length * (1 - eased);
+      area.style.opacity = (0.3 * eased).toString();
+
+      dots.forEach(function(dot, i) {
+        const dotThreshold = (i / dots.length) * 0.8;
+        if (eased > dotThreshold) {
+          dot.style.opacity = '1';
+          dot.style.transition = 'opacity 0.3s ease';
+        }
+      });
+
+      if (progress < 1) requestAnimationFrame(step);
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  function animateCounters() {
+    document.querySelectorAll('.metric-value[data-target]').forEach(function(el) {
+      const target = parseFloat(el.dataset.target);
+      const prefix = el.dataset.prefix || '';
+      const suffix = el.dataset.suffix || '';
+      const format = el.dataset.format || 'integer';
+      const duration = 1400;
+      let start = null;
+
+      function formatValue(val) {
+        if (format === 'compact') {
+          if (val >= 1000000) return prefix + (val / 1000000).toFixed(2) + 'M';
+          if (val >= 1000) return prefix + (val / 1000).toFixed(0) + 'K';
+          return prefix + val.toFixed(0);
+        }
+        if (format === 'comma') {
+          return prefix + Math.round(val).toLocaleString('en-US') + suffix;
+        }
+        if (format === 'decimal') {
+          return prefix + val.toFixed(1) + suffix;
+        }
+        return prefix + Math.round(val) + suffix;
+      }
+
+      function step(timestamp) {
+        if (!start) start = timestamp;
+        const progress = Math.min((timestamp - start) / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        el.textContent = formatValue(target * eased);
+        if (progress < 1) requestAnimationFrame(step);
+      }
+
+      requestAnimationFrame(step);
+    });
+  }
+
+  function initCardEntrance() {
+    const cards = document.querySelectorAll('.glass-card');
+    cards.forEach(function(card) {
+      const delay = parseInt(card.dataset.delay) || 0;
+      setTimeout(function() {
+        card.style.transition = 'opacity 0.6s cubic-bezier(0.16, 1, 0.3, 1), transform 0.6s cubic-bezier(0.16, 1, 0.3, 1)';
+        card.classList.add('visible');
+      }, delay);
+    });
+  }
+
+  document.querySelectorAll('.filter-pill').forEach(function(pill) {
+    pill.addEventListener('click', function() {
+      document.querySelectorAll('.filter-pill').forEach(function(p) { p.classList.remove('active'); });
+      pill.classList.add('active');
+      renderChart(parseInt(pill.dataset.range));
+    });
+  });
+
+  document.querySelectorAll('.nav-pill').forEach(function(pill) {
+    pill.addEventListener('click', function() {
+      document.querySelectorAll('.nav-pill').forEach(function(p) { p.classList.remove('active'); });
+      pill.classList.add('active');
+    });
+  });
+
+  initCardEntrance();
+  setTimeout(animateCounters, 300);
+  setTimeout(function() { renderChart(6); }, 500);
+})();
+</script>
+</body>
+</html>

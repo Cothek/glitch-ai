@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RETRO ARCADE DASHBOARD</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap');
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #0d0d12;
+  --pink: #FF2D95;
+  --blue: #00D4FF;
+  --yellow: #F5E81D;
+  --green: #39FF14;
+  --white: #e8e8e8;
+  --dim: #2a2a35;
+  --font-pixel: 'Press Start 2P', monospace;
+  --font-mono: 'Space Mono', monospace;
+}
+
+html, body {
+  width: 100%; min-height: 100vh;
+  background: var(--bg);
+  color: var(--white);
+  font-family: var(--font-mono);
+  overflow-x: hidden;
+}
+
+body {
+  position: relative;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.15) 2px,
+    rgba(0,0,0,0.15) 4px
+  );
+  z-index: 999;
+  animation: scanline-scroll 8s linear infinite;
+}
+
+@keyframes scanline-scroll {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 100px; }
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.6) 100%);
+  z-index: 998;
+}
+
+.dashboard {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+/* HEADER */
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border: 2px solid var(--pink);
+  box-shadow: 0 0 10px var(--pink), 0 0 20px rgba(255,45,149,0.3), inset 0 0 10px rgba(255,45,149,0.1);
+  margin-bottom: 24px;
+  background: rgba(255,45,149,0.03);
+}
+
+.header-logo {
+  font-family: var(--font-pixel);
+  font-size: 14px;
+  color: var(--pink);
+  text-shadow: 0 0 7px var(--pink), 0 0 15px var(--pink);
+  letter-spacing: 2px;
+}
+
+.header-logo span {
+  color: var(--blue);
+  text-shadow: 0 0 7px var(--blue), 0 0 15px var(--blue);
+}
+
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  font-size: 11px;
+  font-family: var(--font-pixel);
+}
+
+.header-status .live-dot {
+  width: 8px; height: 8px;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green), 0 0 12px var(--green);
+  animation: blink-dot 1.5s step-end infinite;
+}
+
+@keyframes blink-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.header-status .status-text {
+  color: var(--green);
+  text-shadow: 0 0 5px var(--green);
+}
+
+/* NAV TABS */
+.nav-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.nav-tab {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  padding: 10px 18px;
+  background: transparent;
+  border: 2px solid var(--dim);
+  color: var(--white);
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  transition: all 150ms ease;
+  position: relative;
+}
+
+.nav-tab:hover {
+  border-color: var(--blue);
+  color: var(--blue);
+  box-shadow: 0 0 10px var(--blue), 0 0 20px rgba(0,212,255,0.3);
+  text-shadow: 0 0 5px var(--blue);
+}
+
+.nav-tab.active {
+  border-color: var(--pink);
+  color: var(--pink);
+  box-shadow: 0 0 10px var(--pink), 0 0 20px rgba(255,45,149,0.3), inset 0 0 8px rgba(255,45,149,0.15);
+  text-shadow: 0 0 7px var(--pink);
+  background: rgba(255,45,149,0.05);
+}
+
+.nav-tab:active {
+  transform: scale(0.95);
+  transition: transform 60ms ease;
+}
+
+.nav-tab.pressed {
+  transform: scale(0.95);
+}
+
+/* HERO HIGH SCORE */
+.hero {
+  text-align: center;
+  padding: 48px 24px;
+  margin-bottom: 32px;
+  border: 2px dashed var(--yellow);
+  position: relative;
+  background: rgba(245,232,29,0.02);
+}
+
+.hero::before {
+  content: '★ HIGH SCORE ★';
+  position: absolute;
+  top: -10px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--yellow);
+  background: var(--bg);
+  padding: 0 16px;
+  text-shadow: 0 0 7px var(--yellow);
+  letter-spacing: 3px;
+}
+
+.hero-label {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--blue);
+  text-shadow: 0 0 5px var(--blue);
+  margin-bottom: 16px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+}
+
+.hero-value {
+  font-family: var(--font-pixel);
+  font-size: clamp(32px, 6vw, 64px);
+  color: var(--yellow);
+  text-shadow:
+    0 0 10px var(--yellow),
+    0 0 20px var(--yellow),
+    0 0 40px rgba(245,232,29,0.5),
+    0 0 80px rgba(245,232,29,0.2);
+  animation: neon-pulse-yellow 2s ease-in-out infinite;
+  letter-spacing: 4px;
+  line-height: 1.2;
+}
+
+@keyframes neon-pulse-yellow {
+  0%, 100% {
+    text-shadow:
+      0 0 10px var(--yellow),
+      0 0 20px var(--yellow),
+      0 0 40px rgba(245,232,29,0.5),
+      0 0 80px rgba(245,232,29,0.2);
+  }
+  50% {
+    text-shadow:
+      0 0 5px var(--yellow),
+      0 0 10px var(--yellow),
+      0 0 20px rgba(245,232,29,0.3),
+      0 0 40px rgba(245,232,29,0.1);
+  }
+}
+
+.hero-sub {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--green);
+  text-shadow: 0 0 5px var(--green);
+  margin-top: 12px;
+  letter-spacing: 2px;
+}
+
+/* STAT BOXES */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+  margin-bottom: 32px;
+}
+
+.stat-box {
+  border: 2px solid var(--blue);
+  padding: 20px;
+  text-align: center;
+  position: relative;
+  background: rgba(0,212,255,0.03);
+  box-shadow: 0 0 8px rgba(0,212,255,0.3), inset 0 0 8px rgba(0,212,255,0.05);
+  transition: all 150ms ease;
+}
+
+.stat-box:hover {
+  box-shadow: 0 0 15px var(--blue), 0 0 30px rgba(0,212,255,0.4), inset 0 0 15px rgba(0,212,255,0.1);
+  border-color: var(--blue);
+}
+
+.stat-box:nth-child(1) { border-color: var(--pink); box-shadow: 0 0 8px rgba(255,45,149,0.3), inset 0 0 8px rgba(255,45,149,0.05); }
+.stat-box:nth-child(1):hover { box-shadow: 0 0 15px var(--pink), 0 0 30px rgba(255,45,149,0.4), inset 0 0 15px rgba(255,45,149,0.1); }
+.stat-box:nth-child(2) { border-color: var(--blue); }
+.stat-box:nth-child(3) { border-color: var(--yellow); box-shadow: 0 0 8px rgba(245,232,29,0.3), inset 0 0 8px rgba(245,232,29,0.05); }
+.stat-box:nth-child(3):hover { box-shadow: 0 0 15px var(--yellow), 0 0 30px rgba(245,232,29,0.4), inset 0 0 15px rgba(245,232,29,0.1); }
+.stat-box:nth-child(4) { border-color: var(--green); box-shadow: 0 0 8px rgba(57,255,20,0.3), inset 0 0 8px rgba(57,255,20,0.05); }
+.stat-box:nth-child(4):hover { box-shadow: 0 0 15px var(--green), 0 0 30px rgba(57,255,20,0.4), inset 0 0 15px rgba(57,255,20,0.1); }
+
+.stat-icon {
+  font-family: var(--font-pixel);
+  font-size: 16px;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.stat-box:nth-child(1) .stat-icon { color: var(--pink); text-shadow: 0 0 7px var(--pink); }
+.stat-box:nth-child(2) .stat-icon { color: var(--blue); text-shadow: 0 0 7px var(--blue); }
+.stat-box:nth-child(3) .stat-icon { color: var(--yellow); text-shadow: 0 0 7px var(--yellow); }
+.stat-box:nth-child(4) .stat-icon { color: var(--green); text-shadow: 0 0 7px var(--green); }
+
+.stat-label {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: var(--white);
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+  opacity: 0.7;
+}
+
+.stat-value {
+  font-family: var(--font-pixel);
+  font-size: 20px;
+  color: var(--white);
+  text-shadow: 0 0 5px currentColor;
+}
+
+/* CHART SECTION */
+.chart-section {
+  border: 2px solid var(--green);
+  padding: 24px;
+  margin-bottom: 32px;
+  position: relative;
+  background: rgba(57,255,20,0.02);
+  box-shadow: 0 0 8px rgba(57,255,20,0.2), inset 0 0 8px rgba(57,255,20,0.03);
+}
+
+.chart-title {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--green);
+  text-shadow: 0 0 5px var(--green);
+  margin-bottom: 16px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 250px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(57,255,20,0.2);
+}
+
+.chart-container canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.chart-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: rgba(57,255,20,0.6);
+  letter-spacing: 1px;
+}
+
+/* TABLE SECTION */
+.table-section {
+  border: 2px solid var(--pink);
+  padding: 24px;
+  margin-bottom: 32px;
+  background: rgba(255,45,149,0.02);
+  box-shadow: 0 0 8px rgba(255,45,149,0.2), inset 0 0 8px rgba(255,45,149,0.03);
+}
+
+.table-title {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--pink);
+  text-shadow: 0 0 5px var(--pink);
+  margin-bottom: 16px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+
+.score-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+}
+
+.score-table th {
+  font-family: var(--font-pixel);
+  font-size: 9px;
+  color: var(--blue);
+  text-shadow: 0 0 5px var(--blue);
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 2px solid var(--blue);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+
+.score-table td {
+  padding: 10px 12px;
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: var(--white);
+}
+
+.score-table tr:nth-child(even) td {
+  background: rgba(255,255,255,0.02);
+}
+
+.score-table tr:hover td {
+  background: rgba(255,45,149,0.05);
+  box-shadow: inset 0 0 20px rgba(255,45,149,0.03);
+}
+
+.score-table .rank {
+  font-family: var(--font-pixel);
+  font-size: 11px;
+  color: var(--yellow);
+  text-shadow: 0 0 5px var(--yellow);
+}
+
+.score-table .player {
+  font-family: var(--font-pixel);
+  font-size: 10px;
+  color: var(--white);
+  letter-spacing: 1px;
+}
+
+.score-table .score {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--green);
+  text-shadow: 0 0 3px var(--green);
+}
+
+.score-table .status {
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  letter-spacing: 1px;
+}
+
+.status-active {
+  color: var(--green);
+  text-shadow: 0 0 5px var(--green);
+}
+
+.status-offline {
+  color: var(--pink);
+  text-shadow: 0 0 5px var(--pink);
+}
+
+.status-away {
+  color: var(--yellow);
+  text-shadow: 0 0 5px var(--yellow);
+}
+
+/* FOOTER */
+.footer {
+  text-align: center;
+  padding: 20px;
+  font-family: var(--font-pixel);
+  font-size: 8px;
+  color: rgba(255,255,255,0.3);
+  letter-spacing: 2px;
+  border-top: 1px dashed var(--dim);
+}
+
+/* CRT FLICKER */
+@keyframes crt-flicker {
+  0%, 95%, 100% { opacity: 1; }
+  96% { opacity: 0.85; }
+  97% { opacity: 1; }
+  98% { opacity: 0.9; }
+}
+
+.flicker-target {
+  animation: crt-flicker 4s step-end infinite;
+}
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  .header { flex-direction: column; gap: 12px; text-align: center; }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .hero-value { font-size: 28px; }
+  .nav-tabs { justify-content: center; }
+}
+
+@media (max-width: 480px) {
+  .stats-grid { grid-template-columns: 1fr; }
+  .dashboard { padding: 12px; }
+}
+</style>
+</head>
+<body>
+<div class="dashboard">
+
+  <header class="header">
+    <div class="header-logo flicker-target">RETRO<span>SCORE</span>_DASH</div>
+    <div class="header-status">
+      <div class="live-dot"></div>
+      <span class="status-text">LIVE</span>
+      <span style="color: var(--dim);">|</span>
+      <span style="color: var(--white); opacity: 0.5;">SYS.OK</span>
+    </div>
+  </header>
+
+  <nav class="nav-tabs">
+    <button class="nav-tab active" data-tab="overview">OVERVIEW</button>
+    <button class="nav-tab" data-tab="players">PLAYERS</button>
+    <button class="nav-tab" data-tab="levels">LEVELS</button>
+    <button class="nav-tab" data-tab="analytics">ANALYTICS</button>
+    <button class="nav-tab" data-tab="settings">SETTINGS</button>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-label">TOTAL REVENUE</div>
+    <div class="hero-value" id="hero-score" data-target="2847350">$0</div>
+    <div class="hero-sub">▲ +12.4% FROM LAST MONTH</div>
+  </section>
+
+  <section class="stats-grid">
+    <div class="stat-box">
+      <span class="stat-icon">♦</span>
+      <div class="stat-label">PLAYERS</div>
+      <div class="stat-value" data-target="12847" data-prefix="" data-suffix="">0</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon">◆</span>
+      <div class="stat-label">LEVELS</div>
+      <div class="stat-value" data-target="42" data-prefix="" data-suffix="">0</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon">★</span>
+      <div class="stat-label">COMBO</div>
+      <div class="stat-value" data-target="3.4" data-prefix="" data-suffix="x">0x</div>
+    </div>
+    <div class="stat-box">
+      <span class="stat-icon">●</span>
+      <div class="stat-label">UPTIME</div>
+      <div class="stat-value" data-target="99.97" data-prefix="" data-suffix="%">0%</div>
+    </div>
+  </section>
+
+  <section class="chart-section">
+    <div class="chart-title">▸ WAVEFORM — REVENUE TREND (4 MONTHS)</div>
+    <div class="chart-container">
+      <canvas id="oscilloscope"></canvas>
+    </div>
+    <div class="chart-labels">
+      <span>JAN</span>
+      <span>FEB</span>
+      <span>MAR</span>
+      <span>APR</span>
+    </div>
+  </section>
+
+  <section class="table-section">
+    <div class="table-title">▸ HIGH SCORE TABLE</div>
+    <table class="score-table">
+      <thead>
+        <tr>
+          <th>RANK</th>
+          <th>PLAYER</th>
+          <th>SCORE</th>
+          <th>STATUS</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="rank">#1</td>
+          <td class="player">LEGEND42</td>
+          <td class="score">1,247,800</td>
+          <td class="status status-active">ACTIVE</td>
+        </tr>
+        <tr>
+          <td class="rank">#2</td>
+          <td class="player">NINJA_X</td>
+          <td class="score">983,210</td>
+          <td class="status status-active">ACTIVE</td>
+        </tr>
+        <tr>
+          <td class="rank">#3</td>
+          <td class="player">PIXEL_QN</td>
+          <td class="score">756,440</td>
+          <td class="status status-away">AWAY</td>
+        </tr>
+        <tr>
+          <td class="rank">#4</td>
+          <td class="player">VOID_RDR</td>
+          <td class="score">612,090</td>
+          <td class="status status-offline">OFFLINE</td>
+        </tr>
+        <tr>
+          <td class="rank">#5</td>
+          <td class="player">NEON_ACE</td>
+          <td class="score">498,330</td>
+          <td class="status status-active">ACTIVE</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <footer class="footer">
+    INSERT COIN TO CONTINUE &mdash; RETROSCORE DASH V1.0 &mdash; 2026
+  </footer>
+
+</div>
+
+<script>
+(function() {
+  const PINK = '#FF2D95';
+  const BLUE = '#00D4FF';
+  const YELLOW = '#F5E81D';
+  const GREEN = '#39FF14';
+
+  function animateCounter(el, target, duration, prefix, suffix, isFloat) {
+    const steps = isFloat ? 34 : Math.min(60, Math.max(20, Math.floor(target / 100)));
+    const stepTime = duration / steps;
+    let current = 0;
+    let step = 0;
+
+    const timer = setInterval(function() {
+      step++;
+      const progress = step / steps;
+      const eased = 1 - Math.pow(1 - progress, 3);
+      current = target * eased;
+
+      if (isFloat) {
+        el.textContent = prefix + current.toFixed(suffix === '%' ? 2 : 1) + suffix;
+      } else {
+        const formatted = Math.floor(current).toLocaleString();
+        el.textContent = prefix + formatted + suffix;
+      }
+
+      if (step >= steps) {
+        clearInterval(timer);
+        if (isFloat) {
+          el.textContent = prefix + target.toFixed(suffix === '%' ? 2 : 1) + suffix;
+        } else {
+          el.textContent = prefix + target.toLocaleString() + suffix;
+        }
+      }
+    }, stepTime);
+  }
+
+  function initCounters() {
+    const heroEl = document.getElementById('hero-score');
+    const heroTarget = parseInt(heroEl.dataset.target);
+    animateCounter(heroEl, heroTarget, 2500, '$', '', false);
+
+    const statEls = document.querySelectorAll('.stat-value[data-target]');
+    statEls.forEach(function(el, i) {
+      const target = parseFloat(el.dataset.target);
+      const prefix = el.dataset.prefix || '';
+      const suffix = el.dataset.suffix || '';
+      const isFloat = target % 1 !== 0;
+      setTimeout(function() {
+        animateCounter(el, target, 1800, prefix, suffix, isFloat);
+      }, 400 + i * 200);
+    });
+  }
+
+  function initOscilloscope() {
+    const canvas = document.getElementById('oscilloscope');
+    const ctx = canvas.getContext('2d');
+    const container = canvas.parentElement;
+
+    function resize() {
+      canvas.width = container.clientWidth;
+      canvas.height = container.clientHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    const dataPoints = [
+      0.3, 0.35, 0.28, 0.42, 0.55, 0.48, 0.62, 0.58, 0.71, 0.65,
+      0.78, 0.72, 0.85, 0.80, 0.88, 0.82, 0.91, 0.86, 0.95, 0.89,
+      0.92, 0.87, 0.94, 0.90, 0.96, 0.93, 0.97, 0.95, 0.98, 0.96,
+      0.94, 0.97, 0.95, 0.98, 0.96, 0.99, 0.97, 1.0, 0.98, 0.99
+    ];
+
+    const w = function() { return canvas.width; };
+    const h = function() { return canvas.height; };
+    const padding = 20;
+
+    let drawProgress = 0;
+    const drawSpeed = 0.008;
+
+    function getPoint(index) {
+      const totalPoints = dataPoints.length;
+      const x = padding + (index / (totalPoints - 1)) * (w() - padding * 2);
+      const val = dataPoints[index];
+      const y = h() - padding - val * (h() - padding * 2);
+      return { x: x, y: y };
+    }
+
+    function drawGrid() {
+      ctx.strokeStyle = 'rgba(57, 255, 20, 0.08)';
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 8]);
+
+      for (let i = 0; i <= 4; i++) {
+        const y = padding + i * ((h() - padding * 2) / 4);
+        ctx.beginPath();
+        ctx.moveTo(padding, y);
+        ctx.lineTo(w() - padding, y);
+        ctx.stroke();
+      }
+
+      for (let i = 0; i <= 4; i++) {
+        const x = padding + i * ((w() - padding * 2) / 4);
+        ctx.beginPath();
+        ctx.moveTo(x, padding);
+        ctx.lineTo(x, h() - padding);
+        ctx.stroke();
+      }
+
+      ctx.setLineDash([]);
+    }
+
+    function drawWave() {
+      const totalPoints = dataPoints.length;
+      const currentIndex = Math.floor(drawProgress * totalPoints);
+      if (currentIndex < 2) return;
+
+      ctx.shadowColor = GREEN;
+      ctx.shadowBlur = 12;
+      ctx.strokeStyle = GREEN;
+      ctx.lineWidth = 2;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+
+      ctx.beginPath();
+      let p = getPoint(0);
+      ctx.moveTo(p.x, p.y);
+
+      for (let i = 1; i < currentIndex && i < totalPoints; i++) {
+        p = getPoint(i);
+        ctx.lineTo(p.x, p.y);
+      }
+
+      const frac = (drawProgress * totalPoints) - currentIndex;
+      if (currentIndex < totalPoints - 1) {
+        const curr = getPoint(currentIndex);
+        const next = getPoint(currentIndex + 1);
+        const ix = curr.x + (next.x - curr.x) * frac;
+        const iy = curr.y + (next.y - curr.y) * frac;
+        ctx.lineTo(ix, iy);
+      }
+
+      ctx.stroke();
+
+      ctx.shadowBlur = 25;
+      ctx.strokeStyle = 'rgba(57, 255, 20, 0.3)';
+      ctx.lineWidth = 6;
+      ctx.beginPath();
+      p = getPoint(0);
+      ctx.moveTo(p.x, p.y);
+      for (let i = 1; i < currentIndex && i < totalPoints; i++) {
+        p = getPoint(i);
+        ctx.lineTo(p.x, p.y);
+      }
+      ctx.stroke();
+
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = 'transparent';
+
+      if (currentIndex < totalPoints) {
+        const headP = getPoint(Math.min(currentIndex, totalPoints - 1));
+        ctx.fillStyle = GREEN;
+        ctx.shadowColor = GREEN;
+        ctx.shadowBlur = 15;
+        ctx.beginPath();
+        ctx.arc(headP.x, headP.y, 4, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+      }
+    }
+
+    function render() {
+      ctx.clearRect(0, 0, w(), h());
+      drawGrid();
+      drawWave();
+
+      if (drawProgress < 1) {
+        drawProgress += drawSpeed;
+        if (drawProgress > 1) drawProgress = 1;
+      }
+
+      requestAnimationFrame(render);
+    }
+
+    render();
+  }
+
+  function initTabs() {
+    const tabs = document.querySelectorAll('.nav-tab');
+    tabs.forEach(function(tab) {
+      tab.addEventListener('click', function() {
+        tabs.forEach(function(t) { t.classList.remove('active'); });
+        tab.classList.add('active');
+
+        tab.classList.add('pressed');
+        setTimeout(function() {
+          tab.classList.remove('pressed');
+        }, 120);
+      });
+    });
+  }
+
+  function initFlicker() {
+    const el = document.querySelector('.flicker-target');
+    if (!el) return;
+
+    function triggerFlicker() {
+      const delay = 3000 + Math.random() * 8000;
+      setTimeout(function() {
+        el.style.opacity = '0.82';
+        setTimeout(function() {
+          el.style.opacity = '1';
+          setTimeout(function() {
+            el.style.opacity = '0.88';
+            setTimeout(function() {
+              el.style.opacity = '1';
+              triggerFlicker();
+            }, 50);
+          }, 40);
+        }, 60);
+      }, delay);
+    }
+
+    triggerFlicker();
+  }
+
+  document.addEventListener('DOMContentLoaded', function() {
+    initCounters();
+    initOscilloscope();
+    initTabs();
+    initFlicker();
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,659 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terra — Environmental Analytics</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;1,400&display=swap');
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --clay: #f5ede3;
+  --card: #faf4ec;
+  --forest: #1a3a2a;
+  --terracotta: #c25a3c;
+  --ochre: #d4a853;
+  --sage: #8a9a7a;
+  --soil: #3d2b1f;
+  --bark: #6b4c3b;
+  --warm-shadow: rgba(107, 76, 59, 0.12);
+  --warm-shadow-hover: rgba(107, 76, 59, 0.22);
+}
+
+body {
+  font-family: 'Source Sans 3', sans-serif;
+  background-color: var(--clay);
+  color: var(--forest);
+  min-height: 100vh;
+  overflow-x: hidden;
+  position: relative;
+  font-weight: 400;
+  line-height: 1.6;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg width='4' height='4' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M1 1h2v2H1z' fill='%23d4c9b8' fill-opacity='0.15'/%3E%3C/svg%3E");
+  pointer-events: none;
+  z-index: 999;
+}
+
+.blob {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.15;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.blob-1 {
+  width: 500px;
+  height: 500px;
+  background: var(--sage);
+  top: -100px;
+  right: -100px;
+}
+
+.blob-2 {
+  width: 400px;
+  height: 400px;
+  background: #c9a96e;
+  bottom: 10%;
+  left: -80px;
+}
+
+.blob-3 {
+  width: 300px;
+  height: 350px;
+  background: var(--terracotta);
+  top: 50%;
+  right: 5%;
+  opacity: 0.08;
+}
+
+.floating-particle {
+  position: fixed;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0;
+  animation: floatUp 20s linear infinite;
+  font-size: 18px;
+}
+
+.floating-particle:nth-child(1) { left: 10%; animation-delay: 0s; animation-duration: 22s; }
+.floating-particle:nth-child(2) { left: 25%; animation-delay: 4s; animation-duration: 18s; }
+.floating-particle:nth-child(3) { left: 45%; animation-delay: 8s; animation-duration: 24s; }
+.floating-particle:nth-child(4) { left: 65%; animation-delay: 2s; animation-duration: 20s; }
+.floating-particle:nth-child(5) { left: 80%; animation-delay: 12s; animation-duration: 26s; }
+.floating-particle:nth-child(6) { left: 90%; animation-delay: 6s; animation-duration: 19s; }
+
+@keyframes floatUp {
+  0% { transform: translateY(100vh) rotate(0deg); opacity: 0; }
+  10% { opacity: 0.25; }
+  90% { opacity: 0.25; }
+  100% { transform: translateY(-100px) rotate(360deg); opacity: 0; }
+}
+
+.container {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 60px 32px 80px;
+  position: relative;
+  z-index: 2;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 64px;
+  opacity: 0;
+  animation: fadeIn 800ms ease forwards;
+}
+
+.brand-name {
+  font-family: 'DM Serif Display', serif;
+  font-size: 3.2rem;
+  color: var(--forest);
+  letter-spacing: 0.04em;
+  margin-bottom: 8px;
+}
+
+.brand-name span {
+  color: var(--terracotta);
+}
+
+.leaf-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin: 16px 0 20px;
+}
+
+.leaf-divider .line {
+  width: 60px;
+  height: 1px;
+  background: var(--sage);
+  opacity: 0.5;
+}
+
+.leaf-divider svg {
+  width: 28px;
+  height: 28px;
+  fill: var(--sage);
+  opacity: 0.7;
+}
+
+.welcome {
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 1.15rem;
+  color: var(--bark);
+  font-weight: 400;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 24px;
+  margin-bottom: 48px;
+}
+
+@media (max-width: 800px) {
+  .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (max-width: 480px) {
+  .metrics-grid { grid-template-columns: 1fr; }
+}
+
+.plant-card {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 28px 24px 20px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 400ms ease, box-shadow 400ms ease;
+  box-shadow: 0 2px 12px var(--warm-shadow);
+  opacity: 0;
+  animation: fadeIn 800ms ease forwards;
+}
+
+.plant-card:nth-child(1) { animation-delay: 200ms; }
+.plant-card:nth-child(2) { animation-delay: 400ms; }
+.plant-card:nth-child(3) { animation-delay: 600ms; }
+.plant-card:nth-child(4) { animation-delay: 800ms; }
+
+.plant-card:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 24px var(--warm-shadow-hover);
+}
+
+.plant-card:hover .soil-strip {
+  height: 6px;
+}
+
+.plant-card:hover .plant-emoji {
+  animation: sway 1.2s ease-in-out infinite;
+}
+
+.soil-strip {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  transition: height 400ms ease;
+}
+
+.plant-card:nth-child(1) .soil-strip { background: var(--forest); }
+.plant-card:nth-child(2) .soil-strip { background: var(--terracotta); }
+.plant-card:nth-child(3) .soil-strip { background: var(--ochre); }
+.plant-card:nth-child(4) .soil-strip { background: var(--sage); }
+
+.plant-emoji {
+  font-size: 2rem;
+  display: block;
+  margin-bottom: 12px;
+  transform-origin: bottom center;
+}
+
+@keyframes sway {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(3deg); }
+  75% { transform: rotate(-3deg); }
+}
+
+.metric-label {
+  font-size: 0.82rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--bark);
+  margin-bottom: 6px;
+}
+
+.metric-value {
+  font-family: 'DM Serif Display', serif;
+  font-size: 2rem;
+  color: var(--forest);
+  line-height: 1.1;
+  margin-bottom: 6px;
+}
+
+.metric-change {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--sage);
+}
+
+.chart-section {
+  background: var(--card);
+  border-radius: 16px;
+  padding: 36px 32px 28px;
+  margin-bottom: 48px;
+  box-shadow: 0 2px 12px var(--warm-shadow);
+  position: relative;
+  overflow: hidden;
+  opacity: 0;
+  animation: fadeIn 800ms ease forwards;
+  animation-delay: 1000ms;
+}
+
+.chart-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.5rem;
+  color: var(--forest);
+  margin-bottom: 4px;
+}
+
+.chart-subtitle {
+  font-size: 0.9rem;
+  color: var(--bark);
+  margin-bottom: 28px;
+  font-style: italic;
+}
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 280px;
+}
+
+.chart-container svg {
+  width: 100%;
+  height: 100%;
+}
+
+.vine-line {
+  fill: none;
+  stroke: var(--forest);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 1200;
+  stroke-dashoffset: 1200;
+  animation: growVine 2s ease-out forwards;
+  animation-delay: 1200ms;
+}
+
+.vine-fill {
+  opacity: 0;
+  animation: fadeInFill 1s ease forwards;
+  animation-delay: 2800ms;
+}
+
+.leaf-node {
+  opacity: 0;
+  transform-origin: center;
+  transform: scale(0);
+}
+
+.leaf-node:nth-child(1) { animation: popIn 400ms ease forwards; animation-delay: 1500ms; }
+.leaf-node:nth-child(2) { animation: popIn 400ms ease forwards; animation-delay: 1750ms; }
+.leaf-node:nth-child(3) { animation: popIn 400ms ease forwards; animation-delay: 2000ms; }
+.leaf-node:nth-child(4) { animation: popIn 400ms ease forwards; animation-delay: 2250ms; }
+.leaf-node:nth-child(5) { animation: popIn 400ms ease forwards; animation-delay: 2500ms; }
+.leaf-node:nth-child(6) { animation: popIn 400ms ease forwards; animation-delay: 2800ms; }
+
+@keyframes growVine {
+  to { stroke-dashoffset: 0; }
+}
+
+@keyframes fadeInFill {
+  to { opacity: 1; }
+}
+
+@keyframes popIn {
+  0% { opacity: 0; transform: scale(0); }
+  70% { transform: scale(1.3); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.chart-labels {
+  display: flex;
+  justify-content: space-between;
+  padding: 12px 20px 0;
+}
+
+.chart-label {
+  font-size: 0.78rem;
+  color: var(--bark);
+  font-style: italic;
+}
+
+.journal-section {
+  opacity: 0;
+  animation: fadeIn 800ms ease forwards;
+  animation-delay: 1200ms;
+}
+
+.journal-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.5rem;
+  color: var(--forest);
+  margin-bottom: 24px;
+  text-align: center;
+}
+
+.journal-entries {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 20px;
+}
+
+@media (max-width: 640px) {
+  .journal-entries { grid-template-columns: 1fr; }
+}
+
+.journal-entry {
+  background: var(--card);
+  border-radius: 12px;
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  transition: transform 400ms ease, box-shadow 400ms ease;
+  box-shadow: 0 2px 12px var(--warm-shadow);
+  opacity: 0;
+  animation: fadeIn 800ms ease forwards;
+}
+
+.journal-entry:nth-child(1) { animation-delay: 1400ms; }
+.journal-entry:nth-child(2) { animation-delay: 1600ms; }
+.journal-entry:nth-child(3) { animation-delay: 1800ms; }
+.journal-entry:nth-child(4) { animation-delay: 2000ms; }
+
+.journal-entry:hover {
+  transform: scale(1.02);
+  box-shadow: 0 6px 24px var(--warm-shadow-hover);
+}
+
+.journal-emoji {
+  font-size: 1.6rem;
+  margin-bottom: 10px;
+  display: block;
+}
+
+.journal-date {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--sage);
+  margin-bottom: 6px;
+}
+
+.journal-event {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.1rem;
+  color: var(--forest);
+  margin-bottom: 6px;
+  line-height: 1.3;
+}
+
+.journal-note {
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.88rem;
+  color: var(--bark);
+  line-height: 1.4;
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(138, 154, 122, 0.3) 0%, transparent 70%);
+  transform: scale(0);
+  animation: rippleOut 600ms ease-out forwards;
+  pointer-events: none;
+  z-index: 10;
+}
+
+@keyframes rippleOut {
+  to {
+    transform: scale(4);
+    opacity: 0;
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+footer {
+  text-align: center;
+  margin-top: 64px;
+  padding-top: 32px;
+  opacity: 0;
+  animation: fadeIn 800ms ease forwards;
+  animation-delay: 2200ms;
+}
+
+.footer-leaf {
+  font-size: 1.4rem;
+  margin-bottom: 8px;
+  display: block;
+  opacity: 0.5;
+}
+
+.footer-text {
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 0.9rem;
+  color: var(--bark);
+  opacity: 0.6;
+}
+</style>
+</head>
+<body>
+
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
+
+<div class="floating-particle">🍃</div>
+<div class="floating-particle">🌿</div>
+<div class="floating-particle">🍂</div>
+<div class="floating-particle">🍃</div>
+<div class="floating-particle">🌱</div>
+<div class="floating-particle">🍂</div>
+
+<div class="container">
+
+  <header>
+    <div class="brand-name">T<span>e</span>rra</div>
+    <div class="leaf-divider">
+      <div class="line"></div>
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path d="M17 8C8 10 5.9 16.17 3.82 21.34L5.71 22l1-2.3A4.49 4.49 0 0 0 8 20c4 0 8.5-3.5 10-8 1.5-4.5 1-7 1-7s-2.5-.5-7 1c-4.5 1.5-8 6-8 10a4.49 4.49 0 0 0 .36 1.29L6.7 3.82A14.7 14.7 0 0 1 17 8z"/>
+      </svg>
+      <div class="line"></div>
+    </div>
+    <div class="welcome">Welcome to your garden</div>
+  </header>
+
+  <div class="metrics-grid">
+    <div class="plant-card" onclick="createRipple(event, this)">
+      <span class="plant-emoji">🌳</span>
+      <div class="metric-label">CO&#8322; Offset</div>
+      <div class="metric-value" data-target="2847" data-suffix=" tons">0 tons</div>
+      <div class="metric-change">+12% this season</div>
+      <div class="soil-strip"></div>
+    </div>
+    <div class="plant-card" onclick="createRipple(event, this)">
+      <span class="plant-emoji">🌿</span>
+      <div class="metric-label">Trees Planted</div>
+      <div class="metric-value" data-target="48294" data-suffix="">0</div>
+      <div class="metric-change">+8.2% this season</div>
+      <div class="soil-strip"></div>
+    </div>
+    <div class="plant-card" onclick="createRipple(event, this)">
+      <span class="plant-emoji">💧</span>
+      <div class="metric-label">Water Saved</div>
+      <div class="metric-value" data-target="1200000" data-suffix=" gal" data-display="1.2M gal">0 gal</div>
+      <div class="metric-change">+15% this season</div>
+      <div class="soil-strip"></div>
+    </div>
+    <div class="plant-card" onclick="createRipple(event, this)">
+      <span class="plant-emoji">🍄</span>
+      <div class="metric-label">Soil Health</div>
+      <div class="metric-value" data-target="94" data-suffix="/100">0/100</div>
+      <div class="metric-change">+3 pts this season</div>
+      <div class="soil-strip"></div>
+    </div>
+  </div>
+
+  <div class="chart-section" onclick="createRipple(event, this)">
+    <div class="chart-title">Growth Over Time</div>
+    <div class="chart-subtitle">Six months of reforestation progress</div>
+    <div class="chart-container">
+      <svg viewBox="0 0 800 260" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="earthGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1a3a2a" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#6b4c3b" stop-opacity="0.05"/>
+          </linearGradient>
+        </defs>
+        <path class="vine-fill" d="M40,220 C120,200 160,180 240,150 C320,120 360,130 440,100 C520,70 560,85 640,50 C680,38 720,30 760,20 L760,250 L40,250 Z" fill="url(#earthGrad)"/>
+        <path class="vine-line" d="M40,220 C120,200 160,180 240,150 C320,120 360,130 440,100 C520,70 560,85 640,50 C680,38 720,30 760,20"/>
+        <g>
+          <circle class="leaf-node" cx="40" cy="220" r="6" fill="#8a9a7a"/>
+          <circle class="leaf-node" cx="160" cy="183" r="6" fill="#8a9a7a"/>
+          <circle class="leaf-node" cx="280" cy="148" r="6" fill="#1a3a2a"/>
+          <circle class="leaf-node" cx="440" cy="100" r="6" fill="#1a3a2a"/>
+          <circle class="leaf-node" cx="580" cy="72" r="6" fill="#c25a3c"/>
+          <circle class="leaf-node" cx="760" cy="20" r="7" fill="#c25a3c"/>
+        </g>
+      </svg>
+    </div>
+    <div class="chart-labels">
+      <span class="chart-label">January</span>
+      <span class="chart-label">February</span>
+      <span class="chart-label">March</span>
+      <span class="chart-label">April</span>
+      <span class="chart-label">May</span>
+      <span class="chart-label">June</span>
+    </div>
+  </div>
+
+  <div class="journal-section">
+    <div class="journal-title">Recent Growth</div>
+    <div class="journal-entries">
+      <div class="journal-entry" onclick="createRipple(event, this)">
+        <span class="journal-emoji">🌱</span>
+        <div class="journal-date">June 12, 2026</div>
+        <div class="journal-event">May forest planted in Costa Rica</div>
+        <div class="journal-note">"Three hundred seedlings nestled into the hillside, waiting for the rains."</div>
+      </div>
+      <div class="journal-entry" onclick="createRipple(event, this)">
+        <span class="journal-emoji">🌿</span>
+        <div class="journal-date">June 8, 2026</div>
+        <div class="journal-event">New species documented</div>
+        <div class="journal-note">"A fern unlike any recorded before, found in the shaded ravine."</div>
+      </div>
+      <div class="journal-entry" onclick="createRipple(event, this)">
+        <span class="journal-emoji">🍄</span>
+        <div class="journal-date">June 3, 2026</div>
+        <div class="journal-event">Soil health report generated</div>
+        <div class="journal-note">"Microbial activity up across all plots. The earth is waking up."</div>
+      </div>
+      <div class="journal-entry" onclick="createRipple(event, this)">
+        <span class="journal-emoji">🌳</span>
+        <div class="journal-date">May 28, 2026</div>
+        <div class="journal-event">Partnership with GreenCorp</div>
+        <div class="journal-note">"Together, we will restore what was taken. A thousand acres by year's end."</div>
+      </div>
+    </div>
+  </div>
+
+  <footer>
+    <span class="footer-leaf">🌿</span>
+    <div class="footer-text">Terra &mdash; tending the earth, one season at a time</div>
+  </footer>
+
+</div>
+
+<script>
+function createRipple(e, el) {
+  const rect = el.getBoundingClientRect();
+  const ripple = document.createElement('div');
+  ripple.className = 'ripple';
+  const size = Math.max(rect.width, rect.height);
+  ripple.style.width = ripple.style.height = size + 'px';
+  ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+  ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+  el.appendChild(ripple);
+  ripple.addEventListener('animationend', () => ripple.remove());
+}
+
+function animateCounters() {
+  const counters = document.querySelectorAll('.metric-value[data-target]');
+  counters.forEach(counter => {
+    const target = parseInt(counter.dataset.target);
+    const suffix = counter.dataset.suffix || '';
+    const displayOverride = counter.dataset.display;
+    const duration = 1800;
+    const start = performance.now();
+
+    function update(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      const current = Math.floor(eased * target);
+
+      if (progress >= 1 && displayOverride) {
+        counter.textContent = displayOverride;
+      } else {
+        counter.textContent = current.toLocaleString() + suffix;
+      }
+
+      if (progress < 1) {
+        requestAnimationFrame(update);
+      }
+    }
+
+    requestAnimationFrame(update);
+  });
+}
+
+const observer = new IntersectionObserver((entries) => {
+  entries.forEach(entry => {
+    if (entry.isIntersecting) {
+      animateCounters();
+      observer.disconnect();
+    }
+  });
+}, { threshold: 0.3 });
+
+observer.observe(document.querySelector('.metrics-grid'));
+</script>
+
+</body>
+</html>

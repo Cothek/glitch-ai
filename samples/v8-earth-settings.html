@@ -1,0 +1,923 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Terra Settings</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;1,400&display=swap');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --clay: #f5ede3;
+  --card: #faf4ec;
+  --forest: #1a3a2a;
+  --terracotta: #c25a3c;
+  --ochre: #d4a853;
+  --sage: #8a9a7a;
+  --sage-light: rgba(138, 154, 122, 0.15);
+  --terracotta-light: rgba(194, 90, 60, 0.1);
+  --text: #2c2416;
+  --text-muted: #6b5d4d;
+  --border: rgba(44, 36, 22, 0.08);
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  font-family: 'Source Sans 3', sans-serif;
+  background-color: var(--clay);
+  color: var(--text);
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  line-height: 1.6;
+  font-weight: 400;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background-image: radial-gradient(circle, rgba(44, 36, 22, 0.03) 1px, transparent 1px);
+  background-size: 18px 18px;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.blob {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.25;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.blob-1 {
+  width: 400px;
+  height: 400px;
+  background: var(--sage);
+  top: -100px;
+  right: -80px;
+  animation: drift1 30s ease-in-out infinite;
+}
+
+.blob-2 {
+  width: 300px;
+  height: 350px;
+  background: var(--terracotta);
+  bottom: 10%;
+  left: -60px;
+  animation: drift2 34s ease-in-out infinite;
+}
+
+.blob-3 {
+  width: 250px;
+  height: 250px;
+  background: var(--ochre);
+  top: 50%;
+  right: 10%;
+  opacity: 0.15;
+  animation: drift3 28s ease-in-out infinite;
+}
+
+@keyframes drift1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(-30px, 40px) scale(1.05); }
+  66% { transform: translate(20px, -20px) scale(0.95); }
+}
+
+@keyframes drift2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, -30px) scale(1.08); }
+  66% { transform: translate(-20px, 20px) scale(0.96); }
+}
+
+@keyframes drift3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-40px, 30px) scale(1.1); }
+}
+
+.container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 3rem 1.5rem 4rem;
+  position: relative;
+  z-index: 1;
+}
+
+.page-header {
+  text-align: center;
+  margin-bottom: 3rem;
+  opacity: 0;
+  animation: fadeUp 800ms ease forwards;
+}
+
+.page-header .emoji {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: 0.5rem;
+  animation: gentleSway 4s ease-in-out infinite;
+}
+
+@keyframes gentleSway {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+
+.page-header h1 {
+  font-family: 'DM Serif Display', serif;
+  font-style: italic;
+  font-size: 2.4rem;
+  font-weight: 400;
+  color: var(--forest);
+  letter-spacing: -0.01em;
+}
+
+.page-header p {
+  font-size: 1.05rem;
+  color: var(--text-muted);
+  margin-top: 0.35rem;
+  font-weight: 300;
+  font-style: italic;
+}
+
+.section {
+  background: var(--card);
+  border-radius: 20px;
+  padding: 2rem;
+  margin-bottom: 1.75rem;
+  border: 1px solid var(--border);
+  position: relative;
+  opacity: 0;
+  transform: translateY(24px);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.section:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 30px rgba(44, 36, 22, 0.06);
+}
+
+.section.visible {
+  opacity: 1;
+  transform: translateY(0);
+  animation: journalIn 700ms ease forwards;
+}
+
+@keyframes journalIn {
+  0% {
+    opacity: 0;
+    transform: perspective(800px) rotateX(4deg) translateY(30px);
+  }
+  100% {
+    opacity: 1;
+    transform: perspective(800px) rotateX(0deg) translateY(0);
+  }
+}
+
+@keyframes fadeUp {
+  0% { opacity: 0; transform: translateY(16px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.section-title {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.4rem;
+  color: var(--forest);
+  margin-bottom: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.section-title .emoji {
+  font-size: 1.3rem;
+}
+
+.field-group {
+  margin-bottom: 1.25rem;
+}
+
+.field-group:last-child {
+  margin-bottom: 0;
+}
+
+.field-label {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--sage);
+  font-weight: 600;
+  margin-bottom: 0.4rem;
+  display: block;
+}
+
+.field-input {
+  width: 100%;
+  border: none;
+  border-bottom: 2px solid var(--border);
+  background: transparent;
+  font-family: 'DM Serif Display', serif;
+  font-size: 1.15rem;
+  color: var(--text);
+  padding: 0.4rem 0;
+  outline: none;
+  transition: border-color 0.3s ease;
+}
+
+.field-input:focus {
+  border-bottom-color: var(--sage);
+}
+
+.field-input::placeholder {
+  color: rgba(44, 36, 22, 0.25);
+  font-style: italic;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.toggle-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.toggle-row:first-of-type {
+  padding-top: 0;
+}
+
+.toggle-info {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.toggle-info .emoji {
+  font-size: 1.2rem;
+}
+
+.toggle-label {
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.toggle-sub {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 52px;
+  height: 28px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.toggle-switch input {
+  display: none;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: rgba(44, 36, 22, 0.1);
+  border-radius: 14px;
+  transition: background 0.35s ease;
+}
+
+.toggle-switch input:checked + .toggle-track {
+  background: var(--sage);
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--card);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.35s ease;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+
+.toggle-switch input:checked ~ .toggle-thumb {
+  transform: translateX(24px);
+}
+
+.toggle-emoji-on,
+.toggle-emoji-off {
+  position: absolute;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.toggle-emoji-on {
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+.toggle-emoji-off {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.toggle-switch input:checked ~ .toggle-thumb .toggle-emoji-on {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.toggle-switch input:checked ~ .toggle-thumb .toggle-emoji-off {
+  opacity: 0;
+  transform: scale(0.5);
+}
+
+.theme-swatches {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.swatch {
+  flex: 1;
+  aspect-ratio: 1.2;
+  border-radius: 16px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  border: 3px solid transparent;
+  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.3s ease, box-shadow 0.3s ease;
+  position: relative;
+}
+
+.swatch:hover {
+  transform: scale(1.04);
+}
+
+.swatch.selected {
+  transform: scale(1.06);
+}
+
+.swatch-forest {
+  background: linear-gradient(145deg, #2d5a3f, #1a3a2a);
+}
+
+.swatch-meadow {
+  background: linear-gradient(145deg, #e8c95a, #d4a853);
+}
+
+.swatch-ocean {
+  background: linear-gradient(145deg, #3a8a8a, #2a6a7a);
+}
+
+.swatch.selected.swatch-forest {
+  border-color: #2d5a3f;
+  box-shadow: 0 0 20px rgba(45, 90, 63, 0.35);
+}
+
+.swatch.selected.swatch-meadow {
+  border-color: #d4a853;
+  box-shadow: 0 0 20px rgba(212, 168, 83, 0.35);
+}
+
+.swatch.selected.swatch-ocean {
+  border-color: #3a8a8a;
+  box-shadow: 0 0 20px rgba(58, 138, 138, 0.35);
+}
+
+.swatch .emoji {
+  font-size: 1.5rem;
+}
+
+.swatch .label {
+  font-size: 0.75rem;
+  color: rgba(255,255,255,0.85);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.swatch .check {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  font-size: 0.8rem;
+  color: white;
+  opacity: 0;
+  transform: scale(0);
+  transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.swatch.selected .check {
+  opacity: 1;
+  transform: scale(1);
+}
+
+.select-field {
+  width: 100%;
+  appearance: none;
+  border: 2px solid var(--border);
+  border-radius: 12px;
+  background: var(--card);
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 1rem;
+  color: var(--text);
+  padding: 0.7rem 1rem;
+  outline: none;
+  cursor: pointer;
+  transition: border-color 0.3s ease;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238a9a7a' stroke-width='2' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 1rem center;
+}
+
+.select-field:focus {
+  border-color: var(--sage);
+}
+
+.slider-group {
+  margin-top: 1.25rem;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.6rem;
+}
+
+.slider-value {
+  font-family: 'DM Serif Display', serif;
+  font-size: 1rem;
+  color: var(--forest);
+}
+
+.slider-track {
+  position: relative;
+  width: 100%;
+  height: 6px;
+  background: rgba(44, 36, 22, 0.08);
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.slider-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  background: var(--sage);
+  border-radius: 3px;
+  transition: width 0.2s ease;
+}
+
+.slider-thumb {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 20px;
+  height: 20px;
+  background: var(--card);
+  border: 3px solid var(--sage);
+  border-radius: 50%;
+  cursor: grab;
+  transition: box-shadow 0.2s ease;
+  z-index: 2;
+}
+
+.slider-thumb:hover {
+  box-shadow: 0 0 0 6px rgba(138, 154, 122, 0.15);
+}
+
+.slider-thumb:active {
+  cursor: grabbing;
+  box-shadow: 0 0 0 8px rgba(138, 154, 122, 0.2);
+}
+
+.data-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.85rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.data-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.data-row:first-of-type {
+  padding-top: 0;
+}
+
+.data-info {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+}
+
+.data-info .emoji {
+  font-size: 1.2rem;
+}
+
+.data-label {
+  font-size: 1rem;
+  color: var(--text);
+}
+
+.data-sub {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+.btn {
+  border: none;
+  border-radius: 12px;
+  font-family: 'Source Sans 3', sans-serif;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.55rem 1.2rem;
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn:hover {
+  transform: scale(1.03);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-export {
+  background: var(--forest);
+  color: white;
+}
+
+.btn-export:hover {
+  box-shadow: 0 4px 14px rgba(26, 58, 42, 0.25);
+}
+
+.btn-danger {
+  background: var(--terracotta-light);
+  color: var(--terracotta);
+}
+
+.btn-danger:hover {
+  background: rgba(194, 90, 60, 0.18);
+}
+
+.ripple {
+  position: absolute;
+  border-radius: 50%;
+  background: rgba(194, 90, 60, 0.3);
+  transform: scale(0);
+  animation: rippleOut 600ms ease-out forwards;
+  pointer-events: none;
+}
+
+@keyframes rippleOut {
+  0% { transform: scale(0); opacity: 1; }
+  100% { transform: scale(4); opacity: 0; }
+}
+
+.counter {
+  font-family: 'DM Serif Display', serif;
+  font-size: 2rem;
+  color: var(--forest);
+  text-align: center;
+  margin: 0.5rem 0;
+}
+
+.counter-label {
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 300;
+}
+
+.stats-row {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.stat-item {
+  flex: 1;
+  text-align: center;
+  padding: 0.75rem;
+  background: var(--sage-light);
+  border-radius: 14px;
+}
+
+.divider {
+  height: 1px;
+  background: var(--border);
+  margin: 1.25rem 0;
+}
+
+@media (max-width: 480px) {
+  .container {
+    padding: 2rem 1rem 3rem;
+  }
+  .section {
+    padding: 1.5rem;
+  }
+  .theme-swatches {
+    gap: 0.75rem;
+  }
+  .page-header h1 {
+    font-size: 2rem;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="blob blob-1"></div>
+<div class="blob blob-2"></div>
+<div class="blob blob-3"></div>
+
+<div class="container">
+  <header class="page-header">
+    <span class="emoji">🌿</span>
+    <h1>Terra Settings</h1>
+    <p>Tend to your preferences</p>
+  </header>
+
+  <section class="section" data-delay="0">
+    <h2 class="section-title"><span class="emoji">🌱</span> Your Profile</h2>
+    <div class="field-group">
+      <label class="field-label">Name</label>
+      <input type="text" class="field-input" value="Willow Green" placeholder="Your name...">
+    </div>
+    <div class="field-group">
+      <label class="field-label">Email</label>
+      <input type="email" class="field-input" value="willow@terra.eco" placeholder="your@email.com...">
+    </div>
+  </section>
+
+  <section class="section" data-delay="120">
+    <h2 class="section-title"><span class="emoji">🌻</span> Your Garden</h2>
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <span class="emoji">💧</span>
+        <div>
+          <div class="toggle-label">Watering reminders</div>
+          <div class="toggle-sub">Daily nudges to keep things hydrated</div>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" checked>
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb">
+          <span class="toggle-emoji-on">🌿</span>
+          <span class="toggle-emoji-off">🍂</span>
+        </div>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <span class="emoji">📊</span>
+        <div>
+          <div class="toggle-label">Growth reports</div>
+          <div class="toggle-sub">Weekly summaries of your progress</div>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" checked>
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb">
+          <span class="toggle-emoji-on">🌿</span>
+          <span class="toggle-emoji-off">🍂</span>
+        </div>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <span class="emoji">🌰</span>
+        <div>
+          <div class="toggle-label">Seed alerts</div>
+          <div class="toggle-sub">New opportunities to plant ideas</div>
+        </div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox">
+        <div class="toggle-track"></div>
+        <div class="toggle-thumb">
+          <span class="toggle-emoji-on">🌿</span>
+          <span class="toggle-emoji-off">🍂</span>
+        </div>
+      </label>
+    </div>
+  </section>
+
+  <section class="section" data-delay="240">
+    <h2 class="section-title"><span class="emoji">🌿</span> Preferences</h2>
+    <div class="field-group">
+      <label class="field-label">Theme</label>
+      <div class="theme-swatches">
+        <div class="swatch swatch-forest selected" data-theme="forest">
+          <span class="check">✓</span>
+          <span class="emoji">🌲</span>
+          <span class="label">Forest</span>
+        </div>
+        <div class="swatch swatch-meadow" data-theme="meadow">
+          <span class="check">✓</span>
+          <span class="emoji">🌾</span>
+          <span class="label">Meadow</span>
+        </div>
+        <div class="swatch swatch-ocean" data-theme="ocean">
+          <span class="check">✓</span>
+          <span class="emoji">🌊</span>
+          <span class="label">Ocean</span>
+        </div>
+      </div>
+    </div>
+    <div class="field-group">
+      <label class="field-label">Language</label>
+      <select class="select-field">
+        <option>English</option>
+        <option>Français</option>
+        <option>Deutsch</option>
+        <option>Español</option>
+        <option>日本語</option>
+      </select>
+    </div>
+    <div class="slider-group">
+      <div class="slider-header">
+        <label class="field-label" style="margin-bottom:0">Update frequency</label>
+        <span class="slider-value" id="sliderValue">3 days</span>
+      </div>
+      <div class="slider-track" id="sliderTrack">
+        <div class="slider-fill" id="sliderFill" style="width: 40%"></div>
+        <div class="slider-thumb" id="sliderThumb" style="left: 40%"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="section" data-delay="360">
+    <h2 class="section-title"><span class="emoji">🍄</span> Your Data</h2>
+    <div class="stats-row">
+      <div class="stat-item">
+        <div class="counter" data-target="47">0</div>
+        <div class="counter-label">Seeds planted</div>
+      </div>
+      <div class="stat-item">
+        <div class="counter" data-target="12">0</div>
+        <div class="counter-label">In bloom</div>
+      </div>
+      <div class="stat-item">
+        <div class="counter" data-target="183">0</div>
+        <div class="counter-label">Days growing</div>
+      </div>
+    </div>
+    <div class="divider"></div>
+    <div class="data-row">
+      <div class="data-info">
+        <span class="emoji">📦</span>
+        <div>
+          <div class="data-label">Export your garden</div>
+          <div class="data-sub">Download all your data as JSON</div>
+        </div>
+      </div>
+      <button class="btn btn-export">Export 🍃</button>
+    </div>
+    <div class="data-row">
+      <div class="data-info">
+        <span class="emoji">🗑️</span>
+        <div>
+          <div class="data-label">Clear everything</div>
+          <div class="data-sub">Remove all data permanently</div>
+        </div>
+      </div>
+      <button class="btn btn-danger" id="dangerBtn">Clear 🍂</button>
+    </div>
+  </section>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', () => {
+  const sections = document.querySelectorAll('.section');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const delay = parseInt(entry.target.dataset.delay) || 0;
+        setTimeout(() => {
+          entry.target.classList.add('visible');
+        }, delay);
+        observer.unobserve(entry.target);
+      }
+    });
+  }, { threshold: 0.15 });
+
+  sections.forEach(s => observer.observe(s));
+
+  const swatches = document.querySelectorAll('.swatch');
+  swatches.forEach(swatch => {
+    swatch.addEventListener('click', () => {
+      swatches.forEach(s => s.classList.remove('selected'));
+      swatch.classList.add('selected');
+    });
+  });
+
+  const sliderTrack = document.getElementById('sliderTrack');
+  const sliderThumb = document.getElementById('sliderThumb');
+  const sliderFill = document.getElementById('sliderFill');
+  const sliderValue = document.getElementById('sliderValue');
+  let dragging = false;
+
+  const labels = ['Daily', '2 days', '3 days', 'Weekly', 'Biweekly', 'Monthly'];
+
+  function updateSlider(pct) {
+    pct = Math.max(0, Math.min(1, pct));
+    sliderThumb.style.left = (pct * 100) + '%';
+    sliderFill.style.width = (pct * 100) + '%';
+    const idx = Math.round(pct * (labels.length - 1));
+    sliderValue.textContent = labels[idx];
+  }
+
+  function getPct(e) {
+    const rect = sliderTrack.getBoundingClientRect();
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    return (clientX - rect.left) / rect.width;
+  }
+
+  sliderThumb.addEventListener('mousedown', () => { dragging = true; });
+  sliderThumb.addEventListener('touchstart', () => { dragging = true; }, { passive: true });
+  sliderTrack.addEventListener('click', (e) => { updateSlider(getPct(e)); });
+
+  document.addEventListener('mousemove', (e) => { if (dragging) updateSlider(getPct(e)); });
+  document.addEventListener('touchmove', (e) => { if (dragging) updateSlider(getPct(e)); }, { passive: true });
+  document.addEventListener('mouseup', () => { dragging = false; });
+  document.addEventListener('touchend', () => { dragging = false; });
+
+  const counters = document.querySelectorAll('.counter');
+  const counterObserver = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const el = entry.target;
+        const target = parseInt(el.dataset.target);
+        animateCounter(el, target);
+        counterObserver.unobserve(el);
+      }
+    });
+  }, { threshold: 0.5 });
+
+  counters.forEach(c => counterObserver.observe(c));
+
+  function animateCounter(el, target) {
+    const duration = 1200;
+    const start = performance.now();
+    function tick(now) {
+      const elapsed = now - start;
+      const progress = Math.min(elapsed / duration, 1);
+      const eased = 1 - Math.pow(1 - progress, 3);
+      el.textContent = Math.round(eased * target);
+      if (progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+
+  const dangerBtn = document.getElementById('dangerBtn');
+  dangerBtn.addEventListener('click', function(e) {
+    const rect = this.getBoundingClientRect();
+    const ripple = document.createElement('span');
+    ripple.classList.add('ripple');
+    const size = Math.max(rect.width, rect.height);
+    ripple.style.width = ripple.style.height = size + 'px';
+    ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+    ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+    this.appendChild(ripple);
+    ripple.addEventListener('animationend', () => ripple.remove());
+  });
+});
+</script>
+</body>
+</html>

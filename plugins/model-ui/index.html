@@ -806,7 +806,7 @@
         const isSelected = state.selectedAgents.includes(agent.name);
         const selClass = isSelected ? ' selected' : '';
 
-        return `<tr class="${selClass}" data-agent="${escapeHtml(agent.name)}">
+        return `<tr class="${selClass}"${rowStyle} data-agent="${escapeHtml(agent.name)}">
           <td style="width: 40px;"><input type="checkbox" class="agent-checkbox" data-agent="${escapeHtml(agent.name)}" ${isSelected ? 'checked' : ''}></td>
           <td class="col-agent"><span class="agent-name">@${escapeHtml(agent.name)}</span></td>
           <td>

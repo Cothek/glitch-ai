@@ -178,7 +178,7 @@
       "temperature": 0.2
     },
     "vision": {
-      "model": "opencode/mimo-v2.5-free",
+      "model": "nvidia/moonshotai/kimi-k2.6",
       "mode": "subagent",
       "description": "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
       "permission": {

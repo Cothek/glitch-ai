@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aero Settings</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700&display=swap');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --canvas: #f8f9fc;
+  --glass-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-shadow: 0 8px 32px rgba(100, 116, 139, 0.08), 0 2px 8px rgba(100, 116, 139, 0.04);
+  --glass-shadow-hover: 0 16px 48px rgba(100, 116, 139, 0.12), 0 4px 16px rgba(100, 116, 139, 0.06);
+  --text-primary: #1e293b;
+  --text-secondary: #64748b;
+  --text-tertiary: #94a3b8;
+  --accent-start: #8B5CF6;
+  --accent-mid: #06B6D4;
+  --accent-end: #EC4899;
+  --danger-start: #ef4444;
+  --danger-end: #dc2626;
+  --radius-panel: 16px;
+  --radius-control: 10px;
+  --gradient-accent: linear-gradient(135deg, var(--accent-start), var(--accent-mid), var(--accent-end));
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background: var(--canvas);
+  color: var(--text-primary);
+  min-height: 100vh;
+  padding: 60px 24px 80px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.page-header {
+  margin-bottom: 48px;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: fadeUp 600ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.page-title {
+  font-size: 40px;
+  font-weight: 300;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  margin-bottom: 8px;
+}
+
+.page-subtitle {
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.glass-panel {
+  background: var(--glass-bg);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--glass-shadow);
+  padding: 28px;
+  margin-bottom: 24px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 300ms ease, box-shadow 300ms ease;
+  opacity: 0;
+  transform: translateY(30px);
+}
+
+.glass-panel:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--glass-shadow-hover);
+}
+
+.glass-panel::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--gradient-accent);
+  border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+}
+
+.panel-title {
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-secondary);
+  margin-bottom: 20px;
+}
+
+.panel-1 { animation: fadeUp 600ms cubic-bezier(0.16, 1, 0.3, 1) 150ms forwards; }
+.panel-2 { animation: fadeUp 600ms cubic-bezier(0.16, 1, 0.3, 1) 300ms forwards; }
+.panel-3 { animation: fadeUp 600ms cubic-bezier(0.16, 1, 0.3, 1) 450ms forwards; }
+.panel-4 { animation: fadeUp 600ms cubic-bezier(0.16, 1, 0.3, 1) 600ms forwards; }
+
+@keyframes fadeUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.form-group {
+  margin-bottom: 18px;
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-label {
+  display: block;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.form-input {
+  width: 100%;
+  padding: 12px 16px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.6);
+  border: none;
+  border-radius: var(--radius-control);
+  outline: none;
+  transition: box-shadow 300ms ease, background 300ms ease;
+}
+
+.form-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.form-input:focus {
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 0 0 6px rgba(6, 182, 212, 0.08);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 0;
+}
+
+.toggle-row:not(:last-child) {
+  border-bottom: 1px solid rgba(148, 163, 184, 0.1);
+}
+
+.toggle-info {
+  flex: 1;
+}
+
+.toggle-label {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-primary);
+  margin-bottom: 2px;
+}
+
+.toggle-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.toggle-switch {
+  position: relative;
+  width: 48px;
+  height: 28px;
+  flex-shrink: 0;
+  margin-left: 16px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: rgba(148, 163, 184, 0.25);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background 300ms ease;
+}
+
+.toggle-switch input:checked + .toggle-track {
+  background: var(--gradient-accent);
+}
+
+.toggle-knob {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 22px;
+  height: 22px;
+  background: white;
+  border-radius: 50%;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+  transition: transform 300ms cubic-bezier(0.16, 1, 0.3, 1);
+  pointer-events: none;
+}
+
+.toggle-switch input:checked ~ .toggle-knob {
+  transform: translateX(20px);
+}
+
+.theme-selector {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 22px;
+}
+
+.theme-card {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 12px;
+  background: rgba(255, 255, 255, 0.5);
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+  position: relative;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.theme-card::before {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: calc(var(--radius-control) + 2px);
+  background: transparent;
+  transition: background 300ms ease;
+  z-index: -1;
+}
+
+.theme-card:hover {
+  transform: scale(1.03);
+}
+
+.theme-card.active {
+  border-color: transparent;
+}
+
+.theme-card.active::before {
+  background: var(--gradient-accent);
+}
+
+.theme-card:active {
+  transform: scale(0.97);
+}
+
+.theme-icon {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.theme-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.select-wrapper {
+  position: relative;
+  margin-bottom: 22px;
+}
+
+.form-select {
+  width: 100%;
+  padding: 12px 40px 12px 16px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: rgba(255, 255, 255, 0.6);
+  border: none;
+  border-radius: var(--radius-control);
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  transition: box-shadow 300ms ease, background 300ms ease;
+}
+
+.form-select:focus {
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.15), 0 0 0 6px rgba(6, 182, 212, 0.08);
+}
+
+.select-arrow {
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 16px;
+  height: 16px;
+  pointer-events: none;
+  color: var(--text-tertiary);
+}
+
+.slider-group {
+  margin-bottom: 0;
+}
+
+.slider-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.slider-value {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  min-width: 36px;
+  text-align: right;
+}
+
+.slider-track-wrapper {
+  position: relative;
+  height: 28px;
+  display: flex;
+  align-items: center;
+}
+
+input[type="range"] {
+  width: 100%;
+  height: 4px;
+  appearance: none;
+  background: transparent;
+  outline: none;
+  position: relative;
+  z-index: 2;
+}
+
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.2);
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12), inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  margin-top: -9px;
+  cursor: pointer;
+  transition: box-shadow 200ms ease, transform 200ms ease;
+}
+
+input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 2px 10px rgba(139, 92, 246, 0.25), inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  transform: scale(1.1);
+}
+
+input[type="range"]::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(148, 163, 184, 0.2);
+  border: none;
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: white;
+  box-shadow: 0 1px 6px rgba(0, 0, 0, 0.12), inset 0 1px 2px rgba(0, 0, 0, 0.06);
+  border: none;
+  cursor: pointer;
+}
+
+.slider-fill {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--gradient-accent);
+  transform: translateY(-50%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.danger-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  background: linear-gradient(135deg, var(--danger-start), var(--danger-end));
+  border: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: transform 200ms ease, box-shadow 200ms ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.danger-btn:hover {
+  transform: scale(1.02);
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.3);
+}
+
+.danger-btn:hover::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: rgba(255, 255, 255, 0.1);
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+.danger-btn:active {
+  transform: scale(0.98);
+}
+
+.danger-btn.confirmed {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  pointer-events: none;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: 1; }
+}
+
+.danger-desc {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+
+@media (max-width: 480px) {
+  body {
+    padding: 32px 16px 60px;
+  }
+
+  .page-title {
+    font-size: 32px;
+  }
+
+  .glass-panel {
+    padding: 20px;
+  }
+
+  .theme-selector {
+    gap: 8px;
+  }
+
+  .theme-card {
+    padding: 12px 8px;
+  }
+}
+</style>
+</head>
+<body>
+
+<div class="container">
+  <header class="page-header">
+    <h1 class="page-title">Settings</h1>
+    <p class="page-subtitle">Manage your account preferences</p>
+  </header>
+
+  <section class="glass-panel panel-1">
+    <h2 class="panel-title">Profile</h2>
+    <div class="form-group">
+      <label class="form-label" for="name">Name</label>
+      <input class="form-input" type="text" id="name" value="Sarah Chen" placeholder="Your name">
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="email">Email</label>
+      <input class="form-input" type="email" id="email" value="sarah@aero.io" placeholder="Your email">
+    </div>
+  </section>
+
+  <section class="glass-panel panel-2">
+    <h2 class="panel-title">Notifications</h2>
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Email notifications</div>
+        <div class="toggle-desc">Receive updates and alerts via email</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" checked>
+        <span class="toggle-track"></span>
+        <span class="toggle-knob"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Push notifications</div>
+        <div class="toggle-desc">Get real-time alerts on your device</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox" checked>
+        <span class="toggle-track"></span>
+        <span class="toggle-knob"></span>
+      </label>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-info">
+        <div class="toggle-label">Weekly digest</div>
+        <div class="toggle-desc">Summary of activity sent every Monday</div>
+      </div>
+      <label class="toggle-switch">
+        <input type="checkbox">
+        <span class="toggle-track"></span>
+        <span class="toggle-knob"></span>
+      </label>
+    </div>
+  </section>
+
+  <section class="glass-panel panel-3">
+    <h2 class="panel-title">Preferences</h2>
+    <div class="form-group">
+      <label class="form-label">Theme</label>
+      <div class="theme-selector">
+        <div class="theme-card active" data-theme="light">
+          <span class="theme-icon">&#9728;&#65039;</span>
+          <span class="theme-name">Light</span>
+        </div>
+        <div class="theme-card" data-theme="dark">
+          <span class="theme-icon">&#127769;</span>
+          <span class="theme-name">Dark</span>
+        </div>
+        <div class="theme-card" data-theme="auto">
+          <span class="theme-icon">&#9881;&#65039;</span>
+          <span class="theme-name">Auto</span>
+        </div>
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="language">Language</label>
+      <div class="select-wrapper">
+        <select class="form-select" id="language">
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="ja">Japanese</option>
+        </select>
+        <svg class="select-arrow" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <path d="M4 6l4 4 4-4"/>
+        </svg>
+      </div>
+    </div>
+    <div class="form-group slider-group">
+      <div class="slider-header">
+        <label class="form-label" for="density" style="margin-bottom:0">Interface density</label>
+        <span class="slider-value" id="density-value">70%</span>
+      </div>
+      <div class="slider-track-wrapper">
+        <div class="slider-fill" id="slider-fill" style="width: 70%"></div>
+        <input type="range" id="density" min="0" max="100" value="70">
+      </div>
+    </div>
+  </section>
+
+  <section class="glass-panel panel-4">
+    <h2 class="panel-title">Account</h2>
+    <p class="danger-desc">Permanently delete your account and all associated data. This action cannot be undone.</p>
+    <button class="danger-btn" id="delete-btn">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 4h12M5.333 4V2.667a1.333 1.333 0 011.334-1.334h2.666a1.333 1.333 0 011.334 1.334V4m2 0v9.333a1.333 1.333 0 01-1.334 1.334H4.667a1.333 1.333 0 01-1.334-1.334V4h9.334z"/>
+      </svg>
+      Delete account
+    </button>
+  </section>
+</div>
+
+<script>
+document.querySelectorAll('.theme-card').forEach(card => {
+  card.addEventListener('click', () => {
+    document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('active'));
+    card.classList.add('active');
+  });
+});
+
+const slider = document.getElementById('density');
+const sliderFill = document.getElementById('slider-fill');
+const sliderValue = document.getElementById('density-value');
+
+slider.addEventListener('input', () => {
+  const val = slider.value;
+  sliderFill.style.width = val + '%';
+  sliderValue.textContent = val + '%';
+});
+
+const deleteBtn = document.getElementById('delete-btn');
+deleteBtn.addEventListener('click', () => {
+  if (deleteBtn.classList.contains('confirmed')) return;
+  deleteBtn.textContent = 'Click again to confirm';
+  deleteBtn.style.background = 'linear-gradient(135deg, #f97316, #ea580c)';
+  setTimeout(() => {
+    deleteBtn.classList.add('confirmed');
+    deleteBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.333 4L6 11.333 2.667 8"/></svg> Account scheduled for deletion';
+  }, 2000);
+});
+</script>
+
+</body>
+</html>

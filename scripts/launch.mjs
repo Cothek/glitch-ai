@@ -485,6 +485,28 @@ async function main() {
   try {
     let configObj = JSON.parse(runtimeJson);
     injectProviders(configObj);
+
+    // Apply model overrides from data/model-assignments.json (set by model UI)
+    const assignmentsPath = join(ROOT_DIR, 'data', 'model-assignments.json');
+    if (existsSync(assignmentsPath)) {
+      try {
+        const assignmentsRaw = readFileSync(assignmentsPath, 'utf-8');
+        const assignments = JSON.parse(assignmentsRaw);
+        let overrideCount = 0;
+        for (const [agentName, modelId] of Object.entries(assignments)) {
+          if (configObj.agent?.[agentName]) {
+            configObj.agent[agentName].model = modelId;
+            overrideCount++;
+          }
+        }
+        if (overrideCount > 0) {
+          log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from model-assignments.json`);
+        }
+      } catch (e) {
+        log(YELLOW, `  Warning: Could not read model-assignments.json (${e.message})`);
+      }
+    }
+
     const finalJson = JSON.stringify(configObj, null, 2);
     writeFileSync(ConfigPath, finalJson, 'utf-8');
     log(DARK_GREEN, `  Config written (${allInstructions.length} instruction files)`);

@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SCORE // CONFIGURATION</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Space+Mono:wght@400;700&display=swap');
+
+*, *::before, *::after {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+:root {
+  --bg: #0d0d12;
+  --pink: #FF2D95;
+  --blue: #00D4FF;
+  --yellow: #F5E81D;
+  --amber: #FF9500;
+  --green: #00FF41;
+  --text: #e0e0e0;
+  --text-dim: #6a6a7a;
+  --border: #2a2a3a;
+  --panel-bg: #12121a;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  overflow-x: hidden;
+}
+
+body {
+  position: relative;
+}
+
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 0, 0, 0.15) 2px,
+    rgba(0, 0, 0, 0.15) 4px
+  );
+  pointer-events: none;
+  z-index: 1000;
+}
+
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  background: radial-gradient(
+    ellipse at center,
+    transparent 50%,
+    rgba(0, 0, 0, 0.6) 100%
+  );
+  pointer-events: none;
+  z-index: 999;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+  position: relative;
+  z-index: 1;
+}
+
+.header {
+  text-align: center;
+  margin-bottom: 48px;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: slideUp 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: 0ms;
+}
+
+.header-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: var(--text-dim);
+  letter-spacing: 4px;
+  margin-bottom: 12px;
+}
+
+.header-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 24px;
+  color: var(--pink);
+  text-shadow:
+    0 0 10px var(--pink),
+    0 0 30px rgba(255, 45, 149, 0.4),
+    0 0 60px rgba(255, 45, 149, 0.2);
+  letter-spacing: 6px;
+}
+
+.header-sub {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 8px;
+  color: var(--blue);
+  letter-spacing: 3px;
+  margin-top: 12px;
+  text-shadow: 0 0 8px var(--blue);
+}
+
+.panel {
+  border: 2px dashed var(--border);
+  padding: 24px;
+  margin-bottom: 24px;
+  background: var(--panel-bg);
+  position: relative;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: slideUp 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.panel:nth-child(2) { animation-delay: 100ms; }
+.panel:nth-child(3) { animation-delay: 200ms; }
+.panel:nth-child(4) { animation-delay: 300ms; }
+.panel:nth-child(5) { animation-delay: 400ms; }
+
+.panel-header {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: var(--blue);
+  letter-spacing: 3px;
+  margin-bottom: 20px;
+  padding-bottom: 12px;
+  border-bottom: 2px solid var(--border);
+  text-shadow: 0 0 6px var(--blue);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.panel-header .panel-icon {
+  font-size: 14px;
+}
+
+.field {
+  margin-bottom: 20px;
+}
+
+.field:last-child {
+  margin-bottom: 0;
+}
+
+.field-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: var(--text-dim);
+  letter-spacing: 2px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
+}
+
+.field-input {
+  width: 100%;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  color: var(--text);
+  font-family: 'Space Mono', monospace;
+  font-size: 14px;
+  padding: 10px 14px;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.field-input:focus {
+  border-color: var(--pink);
+  box-shadow: 0 0 8px rgba(255, 45, 149, 0.3), inset 0 0 8px rgba(255, 45, 149, 0.05);
+}
+
+.field-input::placeholder {
+  color: var(--text-dim);
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.toggle-row:last-child {
+  border-bottom: none;
+}
+
+.toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text);
+}
+
+.toggle-label .icon {
+  font-size: 16px;
+  width: 24px;
+  text-align: center;
+}
+
+.toggle-switch {
+  position: relative;
+  width: 56px;
+  height: 28px;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  display: none;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+}
+
+.toggle-thumb {
+  position: absolute;
+  top: 4px;
+  left: 4px;
+  width: 16px;
+  height: 16px;
+  background: var(--text-dim);
+  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), background 0.2s, box-shadow 0.2s;
+}
+
+.toggle-switch input:checked ~ .toggle-track {
+  background: rgba(255, 45, 149, 0.1);
+  border-color: var(--pink);
+  box-shadow: 0 0 10px rgba(255, 45, 149, 0.3);
+}
+
+.toggle-switch input:checked ~ .toggle-thumb {
+  transform: translateX(28px);
+  background: var(--pink);
+  box-shadow: 0 0 8px var(--pink);
+  animation: neonPulse 1.5s ease-in-out infinite;
+}
+
+.toggle-state {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  letter-spacing: 1px;
+  min-width: 24px;
+  text-align: right;
+}
+
+.toggle-state.on {
+  color: var(--pink);
+  text-shadow: 0 0 4px var(--pink);
+}
+
+.toggle-state.off {
+  color: var(--text-dim);
+}
+
+.theme-picker {
+  display: flex;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.theme-swatch {
+  width: 56px;
+  height: 56px;
+  border: 2px solid var(--border);
+  cursor: pointer;
+  position: relative;
+  transition: transform 0.15s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.2s, box-shadow 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.theme-swatch:hover {
+  transform: scale(1.05);
+}
+
+.theme-swatch.active {
+  transform: scale(1.1);
+}
+
+.theme-swatch[data-theme="rgb"] {
+  background: linear-gradient(135deg, var(--pink) 33%, var(--blue) 33%, var(--blue) 66%, var(--yellow) 66%);
+}
+
+.theme-swatch[data-theme="rgb"].active {
+  border-color: var(--pink);
+  box-shadow: 0 0 12px var(--pink), 0 0 24px rgba(255, 45, 149, 0.3);
+}
+
+.theme-swatch[data-theme="amber"] {
+  background: var(--amber);
+}
+
+.theme-swatch[data-theme="amber"].active {
+  border-color: var(--amber);
+  box-shadow: 0 0 12px var(--amber), 0 0 24px rgba(255, 149, 0, 0.3);
+}
+
+.theme-swatch[data-theme="green"] {
+  background: var(--green);
+}
+
+.theme-swatch[data-theme="green"].active {
+  border-color: var(--green);
+  box-shadow: 0 0 12px var(--green), 0 0 24px rgba(0, 255, 65, 0.3);
+}
+
+.theme-swatch-label {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  color: var(--bg);
+  text-shadow: 0 0 2px rgba(0,0,0,0.5);
+  letter-spacing: 1px;
+  pointer-events: none;
+}
+
+.theme-swatch[data-theme="rgb"] .theme-swatch-label {
+  color: #fff;
+  text-shadow: 0 0 4px rgba(0,0,0,0.8);
+}
+
+.resolution-group {
+  display: flex;
+  gap: 0;
+  margin-top: 4px;
+}
+
+.resolution-option {
+  flex: 1;
+  padding: 10px 8px;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  color: var(--text-dim);
+  font-family: 'Space Mono', monospace;
+  font-size: 11px;
+  text-align: center;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, border-color 0.2s, box-shadow 0.2s;
+  border-right: none;
+}
+
+.resolution-option:last-child {
+  border-right: 2px solid var(--border);
+}
+
+.resolution-option:hover {
+  color: var(--text);
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.resolution-option.active {
+  background: rgba(0, 212, 255, 0.1);
+  border-color: var(--blue);
+  color: var(--blue);
+  box-shadow: 0 0 8px rgba(0, 212, 255, 0.2);
+  text-shadow: 0 0 4px var(--blue);
+}
+
+.danger-zone {
+  border-color: rgba(255, 45, 149, 0.3);
+  background: rgba(255, 45, 149, 0.02);
+}
+
+.danger-zone .panel-header {
+  color: var(--pink);
+  border-bottom-color: rgba(255, 45, 149, 0.3);
+}
+
+.warning-text {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: var(--yellow);
+  letter-spacing: 2px;
+  margin-bottom: 16px;
+  animation: flicker 4s infinite;
+}
+
+.warning-text::before {
+  content: '⚠ ';
+}
+
+.danger-desc {
+  font-size: 12px;
+  color: var(--text-dim);
+  margin-bottom: 20px;
+  line-height: 1.6;
+}
+
+.btn-reset {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  padding: 14px 28px;
+  background: var(--bg);
+  color: var(--pink);
+  border: 2px solid var(--pink);
+  cursor: pointer;
+  position: relative;
+  transition: background 0.15s, box-shadow 0.15s, transform 0.1s;
+  text-shadow: 0 0 6px var(--pink);
+  box-shadow: 0 0 10px rgba(255, 45, 149, 0.2), inset 0 0 10px rgba(255, 45, 149, 0.05);
+}
+
+.btn-reset:hover {
+  background: rgba(255, 45, 149, 0.1);
+  box-shadow: 0 0 20px rgba(255, 45, 149, 0.4), inset 0 0 15px rgba(255, 45, 149, 0.1);
+}
+
+.btn-reset:active {
+  transform: scale(0.9);
+  box-shadow: 0 0 6px rgba(255, 45, 149, 0.3);
+}
+
+.btn-reset.released {
+  animation: btnSpring 200ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.footer-bar {
+  text-align: center;
+  margin-top: 40px;
+  opacity: 0;
+  transform: translateY(20px);
+  animation: slideUp 300ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  animation-delay: 500ms;
+}
+
+.footer-bar span {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 7px;
+  color: var(--text-dim);
+  letter-spacing: 3px;
+}
+
+.footer-bar .blink {
+  animation: blink 1s step-end infinite;
+}
+
+@keyframes slideUp {
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes neonPulse {
+  0%, 100% {
+    box-shadow: 0 0 8px var(--pink);
+  }
+  50% {
+    box-shadow: 0 0 16px var(--pink), 0 0 24px rgba(255, 45, 149, 0.4);
+  }
+}
+
+@keyframes flicker {
+  0%, 100% { opacity: 1; }
+  3% { opacity: 0.4; }
+  6% { opacity: 1; }
+  7% { opacity: 0.6; }
+  8% { opacity: 1; }
+  45% { opacity: 1; }
+  46% { opacity: 0.5; }
+  47% { opacity: 1; }
+  82% { opacity: 1; }
+  83% { opacity: 0.3; }
+  84% { opacity: 0.8; }
+  85% { opacity: 1; }
+}
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@keyframes btnSpring {
+  0% { transform: scale(0.9); }
+  60% { transform: scale(1.03); }
+  100% { transform: scale(1); }
+}
+
+.scanline-disabled body::before {
+  display: none;
+}
+
+.vignette-disabled body::after {
+  display: none;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="header-label">SCORE ANALYTICS</div>
+    <div class="header-title">CONFIGURATION</div>
+    <div class="header-sub">SERVICE MENU v2.4</div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-icon">👾</span>
+      PLAYER PROFILE
+    </div>
+    <div class="field">
+      <div class="field-label">GAMER TAG</div>
+      <input type="text" class="field-input" value="LEGEND42" placeholder="ENTER TAG">
+    </div>
+    <div class="field">
+      <div class="field-label">EMAIL</div>
+      <input type="email" class="field-input" value="legend42@score.io" placeholder="ENTER EMAIL">
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-icon">🔊</span>
+      SOUND OPTIONS
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <span class="icon">🔊</span>
+        <span>Sound Effects</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <label class="toggle-switch">
+          <input type="checkbox" checked data-toggle="sound">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+        <span class="toggle-state on">ON</span>
+      </div>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <span class="icon">🎵</span>
+        <span>Music</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <label class="toggle-switch">
+          <input type="checkbox" checked data-toggle="music">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+        <span class="toggle-state on">ON</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-header">
+      <span class="panel-icon">🖥</span>
+      DISPLAY
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <span class="icon">📺</span>
+        <span>CRT Scanlines</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <label class="toggle-switch">
+          <input type="checkbox" checked data-toggle="scanlines">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+        <span class="toggle-state on">ON</span>
+      </div>
+    </div>
+    <div class="toggle-row">
+      <div class="toggle-label">
+        <span class="icon">💡</span>
+        <span>CRT Vignette</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <label class="toggle-switch">
+          <input type="checkbox" checked data-toggle="vignette">
+          <div class="toggle-track"></div>
+          <div class="toggle-thumb"></div>
+        </label>
+        <span class="toggle-state on">ON</span>
+      </div>
+    </div>
+    <div class="field" style="margin-top:16px;">
+      <div class="field-label">PHOSPHOR THEME</div>
+      <div class="theme-picker">
+        <div class="theme-swatch active" data-theme="rgb">
+          <span class="theme-swatch-label">RGB</span>
+        </div>
+        <div class="theme-swatch" data-theme="amber">
+          <span class="theme-swatch-label">AMBER</span>
+        </div>
+        <div class="theme-swatch" data-theme="green">
+          <span class="theme-swatch-label">GREEN</span>
+        </div>
+      </div>
+    </div>
+    <div class="field" style="margin-top:16px;">
+      <div class="field-label">RESOLUTION</div>
+      <div class="resolution-group">
+        <div class="resolution-option" data-res="320x240">320x240</div>
+        <div class="resolution-option active" data-res="640x480">640x480</div>
+        <div class="resolution-option" data-res="1024x768">1024x768</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel danger-zone">
+    <div class="panel-header">
+      <span class="panel-icon">☠</span>
+      SYSTEM
+    </div>
+    <div class="warning-text">WARNING: THIS ACTION CANNOT BE UNDONE</div>
+    <div class="danger-desc">
+      Resetting will erase all player data, high scores, and custom configurations.
+      Your progress will be lost forever.
+    </div>
+    <button class="btn-reset" id="resetBtn">RESET TO FACTORY</button>
+  </div>
+
+  <div class="footer-bar">
+    <span>INSERT COIN TO SAVE <span class="blink">_</span></span>
+  </div>
+</div>
+
+<script>
+document.querySelectorAll('.toggle-switch input').forEach(input => {
+  input.addEventListener('change', function() {
+    const stateEl = this.closest('div').parentElement.querySelector('.toggle-state');
+    if (this.checked) {
+      stateEl.textContent = 'ON';
+      stateEl.classList.remove('off');
+      stateEl.classList.add('on');
+    } else {
+      stateEl.textContent = 'OFF';
+      stateEl.classList.remove('on');
+      stateEl.classList.add('off');
+    }
+
+    if (this.dataset.toggle === 'scanlines') {
+      document.documentElement.classList.toggle('scanline-disabled', !this.checked);
+    }
+    if (this.dataset.toggle === 'vignette') {
+      document.documentElement.classList.toggle('vignette-disabled', !this.checked);
+    }
+  });
+});
+
+document.querySelectorAll('.theme-swatch').forEach(swatch => {
+  swatch.addEventListener('click', function() {
+    document.querySelectorAll('.theme-swatch').forEach(s => s.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+
+document.querySelectorAll('.resolution-option').forEach(opt => {
+  opt.addEventListener('click', function() {
+    document.querySelectorAll('.resolution-option').forEach(o => o.classList.remove('active'));
+    this.classList.add('active');
+  });
+});
+
+const resetBtn = document.getElementById('resetBtn');
+resetBtn.addEventListener('mousedown', function() {
+  this.classList.remove('released');
+});
+resetBtn.addEventListener('mouseup', function() {
+  this.classList.add('released');
+  setTimeout(() => this.classList.remove('released'), 200);
+});
+resetBtn.addEventListener('mouseleave', function() {
+  this.classList.add('released');
+  setTimeout(() => this.classList.remove('released'), 200);
+});
+resetBtn.addEventListener('click', function() {
+  const original = this.textContent;
+  this.textContent = 'ARE YOU SURE?';
+  this.style.borderColor = 'var(--yellow)';
+  this.style.color = 'var(--yellow)';
+  this.style.textShadow = '0 0 6px var(--yellow)';
+  setTimeout(() => {
+    this.textContent = original;
+    this.style.borderColor = '';
+    this.style.color = '';
+    this.style.textShadow = '';
+  }, 1500);
+});
+</script>
+</body>
+</html>
