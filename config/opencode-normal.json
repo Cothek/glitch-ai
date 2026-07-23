@@ -1,501 +1,501 @@
 {
-    "$schema":  "https://opencode.ai/config.json",
-    "plugin":  [
-                   ".opencode/plugins/save-images.js",
-                   ".opencode/plugins/dispatch-reflex.js",
-                   ".opencode/plugins/compaction.js",
-                   ".opencode/plugins/verify-claim.js",
-                   ".opencode/plugins/recall.js",
-                   ".opencode/plugins/stuck-detector.js"
-               ],
-    "instructions":  [
-                         "glitch-memorycore/prompt-rules.md",
-                         "glitch-memorycore/CLAUDE.md",
-                         "glitch-memorycore/master-memory.md",
-                         "glitch-memorycore/core/identity.md",
-                         "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
-                     ],
-    "agent":  {
-                  "glitch":  {
-                                 "model":  "opencode-go/deepseek-v4-flash",
-                                 "mode":  "primary",
-                                 "description":  "Orchestrates tasks, manages memory, delegates to sub-agents, executes directly only as last resort",
-                                 "color":  "#a855f7",
-                                 "temperature":  0.2,
-                                 "permission":  {
-                                                    "read":  "allow",
-                                                    "edit":  "deny",
-                                                    "bash":  "deny",
-                                                    "glob":  "allow",
-                                                    "grep":  "allow",
-                                                    "list":  "allow",
-                                                    "webfetch":  "allow",
-                                                    "websearch":  "allow",
-                                                    "question":  "allow",
-                                                    "skill":  "allow",
-                                                    "todowrite":  "allow",
-                                                    "task":  "allow"
-                                                },
-                                 "prompt":  "You are Glitch, a personal AI companion. Your primary job is coordination and parallelism - plan work, split into parallel subtasks, dispatch to sub-agents simultaneously, and consolidate results.\n\n## Agent Selection\nFor every task, pick the right agent:\n\n| Task Type | Agent | Model |\n|---|---|---|\n| Bash commands, config edits | @general | opencode/deepseek-v4-flash-free (free) |\n| ⭐ Code (1-5 files, standard logic) | @coder | opencode/nemotron-3-ultra-free (free) |\n| Codebase research | @explore | opencode/deepseek-v4-flash-free (free) |\n| Architecture / planning | @plan | opencode/deepseek-v4-flash-free (free) |\n| ⭐ Complex code (5+ files, auth, architecture) | @coder | opencode/nemotron-3-ultra-free (free) |\n| UI/design system work | @ui-designer | opencode/nemotron-3-ultra-free (free) |\n| Code review / quality gate | @reviewer | opencode/nemotron-3-ultra-free (free) |\n| Test writing / TDD | @testing | opencode/nemotron-3-ultra-free (free) |\n| Security / pentesting | @pentester | opencode/nemotron-3-ultra-free (free) |\n| Image/visual analysis | @vision | opencode/mimo-v2.5-free (free) |\n| Memory writes (diary, decisions, reminders, etc.) | @memory | opencode/deepseek-v4-flash-free (free) |\n\n## Free-to-Paid Fallback Protocol\n1. Always try the free variant first (@general, @explore, @plan, @coder, @pentester, @memory, etc.)\n2. If the free agent returns empty results or errors, retry with the paid fallback (@general-paid, @coder-paid, @pentester-paid, @memory-paid, etc.)\n3. If free AND paid sub-agents both fail, tell the user — the Glitch agent has edit:deny and cannot execute directly. They can restart as glitch-omni (which has full edit/bash/task:deny permissions) for direct execution.\n\n## Parallelism First\n- Dispatch multiple independent sub-agents in parallel to maximize throughput\n- Consolidate results after all parallel tasks complete\n- Use @general-paid to run multiple parallel tasks when @general (free) fails\n\n## Dispatch-First Mandate (Immutable)\nGlitch\u0027s job is coordination. The first action for every code task is DISPATCH, not execution.\n\nYOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the appropriate sub-agent - at the same time as creating the todowrite.\n\n- I may NOT use edit/write/bash for code work UNLESS a sub-agent was dispatched first and failed\n- Dispatch at todowrite time - send sub-agents in parallel while creating the task list\n- Fallback chain: free agent -\u003e paid agent -\u003e direct execution (last resort)\n- Model specialization: @coder (nemotron-3-ultra-free) for code (free), @coder-paid (kimi-k2.6) for paid fallback, @ui-designer (nemotron-3-ultra-free) for UI (free), @reviewer (nemotron-3-ultra-free) for reviews (free)\n- Direct work (no dispatch needed): planning, reading, investigation, questions, config edits (R15)\n- If caught violating: stop immediately, log FAILURE to scratchpad, dispatch correctly\n\n## Memory Update Protocol\nYou handle ALL memory writes directly. Never delegate memory file edits.\n- User preference? Update main-memory.md immediately\n- Decision made? Append to decisions.md\n- Something broke? Append to post-mortems.md\n- Follow-up needed? Append to reminders.md\n- Auto-commit every memory change immediately\n\n## Todo List Workflow\nWhen given a task, immediately create a todowrite breaking it into subtasks. Work through each item, updating status in real time. When all items are completed, run the compaction checkpoint and present a summary."
-                             },
-                  "general":  {
-                                  "model":  "opencode/deepseek-v4-flash-free",
-                                  "mode":  "subagent",
-                                  "description":  "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
-                                  "permission":  {
-                                                     "read":  "allow",
-                                                     "edit":  "allow",
-                                                     "bash":  "allow",
-                                                     "glob":  "allow",
-                                                     "grep":  "allow",
-                                                     "list":  "allow",
-                                                     "webfetch":  "allow",
-                                                     "websearch":  "deny",
-                                                     "question":  "allow",
-                                                     "todowrite":  "allow"
-                                                 },
-                                  "temperature":  0.2
-                              },
-                  "explore":  {
-                                  "model":  "opencode/deepseek-v4-flash-free",
-                                  "mode":  "subagent",
-                                  "description":  "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
-                                  "permission":  {
-                                                     "read":  "allow",
-                                                     "edit":  "deny",
-                                                     "write":  "deny",
-                                                     "bash":  "deny",
-                                                     "glob":  "allow",
-                                                     "grep":  "allow",
-                                                     "list":  "allow",
-                                                     "webfetch":  "allow"
-                                                 },
-                                  "temperature":  0.2
-                              },
-                  "plan":  {
-                               "model":  "opencode/deepseek-v4-flash-free",
-                               "mode":  "subagent",
-                               "description":  "Planning mode -- reason about architecture and designs without executing code.",
-                               "permission":  {
-                                                  "read":  "allow",
-                                                  "edit":  "deny",
-                                                  "bash":  "deny",
-                                                  "glob":  "allow",
-                                                  "grep":  "allow",
-                                                  "list":  "allow",
-                                                  "webfetch":  "allow"
-                                              },
-                               "temperature":  0.2
-                           },
-                  "coder":  {
-                                "model":  "opencode/nemotron-3-ultra-free",
-                                "mode":  "subagent",
-                                "description":  "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
-                                "permission":  {
-                                                   "read":  "allow",
-                                                   "edit":  "allow",
-                                                   "bash":  "allow",
-                                                   "glob":  "allow",
-                                                   "grep":  "allow",
-                                                   "list":  "allow",
-                                                   "webfetch":  "allow",
-                                                   "websearch":  "deny",
-                                                   "question":  "allow",
-                                                   "todowrite":  "allow"
-                                               },
-                                "temperature":  0.2
-                            },
-                  "ui-designer":  {
-                                      "model":  "opencode/nemotron-3-ultra-free",
-                                      "mode":  "subagent",
-                                      "description":  "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
-                                      "permission":  {
-                                                         "read":  "allow",
-                                                         "edit":  "allow",
-                                                         "bash":  "allow",
-                                                         "glob":  "allow",
-                                                         "grep":  "allow",
-                                                         "list":  "allow",
-                                                         "webfetch":  "allow",
-                                                         "websearch":  "deny",
-                                                         "question":  "allow",
-                                                         "todowrite":  "allow",
-                                                         "skill":  "allow"
-                                                     },
-                                      "temperature":  0.2
-                                  },
-                  "reviewer":  {
-                                   "model":  "opencode/nemotron-3-ultra-free",
-                                   "mode":  "subagent",
-                                   "description":  "Independent code quality gate -- read-only, severity-rated reports",
-                                   "permission":  {
-                                                      "read":  "allow",
-                                                      "edit":  "deny",
-                                                      "bash":  "deny",
-                                                      "glob":  "allow",
-                                                      "grep":  "allow",
-                                                      "list":  "allow",
-                                                      "webfetch":  "allow",
-                                                      "websearch":  "deny",
-                                                      "skill":  "allow"
-                                                  },
-                                   "temperature":  0.2
-                               },
-                  "testing":  {
-                                  "model":  "opencode/nemotron-3-ultra-free",
-                                  "mode":  "subagent",
-                                  "description":  "Test writer -- TDD, framework detection, edge case coverage",
-                                  "permission":  {
-                                                     "read":  "allow",
-                                                     "edit":  "allow",
-                                                     "bash":  "allow",
-                                                     "glob":  "allow",
-                                                     "grep":  "allow",
-                                                     "list":  "allow",
-                                                     "webfetch":  "allow",
-                                                     "websearch":  "deny",
-                                                     "question":  "allow",
-                                                     "todowrite":  "allow",
-                                                     "skill":  "allow"
-                                                 },
-                                  "temperature":  0.2
-                              },
-                  "pentester":  {
-                                    "model":  "opencode/nemotron-3-ultra-free",
-                                    "mode":  "subagent",
-                                    "description":  "Application security tester and penetration testing specialist. Performs structured security assessments, OWASP Top 10 analysis, API security testing, dependency scanning, and secret detection. Runs security tools, analyzes code for vulnerabilities, and produces structured findings reports.",
-                                    "permission":  {
-                                                       "read":  "allow",
-                                                       "edit":  "deny",
-                                                       "bash":  "allow",
-                                                       "glob":  "allow",
-                                                       "grep":  "allow",
-                                                       "list":  "allow",
-                                                       "webfetch":  "allow",
-                                                       "websearch":  "deny",
-                                                       "skill":  "allow"
-                                                   },
-                                    "temperature":  0.2
-                                },
-                  "vision":  {
-                                 "model":  "opencode/mimo-v2.5-free",
-                                 "mode":  "subagent",
-                                 "description":  "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
-                                 "permission":  {
-                                                    "read":  "allow",
-                                                    "bash":  "deny",
-                                                    "glob":  "allow",
-                                                    "grep":  "deny",
-                                                    "edit":  "deny",
-                                                    "list":  "allow",
-                                                    "webfetch":  "allow",
-                                                    "skill":  "deny"
-                                                },
-                                 "temperature":  0.2
-                             },
-                  "memory":  {
-                                 "model":  "opencode/deepseek-v4-flash-free",
-                                 "mode":  "subagent",
-                                 "description":  "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
-                                 "permission":  {
-                                                    "read":  "allow",
-                                                    "write":  "allow",
-                                                    "list":  "allow",
-                                                    "glob":  "allow",
-                                                    "skill":  "allow",
-                                                    "edit":  "deny",
-                                                    "bash":  "deny",
-                                                    "grep":  "deny",
-                                                    "webfetch":  "deny",
-                                                    "websearch":  "deny",
-                                                    "question":  "deny",
-                                                    "todowrite":  "deny",
-                                                    "task":  "deny"
-                                                },
-                                 "temperature":  0.2
-                             },
-                  "memory-paid":  {
-                                      "model":  "opencode-go/deepseek-v4-flash",
-                                      "mode":  "subagent",
-                                      "description":  "Memory writer — paid fallback with deepseek-v4-flash. Reads and appends to user/*.md files only. Loads save-memory skill. Use when @memory (free) returns empty results due to quota exhaustion or transient failure.",
-                                      "permission":  {
-                                                         "read":  "allow",
-                                                         "write":  "allow",
-                                                         "list":  "allow",
-                                                         "glob":  "allow",
-                                                         "skill":  "allow",
-                                                         "edit":  "deny",
-                                                         "bash":  "deny",
-                                                         "grep":  "deny",
-                                                         "webfetch":  "deny",
-                                                         "websearch":  "deny",
-                                                         "question":  "deny",
-                                                         "todowrite":  "deny",
-                                                         "task":  "deny"
-                                                     },
-                                      "temperature":  0.2
-                                  },
-                  "glitch-omni":  {
-                                      "model":  "opencode-go/deepseek-v4-flash",
-                                      "mode":  "primary",
-                                      "description":  "Direct-execution variant — does everything itself, no sub-agent delegation. Alternative primary selectable from agent switcher.",
-                                      "color":  "#a855f7",
-                                      "permission":  {
-                                                         "read":  "allow",
-                                                         "edit":  "allow",
-                                                         "bash":  "allow",
-                                                         "glob":  "allow",
-                                                         "grep":  "allow",
-                                                         "list":  "allow",
-                                                         "webfetch":  "allow",
-                                                         "websearch":  "allow",
-                                                         "question":  "allow",
-                                                         "skill":  "allow",
-                                                         "todowrite":  "allow",
-                                                         "task":  "deny"
-                                                     },
-                                      "temperature":  0.2
-                                  },
-                  "pentester-paid":  {
-                                         "model":  "opencode-go/qwen3.7-plus",
-                                         "mode":  "subagent",
-                                         "description":  "Application security tester and penetration testing specialist. Performs structured security assessments, OWASP Top 10 analysis, API security testing, dependency scanning, and secret detection.",
-                                         "permission":  {
-                                                            "read":  "allow",
-                                                            "edit":  "deny",
-                                                            "bash":  "allow",
-                                                            "glob":  "allow",
-                                                            "grep":  "allow",
-                                                            "list":  "allow",
-                                                            "webfetch":  "allow",
-                                                            "websearch":  "deny",
-                                                            "skill":  "allow"
-                                                        },
-                                         "temperature":  0.2
-                                     },
-                  "general-paid":  {
-                                       "model":  "opencode-go/deepseek-v4-flash",
-                                       "mode":  "subagent",
-                                       "description":  "General-purpose agent — paid fallback for @general. Same capabilities (bash, config edits) but on paid model with higher reliability. Use when @general (free) returns empty results due to quota exhaustion or transient failure.",
-                                       "permission":  {
-                                                          "read":  "allow",
-                                                          "edit":  "allow",
-                                                          "bash":  "allow",
-                                                          "glob":  "allow",
-                                                          "grep":  "allow",
-                                                          "list":  "allow",
-                                                          "webfetch":  "allow",
-                                                          "websearch":  "deny",
-                                                          "question":  "allow",
-                                                          "todowrite":  "allow"
-                                                      },
-                                       "temperature":  0.2
-                                   },
-                  "explore-paid":  {
-                                       "model":  "opencode-go/deepseek-v4-flash",
-                                       "mode":  "subagent",
-                                       "description":  "Codebase research — paid fallback for @explore. Read-only codebase search and analysis. Use when @explore (free) returns empty results.",
-                                       "permission":  {
-                                                          "read":  "allow",
-                                                          "edit":  "deny",
-                                                          "bash":  "deny",
-                                                          "glob":  "allow",
-                                                          "grep":  "allow",
-                                                          "list":  "allow",
-                                                          "webfetch":  "allow",
-                                                          "websearch":  "deny"
-                                                      },
-                                       "temperature":  0.2
-                                   },
-                  "plan-paid":  {
-                                    "model":  "opencode-go/deepseek-v4-flash",
-                                    "mode":  "subagent",
-                                    "description":  "Architecture \u0026 planning — paid fallback for @plan. Reason about architecture and design decisions without executing code. Use when @plan (free) returns empty results.",
-                                    "permission":  {
-                                                       "read":  "allow",
-                                                       "edit":  "deny",
-                                                       "bash":  "deny",
-                                                       "glob":  "allow",
-                                                       "grep":  "allow",
-                                                       "list":  "allow",
-                                                       "webfetch":  "allow"
-                                                   },
-                                    "temperature":  0.2
-                                },
-                  "coder-paid":  {
-                                     "model":  "opencode-go/qwen3.7-plus",
-                                     "mode":  "subagent",
-                                     "description":  "Senior full-stack engineer — paid fallback with qwen3.7-plus. Use for complex multi-file features, architecture work, or when the free coder agent\u0027s quota is exhausted.",
-                                     "permission":  {
-                                                        "read":  "allow",
-                                                        "edit":  "allow",
-                                                        "bash":  "allow",
-                                                        "glob":  "allow",
-                                                        "grep":  "allow",
-                                                        "list":  "allow",
-                                                        "webfetch":  "allow",
-                                                        "websearch":  "deny",
-                                                        "question":  "allow",
-                                                        "todowrite":  "allow"
-                                                    },
-                                     "temperature":  0.2
-                                 },
-                  "ui-designer-paid":  {
-                                           "model":  "opencode-go/qwen3.7-plus",
-                                           "mode":  "subagent",
-                                           "description":  "Senior UI designer — paid fallback with qwen3.7-plus. Visual design, component creation, layout, styling, responsive, or UX improvements. Use when the free ui-designer\u0027s quota is exhausted or for especially complex design work.",
-                                           "permission":  {
-                                                              "read":  "allow",
-                                                              "edit":  "allow",
-                                                              "bash":  "allow",
-                                                              "glob":  "allow",
-                                                              "grep":  "allow",
-                                                              "list":  "allow",
-                                                              "webfetch":  "allow",
-                                                              "websearch":  "deny",
-                                                              "question":  "allow",
-                                                              "todowrite":  "allow",
-                                                              "skill":  "allow"
-                                                          },
-                                           "temperature":  0.2
-                                       },
-                  "reviewer-paid":  {
-                                        "model":  "opencode-go/qwen3.6-plus",
-                                        "mode":  "subagent",
-                                        "description":  "Independent code quality and security reviewer — paid fallback with qwen3.6-plus. Use when the free reviewer\u0027s quota is exhausted or for especially critical security reviews. NEVER modifies code.",
-                                        "permission":  {
-                                                           "read":  "allow",
-                                                           "edit":  "deny",
-                                                           "bash":  "deny",
-                                                           "glob":  "allow",
-                                                           "grep":  "allow",
-                                                           "list":  "allow",
-                                                           "webfetch":  "allow",
-                                                           "websearch":  "deny",
-                                                           "skill":  "allow"
-                                                       },
-                                        "temperature":  0.2
-                                    },
-                  "testing-paid":  {
-                                       "model":  "opencode-go/qwen3.7-plus",
-                                       "mode":  "subagent",
-                                       "description":  "Senior QA engineer — paid fallback with qwen3.7-plus. Test generation, coverage analysis, and TDD. Use when the free testing agent\u0027s quota is exhausted or for especially complex test suites.",
-                                       "permission":  {
-                                                          "read":  "allow",
-                                                          "edit":  "allow",
-                                                          "bash":  "allow",
-                                                          "glob":  "allow",
-                                                          "grep":  "allow",
-                                                          "list":  "allow",
-                                                          "webfetch":  "allow",
-                                                          "websearch":  "deny",
-                                                          "question":  "allow",
-                                                          "todowrite":  "allow",
-                                                          "skill":  "allow"
-                                                      },
-                                       "temperature":  0.2
-                                   },
-                  "vision-paid":  {
-                                      "model":  "opencode-go/qwen3.6-plus",
-                                      "mode":  "subagent",
-                                      "description":  "Image and visual content analysis — paid fallback with qwen3.6-plus. Use when the free vision agent\u0027s quota is exhausted or for especially detailed visual analysis.",
-                                      "permission":  {
-                                                         "read":  "allow",
-                                                         "edit":  "deny",
-                                                         "bash":  "deny",
-                                                         "glob":  "deny",
-                                                         "grep":  "deny",
-                                                         "list":  "allow",
-                                                         "webfetch":  "allow",
-                                                         "websearch":  "deny",
-                                                         "skill":  "deny"
-                                                     },
-                                      "temperature":  0.2
-                                  }
-              },
-    "attachment":  {
-                       "image":  {
-                                     "auto_resize":  true,
-                                     "max_width":  2000,
-                                     "max_height":  2000,
-                                     "max_base64_bytes":  5242880
-                                 }
-                   },
-    "experimental":  {
-                         "disable_paste_summary":  true
-                     },
-    "server":  {
-                   "port":  4100,
-                   "hostname":  "127.0.0.1"
-               },
-    "default_agent":  "glitch",
-    "provider":  {
-                     "lmstudio":  {
-                                      "npm":  "@ai-sdk/openai-compatible",
-                                      "name":  "LM Studio (local)",
-                                      "options":  {
-                                                      "baseURL":  "http://192.168.86.139:1234/v1"
-                                                  },
-                                      "models":  {
-                                                     "google/gemma-4-12b":  {
-                                                                                "name":  "Gemma 4 12B (local)"
-                                                                            }
-                                                 }
-                                  },
-                     "nvidia":  {
-                                    "npm":  "@ai-sdk/openai-compatible",
-                                    "name":  "NVIDIA API (free endpoints)",
-                                    "options":  {
-                                                    "baseURL":  "https://integrate.api.nvidia.com/v1"
-                                                },
-                                    "models":  {
-                                                   "minimaxai/minimax-m3":  {
-                                                                                "name":  "MiniMax M3 (free, multimodal)"
-                                                                            },
-                                                   "nvidia/nemotron-3-nano-30b-a3b":  {
-                                                                                          "name":  "Nemotron 3 Nano 30B (free)"
-                                                                                      },
-                                                   "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning":  {
-                                                                                                         "name":  "Nemotron 3 Nano Omni (free, multimodal)"
-                                                                                                     },
-                                                   "nvidia/nvidia-nemotron-nano-9b-v2":  {
-                                                                                             "name":  "Nemotron Nano 9B v2 (free)"
-                                                                                         },
-                                                   "nvidia/nemotron-mini-4b-instruct":  {
-                                                                                            "name":  "Nemotron Mini 4B (free)"
-                                                                                        },
-                                                   "minimaxai/minimax-m2.7":  {
-                                                                                  "name":  "MiniMax M2.7 (free)"
-                                                                              },
-                                                   "qwen/qwen3.5-122b-a10b":  {
-                                                                                  "name":  "Qwen3.5 122B (free, multimodal)"
-                                                                              },
-                                                   "stepfun-ai/step-3.7-flash":  {
-                                                                                     "name":  "Step 3.7 Flash (free, multimodal)"
-                                                                                 },
-                                                   "nvidia/nemotron-3-content-safety":  {
-                                                                                            "name":  "Nemotron 3 Content Safety (free, multimodal)"
-                                                                                        },
-                                                   "nvidia/ai-synthetic-video-detector":  {
-                                                                                              "name":  "Synthetic Video Detector (free, multimodal)"
-                                                                                          },
-                                                   "nvidia/ising-calibration-1-35b-a3b":  {
-                                                                                              "name":  "Ising Calibration (free, multimodal)"
-                                                                                          },
-                                                   "deepseek-ai/deepseek-v4-flash":  {
-                                                                                         "name":  "DeepSeek V4 Flash (free)"
-                                                                                     },
-                                                   "deepseek-ai/deepseek-v4-pro":  {
-                                                                                       "name":  "DeepSeek V4 Pro (free)"
-                                                                                   },
-                                                   "z-ai/glm-5.1":  {
-                                                                        "name":  "GLM-5.1 (free)"
-                                                                    }
-                                               }
-                                }
-                 },
-    "compaction":  {
-                       "auto":  true,
-                       "tail_turns":  8
-                   }
+  "$schema": "https://opencode.ai/config.json",
+  "plugin": [
+    ".opencode/plugins/save-images.js",
+    ".opencode/plugins/dispatch-reflex.js",
+    ".opencode/plugins/compaction.js",
+    ".opencode/plugins/verify-claim.js",
+    ".opencode/plugins/recall.js",
+    ".opencode/plugins/stuck-detector.js"
+  ],
+  "instructions": [
+    "glitch-memorycore/prompt-rules.md",
+    "glitch-memorycore/CLAUDE.md",
+    "glitch-memorycore/master-memory.md",
+    "glitch-memorycore/core/identity.md",
+    "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+  ],
+  "agent": {
+    "glitch": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "mode": "primary",
+      "description": "Orchestrates tasks, manages memory, delegates to sub-agents, executes directly only as last resort",
+      "color": "#a855f7",
+      "temperature": 0.2,
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "allow",
+        "skill": "allow",
+        "todowrite": "allow",
+        "task": "allow"
+      },
+      "prompt": "You are Glitch, a personal AI companion. Your primary job is coordination and parallelism - plan work, split into parallel subtasks, dispatch to sub-agents simultaneously, and consolidate results.\n\n## Agent Selection\nFor every task, pick the right agent:\n\n| Task Type | Agent | Model |\n|---|---|---|\n| Bash commands, config edits | @general | opencode/deepseek-v4-flash-free (free) |\n| ⭐ Code (1-5 files, standard logic) | @coder | opencode/nemotron-3-ultra-free (free) |\n| Codebase research | @explore | opencode/deepseek-v4-flash-free (free) |\n| Architecture / planning | @plan | opencode/deepseek-v4-flash-free (free) |\n| ⭐ Complex code (5+ files, auth, architecture) | @coder | opencode/nemotron-3-ultra-free (free) |\n| UI/design system work | @ui-designer | opencode/nemotron-3-ultra-free (free) |\n| Code review / quality gate | @reviewer | opencode/nemotron-3-ultra-free (free) |\n| Test writing / TDD | @testing | opencode/nemotron-3-ultra-free (free) |\n| Security / pentesting | @pentester | opencode/nemotron-3-ultra-free (free) |\n| Image/visual analysis | @vision | opencode/mimo-v2.5-free (free) |\n| Memory writes (diary, decisions, reminders, etc.) | @memory | opencode/deepseek-v4-flash-free (free) |\n\n## Free-to-Paid Fallback Protocol\n1. Always try the free variant first (@general, @explore, @plan, @coder, @pentester, @memory, etc.)\n2. If the free agent returns empty results or errors, retry with the paid fallback (@general-paid, @coder-paid, @pentester-paid, @memory-paid, etc.)\n3. If free AND paid sub-agents both fail, tell the user — the Glitch agent has edit:deny and cannot execute directly. They can restart as glitch-omni (which has full edit/bash/task:deny permissions) for direct execution.\n\n## Parallelism First\n- Dispatch multiple independent sub-agents in parallel to maximize throughput\n- Consolidate results after all parallel tasks complete\n- Use @general-paid to run multiple parallel tasks when @general (free) fails\n\n## Dispatch-First Mandate (Immutable)\nGlitch's job is coordination. The first action for every code task is DISPATCH, not execution.\n\nYOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the appropriate sub-agent - at the same time as creating the todowrite.\n\n- I may NOT use edit/write/bash for code work UNLESS a sub-agent was dispatched first and failed\n- Dispatch at todowrite time - send sub-agents in parallel while creating the task list\n- Fallback chain: free agent -> paid agent -> direct execution (last resort)\n- Model specialization: @coder (nemotron-3-ultra-free) for code (free), @coder-paid (kimi-k2.6) for paid fallback, @ui-designer (nemotron-3-ultra-free) for UI (free), @reviewer (nemotron-3-ultra-free) for reviews (free)\n- Direct work (no dispatch needed): planning, reading, investigation, questions, config edits (R15)\n- If caught violating: stop immediately, log FAILURE to scratchpad, dispatch correctly\n\n## Memory Update Protocol\nYou handle ALL memory writes directly. Never delegate memory file edits.\n- User preference? Update main-memory.md immediately\n- Decision made? Append to decisions.md\n- Something broke? Append to post-mortems.md\n- Follow-up needed? Append to reminders.md\n- Auto-commit every memory change immediately\n\n## Todo List Workflow\nWhen given a task, immediately create a todowrite breaking it into subtasks. Work through each item, updating status in real time. When all items are completed, run the compaction checkpoint and present a summary."
+    },
+    "general": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "mode": "subagent",
+      "description": "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow"
+      },
+      "temperature": 0.2
+    },
+    "explore": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "mode": "subagent",
+      "description": "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "write": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow"
+      },
+      "temperature": 0.2
+    },
+    "plan": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "mode": "subagent",
+      "description": "Planning mode -- reason about architecture and designs without executing code.",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow"
+      },
+      "temperature": 0.2
+    },
+    "coder": {
+      "model": "nvidia/minimaxai/minimax-m3",
+      "mode": "subagent",
+      "description": "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow"
+      },
+      "temperature": 0.2
+    },
+    "ui-designer": {
+      "model": "nvidia/minimaxai/minimax-m3",
+      "mode": "subagent",
+      "description": "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow",
+        "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "reviewer": {
+      "model": "nvidia/minimaxai/minimax-m3",
+      "mode": "subagent",
+      "description": "Independent code quality gate -- read-only, severity-rated reports",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "testing": {
+      "model": "nvidia/minimaxai/minimax-m3",
+      "mode": "subagent",
+      "description": "Test writer -- TDD, framework detection, edge case coverage",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow",
+        "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "pentester": {
+      "model": "nvidia/minimaxai/minimax-m3",
+      "mode": "subagent",
+      "description": "Application security tester and penetration testing specialist. Performs structured security assessments, OWASP Top 10 analysis, API security testing, dependency scanning, and secret detection. Runs security tools, analyzes code for vulnerabilities, and produces structured findings reports.",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "vision": {
+      "model": "opencode/mimo-v2.5-free",
+      "mode": "subagent",
+      "description": "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
+      "permission": {
+        "read": "allow",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "deny",
+        "edit": "deny",
+        "list": "allow",
+        "webfetch": "allow",
+        "skill": "deny"
+      },
+      "temperature": 0.2
+    },
+    "memory": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "mode": "subagent",
+      "description": "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
+      "permission": {
+        "read": "allow",
+        "write": "allow",
+        "list": "allow",
+        "glob": "allow",
+        "skill": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "grep": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "question": "deny",
+        "todowrite": "deny",
+        "task": "deny"
+      },
+      "temperature": 0.2
+    },
+    "memory-paid": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "mode": "subagent",
+      "description": "Memory writer — paid fallback with deepseek-v4-flash. Reads and appends to user/*.md files only. Loads save-memory skill. Use when @memory (free) returns empty results due to quota exhaustion or transient failure.",
+      "permission": {
+        "read": "allow",
+        "write": "allow",
+        "list": "allow",
+        "glob": "allow",
+        "skill": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "grep": "deny",
+        "webfetch": "deny",
+        "websearch": "deny",
+        "question": "deny",
+        "todowrite": "deny",
+        "task": "deny"
+      },
+      "temperature": 0.2
+    },
+    "glitch-omni": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "mode": "primary",
+      "description": "Direct-execution variant — does everything itself, no sub-agent delegation. Alternative primary selectable from agent switcher.",
+      "color": "#a855f7",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "allow",
+        "skill": "allow",
+        "todowrite": "allow",
+        "task": "deny"
+      },
+      "temperature": 0.2
+    },
+    "pentester-paid": {
+      "model": "opencode-go/qwen3.7-plus",
+      "mode": "subagent",
+      "description": "Application security tester and penetration testing specialist. Performs structured security assessments, OWASP Top 10 analysis, API security testing, dependency scanning, and secret detection.",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "general-paid": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "mode": "subagent",
+      "description": "General-purpose agent — paid fallback for @general. Same capabilities (bash, config edits) but on paid model with higher reliability. Use when @general (free) returns empty results due to quota exhaustion or transient failure.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow"
+      },
+      "temperature": 0.2
+    },
+    "explore-paid": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "mode": "subagent",
+      "description": "Codebase research — paid fallback for @explore. Read-only codebase search and analysis. Use when @explore (free) returns empty results.",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny"
+      },
+      "temperature": 0.2
+    },
+    "plan-paid": {
+      "model": "opencode-go/deepseek-v4-flash",
+      "mode": "subagent",
+      "description": "Architecture & planning — paid fallback for @plan. Reason about architecture and design decisions without executing code. Use when @plan (free) returns empty results.",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow"
+      },
+      "temperature": 0.2
+    },
+    "coder-paid": {
+      "model": "opencode-go/qwen3.7-plus",
+      "mode": "subagent",
+      "description": "Senior full-stack engineer — paid fallback with qwen3.7-plus. Use for complex multi-file features, architecture work, or when the free coder agent's quota is exhausted.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow"
+      },
+      "temperature": 0.2
+    },
+    "ui-designer-paid": {
+      "model": "opencode-go/qwen3.7-plus",
+      "mode": "subagent",
+      "description": "Senior UI designer — paid fallback with qwen3.7-plus. Visual design, component creation, layout, styling, responsive, or UX improvements. Use when the free ui-designer's quota is exhausted or for especially complex design work.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow",
+        "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "reviewer-paid": {
+      "model": "opencode-go/qwen3.6-plus",
+      "mode": "subagent",
+      "description": "Independent code quality and security reviewer — paid fallback with qwen3.6-plus. Use when the free reviewer's quota is exhausted or for especially critical security reviews. NEVER modifies code.",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "testing-paid": {
+      "model": "opencode-go/qwen3.7-plus",
+      "mode": "subagent",
+      "description": "Senior QA engineer — paid fallback with qwen3.7-plus. Test generation, coverage analysis, and TDD. Use when the free testing agent's quota is exhausted or for especially complex test suites.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "bash": "allow",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "question": "allow",
+        "todowrite": "allow",
+        "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "vision-paid": {
+      "model": "opencode-go/qwen3.6-plus",
+      "mode": "subagent",
+      "description": "Image and visual content analysis — paid fallback with qwen3.6-plus. Use when the free vision agent's quota is exhausted or for especially detailed visual analysis.",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "deny",
+        "grep": "deny",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "deny",
+        "skill": "deny"
+      },
+      "temperature": 0.2
+    }
+  },
+  "attachment": {
+    "image": {
+      "auto_resize": true,
+      "max_width": 2000,
+      "max_height": 2000,
+      "max_base64_bytes": 5242880
+    }
+  },
+  "experimental": {
+    "disable_paste_summary": true
+  },
+  "server": {
+    "port": 4100,
+    "hostname": "127.0.0.1"
+  },
+  "default_agent": "glitch",
+  "provider": {
+    "lmstudio": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LM Studio (local)",
+      "options": {
+        "baseURL": "http://192.168.86.139:1234/v1"
+      },
+      "models": {
+        "google/gemma-4-12b": {
+          "name": "Gemma 4 12B (local)"
+        }
+      }
+    },
+    "nvidia": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "NVIDIA API (free endpoints)",
+      "options": {
+        "baseURL": "https://integrate.api.nvidia.com/v1"
+      },
+      "models": {
+        "minimaxai/minimax-m3": {
+          "name": "MiniMax M3 (free, multimodal)"
+        },
+        "nvidia/nemotron-3-nano-30b-a3b": {
+          "name": "Nemotron 3 Nano 30B (free)"
+        },
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
+          "name": "Nemotron 3 Nano Omni (free, multimodal)"
+        },
+        "nvidia/nvidia-nemotron-nano-9b-v2": {
+          "name": "Nemotron Nano 9B v2 (free)"
+        },
+        "nvidia/nemotron-mini-4b-instruct": {
+          "name": "Nemotron Mini 4B (free)"
+        },
+        "minimaxai/minimax-m2.7": {
+          "name": "MiniMax M2.7 (free)"
+        },
+        "qwen/qwen3.5-122b-a10b": {
+          "name": "Qwen3.5 122B (free, multimodal)"
+        },
+        "stepfun-ai/step-3.7-flash": {
+          "name": "Step 3.7 Flash (free, multimodal)"
+        },
+        "nvidia/nemotron-3-content-safety": {
+          "name": "Nemotron 3 Content Safety (free, multimodal)"
+        },
+        "nvidia/ai-synthetic-video-detector": {
+          "name": "Synthetic Video Detector (free, multimodal)"
+        },
+        "nvidia/ising-calibration-1-35b-a3b": {
+          "name": "Ising Calibration (free, multimodal)"
+        },
+        "deepseek-ai/deepseek-v4-flash": {
+          "name": "DeepSeek V4 Flash (free)"
+        },
+        "deepseek-ai/deepseek-v4-pro": {
+          "name": "DeepSeek V4 Pro (free)"
+        },
+        "z-ai/glm-5.1": {
+          "name": "GLM-5.1 (free)"
+        }
+      }
+    }
+  },
+  "compaction": {
+    "auto": true,
+    "tail_turns": 8
+  }
 }

@@ -497,6 +497,7 @@
             <p class="glitch-page-header__desc">Browse and manage agent model assignments. Changes are staged until you apply them.</p>
           </div>
           <div class="gl-flex gl-gap-3">
+            <button class="gl-btn gl-btn--secondary gl-btn--md" id="btn-rollback" disabled>&#8634; Rollback</button>
             <button class="gl-btn gl-btn--primary gl-btn--md" id="btn-apply-restart" disabled>&#8635; Apply & Restart</button>
           </div>
         </div>
@@ -830,19 +831,26 @@
     // Agent checkbox toggle via event delegation
     document.getElementById('agent-tbody').addEventListener('click', (e) => {
       const checkbox = e.target.closest('.agent-checkbox');
-      if (!checkbox) return;
-      const agentName = checkbox.dataset.agent;
-      if (checkbox.checked) {
-        if (!state.selectedAgents.includes(agentName)) state.selectedAgents.push(agentName);
+      const row = e.target.closest('tr');
+      if (!row) return;
+      const agentName = row.dataset.agent;
+      if (!agentName) return;
+
+      if (checkbox) {
+        // Checkbox click: toggle selection
+        if (checkbox.checked) {
+          if (!state.selectedAgents.includes(agentName)) state.selectedAgents.push(agentName);
+        } else {
+          state.selectedAgents = state.selectedAgents.filter(a => a !== agentName);
+        }
+        const allChecked = state.selectedAgents.length === state.agents.length;
+        document.getElementById('select-all-agents').checked = allChecked;
+        row.classList.toggle('selected', checkbox.checked);
+        updateBatchBar();
       } else {
-        state.selectedAgents = state.selectedAgents.filter(a => a !== agentName);
+        // Row click: open model picker for this single agent
+        openModelPicker(agentName);
       }
-      const allChecked = state.selectedAgents.length === state.agents.length;
-      document.getElementById('select-all-agents').checked = allChecked;
-      // Toggle row class directly instead of re-rendering
-      const row = checkbox.closest('tr');
-      if (row) row.classList.toggle('selected', checkbox.checked);
-      updateBatchBar();
     });
 
     // Select all
@@ -927,6 +935,7 @@
 
     function updatePendingUI() {
       const hasPending = state.pendingChanges.length > 0;
+      document.getElementById('btn-rollback').disabled = !hasPending;
       document.getElementById('btn-apply-restart').disabled = !hasPending;
       document.getElementById('stat-pending').textContent = state.pendingChanges.length;
       document.getElementById('stat-pending-sub').textContent = state.pendingChanges.length === 1 ? 'change staged' : 'changes staged';
@@ -1167,34 +1176,38 @@
     async function applyAndRestart() {
       try {
         const data = await api('apply-and-restart', { method: 'POST' });
-        showToast(`Changes applied. Restarting Glitch...`, 'success');
         state.pendingChanges = [];
         updatePendingUI();
-        // Disable all buttons during restart
-        document.querySelectorAll('.gl-btn').forEach(b => b.disabled = true);
-        // Show restarting overlay
-        const overlay = document.createElement('div');
-        overlay.id = 'restart-overlay';
-        overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 16px;';
-        overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload automatically.</div>';
-        document.body.appendChild(overlay);
-        // Retry loop: poll every 3s until server responds, then reload
-        let attempts = 0;
-        const maxAttempts = 20;
-        function pollServer() {
-          attempts++;
-          fetch('/api/status')
-            .then(r => {
-              if (r.ok) window.location.reload();
-              else if (attempts < maxAttempts) setTimeout(pollServer, 3000);
-              else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
-            })
-            .catch(() => {
-              if (attempts < maxAttempts) setTimeout(pollServer, 3000);
-              else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
-            });
+
+        if (data.restarting) {
+          // Server mode: show restart overlay and poll
+          showToast(`Changes applied. Restarting Glitch...`, 'success');
+          document.querySelectorAll('.gl-btn').forEach(b => b.disabled = true);
+          const overlay = document.createElement('div');
+          overlay.id = 'restart-overlay';
+          overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 16px;';
+          overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload automatically.</div>';
+          document.body.appendChild(overlay);
+          let attempts = 0;
+          const maxAttempts = 20;
+          function pollServer() {
+            attempts++;
+            fetch('/api/status')
+              .then(r => {
+                if (r.ok) window.location.reload();
+                else if (attempts < maxAttempts) setTimeout(pollServer, 3000);
+                else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
+              })
+              .catch(() => {
+                if (attempts < maxAttempts) setTimeout(pollServer, 3000);
+                else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
+              });
+          }
+          setTimeout(pollServer, 3000);
+        } else {
+          // TUI mode: just show success message
+          showToast(data.message || 'Changes applied. Please restart opencode manually.', 'success');
         }
-        setTimeout(pollServer, 3000);
       } catch (err) {
         showToast(`Failed to apply and restart: ${err.message}`, 'error');
       }
@@ -1291,6 +1304,7 @@
     });
     document.getElementById('model-retry-btn').addEventListener('click', fetchModels);
 
+    document.getElementById('btn-rollback').addEventListener('click', rollbackChanges);
     document.getElementById('btn-apply-restart').addEventListener('click', applyAndRestart);
 
     document.getElementById('btn-plugin-toggle').addEventListener('click', async () => {

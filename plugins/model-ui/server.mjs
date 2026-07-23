@@ -431,31 +431,44 @@ async function handler(req, res) {
       const changes = [...pendingChanges];
       pendingChanges = [];
 
-      const restartFlagPath = join(ROOT_DIR, 'data', '.restart-flag');
-      writeFileSync(restartFlagPath, '1', 'utf-8');
-
+      // Check if we're in server mode (PID file exists) or TUI mode
       const pidFilePath = join(ROOT_DIR, 'data', 'opencode.pid');
-      const isWindows = process.platform === 'win32';
-      if (isWindows) {
-        // Use PID file to kill only the specific opencode process
-        const psCmd = `Start-Sleep 2; if (Test-Path '${pidFilePath.replace(/'/g, "''")}') { $pid = Get-Content '${pidFilePath.replace(/'/g, "''")}' -Raw; Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue }`;
-        spawn('powershell.exe', [
-          '-NoProfile',
-          '-WindowStyle', 'Hidden',
-          '-Command', psCmd
-        ], { detached: true, stdio: 'ignore' }).unref();
-      } else {
-        // Use PID file to kill only the specific opencode process
-        const shCmd = `sleep 2; if [ -f '${pidFilePath}' ]; then kill $(cat '${pidFilePath}') 2>/dev/null; fi`;
-        spawn('sh', ['-c', shCmd], { detached: true, stdio: 'ignore' }).unref();
-      }
+      const isServerMode = existsSync(pidFilePath);
 
-      sendJson(res, 200, {
-        success: true,
-        applied,
-        changes,
-        restarting: true,
-      });
+      if (isServerMode) {
+        // Server mode: write restart flag and kill opencode
+        const restartFlagPath = join(ROOT_DIR, 'data', '.restart-flag');
+        writeFileSync(restartFlagPath, '1', 'utf-8');
+
+        const isWindows = process.platform === 'win32';
+        if (isWindows) {
+          const psCmd = `Start-Sleep 2; $targetPid = Get-Content '${pidFilePath.replace(/'/g, "''")}' -Raw; Stop-Process -Id $targetPid -Force -ErrorAction SilentlyContinue`;
+          spawn('powershell.exe', [
+            '-NoProfile',
+            '-WindowStyle', 'Hidden',
+            '-Command', psCmd
+          ], { detached: true, stdio: 'ignore' }).unref();
+        } else {
+          const shCmd = `sleep 2; kill $(cat '${pidFilePath}') 2>/dev/null`;
+          spawn('sh', ['-c', shCmd], { detached: true, stdio: 'ignore' }).unref();
+        }
+
+        sendJson(res, 200, {
+          success: true,
+          applied,
+          changes,
+          restarting: true,
+        });
+      } else {
+        // TUI mode: just apply changes, user restarts manually
+        sendJson(res, 200, {
+          success: true,
+          applied,
+          changes,
+          restarting: false,
+          message: 'Changes applied. Please restart opencode manually to activate them.',
+        });
+      }
       return;
     }
 
