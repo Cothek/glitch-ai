@@ -356,14 +356,8 @@
     }
 
     @keyframes modal-scale-in {
-      from {
-        opacity: 0;
-        transform: scale(0.96);
-      }
-      to {
-        opacity: 1;
-        transform: scale(1);
-      }
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     /* Status cards: staggered fade-in */
@@ -969,7 +963,7 @@
 
         return `<div class="${classes.join(' ')}" onclick="selectModel('${escapeHtml(model.id)}')" data-model-id="${escapeHtml(model.id)}">
           <div class="model-card__info">
-            <span class="model-card__name">${escapeHtml(model.name || model.id)}</span>
+            <span class="model-card__name">${escapeHtml(model.id.includes('/') ? model.id.split('/').pop() : (model.name || model.id))}</span>
             ${isCurrent ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Current</span>' : ''}
             ${model.vision ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Vision</span>' : ''}
             <span class="model-sep"></span>
@@ -994,7 +988,8 @@
       if (!model) return;
       state.selectedModel = model;
       document.getElementById('modal-confirm').disabled = false;
-      document.getElementById('modal-confirm').textContent = `Confirm: ${model.name || model.id}`;
+      const shortName = model.id.includes('/') ? model.id.split('/').pop() : (model.name || model.id);
+      document.getElementById('modal-confirm').textContent = `Confirm: ${shortName}`;
       renderModelList();
     }
 
