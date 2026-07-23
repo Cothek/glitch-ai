@@ -497,8 +497,6 @@
             <p class="glitch-page-header__desc">Browse and manage agent model assignments. Changes are staged until you apply them.</p>
           </div>
           <div class="gl-flex gl-gap-3">
-            <button class="gl-btn gl-btn--secondary gl-btn--md" id="btn-rollback" disabled>&#8634; Rollback</button>
-            <button class="gl-btn gl-btn--primary gl-btn--md" id="btn-apply" disabled>&#10003; Apply Changes</button>
             <button class="gl-btn gl-btn--primary gl-btn--md" id="btn-apply-restart" disabled>&#8635; Apply & Restart</button>
           </div>
         </div>
@@ -536,32 +534,7 @@
           </div>
         </div>
 
-        <div id="pending-section" class="gl-hidden">
-          <div class="gl-card gl-card--accent gl-m-4" style="margin-bottom: var(--glitch-space-6);">
-            <div class="gl-card-header">
-              <span>&#9888; Pending Changes</span>
-              <div class="gl-flex gl-gap-2">
-                <button class="gl-btn gl-btn--ghost gl-btn--sm" id="btn-pending-rollback">Rollback All</button>
-                <button class="gl-btn gl-btn--primary gl-btn--sm" id="btn-pending-apply">Apply All</button>
-                <button class="gl-btn gl-btn--primary gl-btn--sm" id="btn-pending-apply-restart">Apply & Restart</button>
-              </div>
-            </div>
-            <div class="table-wrapper" style="border: none; border-radius: 0;">
-              <table class="gl-table pending-table">
-                <thead>
-                  <tr>
-                    <th>Agent</th>
-                    <th>Old Model</th>
-                    <th></th>
-                    <th>New Model</th>
-                    <th>Tier</th>
-                  </tr>
-                </thead>
-                <tbody id="pending-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+
 
         <div class="gl-section-header">
           <div>
@@ -674,6 +647,11 @@
           </div>
 
 
+        </div>
+
+        <div id="modal-agent-info" class="gl-hidden" style="margin-bottom: 8px; padding: 6px 10px; background-color: color-mix(in srgb, var(--glitch-accent) 8%, transparent); border-radius: var(--glitch-radius-md); font-size: 12px; line-height: 1.6;">
+          <div style="font-weight: var(--glitch-font-medium); color: var(--glitch-text-primary); margin-bottom: 4px;">Changing model for:</div>
+          <div id="modal-agent-list"></div>
         </div>
 
         <div id="model-list-loading" class="gl-flex gl-items-center gl-justify-center gl-p-8">
@@ -949,27 +927,9 @@
 
     function updatePendingUI() {
       const hasPending = state.pendingChanges.length > 0;
-      document.getElementById('btn-apply').disabled = !hasPending;
-      document.getElementById('btn-rollback').disabled = !hasPending;
+      document.getElementById('btn-apply-restart').disabled = !hasPending;
       document.getElementById('stat-pending').textContent = state.pendingChanges.length;
       document.getElementById('stat-pending-sub').textContent = state.pendingChanges.length === 1 ? 'change staged' : 'changes staged';
-
-      const section = document.getElementById('pending-section');
-      if (hasPending) {
-        section.classList.remove('gl-hidden');
-        const tbody = document.getElementById('pending-tbody');
-        tbody.innerHTML = state.pendingChanges.map(c => `
-          <tr class="changed">
-            <td><span class="agent-name">@${escapeHtml(c.agent)}</span></td>
-            <td class="model-id">${escapeHtml(c.old_model)}</td>
-            <td><span class="pending-change-arrow">&rarr;</span></td>
-            <td class="model-id">${escapeHtml(c.new_model)}</td>
-            <td><span class="gl-badge ${tierBadgeClass(c.tier)}"><span class="gl-badge-dot"></span>${escapeHtml(c.tier || '')}</span></td>
-          </tr>
-        `).join('');
-      } else {
-        section.classList.add('gl-hidden');
-      }
 
       renderAgentTable();
     }
@@ -997,12 +957,31 @@
       document.querySelectorAll('.gl-dropdown__option').forEach(o => o.classList.remove('active'));
       document.querySelectorAll('.gl-dropdown__option[data-value=""]').forEach(o => o.classList.add('active'));
 
+      // Show agent info in modal
+      const agentInfo = document.getElementById('modal-agent-info');
+      const agentList = document.getElementById('modal-agent-list');
+      if (agents.length > 1) {
+        agentInfo.classList.remove('gl-hidden');
+        agentList.innerHTML = agents.map(name => {
+          const agent = state.agents.find(a => a.name === name);
+          const model = agent ? agent.current_model : 'unknown';
+          const shortModel = model.includes('/') ? model.split('/').pop() : model;
+          return `<div style="display: flex; justify-content: space-between; gap: 8px;">
+            <span style="color: var(--glitch-accent);">@${escapeHtml(name)}</span>
+            <span style="color: var(--glitch-text-muted); font-family: var(--glitch-font-mono); font-size: 11px;">${escapeHtml(shortModel)}</span>
+          </div>`;
+        }).join('');
+      } else {
+        agentInfo.classList.add('gl-hidden');
+      }
+
       document.getElementById('modal-backdrop').classList.remove('gl-hidden');
       await fetchModels();
     }
 
     function closeModal() {
       document.getElementById('modal-backdrop').classList.add('gl-hidden');
+      document.getElementById('modal-agent-info').classList.add('gl-hidden');
       state.currentAgent = null;
       state.selectedModel = null;
       state.selectedAgents = [];
@@ -1136,14 +1115,26 @@
       const modelId = state.selectedModel.id;
 
       try {
+        // Collect changes from assign API responses
+        const newChanges = [];
         for (const agentName of state.selectedAgents) {
-          await api('assign', {
+          const data = await api('assign', {
             method: 'POST',
             body: JSON.stringify({ agent: agentName, model: modelId })
           });
+          if (data.change) newChanges.push(data.change);
         }
 
-        await loadPending();
+        // Merge into pending changes (replace existing entries for same agent)
+        for (const change of newChanges) {
+          const existing = state.pendingChanges.findIndex(c => c.agent === change.agent);
+          if (existing >= 0) {
+            state.pendingChanges[existing] = change;
+          } else {
+            state.pendingChanges.push(change);
+          }
+        }
+        updatePendingUI();
 
         const count = state.selectedAgents.length;
         const msg = count === 1
@@ -1300,10 +1291,7 @@
     });
     document.getElementById('model-retry-btn').addEventListener('click', fetchModels);
 
-    document.getElementById('btn-apply').addEventListener('click', applyChanges);
-    document.getElementById('btn-rollback').addEventListener('click', rollbackChanges);
-    document.getElementById('btn-pending-apply').addEventListener('click', applyChanges);
-    document.getElementById('btn-pending-rollback').addEventListener('click', rollbackChanges);
+    document.getElementById('btn-apply-restart').addEventListener('click', applyAndRestart);
 
     document.getElementById('btn-plugin-toggle').addEventListener('click', async () => {
       try {

@@ -135,6 +135,25 @@ foreach ($script in $psScripts) {
     }
 }
 
+# ---- 4.75 Check agent file alignment against config templates ----
+$agentAlignmentScript = Join-Path $RootDir "scripts\validate-agent-alignment.mjs"
+if (Test-Path $agentAlignmentScript) {
+    $alignmentOutput = & "node" $agentAlignmentScript 2>&1
+    $alignmentExitCode = $LASTEXITCODE
+    if ($alignmentExitCode -ne 0) {
+        if (-not $Quiet) {
+            Write-Host "  [FAIL] Agent file alignment drift detected:" -ForegroundColor Red
+            $alignmentOutput | ForEach-Object { Write-Host "    $_" -ForegroundColor Yellow }
+        }
+        $errors += "Agent file alignment drift detected -- run 'node scripts/validate-agent-alignment.mjs' for details"
+        $exitCode = 1
+    } else {
+        if (-not $Quiet) { Write-Host "  [OK] Agent file alignment matches config templates" -ForegroundColor Green }
+    }
+} else {
+    if (-not $Quiet) { Write-Host "  [SKIP] validate-agent-alignment.mjs not found" -ForegroundColor DarkGray }
+}
+
 # ---- 5. Check required top-level keys ----
 $requiredKeys = @('agent')
 foreach ($key in $requiredKeys) {
