@@ -129,7 +129,7 @@ if ! command -v git >/dev/null 2>&1; then
     # macOS — Homebrew
     if command -v brew >/dev/null 2>&1; then
         prompt "Install git via Homebrew? (Y/n): "
-        read -r answer
+        read -r answer </dev/tty
         if [ -z "$answer" ] || echo "$answer" | grep -qi "^y"; then
             step "Installing git via Homebrew..."
             brew install git
@@ -142,7 +142,7 @@ if ! command -v git >/dev/null 2>&1; then
     # Debian/Ubuntu — apt
     elif command -v apt-get >/dev/null 2>&1; then
         prompt "Install git via apt (requires sudo)? (Y/n): "
-        read -r answer
+        read -r answer </dev/tty
         if [ -z "$answer" ] || echo "$answer" | grep -qi "^y"; then
             step "Installing git via apt..."
             sudo apt-get install -y git
@@ -155,7 +155,7 @@ if ! command -v git >/dev/null 2>&1; then
     # Fedora/RHEL — dnf
     elif command -v dnf >/dev/null 2>&1; then
         prompt "Install git via dnf (requires sudo)? (Y/n): "
-        read -r answer
+        read -r answer </dev/tty
         if [ -z "$answer" ] || echo "$answer" | grep -qi "^y"; then
             step "Installing git via dnf..."
             sudo dnf install -y git
@@ -168,7 +168,7 @@ if ! command -v git >/dev/null 2>&1; then
     # Alpine — apk
     elif command -v apk >/dev/null 2>&1; then
         prompt "Install git via apk (requires sudo)? (Y/n): "
-        read -r answer
+        read -r answer </dev/tty
         if [ -z "$answer" ] || echo "$answer" | grep -qi "^y"; then
             step "Installing git via apk..."
             sudo apk add git
@@ -220,12 +220,12 @@ if [ "$INSTALL_DIR" = "$HOME/glitch-ai" ]; then
     echo "  [3] Custom path"
     echo ""
     prompt "  Choose (Enter=2): "
-    read -r loc_choice
+    read -r loc_choice </dev/tty
     case "$loc_choice" in
         1) INSTALL_DIR="$(pwd)/glitch-ai" ;;
         3)
             prompt "  Enter installation path: "
-            read -r custom_dir
+            read -r custom_dir </dev/tty
             if [ -n "$custom_dir" ]; then
                 INSTALL_DIR="$custom_dir"
             fi
@@ -241,7 +241,7 @@ if [ -d "$INSTALL_DIR/.git" ]; then
     # Existing git repo — offer update
     warn "Glitch AI already installed at $INSTALL_DIR"
     prompt "Update to latest version? (Y/n): "
-    read -r update
+    read -r update </dev/tty
     if [ -z "$update" ] || [[ "$update" =~ ^[Yy] ]]; then
         step "Pulling latest changes..."
         (cd "$INSTALL_DIR" && git pull --ff-only)
@@ -264,7 +264,7 @@ elif [ -d "$INSTALL_DIR" ]; then
     echo "  [3] Cancel"
     echo ""
     prompt "  Choose (Enter=3): "
-    read -r over_choice
+    read -r over_choice </dev/tty
     case "$over_choice" in
         1)
             step "Removing existing directory..."
@@ -273,7 +273,7 @@ elif [ -d "$INSTALL_DIR" ]; then
             ;;
         2)
             prompt "  Enter new installation path: "
-            read -r new_dir
+            read -r new_dir </dev/tty
             if [ -n "$new_dir" ]; then
                 INSTALL_DIR="$new_dir"
                 success "Will install to: $INSTALL_DIR"
@@ -319,15 +319,15 @@ Glitch AI stores your personal memory, preferences, and projects in a separate G
 This lets you sync your AI companion across machines via GitHub.
 EOF
 prompt "Set up user profile from GitHub? (Y/n): "
-read -r setup_profile
+read -r setup_profile </dev/tty
 if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
     prompt "GitHub username (your GitHub handle): "
-    read -r gh_user
+    read -r gh_user </dev/tty
     if [ -n "$gh_user" ]; then
         prompt "Repository name (default: glitch-user-$gh_user): "
-        read -r repo_name
+        read -r repo_name </dev/tty
         [ -z "$repo_name" ] && repo_name="glitch-user-$gh_user"
-        
+
         USER_DIR="$INSTALL_DIR/user"
         if [ -d "$USER_DIR/.git" ]; then
             warn "User profile already exists at $USER_DIR"
@@ -337,7 +337,8 @@ if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
             cd "$USER_DIR"
             git init >/dev/null
             # Detect what branch git init created (reflects user's init.defaultBranch setting)
-            local_branch=$(git rev-parse --abbrev-ref HEAD)
+            # Guard against empty repo (no commits yet) where HEAD is ambiguous
+            local_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
             git remote add origin "https://github.com/$gh_user/$repo_name.git" 2>/dev/null
             # Try to detect remote's default branch
             remote_head=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
@@ -352,11 +353,13 @@ if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
                     git branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null
                 else
                     warn "No existing profile on GitHub (or pull failed). Starting fresh."
-                    echo "  Your memory will be saved locally and can be pushed later with: ./scripts/sync-user.ps1 -Push"
+                    echo "  Your memory will be saved locally. To push later:"
+                    echo "    cd $USER_DIR && git add -A && git commit -m 'initial profile' && git push -u origin $default_branch"
                 fi
             else
                 warn "No existing profile on GitHub. Starting fresh."
-                echo "  Your memory will be saved locally and can be pushed later with: ./scripts/sync-user.ps1 -Push"
+                echo "  Your memory will be saved locally. To push later:"
+                echo "    cd $USER_DIR && git add -A && git commit -m 'initial profile' && git push -u origin $default_branch"
             fi
         fi
     fi
@@ -366,7 +369,7 @@ fi
 if [ "$NO_LAUNCH" = false ]; then
     header "Launch Glitch AI"
     prompt "Launch Glitch now? (Y/n): "
-    read -r launch
+    read -r launch </dev/tty
     if [ -z "$launch" ] || [[ "$launch" =~ ^[Yy] ]]; then
         step "Starting Glitch AI..."
         cd "$INSTALL_DIR"
@@ -394,7 +397,7 @@ Next steps:
   • Local mode:    cd $INSTALL_DIR && ./launch-glitch.sh (select Local at prompt)
   • Safe mode:     cd $INSTALL_DIR && ./launch-glitch.sh (select Safe at prompt)
   • Update:        Re-run this installer (it will pull latest)
-  • User sync:     ./scripts/sync-user.ps1 -Push  (after making changes)
+  • User sync:     cd $INSTALL_DIR/user && git add -A && git commit -m 'update' && git push  (after making changes)
 
 Documentation: https://github.com/Cothek/glitch-ai
 EOF

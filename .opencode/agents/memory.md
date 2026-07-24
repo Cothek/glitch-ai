@@ -1,14 +1,18 @@
 ---
 name: memory
-model: nvidia/minimaxai/minimax-m3
+model: opencode/deepseek-v4-flash-free
 permission:
   read: allow
   write: allow
   list: allow
   glob: allow
-  edit: deny
-  grep: allow
-  bash: allow
+  edit: allow
+  grep: deny
+  bash: deny
+  webfetch: deny
+  websearch: deny
+  question: deny
+  todowrite: deny
   task: deny
   skill: allow
 ---

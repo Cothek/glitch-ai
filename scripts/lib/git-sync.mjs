@@ -273,9 +273,16 @@ function switchBranch(cwd, targetBranch, sourceBranch) {
 const RESTART_MAX_DISPLAY = 8;
 
 /**
- * If startup-critical files were updated by a git pull, spawn a fresh
- * process running the same launch script and exit the current one.
- * Ensures updated code on disk takes effect immediately.
+ * Update-triggered restart: spawn a fresh process with the updated launch
+ * script and exit the current one. This is DIFFERENT from the user-triggered
+ * restart path (data/.restart-flag + in-process loop in serve.mjs/launch.mjs).
+ *
+ * - Uses detached:true + child.unref() so the child survives parent exit
+ *   on all platforms (Windows and Unix).
+ * - The child inherits the parent's stdio and takes over the console.
+ * - If the child fails to start, the parent will see the spawn error.
+ * - If the child exits with a non-zero code, the parent logs the failure
+ *   before the child's output is lost.
  *
  * @param {Function} spawnFn - spawn function from child_process (passed by caller)
  * @param {{ restartNeeded: boolean, changedStartupFiles: string[] }} syncResult
@@ -283,6 +290,11 @@ const RESTART_MAX_DISPLAY = 8;
  */
 export function handleRestartOnUpdate(spawnFn, syncResult, cwd) {
   if (!syncResult.restartNeeded) return;
+
+  if (typeof spawnFn !== 'function') {
+    log(C.RED, '  Restart failed: spawnFn must be a function');
+    process.exit(1);
+  }
 
   log(C.CYAN, '');
   log(C.CYAN, '  Startup scripts updated. Restarting to apply changes...');
@@ -297,18 +309,33 @@ export function handleRestartOnUpdate(spawnFn, syncResult, cwd) {
   }
   log('');
 
+  // Process.argv[1] is the script path. Guard for edge cases (eval, stdin mode).
+  if (!process.argv[1]) {
+    log(C.RED, '  Cannot restart: no script path (process.argv[1] is empty)');
+    process.exit(1);
+  }
+
   const child = spawnFn(process.execPath, [process.argv[1], ...process.argv.slice(2)], {
     cwd,
     stdio: 'inherit',
-    detached: false
+    detached: true,   // Detach so child survives parent exit on Unix (SIGHUP isolation)
   });
 
+  child.unref(); // Let parent exit independently — don't wait for child
+
   child.on('error', (err) => {
-    console.error(`\x1b[31m  Restart failed: ${err.message}\x1b[0m`);
+    log(C.RED, '  Restart failed: ' + err.message);
     process.exit(1);
   });
 
-  child.on('exit', (code) => process.exit(code ?? 0));
+  child.on('exit', (code) => {
+    if (code !== 0) {
+      log(C.RED, `  Restarted process exited with code ${code} — check logs for errors`);
+    }
+  });
+
+  // Exit immediately. The child is detached and runs independently.
+  process.exit(0);
 }
 
 // ===== Exported functions =====

@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AURUM — Private Wealth Analytics</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --canvas:#0f0f14;
+  --surface:#1a1a24;
+  --surface-raised:#1f1f2a;
+  --gold:#d4af37;
+  --gold-light:#f5e6c8;
+  --gold-muted:#c9a84c;
+  --gold-dim:rgba(212,175,55,0.3);
+  --gold-glow:rgba(212,175,55,0.05);
+  --gold-shimmer:rgba(212,175,55,0.12);
+  --burgundy:#4a1a2e;
+  --ivory:#f0ead6;
+  --ivory-muted:rgba(240,234,214,0.6);
+  --ivory-dim:rgba(240,234,214,0.35);
+  --serif:'Playfair Display',Georgia,'Times New Roman',serif;
+  --sans:'Plus Jakarta Sans','Segoe UI',system-ui,sans-serif;
+  --radius:6px;
+}
+html{font-size:16px;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
+body{
+  background:var(--canvas);
+  color:var(--ivory);
+  font-family:var(--sans);
+  font-weight:300;
+  line-height:1.6;
+  min-height:100vh;
+  overflow-x:hidden;
+}
+body::before{
+  content:'';
+  position:fixed;
+  inset:0;
+  background:repeating-linear-gradient(
+    135deg,
+    transparent,
+    transparent 40px,
+    rgba(212,175,55,0.008) 40px,
+    rgba(212,175,55,0.008) 41px
+  );
+  pointer-events:none;
+  z-index:0;
+}
+
+.page{position:relative;z-index:1;max-width:1200px;margin:0 auto;padding:0 32px}
+
+/* ── Top Bar ── */
+.topbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:28px 0 20px;
+  border-bottom:1px solid rgba(212,175,55,0.08);
+  opacity:0;
+  transform:translateY(-12px);
+}
+.topbar.is-visible{opacity:1;transform:translateY(0);transition:opacity 1000ms ease-out,transform 1000ms ease-out}
+.wordmark{
+  font-family:var(--serif);
+  font-size:1.5rem;
+  font-weight:600;
+  letter-spacing:0.25em;
+  color:var(--gold);
+  text-transform:uppercase;
+}
+.crest{
+  width:36px;
+  height:36px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+.crest svg{width:100%;height:100%}
+
+/* ── Hero ── */
+.hero{
+  text-align:center;
+  padding:80px 0 60px;
+  opacity:0;
+  transform:translateY(20px);
+}
+.hero.is-visible{opacity:1;transform:translateY(0);transition:opacity 1000ms ease-out 250ms,transform 1000ms ease-out 250ms}
+.hero-label{
+  font-family:var(--sans);
+  font-size:0.7rem;
+  font-weight:500;
+  letter-spacing:0.3em;
+  text-transform:uppercase;
+  color:var(--ivory-dim);
+  margin-bottom:20px;
+}
+.hero-value{
+  font-family:var(--serif);
+  font-size:5rem;
+  font-weight:700;
+  color:var(--ivory);
+  line-height:1.1;
+  position:relative;
+  display:inline-block;
+}
+.hero-value .dollar{
+  font-size:3rem;
+  font-weight:400;
+  vertical-align:top;
+  margin-right:2px;
+  color:var(--ivory-muted);
+}
+.hero-value .decimal{
+  font-size:3rem;
+  font-weight:400;
+  color:var(--ivory-muted);
+}
+
+/* Gold shimmer sweep */
+.hero-value::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(
+    105deg,
+    transparent 30%,
+    var(--gold-shimmer) 45%,
+    rgba(212,175,55,0.2) 50%,
+    var(--gold-shimmer) 55%,
+    transparent 70%
+  );
+  transform:translateX(-120%);
+  pointer-events:none;
+}
+.hero-value.shimmer::after{
+  animation:shimmerSweep 2s ease-in-out forwards;
+}
+@keyframes shimmerSweep{
+  0%{transform:translateX(-120%)}
+  100%{transform:translateX(120%)}
+}
+
+/* Signature line */
+.signature-line{
+  width:120px;
+  height:2px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);
+  margin:24px auto 0;
+  transform:scaleX(0);
+  transform-origin:center;
+}
+.signature-line.is-visible{
+  animation:drawLine 800ms ease-out 600ms forwards;
+}
+@keyframes drawLine{
+  to{transform:scaleX(1)}
+}
+
+.hero-subtitle{
+  font-family:var(--serif);
+  font-style:italic;
+  font-size:1.15rem;
+  color:var(--ivory-muted);
+  margin-top:20px;
+  font-weight:400;
+}
+
+/* ── Decorative Divider ── */
+.divider{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:16px;
+  padding:12px 0 48px;
+  opacity:0;
+}
+.divider.is-visible{opacity:1;transition:opacity 600ms ease-out 400ms}
+.divider-line{
+  height:1px;
+  width:80px;
+  background:linear-gradient(90deg,transparent,var(--gold-dim));
+  transform:scaleX(0);
+  transform-origin:right;
+}
+.divider-line:last-child{
+  background:linear-gradient(90deg,var(--gold-dim),transparent);
+  transform-origin:left;
+}
+.divider.is-visible .divider-line{
+  animation:drawDivider 800ms ease-out 500ms forwards;
+}
+@keyframes drawDivider{to{transform:scaleX(1)}}
+.divider-diamond{
+  width:6px;
+  height:6px;
+  background:var(--gold);
+  transform:rotate(45deg) scale(0);
+  opacity:0.5;
+}
+.divider.is-visible .divider-diamond{
+  animation:drawDiamond 600ms ease-out 700ms forwards;
+}
+@keyframes drawDiamond{to{transform:rotate(45deg) scale(1)}}
+
+/* ── Metrics Grid ── */
+.metrics{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:24px;
+  margin-bottom:48px;
+}
+.metric-card{
+  background:var(--surface);
+  border-radius:var(--radius);
+  padding:32px 28px;
+  position:relative;
+  overflow:hidden;
+  opacity:0;
+  transform:translateY(16px);
+  cursor:default;
+}
+.metric-card::before{
+  content:'';
+  position:absolute;
+  left:0;
+  top:0;
+  bottom:0;
+  width:2px;
+  background:linear-gradient(180deg,var(--gold),var(--gold-muted));
+  transition:all 500ms ease;
+}
+.metric-card::after{
+  content:'';
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  height:0;
+  background:linear-gradient(180deg,var(--gold-glow),transparent);
+  transition:height 500ms ease;
+  pointer-events:none;
+}
+.metric-card.is-visible{
+  opacity:1;
+  transform:translateY(0);
+  transition:opacity 1000ms ease-out,transform 1000ms ease-out;
+}
+.metric-card:nth-child(1).is-visible{transition-delay:500ms}
+.metric-card:nth-child(2).is-visible{transition-delay:650ms}
+.metric-card:nth-child(3).is-visible{transition-delay:800ms}
+.metric-card:nth-child(4).is-visible{transition-delay:950ms}
+
+.metric-card:hover::before{
+  width:100%;
+  height:1px;
+  bottom:auto;
+  opacity:0.4;
+}
+.metric-card:hover::after{
+  height:60px;
+}
+.metric-card:hover{
+  box-shadow:inset 0 0 40px rgba(212,175,55,0.03),0 8px 32px rgba(0,0,0,0.3);
+}
+
+.metric-label{
+  font-family:var(--sans);
+  font-size:0.65rem;
+  font-weight:600;
+  letter-spacing:0.2em;
+  text-transform:uppercase;
+  color:var(--ivory-dim);
+  margin-bottom:12px;
+}
+.metric-value{
+  font-family:var(--serif);
+  font-size:2.4rem;
+  font-weight:600;
+  color:var(--ivory);
+  line-height:1.2;
+  margin-bottom:8px;
+}
+.metric-value .prefix{
+  font-size:1.4rem;
+  font-weight:400;
+  color:var(--ivory-muted);
+  margin-right:1px;
+}
+.metric-value .suffix{
+  font-size:1.4rem;
+  font-weight:400;
+  color:var(--ivory-muted);
+}
+.metric-trend{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-family:var(--sans);
+  font-size:0.8rem;
+  font-weight:500;
+}
+.metric-trend.up{color:#6ecf8e}
+.metric-trend.down{color:var(--gold-muted)}
+.metric-trend svg{width:12px;height:12px}
+
+/* ── Chart Card ── */
+.chart-card{
+  background:var(--surface);
+  border-radius:var(--radius);
+  padding:36px 32px 28px;
+  position:relative;
+  overflow:hidden;
+  margin-bottom:48px;
+  opacity:0;
+  transform:translateY(16px);
+}
+.chart-card::before{
+  content:'';
+  position:absolute;
+  top:0;
+  left:0;
+  right:0;
+  height:1px;
+  background:linear-gradient(90deg,transparent,var(--gold-dim),transparent);
+}
+.chart-card.is-visible{
+  opacity:1;
+  transform:translateY(0);
+  transition:opacity 1000ms ease-out,transform 1000ms ease-out;
+}
+.chart-header{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  margin-bottom:28px;
+}
+.chart-title{
+  font-family:var(--serif);
+  font-size:1.15rem;
+  font-weight:500;
+  color:var(--ivory);
+}
+.chart-period{
+  font-family:var(--sans);
+  font-size:0.7rem;
+  font-weight:400;
+  letter-spacing:0.15em;
+  text-transform:uppercase;
+  color:var(--ivory-dim);
+}
+.chart-svg{
+  width:100%;
+  height:220px;
+  display:block;
+}
+.chart-line{
+  fill:none;
+  stroke:var(--gold);
+  stroke-width:1.5;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+.chart-area{
+  fill:url(#goldGradient);
+  opacity:0;
+}
+.chart-area.is-visible{
+  animation:fadeArea 1.5s ease-out 1.5s forwards;
+}
+@keyframes fadeArea{to{opacity:1}}
+.chart-dot{
+  fill:var(--canvas);
+  stroke:var(--gold);
+  stroke-width:1.5;
+  opacity:0;
+}
+.chart-dot.is-visible{
+  animation:fadeDot 400ms ease-out forwards;
+}
+.chart-axis-label{
+  font-family:var(--sans);
+  font-size:11px;
+  fill:var(--ivory-dim);
+  font-weight:400;
+}
+.chart-grid-line{
+  stroke:rgba(212,175,55,0.06);
+  stroke-width:0.5;
+}
+
+/* ── Activity ── */
+.activity{
+  padding:0 0 80px;
+  opacity:0;
+  transform:translateY(16px);
+}
+.activity.is-visible{
+  opacity:1;
+  transform:translateY(0);
+  transition:opacity 1000ms ease-out,transform 1000ms ease-out;
+}
+.activity-title{
+  font-family:var(--serif);
+  font-size:1.15rem;
+  font-weight:500;
+  color:var(--ivory);
+  margin-bottom:24px;
+}
+.activity-list{
+  list-style:none;
+  display:flex;
+  flex-direction:column;
+}
+.activity-item{
+  display:flex;
+  align-items:center;
+  gap:16px;
+  padding:14px 0;
+  border-bottom:1px solid rgba(212,175,55,0.06);
+  font-family:var(--sans);
+  font-size:0.85rem;
+  font-weight:400;
+  color:var(--ivory-muted);
+  letter-spacing:0.02em;
+}
+.activity-item:last-child{border-bottom:none}
+.activity-dot{
+  width:4px;
+  height:4px;
+  border-radius:50%;
+  background:var(--gold);
+  flex-shrink:0;
+  animation:pulseDot 3s ease-in-out infinite;
+}
+.activity-item:nth-child(2) .activity-dot{animation-delay:0.75s}
+.activity-item:nth-child(3) .activity-dot{animation-delay:1.5s}
+.activity-item:nth-child(4) .activity-dot{animation-delay:2.25s}
+@keyframes pulseDot{
+  0%,100%{opacity:0.3}
+  50%{opacity:0.6}
+}
+.activity-time{
+  margin-left:auto;
+  font-size:0.7rem;
+  color:var(--ivory-dim);
+  letter-spacing:0.1em;
+  text-transform:uppercase;
+  font-weight:500;
+}
+
+/* ── Decorative Gold Dots ── */
+.gold-dots{
+  position:fixed;
+  pointer-events:none;
+  z-index:0;
+}
+.gold-dot{
+  position:absolute;
+  width:3px;
+  height:3px;
+  border-radius:50%;
+  background:var(--gold);
+  animation:pulseDot 3s ease-in-out infinite;
+}
+
+/* ── Responsive ── */
+@media(max-width:768px){
+  .page{padding:0 20px}
+  .hero-value{font-size:3.2rem}
+  .hero-value .dollar,.hero-value .decimal{font-size:2rem}
+  .metrics{grid-template-columns:1fr;gap:16px}
+  .metric-value{font-size:2rem}
+  .chart-svg{height:180px}
+}
+</style>
+</head>
+<body>
+
+<div class="gold-dots" aria-hidden="true">
+  <div class="gold-dot" style="top:15%;left:8%;animation-delay:0s"></div>
+  <div class="gold-dot" style="top:35%;right:5%;animation-delay:1s"></div>
+  <div class="gold-dot" style="top:60%;left:3%;animation-delay:2s"></div>
+  <div class="gold-dot" style="top:80%;right:10%;animation-delay:0.5s"></div>
+  <div class="gold-dot" style="top:45%;left:92%;animation-delay:1.5s"></div>
+</div>
+
+<div class="page">
+
+  <!-- Top Bar -->
+  <header class="topbar" data-animate>
+    <div class="wordmark">Aurum</div>
+    <div class="crest">
+      <svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M18 3L22 13H14L18 3Z" fill="none" stroke="#d4af37" stroke-width="0.8" opacity="0.6"/>
+        <path d="M18 33L14 23H22L18 33Z" fill="none" stroke="#d4af37" stroke-width="0.8" opacity="0.6"/>
+        <circle cx="18" cy="18" r="6" fill="none" stroke="#d4af37" stroke-width="0.6" opacity="0.4"/>
+        <circle cx="18" cy="18" r="2" fill="#d4af37" opacity="0.3"/>
+        <line x1="18" y1="6" x2="18" y2="12" stroke="#d4af37" stroke-width="0.5" opacity="0.3"/>
+        <line x1="18" y1="24" x2="18" y2="30" stroke="#d4af37" stroke-width="0.5" opacity="0.3"/>
+      </svg>
+    </div>
+  </header>
+
+  <!-- Hero -->
+  <section class="hero" data-animate>
+    <p class="hero-label">Fiscal Year 2026</p>
+    <h1 class="hero-value">
+      <span class="dollar">$</span><span class="counter" data-target="8.47" data-decimals="2">0.00</span><span class="decimal">M</span>
+    </h1>
+    <div class="signature-line" data-animate-line></div>
+    <p class="hero-subtitle">Performance Summary</p>
+  </section>
+
+  <!-- Divider -->
+  <div class="divider" data-animate>
+    <div class="divider-line"></div>
+    <div class="divider-diamond"></div>
+    <div class="divider-line"></div>
+  </div>
+
+  <!-- Metrics -->
+  <section class="metrics">
+    <div class="metric-card" data-animate>
+      <p class="metric-label">Portfolio Value</p>
+      <p class="metric-value"><span class="prefix">$</span><span class="counter" data-target="12.4" data-decimals="1">0.0</span><span class="suffix">B</span></p>
+      <span class="metric-trend up">
+        <svg viewBox="0 0 12 12"><path d="M6 2L10 7H2L6 2Z" fill="currentColor"/></svg>
+        +3.2%
+      </span>
+    </div>
+    <div class="metric-card" data-animate>
+      <p class="metric-label">Client Returns</p>
+      <p class="metric-value"><span class="counter" data-target="14.8" data-decimals="1">0.0</span><span class="suffix">%</span></p>
+      <span class="metric-trend up">
+        <svg viewBox="0 0 12 12"><path d="M6 2L10 7H2L6 2Z" fill="currentColor"/></svg>
+        +1.2%
+      </span>
+    </div>
+    <div class="metric-card" data-animate>
+      <p class="metric-label">Risk Score</p>
+      <p class="metric-value"><span class="counter" data-target="24" data-decimals="0">0</span></p>
+      <span class="metric-trend down">
+        <svg viewBox="0 0 12 12"><path d="M6 10L2 5H10L6 10Z" fill="currentColor"/></svg>
+        -2
+      </span>
+    </div>
+    <div class="metric-card" data-animate>
+      <p class="metric-label">Assets Under Management</p>
+      <p class="metric-value"><span class="prefix">$</span><span class="counter" data-target="8.2" data-decimals="1">0.0</span><span class="suffix">B</span></p>
+      <span class="metric-trend up">
+        <svg viewBox="0 0 12 12"><path d="M6 2L10 7H2L6 2Z" fill="currentColor"/></svg>
+        +4.7%
+      </span>
+    </div>
+  </section>
+
+  <!-- Chart -->
+  <div class="chart-card" data-animate>
+    <div class="chart-header">
+      <h2 class="chart-title">Quarterly Performance</h2>
+      <span class="chart-period">Q1 &mdash; Q4 2026</span>
+    </div>
+    <svg class="chart-svg" viewBox="0 0 800 220" preserveAspectRatio="none" id="chartSvg">
+      <defs>
+        <linearGradient id="goldGradient" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#d4af37" stop-opacity="0.08"/>
+          <stop offset="100%" stop-color="#d4af37" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+    </svg>
+  </div>
+
+  <!-- Activity -->
+  <section class="activity" data-animate>
+    <h2 class="activity-title">Recent Activity</h2>
+    <ul class="activity-list">
+      <li class="activity-item">
+        <span class="activity-dot"></span>
+        Geneva office reporting
+        <span class="activity-time">2h ago</span>
+      </li>
+      <li class="activity-item">
+        <span class="activity-dot"></span>
+        Portfolio rebalancing completed
+        <span class="activity-time">5h ago</span>
+      </li>
+      <li class="activity-item">
+        <span class="activity-dot"></span>
+        Q3 projections updated
+        <span class="activity-time">1d ago</span>
+      </li>
+      <li class="activity-item">
+        <span class="activity-dot"></span>
+        Compliance review passed
+        <span class="activity-time">2d ago</span>
+      </li>
+    </ul>
+  </section>
+
+</div>
+
+<script>
+(function(){
+  'use strict';
+
+  /* ── Entrance Animations ── */
+  const animatables = document.querySelectorAll('[data-animate]');
+  const observer = new IntersectionObserver(function(entries){
+    entries.forEach(function(entry){
+      if(entry.isIntersecting){
+        entry.target.classList.add('is-visible');
+        observer.unobserve(entry.target);
+      }
+    });
+  },{threshold:0.1});
+  animatables.forEach(function(el){observer.observe(el)});
+
+  /* Trigger topbar + hero immediately */
+  requestAnimationFrame(function(){
+    document.querySelector('.topbar').classList.add('is-visible');
+    document.querySelector('.hero').classList.add('is-visible');
+    document.querySelector('.divider').classList.add('is-visible');
+    document.querySelectorAll('.metric-card').forEach(function(c){c.classList.add('is-visible')});
+    document.querySelector('.chart-card').classList.add('is-visible');
+    document.querySelector('.activity').classList.add('is-visible');
+    document.querySelector('.signature-line').classList.add('is-visible');
+  });
+
+  /* ── Gold Shimmer ── */
+  setTimeout(function(){
+    document.querySelector('.hero-value').classList.add('shimmer');
+  },800);
+
+  /* ── Counter Animation ── */
+  function animateCounter(el){
+    var target = parseFloat(el.dataset.target);
+    var decimals = parseInt(el.dataset.decimals,10);
+    var duration = 2000;
+    var start = performance.now();
+    function easeOutCubic(t){return 1-Math.pow(1-t,3)}
+    function tick(now){
+      var elapsed = now - start;
+      var progress = Math.min(elapsed/duration,1);
+      var eased = easeOutCubic(progress);
+      var current = eased * target;
+      el.textContent = current.toFixed(decimals);
+      if(progress < 1) requestAnimationFrame(tick);
+    }
+    requestAnimationFrame(tick);
+  }
+  setTimeout(function(){
+    document.querySelectorAll('.counter').forEach(animateCounter);
+  },600);
+
+  /* ── Chart ── */
+  var svg = document.getElementById('chartSvg');
+  var data = [
+    {label:'Q1',value:6.2},
+    {label:'Q2',value:7.1},
+    {label:'Q3',value:7.8},
+    {label:'Q4',value:8.47}
+  ];
+  var padL=60, padR=40, padT=20, padB=40;
+  var w=800, h=220;
+  var chartW=w-padL-padR, chartH=h-padT-padB;
+  var minV=5, maxV=9;
+
+  function xPos(i){return padL + (i/(data.length-1))*chartW}
+  function yPos(v){return padT + chartH - ((v-minV)/(maxV-minV))*chartH}
+
+  /* Grid lines */
+  for(var g=5;g<=9;g++){
+    var gy=yPos(g);
+    var gridLine=document.createElementNS('http://www.w3.org/2000/svg','line');
+    gridLine.setAttribute('x1',padL);
+    gridLine.setAttribute('x2',w-padR);
+    gridLine.setAttribute('y1',gy);
+    gridLine.setAttribute('y2',gy);
+    gridLine.setAttribute('class','chart-grid-line');
+    svg.appendChild(gridLine);
+    var label=document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x',padL-12);
+    label.setAttribute('y',gy+4);
+    label.setAttribute('text-anchor','end');
+    label.setAttribute('class','chart-axis-label');
+    label.textContent='$'+g+'M';
+    svg.appendChild(label);
+  }
+
+  /* X-axis labels */
+  data.forEach(function(d,i){
+    var label=document.createElementNS('http://www.w3.org/2000/svg','text');
+    label.setAttribute('x',xPos(i));
+    label.setAttribute('y',h-8);
+    label.setAttribute('text-anchor','middle');
+    label.setAttribute('class','chart-axis-label');
+    label.textContent=d.label;
+    svg.appendChild(label);
+  });
+
+  /* Build smooth curve using cardinal spline */
+  var points = data.map(function(d,i){return {x:xPos(i),y:yPos(d.value)}});
+
+  function catmullRom(pts,tension){
+    tension = tension || 0.5;
+    var d = 'M'+pts[0].x+','+pts[0].y;
+    for(var i=0;i<pts.length-1;i++){
+      var p0 = pts[i===0?0:i-1];
+      var p1 = pts[i];
+      var p2 = pts[i+1];
+      var p3 = pts[i+2>=pts.length?pts.length-1:i+2];
+      var cp1x = p1.x + (p2.x-p0.x)/(6/tension);
+      var cp1y = p1.y + (p2.y-p0.y)/(6/tension);
+      var cp2x = p2.x - (p3.x-p1.x)/(6/tension);
+      var cp2y = p2.y - (p3.y-p1.y)/(6/tension);
+      d += ' C'+cp1x+','+cp1y+' '+cp2x+','+cp2y+' '+p2.x+','+p2.y;
+    }
+    return d;
+  }
+
+  var linePath = catmullRom(points);
+  var areaPath = linePath + ' L'+points[points.length-1].x+','+(padT+chartH)+' L'+points[0].x+','+(padT+chartH)+' Z';
+
+  /* Area fill */
+  var area = document.createElementNS('http://www.w3.org/2000/svg','path');
+  area.setAttribute('d',areaPath);
+  area.setAttribute('class','chart-area');
+  svg.appendChild(area);
+  setTimeout(function(){area.classList.add('is-visible')},100);
+
+  /* Line */
+  var line = document.createElementNS('http://www.w3.org/2000/svg','path');
+  line.setAttribute('d',linePath);
+  line.setAttribute('class','chart-line');
+  svg.appendChild(line);
+
+  /* Animate line drawing */
+  var lineLen = line.getTotalLength();
+  line.style.strokeDasharray = lineLen;
+  line.style.strokeDashoffset = lineLen;
+  setTimeout(function(){
+    line.style.transition = 'stroke-dashoffset 2s ease-out';
+    line.style.strokeDashoffset = '0';
+  },800);
+
+  /* Data point dots */
+  points.forEach(function(p,i){
+    var dot = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    dot.setAttribute('cx',p.x);
+    dot.setAttribute('cy',p.y);
+    dot.setAttribute('r','3.5');
+    dot.setAttribute('class','chart-dot');
+    svg.appendChild(dot);
+    setTimeout(function(){dot.classList.add('is-visible')},1200 + i*200);
+  });
+
+})();
+</script>
+</body>
+</html>

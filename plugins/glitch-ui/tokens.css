@@ -10,16 +10,16 @@
 
 :root {
   /* Neutral 50-950 — dark theme optimized */
-  --glitch-neutral-50:  #fafafa;
-  --glitch-neutral-100: #f5f5f5;
-  --glitch-neutral-200: #e5e5e5;
-  --glitch-neutral-300: #d4d4d4;
-  --glitch-neutral-400: #a3a3a3;
-  --glitch-neutral-500: #737373;
-  --glitch-neutral-600: #525252;
-  --glitch-neutral-700: #404040;
-  --glitch-neutral-800: #262626;
-  --glitch-neutral-900: #171717;
+  --glitch-neutral-50:  #ececec;
+  --glitch-neutral-100: #e0e0e0;
+  --glitch-neutral-200: #cccccc;
+  --glitch-neutral-300: #aaaaaa;
+  --glitch-neutral-400: #888888;
+  --glitch-neutral-500: #555555;
+  --glitch-neutral-600: #3a3a3a;
+  --glitch-neutral-700: #2a2a2a;
+  --glitch-neutral-800: #1c1c1c;
+  --glitch-neutral-900: #141414;
   --glitch-neutral-950: #0a0a0a;
 
   /* Semantic neutral aliases */
@@ -37,21 +37,21 @@
 }
 
 /* ==========================================================================
-   ACCENT PALETTE (Purple — Glitch brand color)
+   ACCENT PALETTE (Red — Glitch brand color)
    ========================================================================== */
 
 :root {
-  --glitch-accent-50:  #faf5ff;
-  --glitch-accent-100: #f3e8ff;
-  --glitch-accent-200: #e9d5ff;
-  --glitch-accent-300: #d8b4fe;
-  --glitch-accent-400: #c084fc;
-  --glitch-accent-500: #a855f7;  /* Primary accent */
-  --glitch-accent-600: #9333ea;
-  --glitch-accent-700: #7e22ce;
-  --glitch-accent-800: #6b21a8;
-  --glitch-accent-900: #581c87;
-  --glitch-accent-950: #3b0764;
+  --glitch-accent-50:  #fff5f5;
+  --glitch-accent-100: #ffe0e0;
+  --glitch-accent-200: #ffc0c0;
+  --glitch-accent-300: #ff9090;
+  --glitch-accent-400: #ff6060;
+  --glitch-accent-500: #FF3131;  /* Primary accent — matches website */
+  --glitch-accent-600: #e02828;
+  --glitch-accent-700: #c02020;
+  --glitch-accent-800: #a01818;
+  --glitch-accent-900: #801010;
+  --glitch-accent-950: #400808;
 
   /* Semantic accent aliases */
   --glitch-accent:           var(--glitch-accent-500);
@@ -235,9 +235,9 @@
   --glitch-shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.6);
 
   /* Accent shadows */
-  --glitch-shadow-accent-sm: 0 0 0 1px var(--glitch-accent-border), 0 1px 2px 0 rgb(168 85 247 / 0.2);
-  --glitch-shadow-accent-md: 0 0 0 1px var(--glitch-accent-border), 0 4px 6px -1px rgb(168 85 247 / 0.3);
-  --glitch-shadow-accent-lg: 0 0 0 1px var(--glitch-accent-border), 0 10px 15px -3px rgb(168 85 247 / 0.4);
+  --glitch-shadow-accent-sm: 0 0 0 1px var(--glitch-accent-border), 0 1px 2px 0 rgb(255 49 49 / 0.15);
+  --glitch-shadow-accent-md: 0 0 0 1px var(--glitch-accent-border), 0 4px 6px -1px rgb(255 49 49 / 0.25);
+  --glitch-shadow-accent-lg: 0 0 0 1px var(--glitch-accent-border), 0 10px 15px -3px rgb(255 49 49 / 0.35);
 
   /* Focus ring */
   --glitch-focus-ring: 0 0 0 2px var(--glitch-bg), 0 0 0 4px var(--glitch-accent);
@@ -341,7 +341,7 @@ body {
 
 /* Selection */
 ::selection {
-  background-color: var(--glitch-accent-900);
+  background-color: var(--glitch-accent-950);
   color: var(--glitch-accent-text);
 }
 

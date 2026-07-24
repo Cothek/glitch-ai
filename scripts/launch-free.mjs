@@ -7,7 +7,7 @@ import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
-import { checkRepoUpdates, checkUserRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
+import { checkUserRepoUpdates } from './lib/git-sync.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
 import { ensureEngine } from './lib/engine-bootstrap.mjs';
 
@@ -322,10 +322,6 @@ async function checkAndSwitchToMain() {
   log('');
 }
 
-// ---- Sync glitch-ai repo from remote (branch-aware, shared module) ----
-// Uses scripts/lib/git-sync.mjs - handles any branch, prompts interactively
-// Replaces the old syncMainRepo() that only worked on 'main'
-
 // --- Hardcoded fallback model groups (used when free-models.json is missing/stale) ---
 const FallbackModelGroups = [
   {
@@ -583,10 +579,6 @@ async function main() {
     log(RED, '  Or run: node scripts/bootstrap.ps1');
     process.exit(1);
   }
-
-  // ---- Sync glitch-ai repo from remote (branch-aware, shared module) ----
-  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
-  handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
 
   // ---- Sync user data repo (separate nested git repo) ----
   const userRepoDir = join(ROOT_DIR, 'user');
@@ -871,7 +863,7 @@ async function main() {
 
   const engineInstructions = [
     'glitch-memorycore/prompt-rules.md',
-    'glitch-memorycore/CLAUDE.md',
+    'glitch-memorycore/glitch.md',
     'glitch-memorycore/master-memory.md',
     'glitch-memorycore/core/identity.md',
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'

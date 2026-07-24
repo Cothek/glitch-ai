@@ -2,12 +2,14 @@ import http from 'node:http';
 import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
 import { join, dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { spawn, exec } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = resolve(__dirname, '..', '..');
 const PORT = parseInt(process.env.MODEL_UI_PORT || '4104', 10);
 const TEMPLATE_PATH = join(ROOT_DIR, 'config', 'opencode-normal.json');
+const ASSIGNMENTS_PATH = join(ROOT_DIR, 'data', 'model-assignments.json');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -349,32 +351,13 @@ async function handler(req, res) {
         return;
       }
 
-      const config = getConfig();
-      if (!config) {
-        sendJson(res, 500, { error: 'opencode.json not found or invalid' });
-        return;
-      }
-
+      // Write pending changes to model-assignments.json
+      const assignments = readJson(ASSIGNMENTS_PATH) || {};
       for (const change of pendingChanges) {
-        if (config.agent?.[change.agent]) {
-          config.agent[change.agent].model = change.new_model;
-        }
+        assignments[change.agent] = change.new_model;
       }
+      writeJson(ASSIGNMENTS_PATH, assignments);
 
-      // Write to both runtime config and template
-      writeJson(join(ROOT_DIR, 'opencode.json'), config);
-      const templatePath = TEMPLATE_PATH;
-      if (existsSync(templatePath)) {
-        let templateConfig = readJson(templatePath);
-        if (templateConfig) {
-          for (const change of pendingChanges) {
-            if (templateConfig.agent?.[change.agent]) {
-              templateConfig.agent[change.agent].model = change.new_model;
-            }
-          }
-          writeJson(templatePath, templateConfig);
-        }
-      }
       const applied = pendingChanges.length;
       const changes = [...pendingChanges];
       pendingChanges = [];
@@ -383,8 +366,70 @@ async function handler(req, res) {
         success: true,
         applied,
         changes,
-        backup_path: lastBackupPath ? lastBackupPath.replace(ROOT_DIR + '\\', '').replace(ROOT_DIR + '/', '') : null,
       });
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/apply-and-restart') {
+      if (pendingChanges.length === 0) {
+        sendJson(res, 400, { error: 'No pending changes to apply' });
+        return;
+      }
+
+      // Write pending changes to model-assignments.json (persistent overrides file)
+      const assignments = readJson(ASSIGNMENTS_PATH) || {};
+      for (const change of pendingChanges) {
+        assignments[change.agent] = change.new_model;
+      }
+      writeJson(ASSIGNMENTS_PATH, assignments);
+
+      const applied = pendingChanges.length;
+      const changes = [...pendingChanges];
+      pendingChanges = [];
+
+      // Write restart flag so serve.mjs/launch.mjs knows to restart
+      const restartFlagPath = join(ROOT_DIR, 'data', '.restart-flag');
+      writeFileSync(restartFlagPath, '1', 'utf-8');
+
+      // Send response first
+      sendJson(res, 200, {
+        success: true,
+        applied,
+        changes,
+        restarting: true,
+      });
+
+      // Kill opencode after 2s delay
+      const pidFilePath = join(ROOT_DIR, 'data', 'opencode.pid');
+      const logPath = join(ROOT_DIR, 'data', 'restart-kill.log');
+      setTimeout(() => {
+        try {
+          const pidStr = readFileSync(pidFilePath, 'utf-8').trim();
+          const pid = parseInt(pidStr, 10);
+          if (pid > 0) {
+            const logMsg = `[${new Date().toISOString()}] Killing opencode PID ${pid}...\n`;
+            writeFileSync(logPath, logMsg, 'utf-8');
+            if (process.platform === 'win32') {
+              const killProc = spawn('taskkill', ['/PID', String(pid), '/F'], {
+                stdio: ['ignore', 'pipe', 'pipe'],
+              });
+              let stdout = '';
+              let stderr = '';
+              killProc.stdout.on('data', (d) => { stdout += d.toString(); });
+              killProc.stderr.on('data', (d) => { stderr += d.toString(); });
+              killProc.on('close', (code) => {
+                const result = `exit code: ${code}\nstdout: ${stdout}\nstderr: ${stderr}\n`;
+                writeFileSync(logPath, result, 'utf-8');
+              });
+            } else {
+              process.kill(pid, 'SIGTERM');
+              writeFileSync(logPath, 'SIGTERM sent\n', 'utf-8');
+            }
+          }
+        } catch (e) {
+          writeFileSync(logPath, `Error: ${e.message}\n`, 'utf-8');
+        }
+      }, 2000);
       return;
     }
 

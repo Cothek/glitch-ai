@@ -76,9 +76,10 @@ glitch-website/.vercel/
 glitch-website/public/downloads/
 glitch-website/scripts/screenshot.mjs
 
-# User data (separate git submodule for Troy, or local for others)
-user/
-!/user/.gitkeep
+# Root and MCP server dependencies (installed locally, not tracked)
+node_modules/
+plugins/mcp-server/node_modules/
+
 
 # Security testing binaries (downloaded by bootstrap)
 tools/security/*.exe

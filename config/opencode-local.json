@@ -1,127 +1,136 @@
 {
-  "$schema": "https://opencode.ai/config.json",
-  "plugin": [".opencode/plugins/save-images.js"],
-  "instructions": [
-    "glitch-memorycore/prompt-rules.md",
-    "glitch-memorycore/CLAUDE.md",
-    "glitch-memorycore/master-memory.md",
-    "glitch-memorycore/core/identity.md",
-    "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
-  ],
-  "agent": {
-    "glitch": {
-      "model": "__MODEL__",
-      "mode": "primary",
-      "description": "Local mode orchestrates tasks using only local LLM models via LM Studio.",
-      "color": "#22c55e",
-      "temperature": 0.2,
-      "permission": {
-        "read": "allow",
-        "edit": "deny",
-        "write": "deny",
-        "bash": "deny",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "allow",
-        "question": "allow",
-        "skill": "allow",
-        "todowrite": "allow",
-        "task": "allow"
-      },
-      "prompt": "__PROMPT__"
-    },
-    "general": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
-      "permission": {
-        "read": "allow",
-        "edit": "allow",
-        "bash": "allow",
-        "glob": "allow",
-        "grep": "allow",
-        "list": "allow",
-        "webfetch": "allow",
-        "websearch": "deny",
-        "question": "allow",
-        "todowrite": "allow"
-      },
-      "temperature": 0.2
-    },
-    "explore": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
-      "temperature": 0.2
-    },
-    "plan": {
-      "model": "__MODEL__",
-      "mode": "primary",
-      "description": "Planning mode -- reason about architecture and designs without executing code.",
-      "temperature": 0.2
-    },
-    "build": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Code scaffolding -- generates code from prompts.",
-      "temperature": 0.2
-    },
-    "memory": {
-      "model": "__MODEL__",
-      "mode": "subagent",
-      "description": "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
-      "permission": {
-        "read": "allow",
-        "write": "allow",
-        "list": "allow",
-        "glob": "allow",
-        "skill": "allow",
-        "edit": "deny",
-        "bash": "deny",
-        "grep": "deny",
-        "webfetch": "deny",
-        "websearch": "deny",
-        "question": "deny",
-        "todowrite": "deny",
-        "task": "deny"
-      },
-      "temperature": 0.2
-    }
-  },
-  "attachment": {
-    "image": {
-      "auto_resize": true,
-      "max_width": 2000,
-      "max_height": 2000,
-      "max_base64_bytes": 5242880
-    }
-  },
-  "experimental": {
-    "disable_paste_summary": true
-  },
-  "server": {
-    "port": 4100,
-    "hostname": "0.0.0.0"
-  },
-  "default_agent": "glitch",
-  "provider": {
-    "lmstudio": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "LM Studio (local)",
-      "options": {
-        "baseURL": "http://192.168.86.139:1234/v1"
-      },
-      "models": {
-        "google/gemma-4-12b": {
-          "name": "Gemma 4 12B (local)"
-        }
-      }
-    }
-  },
-  "compaction": {
-    "auto": true,
-    "tail_turns": 8
-  }
+    "$schema":  "https://opencode.ai/config.json",
+    "plugin":  [
+                   ".opencode/plugins/save-images.js",
+                   ".opencode/plugins/dispatch-reflex.js",
+                   ".opencode/plugins/compaction.js",
+                   ".opencode/plugins/verify-claim.js",
+                   ".opencode/plugins/recall.js",
+                   ".opencode/plugins/stuck-detector.js"
+               ],
+    "instructions":  [
+                         "glitch-memorycore/prompt-rules.md",
+                         "glitch-memorycore/glitch.md",
+                         "glitch-memorycore/master-memory.md",
+                         "glitch-memorycore/core/identity.md",
+                         "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+                     ],
+    "agent":  {
+                  "glitch":  {
+                                 "model":  "__MODEL__",
+                                 "mode":  "primary",
+                                 "description":  "Local mode orchestrates tasks using only local LLM models via LM Studio.",
+                                 "color":  "#22c55e",
+                                 "temperature":  0.2,
+                                 "permission":  {
+                                                    "read":  "allow",
+                                                    "edit":  "deny",
+                                                    "write":  "deny",
+                                                    "bash":  "deny",
+                                                    "glob":  "allow",
+                                                    "grep":  "allow",
+                                                    "list":  "allow",
+                                                    "webfetch":  "allow",
+                                                    "websearch":  "allow",
+                                                    "question":  "allow",
+                                                    "skill":  "allow",
+                                                    "todowrite":  "allow",
+                                                    "task":  "allow"
+                                                },
+                                 "prompt":  "__PROMPT__"
+                             },
+                  "general":  {
+                                  "model":  "__MODEL__",
+                                  "mode":  "subagent",
+                                  "description":  "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
+                                  "permission":  {
+                                                     "read":  "allow",
+                                                     "edit":  "allow",
+                                                     "bash":  "allow",
+                                                     "glob":  "allow",
+                                                     "grep":  "allow",
+                                                     "list":  "allow",
+                                                     "webfetch":  "allow",
+                                                     "websearch":  "deny",
+                                                     "question":  "allow",
+                                                     "todowrite":  "allow"
+                                                 },
+                                  "temperature":  0.2
+                              },
+                  "explore":  {
+                                  "model":  "__MODEL__",
+                                  "mode":  "subagent",
+                                  "description":  "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
+                                  "temperature":  0.2
+                              },
+                  "plan":  {
+                               "model":  "__MODEL__",
+                               "mode":  "primary",
+                               "description":  "Planning mode -- reason about architecture and designs without executing code.",
+                               "temperature":  0.2
+                           },
+                  "build":  {
+                                "model":  "__MODEL__",
+                                "mode":  "subagent",
+                                "description":  "Code scaffolding -- generates code from prompts.",
+                                "temperature":  0.2
+                            },
+                  "memory":  {
+                                 "model":  "__MODEL__",
+                                 "mode":  "subagent",
+                                 "description":  "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
+                                 "permission":  {
+                                                    "read":  "allow",
+                                                    "write":  "allow",
+                                                    "list":  "allow",
+                                                    "glob":  "allow",
+                                                    "skill":  "allow",
+"edit":  "allow",
+                                                     "bash":  "deny",
+                                                     "grep":  "deny",
+                                                     "webfetch":  "deny",
+                                                     "websearch":  "deny",
+                                                     "question":  "deny",
+                                                     "todowrite":  "deny",
+                                                     "task":  "deny"
+                                                 },
+                                                 "temperature": 0.2
+                                               }
+                                             }
+                                           }
+              },
+    "attachment":  {
+                       "image":  {
+                                     "auto_resize":  true,
+                                     "max_width":  2000,
+                                     "max_height":  2000,
+                                     "max_base64_bytes":  5242880
+                                 }
+                   },
+    "experimental":  {
+                         "disable_paste_summary":  true
+                     },
+    "server":  {
+                   "port":  4100,
+                   "hostname":  "0.0.0.0"
+               },
+    "default_agent":  "glitch",
+    "provider":  {
+                     "lmstudio":  {
+                                      "npm":  "@ai-sdk/openai-compatible",
+                                      "name":  "LM Studio (local)",
+                                      "options":  {
+                                                      "baseURL":  "http://192.168.86.139:1234/v1"
+                                                  },
+                                      "models":  {
+                                                     "google/gemma-4-12b":  {
+                                                                                "name":  "Gemma 4 12B (local)"
+                                                                            }
+                                                 }
+                                  }
+                 },
+    "compaction":  {
+                       "auto":  true,
+                       "tail_turns":  8
+                   }
 }

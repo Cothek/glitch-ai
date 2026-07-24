@@ -3,8 +3,9 @@
 import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { execFileSync } from 'child_process';
+import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
+import { checkRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -211,6 +212,10 @@ function runScript(scriptName, extraArgs = []) {
 }
 
 async function main() {
+  // ---- Check for repo updates before anything else ----
+  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
+  handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
+
   const args = process.argv.slice(2);
 
   if (args.includes('--help') || args.includes('-h')) {

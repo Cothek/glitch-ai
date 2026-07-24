@@ -1,3 +1,6 @@
 [submodule "glitch-memorycore"]
 	path = glitch-memorycore
 	url = https://github.com/Cothek/glitch-engine.git
+[submodule "user"]
+	path = user
+	url = https://cothek@github.com/Cothek/glitch-user-troy.git

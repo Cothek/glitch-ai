@@ -206,6 +206,73 @@
       flex-shrink: 0;
     }
 
+    /* Agent checkbox */
+    .agent-checkbox {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid var(--glitch-neutral-600);
+      border-radius: 3px;
+      background: var(--glitch-neutral-800);
+      cursor: pointer;
+      flex-shrink: 0;
+      vertical-align: middle;
+      accent-color: var(--glitch-accent);
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .agent-checkbox:checked {
+      background-color: var(--glitch-accent);
+      border-color: var(--glitch-accent);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z'/%3E%3C/svg%3E");
+      background-size: contain;
+    }
+    .agent-checkbox-header {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid var(--glitch-neutral-600);
+      border-radius: 3px;
+      background: var(--glitch-neutral-800);
+      cursor: pointer;
+      accent-color: var(--glitch-accent);
+      transition: background-color 0.15s ease, border-color 0.15s ease;
+    }
+    .agent-checkbox-header:checked {
+      background-color: var(--glitch-accent);
+      border-color: var(--glitch-accent);
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='white' d='M13.78 4.22a.75.75 0 0 1 0 1.06l-7.25 7.25a.75.75 0 0 1-1.06 0L2.22 9.28a.75.75 0 0 1 1.06-1.06L6 10.94l6.72-6.72a.75.75 0 0 1 1.06 0z'/%3E%3C/svg%3E");
+      background-size: contain;
+    }
+    #agent-tbody tr.selected {
+      background-color: color-mix(in srgb, var(--glitch-accent) 10%, transparent) !important;
+    }
+    #agent-tbody tr.selected:hover {
+      background-color: color-mix(in srgb, var(--glitch-accent) 15%, transparent) !important;
+    }
+
+    /* Batch action bar */
+    #batch-bar {
+      display: none;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      margin-bottom: 8px;
+      background-color: color-mix(in srgb, var(--glitch-accent) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--glitch-accent) 30%, transparent);
+      border-radius: var(--glitch-radius-lg);
+      font-size: 13px;
+    }
+    #batch-bar.visible {
+      display: flex;
+    }
+    #batch-count {
+      font-weight: var(--glitch-font-medium);
+      color: var(--glitch-text-primary);
+      margin-right: auto;
+    }
+
     .pending-table tr.changed {
       background-color: var(--glitch-accent-bg);
     }
@@ -241,8 +308,10 @@
     .checkbox-wrapper input[type="checkbox"] {
       accent-color: var(--glitch-accent);
       width: 16px;
-      height: 16px;
-      cursor: pointer;
+      filter: brightness(0.6);
+    }
+    .checkbox-wrapper input[type="checkbox"]:checked {
+      filter: none;
     }
 
     .table-container {
@@ -356,14 +425,8 @@
     }
 
     @keyframes modal-scale-in {
-      from {
-        opacity: 0;
-        transform: scale(0.96);
-      }
-      to {
-        opacity: 1;
-        transform: scale(1);
-      }
+      from { opacity: 0; }
+      to { opacity: 1; }
     }
 
     /* Status cards: staggered fade-in */
@@ -381,16 +444,7 @@
       animation: slide-in-left 0.35s ease-out forwards;
       opacity: 0;
     }
-    #agent-table tbody tr:nth-child(1) { animation-delay: 0.05s; }
-    #agent-table tbody tr:nth-child(2) { animation-delay: 0.1s; }
-    #agent-table tbody tr:nth-child(3) { animation-delay: 0.15s; }
-    #agent-table tbody tr:nth-child(4) { animation-delay: 0.2s; }
-    #agent-table tbody tr:nth-child(5) { animation-delay: 0.25s; }
-    #agent-table tbody tr:nth-child(6) { animation-delay: 0.3s; }
-    #agent-table tbody tr:nth-child(7) { animation-delay: 0.35s; }
-    #agent-table tbody tr:nth-child(8) { animation-delay: 0.4s; }
-    #agent-table tbody tr:nth-child(9) { animation-delay: 0.45s; }
-    #agent-table tbody tr:nth-child(10) { animation-delay: 0.5s; }
+
 
     /* Model picker modal */
     .gl-modal-backdrop:not(.gl-hidden) {
@@ -462,7 +516,7 @@
           </div>
           <div class="gl-flex gl-gap-3">
             <button class="gl-btn gl-btn--secondary gl-btn--md" id="btn-rollback" disabled>&#8634; Rollback</button>
-            <button class="gl-btn gl-btn--primary gl-btn--md" id="btn-apply" disabled>&#10003; Apply Changes</button>
+            <button class="gl-btn gl-btn--primary gl-btn--md" id="btn-apply-restart" disabled>&#8635; Apply & Restart</button>
           </div>
         </div>
       </div>
@@ -499,37 +553,19 @@
           </div>
         </div>
 
-        <div id="pending-section" class="gl-hidden">
-          <div class="gl-card gl-card--accent gl-m-4" style="margin-bottom: var(--glitch-space-6);">
-            <div class="gl-card-header">
-              <span>&#9888; Pending Changes</span>
-              <div class="gl-flex gl-gap-2">
-                <button class="gl-btn gl-btn--ghost gl-btn--sm" id="btn-pending-rollback">Rollback All</button>
-                <button class="gl-btn gl-btn--primary gl-btn--sm" id="btn-pending-apply">Apply All</button>
-              </div>
-            </div>
-            <div class="table-wrapper" style="border: none; border-radius: 0;">
-              <table class="gl-table pending-table">
-                <thead>
-                  <tr>
-                    <th>Agent</th>
-                    <th>Old Model</th>
-                    <th></th>
-                    <th>New Model</th>
-                    <th>Tier</th>
-                  </tr>
-                </thead>
-                <tbody id="pending-tbody"></tbody>
-              </table>
-            </div>
-          </div>
-        </div>
+
 
         <div class="gl-section-header">
           <div>
             <h2 class="gl-section-title">Agents</h2>
             <p class="gl-section-desc">Current model assignments for all configured agents</p>
           </div>
+        </div>
+
+        <div id="batch-bar">
+          <span id="batch-count">0 selected</span>
+          <button class="gl-btn gl-btn--primary gl-btn--sm" id="btn-batch-change" disabled>Change Model</button>
+          <button class="gl-btn gl-btn--ghost gl-btn--sm" id="btn-batch-clear">Clear</button>
         </div>
 
         <div class="table-container">
@@ -545,10 +581,11 @@
             </div>
           </div>
           <table class="gl-table" id="agent-table" style="display: none;">
-            <thead>
+<thead>
               <tr>
+                <th style="width: 40px;"><input type="checkbox" class="agent-checkbox-header" id="select-all-agents" title="Select all"></th>
                 <th class="col-agent">Agent</th>
-                <th class="col-model">Model &amp; Info</th>
+                <th class="col-model">Model & Info</th>
               </tr>
             </thead>
             <tbody id="agent-tbody"></tbody>
@@ -631,6 +668,11 @@
 
         </div>
 
+        <div id="modal-agent-info" class="gl-hidden" style="margin-bottom: 8px; padding: 6px 10px; background-color: color-mix(in srgb, var(--glitch-accent) 8%, transparent); border-radius: var(--glitch-radius-md); font-size: 12px; line-height: 1.6;">
+          <div style="font-weight: var(--glitch-font-medium); color: var(--glitch-text-primary); margin-bottom: 4px;">Changing model for:</div>
+          <div id="modal-agent-list"></div>
+        </div>
+
         <div id="model-list-loading" class="gl-flex gl-items-center gl-justify-center gl-p-8">
           <span class="gl-spinner gl-spinner--lg gl-text-accent"></span>
         </div>
@@ -666,6 +708,7 @@
       pendingChanges: [],
       selectedModel: null,
       currentAgent: null,
+      selectedAgents: [],
       filters: { search: '', tier: '', provider: '', capability: '' },
       models: [],
       loading: { agents: false, models: false, status: false }
@@ -778,7 +821,11 @@
 
         const contextText = agent.context_length ? `${(agent.context_length / 1000).toFixed(0)}K` : '--';
 
-        return `<tr onclick="openModelPicker('${escapeHtml(agent.name)}')"${rowStyle}>
+        const isSelected = state.selectedAgents.includes(agent.name);
+        const selClass = isSelected ? ' selected' : '';
+
+        return `<tr class="${selClass}"${rowStyle} data-agent="${escapeHtml(agent.name)}">
+          <td style="width: 40px;"><input type="checkbox" class="agent-checkbox" data-agent="${escapeHtml(agent.name)}" ${isSelected ? 'checked' : ''}></td>
           <td class="col-agent"><span class="agent-name">@${escapeHtml(agent.name)}</span></td>
           <td>
             <span class="model-line">
@@ -796,7 +843,89 @@
         </tr>`;
       }).join('');
 
+      // Apply staggered animation delays dynamically for any number of rows
+      const rows = tbody.querySelectorAll('tr');
+      rows.forEach((row, i) => {
+        row.style.animationDelay = `${0.05 + i * 0.05}s`;
+      });
+
       document.getElementById('agent-table').style.display = '';
+    }
+
+    // Agent checkbox toggle via event delegation
+    document.getElementById('agent-tbody').addEventListener('click', (e) => {
+      const checkbox = e.target.closest('.agent-checkbox');
+      const row = e.target.closest('tr');
+      if (!row) return;
+      const agentName = row.dataset.agent;
+      if (!agentName) return;
+
+      if (checkbox) {
+        // Checkbox click: toggle selection
+        if (checkbox.checked) {
+          if (!state.selectedAgents.includes(agentName)) state.selectedAgents.push(agentName);
+        } else {
+          state.selectedAgents = state.selectedAgents.filter(a => a !== agentName);
+        }
+        const allChecked = state.selectedAgents.length === state.agents.length;
+        document.getElementById('select-all-agents').checked = allChecked;
+        row.classList.toggle('selected', checkbox.checked);
+        updateBatchBar();
+      } else {
+        // Row click: open model picker for this single agent
+        openModelPicker(agentName);
+      }
+    });
+
+    // Select all
+    document.getElementById('select-all-agents').addEventListener('change', (e) => {
+      if (e.target.checked) {
+        state.selectedAgents = state.agents.map(a => a.name);
+      } else {
+        state.selectedAgents = [];
+      }
+      // Toggle all rows directly instead of re-rendering
+      document.querySelectorAll('#agent-tbody tr').forEach(row => {
+        row.classList.toggle('selected', e.target.checked);
+        const cb = row.querySelector('.agent-checkbox');
+        if (cb) cb.checked = e.target.checked;
+      });
+      updateBatchBar();
+    });
+
+    // Batch change button
+    document.getElementById('btn-batch-change').addEventListener('click', () => {
+      if (state.selectedAgents.length === 0) return;
+      openModelPicker(state.selectedAgents);
+    });
+
+    // Batch clear button
+    document.getElementById('btn-batch-clear').addEventListener('click', () => {
+      state.selectedAgents = [];
+      document.getElementById('select-all-agents').checked = false;
+      // Remove selected class from all rows directly
+      document.querySelectorAll('#agent-tbody tr.selected').forEach(row => {
+        row.classList.remove('selected');
+        const cb = row.querySelector('.agent-checkbox');
+        if (cb) cb.checked = false;
+      });
+      updateBatchBar();
+    });
+
+    function updateBatchBar() {
+      const count = state.selectedAgents.length;
+      const bar = document.getElementById('batch-bar');
+      const countEl = document.getElementById('batch-count');
+      const btn = document.getElementById('btn-batch-change');
+      if (count > 0) {
+        bar.classList.add('visible');
+        countEl.textContent = `${count} agent${count !== 1 ? 's' : ''} selected`;
+        btn.disabled = false;
+        btn.textContent = `Change Model (${count})`;
+      } else {
+        bar.classList.remove('visible');
+        btn.disabled = true;
+      }
     }
 
     async function loadPending() {
@@ -830,37 +959,26 @@
 
     function updatePendingUI() {
       const hasPending = state.pendingChanges.length > 0;
-      document.getElementById('btn-apply').disabled = !hasPending;
       document.getElementById('btn-rollback').disabled = !hasPending;
+      document.getElementById('btn-apply-restart').disabled = !hasPending;
       document.getElementById('stat-pending').textContent = state.pendingChanges.length;
       document.getElementById('stat-pending-sub').textContent = state.pendingChanges.length === 1 ? 'change staged' : 'changes staged';
-
-      const section = document.getElementById('pending-section');
-      if (hasPending) {
-        section.classList.remove('gl-hidden');
-        const tbody = document.getElementById('pending-tbody');
-        tbody.innerHTML = state.pendingChanges.map(c => `
-          <tr class="changed">
-            <td><span class="agent-name">@${escapeHtml(c.agent)}</span></td>
-            <td class="model-id">${escapeHtml(c.old_model)}</td>
-            <td><span class="pending-change-arrow">&rarr;</span></td>
-            <td class="model-id">${escapeHtml(c.new_model)}</td>
-            <td><span class="gl-badge ${tierBadgeClass(c.tier)}"><span class="gl-badge-dot"></span>${escapeHtml(c.tier || '')}</span></td>
-          </tr>
-        `).join('');
-      } else {
-        section.classList.add('gl-hidden');
-      }
 
       renderAgentTable();
     }
 
-    async function openModelPicker(agentName) {
-      state.currentAgent = agentName;
+    async function openModelPicker(agents) {
+      if (typeof agents === 'string') agents = [agents];
+      state.currentAgent = agents[0];
+      state.selectedAgents = agents;
       state.selectedModel = null;
       state.filters = { search: '', tier: '', provider: '', capability: '' };
 
-      document.getElementById('modal-title').textContent = `Select Model for @${agentName}`;
+      if (agents.length === 1) {
+        document.getElementById('modal-title').textContent = `Select Model for @${agents[0]}`;
+      } else {
+        document.getElementById('modal-title').textContent = `Select Model for ${agents.length} agents`;
+      }
       document.getElementById('model-search').value = '';
       document.getElementById('modal-confirm').disabled = true;
       document.getElementById('modal-confirm').textContent = 'Select a Model';
@@ -872,14 +990,42 @@
       document.querySelectorAll('.gl-dropdown__option').forEach(o => o.classList.remove('active'));
       document.querySelectorAll('.gl-dropdown__option[data-value=""]').forEach(o => o.classList.add('active'));
 
+      // Show agent info in modal
+      const agentInfo = document.getElementById('modal-agent-info');
+      const agentList = document.getElementById('modal-agent-list');
+      if (agents.length > 1) {
+        agentInfo.classList.remove('gl-hidden');
+        agentList.innerHTML = agents.map(name => {
+          const agent = state.agents.find(a => a.name === name);
+          const model = agent ? agent.current_model : 'unknown';
+          const shortModel = model.includes('/') ? model.split('/').pop() : model;
+          return `<div style="display: flex; justify-content: space-between; gap: 8px;">
+            <span style="color: var(--glitch-accent);">@${escapeHtml(name)}</span>
+            <span style="color: var(--glitch-text-muted); font-family: var(--glitch-font-mono); font-size: 11px;">${escapeHtml(shortModel)}</span>
+          </div>`;
+        }).join('');
+      } else {
+        agentInfo.classList.add('gl-hidden');
+      }
+
       document.getElementById('modal-backdrop').classList.remove('gl-hidden');
       await fetchModels();
     }
 
     function closeModal() {
       document.getElementById('modal-backdrop').classList.add('gl-hidden');
+      document.getElementById('modal-agent-info').classList.add('gl-hidden');
       state.currentAgent = null;
       state.selectedModel = null;
+      state.selectedAgents = [];
+      document.getElementById('select-all-agents').checked = false;
+      // Clear visual selection from all rows
+      document.querySelectorAll('#agent-tbody tr.selected').forEach(row => {
+        row.classList.remove('selected');
+        const cb = row.querySelector('.agent-checkbox');
+        if (cb) cb.checked = false;
+      });
+      updateBatchBar();
     }
 
     async function fetchModels() {
@@ -967,7 +1113,7 @@
 
         return `<div class="${classes.join(' ')}" onclick="selectModel('${escapeHtml(model.id)}')" data-model-id="${escapeHtml(model.id)}">
           <div class="model-card__info">
-            <span class="model-card__name">${escapeHtml(model.name || model.id)}</span>
+            <span class="model-card__name">${escapeHtml(model.id.includes('/') ? model.id.split('/').pop() : (model.name || model.id))}</span>
             ${isCurrent ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Current</span>' : ''}
             ${model.vision ? '<span class="gl-badge gl-badge--info"><span class="gl-badge-dot"></span>Vision</span>' : ''}
             <span class="model-sep"></span>
@@ -992,22 +1138,47 @@
       if (!model) return;
       state.selectedModel = model;
       document.getElementById('modal-confirm').disabled = false;
-      document.getElementById('modal-confirm').textContent = `Confirm: ${model.name || model.id}`;
+      const shortName = model.id.includes('/') ? model.id.split('/').pop() : (model.name || model.id);
+      document.getElementById('modal-confirm').textContent = `Confirm: ${shortName}`;
       renderModelList();
     }
 
     async function confirmAssignment() {
-      if (!state.selectedModel || !state.currentAgent) return;
+      if (!state.selectedModel || state.selectedAgents.length === 0) return;
+      const modelId = state.selectedModel.id;
 
       try {
-        await api('assign', {
-          method: 'POST',
-          body: JSON.stringify({ agent: state.currentAgent, model: state.selectedModel.id })
-        });
-        showToast(`Model assigned to @${state.currentAgent}. Apply changes to save.`, 'info');
+        // Collect changes from assign API responses
+        const newChanges = [];
+        for (const agentName of state.selectedAgents) {
+          const data = await api('assign', {
+            method: 'POST',
+            body: JSON.stringify({ agent: agentName, model: modelId })
+          });
+          if (data.change) newChanges.push(data.change);
+        }
+
+        // Merge into pending changes (replace existing entries for same agent)
+        for (const change of newChanges) {
+          const existing = state.pendingChanges.findIndex(c => c.agent === change.agent);
+          if (existing >= 0) {
+            state.pendingChanges[existing] = change;
+          } else {
+            state.pendingChanges.push(change);
+          }
+        }
+        updatePendingUI();
+
+        const count = state.selectedAgents.length;
+        const msg = count === 1
+          ? `Model assigned to @${state.selectedAgents[0]}. Apply changes to save.`
+          : `Model assigned to ${count} agents. Apply changes to save.`;
+        showToast(msg, 'info');
+
+        state.selectedAgents = [];
+        document.getElementById('select-all-agents').checked = false;
+        updateBatchBar();
         closeModal();
-        await loadPending();
-        await loadStatus();
       } catch (err) {
         showToast(`Failed to assign model: ${err.message}`, 'error');
       }
@@ -1023,6 +1194,46 @@
         await loadStatus();
       } catch (err) {
         showToast(`Failed to apply changes: ${err.message}`, 'error');
+      }
+    }
+
+    async function applyAndRestart() {
+      try {
+        const data = await api('apply-and-restart', { method: 'POST' });
+        state.pendingChanges = [];
+        updatePendingUI();
+
+        if (data.restarting) {
+          // Server mode: show restart overlay and poll
+          showToast(`Changes applied. Restarting Glitch...`, 'success');
+          document.querySelectorAll('.gl-btn').forEach(b => b.disabled = true);
+          const overlay = document.createElement('div');
+          overlay.id = 'restart-overlay';
+          overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 16px;';
+          overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload automatically.</div>';
+          document.body.appendChild(overlay);
+          let attempts = 0;
+          const maxAttempts = 20;
+          function pollServer() {
+            attempts++;
+            fetch('/api/status')
+              .then(r => {
+                if (r.ok) window.location.reload();
+                else if (attempts < maxAttempts) setTimeout(pollServer, 3000);
+                else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
+              })
+              .catch(() => {
+                if (attempts < maxAttempts) setTimeout(pollServer, 3000);
+                else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
+              });
+          }
+          setTimeout(pollServer, 3000);
+        } else {
+          // TUI mode: just show success message
+          showToast(data.message || 'Changes applied. Please restart opencode manually.', 'success');
+        }
+      } catch (err) {
+        showToast(`Failed to apply and restart: ${err.message}`, 'error');
       }
     }
 
@@ -1117,10 +1328,8 @@
     });
     document.getElementById('model-retry-btn').addEventListener('click', fetchModels);
 
-    document.getElementById('btn-apply').addEventListener('click', applyChanges);
     document.getElementById('btn-rollback').addEventListener('click', rollbackChanges);
-    document.getElementById('btn-pending-apply').addEventListener('click', applyChanges);
-    document.getElementById('btn-pending-rollback').addEventListener('click', rollbackChanges);
+    document.getElementById('btn-apply-restart').addEventListener('click', applyAndRestart);
 
     document.getElementById('btn-plugin-toggle').addEventListener('click', async () => {
       try {

@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BAUHAUS ANALYTICS</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Archivo:ital,wght@0,400;0,600;0,700;0,900;1,400&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --blue: #0033CC;
+  --blue-hover: #0022AA;
+  --red: #E3000B;
+  --red-hover: #B80009;
+  --yellow: #FFD100;
+  --yellow-hover: #E0B800;
+  --black: #000000;
+  --canvas: #f5f5f0;
+  --rule: 3px;
+}
+
+html { font-size: 16px; }
+
+body {
+  background: var(--canvas);
+  font-family: 'Space Grotesk', sans-serif;
+  color: var(--black);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* === LOADING SPINNER === */
+.spinner-overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--canvas);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.4s ease, visibility 0.4s ease;
+}
+.spinner-overlay.hidden {
+  opacity: 0;
+  visibility: hidden;
+}
+.spinner-square {
+  width: 40px;
+  height: 40px;
+  border: 4px solid var(--black);
+  background: var(--red);
+  animation: spin-square 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes spin-square {
+  0% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(90deg) scale(0.8); background: var(--blue); }
+  50% { transform: rotate(180deg) scale(1); }
+  75% { transform: rotate(270deg) scale(0.8); background: var(--yellow); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+/* === MAIN LAYOUT === */
+.dashboard {
+  display: grid;
+  grid-template-columns: 60px 1fr;
+  grid-template-rows: auto 1fr;
+  min-height: 100vh;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.dashboard.visible { opacity: 1; }
+
+/* === LEFT SIDEBAR === */
+.sidebar {
+  grid-row: 1 / -1;
+  background: var(--blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
+  transform: scaleY(0);
+  transform-origin: top;
+  animation: rule-vertical 0.6s ease 0.2s forwards;
+}
+.sidebar-text {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: 1.1rem;
+  letter-spacing: 0.3em;
+  color: #fff;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.sidebar-circle {
+  position: absolute;
+  bottom: 20px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--yellow);
+}
+
+/* === HEADER === */
+.header {
+  padding: 24px 32px;
+  border-bottom: var(--rule) solid var(--black);
+  display: flex;
+  align-items: baseline;
+  gap: 20px;
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: rule-horizontal 0.6s ease 0.4s forwards;
+}
+.header h1 {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: 2rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  line-height: 1;
+}
+.header-sub {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #666;
+}
+.header-triangle {
+  width: 0;
+  height: 0;
+  border-left: 12px solid transparent;
+  border-right: 12px solid transparent;
+  border-bottom: 20px solid var(--red);
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* === CONTENT GRID (Mondrian) === */
+.content {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr 80px;
+  grid-template-rows: 1fr 1fr 1.2fr;
+  gap: 0;
+  padding: 0;
+  position: relative;
+}
+
+/* === BLACK RULES (grid borders) === */
+.content > * {
+  border: var(--rule) solid var(--black);
+  margin: -1.5px;
+  position: relative;
+}
+
+/* === RED BLOCK (Revenue) === */
+.block-red {
+  grid-column: 1 / 3;
+  grid-row: 1 / 3;
+  background: var(--red);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 32px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  opacity: 0;
+  transform: translateX(-60px);
+  animation: slide-from-left 0.6s ease 0.6s forwards;
+}
+.block-red:hover { background: var(--red-hover); }
+.block-red .label {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: 0.85rem;
+  letter-spacing: 0.25em;
+  text-transform: uppercase;
+}
+.block-red .value {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: 4.5rem;
+  line-height: 1;
+  letter-spacing: -0.02em;
+}
+.block-red .sub {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.8rem;
+  letter-spacing: 0.1em;
+  opacity: 0.8;
+}
+.block-red .geo-accent {
+  position: absolute;
+  bottom: 24px;
+  right: 24px;
+  width: 48px;
+  height: 48px;
+  border: 3px solid rgba(255,255,255,0.4);
+}
+
+/* === BLUE BLOCK (Users) === */
+.block-blue {
+  grid-column: 3 / 4;
+  grid-row: 1 / 2;
+  background: var(--canvas);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  opacity: 0;
+  transform: translateY(-40px);
+  animation: slide-from-top 0.6s ease 0.8s forwards;
+}
+.block-blue:hover { background: #eaeae5; }
+.block-blue .accent-bar {
+  width: 100%;
+  height: 6px;
+  background: var(--blue);
+}
+.block-blue .label {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-top: 12px;
+}
+.block-blue .value {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: 2rem;
+  line-height: 1;
+}
+.block-blue .sub {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.7rem;
+  color: #666;
+  letter-spacing: 0.05em;
+}
+
+/* === YELLOW BLOCK (Conversion) === */
+.block-yellow {
+  grid-column: 3 / 4;
+  grid-row: 2 / 3;
+  background: var(--yellow);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 20px;
+  cursor: pointer;
+  transition: background 0.3s ease;
+  opacity: 0;
+  transform: translateY(40px);
+  animation: slide-from-bottom 0.6s ease 1.0s forwards;
+}
+.block-yellow:hover { background: var(--yellow-hover); }
+.block-yellow .label {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 700;
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+.block-yellow .value {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: 2rem;
+  line-height: 1;
+}
+.block-yellow .sub {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+}
+.block-yellow .circle-accent {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--black);
+  align-self: flex-end;
+}
+
+/* === DATA COLUMN (thin right strip) === */
+.data-column {
+  grid-column: 4 / 5;
+  grid-row: 1 / 3;
+  background: var(--black);
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+  padding: 16px 10px;
+  gap: 0;
+  opacity: 0;
+  transform: translateX(40px);
+  animation: slide-from-right 0.6s ease 1.2s forwards;
+}
+.data-column .col-title {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 700;
+  font-size: 0.55rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid rgba(255,255,255,0.3);
+}
+.data-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.data-item .dot {
+  width: 8px;
+  height: 8px;
+  flex-shrink: 0;
+}
+.data-item .dot.red { background: var(--red); }
+.data-item .dot.blue { background: var(--blue); }
+.data-item .dot.yellow { background: var(--yellow); }
+.data-item .name {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.05em;
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.data-item .val {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 700;
+  font-size: 0.6rem;
+  letter-spacing: 0.02em;
+}
+
+/* === CHART AREA === */
+.chart-area {
+  grid-column: 1 / 4;
+  grid-row: 3 / 4;
+  background: var(--canvas);
+  padding: 24px 32px;
+  display: flex;
+  flex-direction: column;
+  opacity: 0;
+  animation: fade-in 0.6s ease 1.4s forwards;
+}
+.chart-title {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 700;
+  font-size: 0.75rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  margin-bottom: 20px;
+}
+.chart-bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex: 1;
+  padding-top: 8px;
+  border-bottom: var(--rule) solid var(--black);
+  position: relative;
+}
+.chart-bar {
+  flex: 1;
+  position: relative;
+  border: 2px solid var(--black);
+  transform-origin: bottom;
+  transform: scaleY(0);
+  min-width: 0;
+}
+.chart-bar.blue { background: var(--blue); }
+.chart-bar.red { background: var(--red); }
+.chart-bar.yellow { background: var(--yellow); }
+.chart-bar.empty { background: transparent; }
+
+.chart-labels {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+.chart-label {
+  flex: 1;
+  text-align: center;
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.6rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #666;
+}
+
+/* === DETAIL OVERLAY === */
+.detail-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 8px;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease, visibility 0.25s ease;
+  z-index: 10;
+}
+.detail-overlay.active {
+  opacity: 1;
+  visibility: visible;
+}
+.detail-overlay .detail-shape {
+  width: 32px;
+  height: 32px;
+  border: 3px solid #fff;
+}
+.detail-overlay .detail-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 0.75rem;
+  color: #fff;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.detail-overlay .detail-value {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 900;
+  font-size: 1.5rem;
+  color: #fff;
+}
+
+/* === BOTTOM RULE === */
+.bottom-rule {
+  grid-column: 1 / -1;
+  height: var(--rule);
+  background: var(--black);
+  transform: scaleX(0);
+  transform-origin: left;
+  animation: rule-horizontal 0.6s ease 1.6s forwards;
+}
+
+/* === FOOTER === */
+.footer {
+  grid-column: 1 / -1;
+  padding: 12px 32px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px solid #ddd;
+}
+.footer-left {
+  font-family: 'Archivo', sans-serif;
+  font-weight: 400;
+  font-style: italic;
+  font-size: 0.7rem;
+  letter-spacing: 0.05em;
+  color: #999;
+}
+.footer-right {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+.footer-dot {
+  width: 10px;
+  height: 10px;
+}
+.footer-dot.red { background: var(--red); }
+.footer-dot.blue { background: var(--blue); }
+.footer-dot.yellow { background: var(--yellow); }
+
+/* === ANIMATIONS === */
+@keyframes slide-from-left {
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes slide-from-top {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slide-from-bottom {
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes slide-from-right {
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes fade-in {
+  to { opacity: 1; }
+}
+@keyframes rule-horizontal {
+  to { transform: scaleX(1); }
+}
+@keyframes rule-vertical {
+  to { transform: scaleY(1); }
+}
+@keyframes bar-grow {
+  to { transform: scaleY(1); }
+}
+
+/* === RESPONSIVE === */
+@media (max-width: 900px) {
+  .dashboard {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    display: none;
+  }
+  .content {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: auto auto auto auto;
+  }
+  .block-red {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .block-blue { grid-column: 1 / 2; grid-row: auto; }
+  .block-yellow { grid-column: 2 / 3; grid-row: auto; }
+  .data-column {
+    grid-column: 1 / -1;
+    grid-row: auto;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .chart-area {
+    grid-column: 1 / -1;
+    grid-row: auto;
+  }
+  .block-red .value { font-size: 3rem; }
+}
+</style>
+</head>
+<body>
+
+<div class="spinner-overlay" id="spinner">
+  <div class="spinner-square"></div>
+</div>
+
+<div class="dashboard" id="dashboard">
+  <div class="sidebar">
+    <span class="sidebar-text">BAUHAUS</span>
+    <div class="sidebar-circle"></div>
+  </div>
+
+  <header class="header">
+    <h1>BAUHAUS ANALYTICS</h1>
+    <span class="header-sub">Das Dashboard &mdash; 2026</span>
+    <div class="header-triangle"></div>
+  </header>
+
+  <div class="content">
+    <div class="block-red" data-detail="Q4 Target: $3.2M &bull; +12.4% YoY">
+      <span class="label">Revenue</span>
+      <span class="value" data-count="2847350" data-prefix="$">$0</span>
+      <span class="sub">FY 2026 &mdash; TOTAL</span>
+      <div class="geo-accent"></div>
+      <div class="detail-overlay">
+        <div class="detail-shape" style="background: var(--yellow);"></div>
+        <span class="detail-text">Q4 Target</span>
+        <span class="detail-value">$3.2M</span>
+      </div>
+    </div>
+
+    <div class="block-blue" data-detail="Active: 41,203 &bull; Churn: 2.1%">
+      <div class="accent-bar"></div>
+      <span class="label">Users</span>
+      <span class="value" data-count="48294">0</span>
+      <span class="sub">REGISTERED</span>
+      <div class="detail-overlay">
+        <div class="detail-shape" style="background: var(--red);"></div>
+        <span class="detail-text">Active</span>
+        <span class="detail-value">41,203</span>
+      </div>
+    </div>
+
+    <div class="block-yellow" data-detail="Goal: 5.0% &bull; +0.6% MoM">
+      <span class="label">Conversion</span>
+      <span class="value" data-count="3.8" data-suffix="%" data-decimals="1">0%</span>
+      <div class="circle-accent"></div>
+      <div class="detail-overlay">
+        <div class="detail-shape" style="background: var(--blue);"></div>
+        <span class="detail-text">Goal</span>
+        <span class="detail-value">5.0%</span>
+      </div>
+    </div>
+
+    <div class="data-column">
+      <div class="col-title">Projects</div>
+      <div class="data-item">
+        <div class="dot red"></div>
+        <span class="name">Konstruktion</span>
+        <span class="val">$842K</span>
+      </div>
+      <div class="data-item">
+        <div class="dot blue"></div>
+        <span class="name">Typografie</span>
+        <span class="val">$631K</span>
+      </div>
+      <div class="data-item">
+        <div class="dot yellow"></div>
+        <span class="name">Formular</span>
+        <span class="val">$528K</span>
+      </div>
+      <div class="data-item">
+        <div class="dot red"></div>
+        <span class="name">Weberei</span>
+        <span class="val">$419K</span>
+      </div>
+    </div>
+
+    <div class="chart-area">
+      <div class="chart-title">Monthly Performance</div>
+      <div class="chart-bars" id="chartBars"></div>
+      <div class="chart-labels" id="chartLabels"></div>
+    </div>
+  </div>
+
+  <div class="bottom-rule"></div>
+
+  <footer class="footer">
+    <span class="footer-left">Gestaltung ist Zweck</span>
+    <div class="footer-right">
+      <div class="footer-dot red"></div>
+      <div class="footer-dot blue"></div>
+      <div class="footer-dot yellow"></div>
+    </div>
+  </footer>
+</div>
+
+<script>
+(function() {
+  const MONTHS = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  const BAR_DATA = [
+    { h: 55, c: 'blue' },
+    { h: 72, c: 'red' },
+    { h: 40, c: 'yellow' },
+    { h: 88, c: 'blue' },
+    { h: 65, c: 'red' },
+    { h: 95, c: 'blue' },
+    { h: 50, c: 'empty' },
+    { h: 78, c: 'red' },
+    { h: 60, c: 'yellow' },
+    { h: 82, c: 'blue' },
+    { h: 70, c: 'red' },
+    { h: 45, c: 'yellow' }
+  ];
+
+  function buildChart() {
+    const barsEl = document.getElementById('chartBars');
+    const labelsEl = document.getElementById('chartLabels');
+    BAR_DATA.forEach((d, i) => {
+      const bar = document.createElement('div');
+      bar.className = 'chart-bar ' + d.c;
+      bar.style.height = d.h + '%';
+      bar.style.animationDelay = (1.6 + i * 0.1) + 's';
+      bar.style.animation = 'bar-grow 0.5s ease ' + (1.6 + i * 0.1) + 's forwards';
+      bar.style.transform = 'scaleY(0)';
+      bar.style.transformOrigin = 'bottom';
+      barsEl.appendChild(bar);
+
+      const label = document.createElement('div');
+      label.className = 'chart-label';
+      label.textContent = MONTHS[i];
+      labelsEl.appendChild(label);
+    });
+  }
+
+  function animateCounters() {
+    document.querySelectorAll('[data-count]').forEach(el => {
+      const target = parseFloat(el.dataset.count);
+      const prefix = el.dataset.prefix || '';
+      const suffix = el.dataset.suffix || '';
+      const decimals = parseInt(el.dataset.decimals || '0');
+      const duration = 1800;
+      const start = performance.now();
+
+      function tick(now) {
+        const elapsed = now - start;
+        const progress = Math.min(elapsed / duration, 1);
+        const eased = 1 - Math.pow(1 - progress, 3);
+        const current = target * eased;
+
+        if (decimals > 0) {
+          el.textContent = prefix + current.toFixed(decimals) + suffix;
+        } else {
+          el.textContent = prefix + Math.floor(current).toLocaleString() + suffix;
+        }
+
+        if (progress < 1) requestAnimationFrame(tick);
+      }
+      setTimeout(() => requestAnimationFrame(tick), 1400);
+    });
+  }
+
+  function initClickExpand() {
+    document.querySelectorAll('[data-detail]').forEach(card => {
+      card.addEventListener('click', function(e) {
+        const overlay = this.querySelector('.detail-overlay');
+        if (!overlay) return;
+        overlay.classList.toggle('active');
+        setTimeout(() => overlay.classList.remove('active'), 2000);
+      });
+    });
+  }
+
+  function init() {
+    buildChart();
+
+    setTimeout(() => {
+      document.getElementById('spinner').classList.add('hidden');
+      document.getElementById('dashboard').classList.add('visible');
+    }, 800);
+
+    animateCounters();
+    initClickExpand();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', init);
+  } else {
+    init();
+  }
+})();
+</script>
+</body>
+</html>

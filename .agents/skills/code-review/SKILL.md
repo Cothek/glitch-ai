@@ -49,7 +49,7 @@ Skip quality gate if ALL of:
 | 10 | `bootstrap.ps1` | first-time setup | Fresh clone can't initialize |
 | 11 | `validate-config.ps1` | all (pre-flight) | Validation gate itself broken |
 | 12 | `glitch-memorycore/prompt-rules.md` | all | Delegator loses instructions — behavioral drift |
-| 13 | `glitch-memorycore/CLAUDE.md` | all | Delegator loses protocol — behavioral drift |
+| 13 | `glitch-memorycore/glitch.md` | all | Delegator loses protocol — behavioral drift |
 | 14 | `glitch-memorycore/main/*.md` | all | Memory context lost — session breaks |
 | 15 | `glitch-memorycore/plugins/glitch-skills/skills/*/SKILL.md` | all | Skills break or go missing |
 
@@ -80,7 +80,7 @@ Skip quality gate if ALL of:
 - **Step 0 — Dependency completeness**: Every binary or npm package used by core files must have a corresponding install step. Missing = fresh clone can't launch.
 - **Step 1 — Submodule init**: Must initialize `glitch-memorycore`. Without it, no instructions files load.
 
-**For memory files (`glitch-memorycore/main/*.md`, `prompt-rules.md`, `CLAUDE.md`):**
+**For memory files (`glitch-memorycore/main/*.md`, `prompt-rules.md`, `glitch.md`):**
 - **Step 0 — Structural integrity**: Does the file still parse as valid Markdown? Are all required sections present?
 - **Step 1 — Cross-references**: Do links between memory files still resolve? Are there dead references to deleted files or renamed paths?
 - **Step 2 — Token budget**: Memory files should not grow unbounded. If a file exceeds ~300 lines, flag for compaction.
