@@ -115,7 +115,23 @@
                                                 },
                                  "temperature":  0.2
                              },
-                  "memory":  {
+                             "vision-alt": {
+                               "model": "__VISION_MODEL__",
+                               "mode": "subagent",
+                               "description": "Alternative image and visual content analysis agent. Fallback when @vision fails with model-level errors (NVIDIA DEGRADED function, quota exhaustion, model not found). Uses a different underlying model than @vision.",
+                               "permission": {
+                                 "read": "allow",
+                                 "bash": "deny",
+                                 "glob": "allow",
+                                 "grep": "deny",
+                                 "edit": "deny",
+                                 "skill": "deny",
+                                 "list": "allow",
+                                 "webfetch": "allow"
+                               },
+                               "temperature": 0.2
+                             },
+                   "memory":  {
                                  "model":  "__MODEL__",
                                  "mode":  "subagent",
 "description":  "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",

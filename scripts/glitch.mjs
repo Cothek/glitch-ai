@@ -5,6 +5,7 @@ import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync, spawn } from 'child_process';
 import { platform } from 'os';
+import { checkRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -114,7 +115,7 @@ async function switchMode(targetMode, options = {}) {
 }
 
 async function generateNormalConfig(templateText) {
-  const engineInstructions = ['glitch-memorycore/prompt-rules.md', 'glitch-memorycore/CLAUDE.md', 'glitch-memorycore/master-memory.md', 'glitch-memorycore/core/identity.md', 'glitch-memorycore/plugins/glitch-skills/skills-registry.md'];
+  const engineInstructions = ['glitch-memorycore/prompt-rules.md', 'glitch-memorycore/glitch.md', 'glitch-memorycore/master-memory.md', 'glitch-memorycore/core/identity.md', 'glitch-memorycore/plugins/glitch-skills/skills-registry.md'];
   let UserName = process.env.GLITCH_USER || null; let userFound = false; const UserDir = join(ROOT_DIR, 'user');
   if (UserName) { const subdirPath = join(UserDir, UserName); if (existsSync(join(subdirPath, 'main-memory.md'))) userFound = true; else if (existsSync(join(UserDir, 'main-memory.md'))) { UserName = ''; userFound = true; } else { log(YELLOW, '  WARNING: User ' + UserName + ' specified but no profile found'); UserName = null; } }
   if (!userFound) { if (existsSync(join(UserDir, 'main-memory.md'))) { UserName = ''; userFound = true; } else if (existsSync(UserDir)) { const { readdirSync } = await import('fs'); try { const entries = readdirSync(UserDir, { withFileTypes: true }); const profiles = entries.filter(e => e.isDirectory()).map(e => e.name).filter(name => existsSync(join(UserDir, name, 'main-memory.md'))); if (profiles.length === 1) { UserName = profiles[0]; userFound = true; } else if (profiles.length > 1) { UserName = profiles[0]; userFound = true; } } catch {} } }
@@ -128,6 +129,10 @@ async function runLaunchScript(scriptPath) { const fullPath = join(ROOT_DIR, scr
 async function showStatus() { const currentMode = getCurrentMode(); const currentConfig = getCurrentConfig(); log(CYAN, '\n  Glitch Mode Status'); log(CYAN, '  =================='); log(''); if (currentMode) { const mode = MODES[currentMode]; log(mode.color, '  Current Mode: ' + mode.name + ' (' + currentMode + ')'); log(DARK_GRAY, '  Model: ' + mode.model); log(DARK_GRAY, '  Agents: ' + mode.agents.join(', ')); } else { log(YELLOW, '  Current Mode: Unknown (no mode marker found)'); } if (currentConfig) { const agentKeys = Object.keys(currentConfig.agent || {}); log(DARK_GRAY, '  Active Agents in Config: ' + agentKeys.join(', ')); if (currentConfig.agent?.glitch?.model) log(DARK_GRAY, '  Glitch Model: ' + currentConfig.agent.glitch.model); } try { const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, encoding: 'utf-8', timeout: 5000 }).toString().trim(); log(DARK_GRAY, '  Git Branch: ' + branch); } catch {} log(''); }
 
 async function main() {
+  // ---- Check for repo updates before switching modes ----
+  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
+  handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
+
   const args = process.argv.slice(2);
 
   if (args.includes('--help') || args.includes('-h') || args.length === 0) {

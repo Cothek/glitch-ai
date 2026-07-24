@@ -59,7 +59,7 @@ async function switchMode(targetMode, options = {}) {
 }
 
 async function generateNormalConfig(templateText) {
-  const engineInstructions = ['glitch-memorycore/prompt-rules.md', 'glitch-memorycore/CLAUDE.md', 'glitch-memorycore/master-memory.md', 'glitch-memorycore/core/identity.md', 'glitch-memorycore/plugins/glitch-skills/skills-registry.md'];
+  const engineInstructions = ['glitch-memorycore/prompt-rules.md', 'glitch-memorycore/glitch.md', 'glitch-memorycore/master-memory.md', 'glitch-memorycore/core/identity.md', 'glitch-memorycore/plugins/glitch-skills/skills-registry.md'];
   let UserName = process.env.GLITCH_USER || null; let userFound = false; const UserDir = join(ROOT_DIR, 'user');
   if (UserName) { const subdirPath = join(UserDir, UserName); if (existsSync(join(subdirPath, 'main-memory.md'))) userFound = true; else if (existsSync(join(UserDir, 'main-memory.md'))) { UserName = ''; userFound = true; } else { log(YELLOW, '  WARNING: User ' + UserName + ' specified but no profile found'); UserName = null; } }
   if (!userFound) { if (existsSync(join(UserDir, 'main-memory.md'))) { UserName = ''; userFound = true; } else if (existsSync(UserDir)) { const { readdirSync } = await import('fs'); try { const entries = readdirSync(UserDir, { withFileTypes: true }); const profiles = entries.filter(e => e.isDirectory()).map(e => e.name).filter(name => existsSync(join(UserDir, name, 'main-memory.md'))); if (profiles.length === 1) { UserName = profiles[0]; userFound = true; } else if (profiles.length > 1) { UserName = profiles[0]; userFound = true; } } catch {} } }

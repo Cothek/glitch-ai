@@ -193,6 +193,22 @@
       },
       "temperature": 0.2
     },
+    "vision-alt": {
+      "model": "nvidia/qwen/qwen3.5-122b-a10b",
+      "mode": "subagent",
+      "description": "Alternative image and visual content analysis agent. Fallback when @vision fails with model-level errors (NVIDIA DEGRADED function, quota exhaustion, model not found). Uses a different underlying model than @vision.",
+      "permission": {
+        "read": "allow",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "deny",
+        "edit": "deny",
+        "list": "allow",
+        "webfetch": "allow",
+        "skill": "deny"
+      },
+      "temperature": 0.2
+    },
     "memory": {
       "model": "opencode/deepseek-v4-flash-free",
       "mode": "subagent",

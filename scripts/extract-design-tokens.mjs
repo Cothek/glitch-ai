@@ -40,9 +40,12 @@ OPTIONS
   --section <name>   Extract one section: color, typography, spacing, radius,
                      shadow, breakpoints, transition, components, or all (default: all)
   --json             Output raw JSON (for piping)
-  --pretty           Pretty-print terminal output (default if no --json)
+  --pretty           Pretty-print terminal output (default if no --json).
+                     Color tokens display their full scale (50-950) underneath.
   --env              Output as env vars: DSP_COLOR_PRIMARY=#6366f1
+                     (scale entries: DSP_COLOR_PRIMARY_50=#eef2ff, etc.)
   --css              Output as CSS custom properties: --ds-color-primary: #6366f1;
+                     (scale entries: --ds-color-primary-50: #eef2ff;, etc.)
   --validate         Cross-reference JSON-LD against CSS custom properties in HTML
   --help, -h         Show this help
 
@@ -99,6 +102,13 @@ function flattenTokens(obj, prefix = '') {
     if (val && typeof val === 'object' && !Array.isArray(val)) {
       if (val.value !== undefined && val.cssVar) {
         result[val.cssVar] = val.value;
+        for (const [subKey, subVal] of Object.entries(val)) {
+          if (subKey !== 'value' && subKey !== 'cssVar' && subKey !== 'usage' && subKey !== 'px') {
+            if (subVal && typeof subVal === 'object' && !Array.isArray(subVal)) {
+              Object.assign(result, flattenTokens(subVal, fullKey));
+            }
+          }
+        }
       } else if (val.value !== undefined) {
         result[fullKey] = val.value;
       } else {
@@ -177,8 +187,17 @@ function formatTokenGroup(tokens, indent, lines) {
     if (val && typeof val === 'object' && !Array.isArray(val)) {
       if (val.value !== undefined && val.cssVar) {
         const extra = val.px ? ` (${val.px})` : '';
-        const usage = val.usage ? ` — ${val.usage}` : '';
+        const usage = val.usage ? ` - ${val.usage}` : '';
         lines.push(`${indent}${key.padEnd(20)} ${String(val.value).padEnd(16)} (${val.cssVar})${extra}${usage}`);
+        if (val.scale && typeof val.scale === 'object') {
+          lines.push(`${indent}  scale:`);
+          for (const [step, stepVal] of Object.entries(val.scale)) {
+            if (stepVal && stepVal.value) {
+              const marker = step === '500' ? ' <- base' : '';
+              lines.push(`${indent}    ${step.padEnd(4)} ${String(stepVal.value).padEnd(9)} (${stepVal.cssVar})${marker}`);
+            }
+          }
+        }
       } else if (val.value !== undefined) {
         lines.push(`${indent}${key}: ${val.value}`);
       } else {

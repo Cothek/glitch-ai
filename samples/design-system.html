@@ -2927,7 +2927,9 @@
     "name": "Design System v2.0",
     "description": "Canonical design system template with color gradations and interactive customization",
     "version": "2.0",
-    "color": {
+    "designSystem": {
+      "tokens": {
+        "color": {
       "primary": {
         "value": "#6366f1",
         "cssVar": "--ds-color-primary",
@@ -3104,6 +3106,33 @@
       "16": { "value": "4rem", "cssVar": "--ds-space-16" },
       "20": { "value": "5rem", "cssVar": "--ds-space-20" },
       "24": { "value": "6rem", "cssVar": "--ds-space-24" }
+      },
+        "components": {
+          "button": {
+            "variants": ["primary", "secondary", "ghost", "outline", "danger", "link"],
+            "sizes": ["sm", "md", "lg"]
+          },
+          "input": {
+            "types": ["text", "email", "select", "textarea"],
+            "states": ["default", "focus", "error", "disabled"]
+          },
+          "badge": {
+            "variants": ["default", "primary", "success", "warning", "error"]
+          },
+          "card": {
+            "styles": ["default", "interactive"]
+          },
+          "alert": {
+            "variants": ["info", "success", "warning", "error"]
+          },
+          "toggle": {
+            "states": ["off", "on", "disabled"]
+          },
+          "table": {
+            "features": ["striped", "hover"]
+          }
+        }
+      }
     }
   }
   </script>

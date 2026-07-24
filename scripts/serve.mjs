@@ -313,6 +313,10 @@ async function main() {
   log(MAGENTA, ' Glitch AI - Server Mode');
   log(MAGENTA, '');
 
+  // ---- Sync glitch-ai repo from remote (before any heavy init) ----
+  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: false, allowBranchSwitch: false });
+  handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
+
   // ---- Load .env ----
   loadEnv();
 
@@ -358,10 +362,6 @@ async function main() {
   } else {
     log(DARK_GREEN, '  Engine found');
   }
-
-  // ---- Sync glitch-ai repo from remote (silent, best-effort, branch-aware) ----
-  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: false, allowBranchSwitch: false });
-  handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
 
   // ---- Sync user data repo (silent, best-effort) ----
   const userRepoDir = join(ROOT_DIR, 'user');
@@ -442,7 +442,7 @@ async function main() {
 
   const engineInstructions = [
     'glitch-memorycore/prompt-rules.md',
-    'glitch-memorycore/CLAUDE.md',
+    'glitch-memorycore/glitch.md',
     'glitch-memorycore/master-memory.md',
     'glitch-memorycore/core/identity.md',
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
@@ -638,7 +638,7 @@ async function main() {
       const templateText = readFileSync(TemplatePath, 'utf-8');
       const engineInstructions = [
         'glitch-memorycore/prompt-rules.md',
-        'glitch-memorycore/CLAUDE.md',
+        'glitch-memorycore/glitch.md',
         'glitch-memorycore/master-memory.md',
         'glitch-memorycore/core/identity.md',
         'glitch-memorycore/plugins/glitch-skills/skills-registry.md'

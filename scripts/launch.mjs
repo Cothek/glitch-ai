@@ -7,7 +7,7 @@ import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
-import { checkRepoUpdates, checkUserRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
+import { checkUserRepoUpdates } from './lib/git-sync.mjs';
 import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
 
@@ -243,14 +243,6 @@ function pwsh(args, opts = {}) {
   return run(POWERSHELL, ['-NoProfile', '-ExecutionPolicy', 'Bypass', ...args], opts);
 }
 
-// ---- Sync glitch-ai repo from remote (branch-aware, shared module) ----
-// Uses scripts/lib/git-sync.mjs -- handles any branch, prompts interactively
-// Replaces the old syncMainRepo() that only worked on 'main'
-//
-// Old functions removed in favor of shared module calls in main():
-//   - syncMainRepo()  -> checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true })
-//   - syncUserRepo()  -> checkUserRepoUpdates({ cwd: join(ROOT_DIR, 'user'), interactive: true })
-
 // ---- Branch check: warn if not on main and offer to switch ----
 async function checkAndSwitchToMain() {
   // Skip branch check on restart (seamless restart, no user input)
@@ -394,10 +386,6 @@ async function main() {
     log(DARK_GREEN, '  Engine found');
   }
 
-  // ---- Sync glitch-ai repo from remote (branch-aware, shared module) ----
-  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
-  handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
-
   // ---- Sync user data repo (separate nested git repo) ----
   const userRepoDir = join(ROOT_DIR, 'user');
   if (existsSync(join(userRepoDir, '.git'))) {
@@ -469,7 +457,7 @@ async function main() {
 
   const engineInstructions = [
     'glitch-memorycore/prompt-rules.md',
-    'glitch-memorycore/CLAUDE.md',
+    'glitch-memorycore/glitch.md',
     'glitch-memorycore/master-memory.md',
     'glitch-memorycore/core/identity.md',
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
@@ -879,7 +867,7 @@ async function main() {
       const templateText = readFileSync(TemplatePath, 'utf-8');
       const engineInstructions = [
         'glitch-memorycore/prompt-rules.md',
-        'glitch-memorycore/CLAUDE.md',
+        'glitch-memorycore/glitch.md',
         'glitch-memorycore/master-memory.md',
         'glitch-memorycore/core/identity.md',
         'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
