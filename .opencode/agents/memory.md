@@ -6,7 +6,7 @@ permission:
   write: allow
   list: allow
   glob: allow
-  edit: deny
+  edit: allow
   grep: deny
   bash: deny
   webfetch: deny

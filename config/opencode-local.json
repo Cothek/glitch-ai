@@ -85,17 +85,19 @@
                                                     "list":  "allow",
                                                     "glob":  "allow",
                                                     "skill":  "allow",
-                                                    "edit":  "deny",
-                                                    "bash":  "deny",
-                                                    "grep":  "deny",
-                                                    "webfetch":  "deny",
-                                                    "websearch":  "deny",
-                                                    "question":  "deny",
-                                                    "todowrite":  "deny",
-                                                    "task":  "deny"
-                                                },
-                                 "temperature":  0.2
-                             }
+"edit":  "allow",
+                                                     "bash":  "deny",
+                                                     "grep":  "deny",
+                                                     "webfetch":  "deny",
+                                                     "websearch":  "deny",
+                                                     "question":  "deny",
+                                                     "todowrite":  "deny",
+                                                     "task":  "deny"
+                                                 },
+                                                 "temperature": 0.2
+                                               }
+                                             }
+                                           }
               },
     "attachment":  {
                        "image":  {

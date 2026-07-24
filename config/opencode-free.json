@@ -118,14 +118,14 @@
                   "memory":  {
                                  "model":  "__MODEL__",
                                  "mode":  "subagent",
-                                 "description":  "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
-                                 "permission":  {
-                                                    "read":  "allow",
-                                                    "write":  "allow",
-                                                    "list":  "allow",
-                                                    "glob":  "allow",
-                                                    "skill":  "allow",
-                                                    "edit":  "deny",
+"description":  "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
+                                  "permission":  {
+                                                     "read":  "allow",
+                                                     "write":  "allow",
+                                                     "list":  "allow",
+                                                     "glob":  "allow",
+                                                     "skill":  "allow",
+                                                     "edit":  "allow",
                                                     "bash":  "deny",
                                                     "grep":  "deny",
                                                     "webfetch":  "deny",
