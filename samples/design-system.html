@@ -185,6 +185,43 @@
       --ds-color-text-muted: #64748b;
       --ds-color-border: #334155;
       --ds-color-overlay: rgba(0, 0, 0, 0.6);
+
+      /* NEW: Color scale dark mode overrides */
+      /* Neutral -- shift light values dark so they work as backgrounds */
+      --ds-color-neutral-50: #1e293b;    /* = surface */
+      --ds-color-neutral-100: #334155;   /* = border */
+      --ds-color-neutral-200: #475569;   /* = muted-ish */
+      --ds-color-neutral-300: #64748b;   /* = text-muted */
+
+      /* Primary scale -- dark mode shifted */
+      --ds-color-primary-50: #1e1b4b;    /* = original 950 */
+      --ds-color-primary-100: #312e81;   /* = original 900 */
+      --ds-color-primary-200: #3730a3;   /* = original 800 */
+
+      /* Accent scale */
+      --ds-color-accent-50: #500724;     /* = original 950 */
+      --ds-color-accent-100: #831843;    /* = original 900 */
+      --ds-color-accent-200: #9d174d;    /* = original 800 */
+
+      /* Success scale */
+      --ds-color-success-50: #052e16;    /* = original 950 */
+      --ds-color-success-100: #14532d;   /* = original 900 */
+      --ds-color-success-200: #166534;   /* = original 800 */
+
+      /* Warning scale */
+      --ds-color-warning-50: #451a03;    /* = original 950 */
+      --ds-color-warning-100: #78350f;   /* = original 900 */
+      --ds-color-warning-200: #92400e;   /* = original 800 */
+
+      /* Error scale */
+      --ds-color-error-50: #450a0a;      /* = original 950 */
+      --ds-color-error-100: #7f1d1d;     /* = original 900 */
+      --ds-color-error-200: #991b1b;     /* = original 800 */
+
+      /* Info scale */
+      --ds-color-info-50: #172554;       /* = original 950 */
+      --ds-color-info-100: #1e3a8a;      /* = original 900 */
+      --ds-color-info-200: #1e40af;      /* = original 800 */
     }
 
     * {
@@ -256,6 +293,20 @@
       background: var(--ds-color-primary-950);
     }
 
+    .sidebar-group-label {
+      font-size: var(--ds-text-xs);
+      font-weight: var(--ds-font-weight-semibold);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--ds-color-text-muted);
+      margin-top: var(--ds-space-5);
+      margin-bottom: var(--ds-space-1);
+      padding: var(--ds-space-1) var(--ds-space-3);
+    }
+    .sidebar-group-label:first-child {
+      margin-top: 0;
+    }
+
     main {
       flex: 1;
       margin-left: var(--ds-sidebar-width);
@@ -315,7 +366,7 @@
     }
 
     [data-theme="dark"] .btn-secondary:hover {
-      background: var(--ds-color-neutral-800);
+      background: var(--ds-color-neutral-700);
     }
 
     section {
@@ -696,6 +747,7 @@
       border-radius: var(--ds-radius-md);
       background: var(--ds-color-surface);
       font-size: var(--ds-text-sm);
+      color: var(--ds-color-text);
       cursor: pointer;
     }
 
@@ -715,13 +767,29 @@
       background: var(--ds-color-surface);
       font-size: var(--ds-text-sm);
       font-family: var(--ds-font-sans);
+      color: var(--ds-color-text);
       transition: all var(--ds-transition-fast) var(--ds-ease-default);
     }
 
     .input:focus {
       outline: none;
       border-color: var(--ds-color-primary);
-      box-shadow: 0 0 0 3px var(--ds-color-primary-100);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-color-primary) 25%, transparent);
+    }
+
+    /* When .input is used on a <select>, show a custom chevron and style options for dark mode */
+    select.input {
+      appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16' fill='none' stroke='%2364748b' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M4 6l4 4 4-4'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 8px center;
+      padding-right: var(--ds-space-8);
+      cursor: pointer;
+    }
+
+    select.input option {
+      background: var(--ds-color-surface);
+      color: var(--ds-color-text);
     }
 
     .textarea {
@@ -731,6 +799,7 @@
       background: var(--ds-color-surface);
       font-size: var(--ds-text-sm);
       font-family: var(--ds-font-sans);
+      color: var(--ds-color-text);
       resize: vertical;
       min-height: 100px;
       transition: all var(--ds-transition-fast) var(--ds-ease-default);
@@ -739,7 +808,7 @@
     .textarea:focus {
       outline: none;
       border-color: var(--ds-color-primary);
-      box-shadow: 0 0 0 3px var(--ds-color-primary-100);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--ds-color-primary) 25%, transparent);
     }
 
     .checkbox {
@@ -806,6 +875,24 @@
       background: var(--ds-color-error-50);
       border-color: var(--ds-color-error);
       color: var(--ds-color-error-900);
+    }
+
+    /* Dark mode alert overrides */
+    [data-theme="dark"] .alert-info {
+      color: var(--ds-color-info-300);
+      border-color: var(--ds-color-info-400);
+    }
+    [data-theme="dark"] .alert-success {
+      color: var(--ds-color-success-300);
+      border-color: var(--ds-color-success-400);
+    }
+    [data-theme="dark"] .alert-warning {
+      color: var(--ds-color-warning-300);
+      border-color: var(--ds-color-warning-400);
+    }
+    [data-theme="dark"] .alert-error {
+      color: var(--ds-color-error-300);
+      border-color: var(--ds-color-error-400);
     }
 
     .card {
@@ -880,15 +967,51 @@
     <nav class="sidebar">
       <div class="sidebar-logo">Design System</div>
       <div class="sidebar-nav">
-        <a href="#overview" class="sidebar-link">Overview</a>
+        <div class="sidebar-group-label">Foundation</div>
         <a href="#colors" class="sidebar-link">Colors</a>
         <a href="#color-scales" class="sidebar-link">Color Scales</a>
         <a href="#typography" class="sidebar-link">Typography</a>
         <a href="#spacing" class="sidebar-link">Spacing</a>
         <a href="#radius" class="sidebar-link">Border Radius</a>
         <a href="#shadows" class="sidebar-link">Shadows</a>
+
+        <div class="sidebar-group-label">Components &amp; UI</div>
         <a href="#components" class="sidebar-link">Components</a>
+        <a href="#forms" class="sidebar-link">Forms</a>
+        <a href="#navigation" class="sidebar-link">Navigation</a>
+        <a href="#data-display" class="sidebar-link">Data Display</a>
+        <a href="#icons" class="sidebar-link">Icons</a>
+        <a href="#feedback" class="sidebar-link">Feedback &amp; States</a>
+
+        <div class="sidebar-group-label">Patterns &amp; Guidelines</div>
         <a href="#layout" class="sidebar-link">Layout Patterns</a>
+        <a href="#utilities" class="sidebar-link">Utilities</a>
+        <a href="#animations" class="sidebar-link">Animations</a>
+        <a href="#responsive" class="sidebar-link">Responsive Design</a>
+        <a href="#accessibility" class="sidebar-link">Accessibility</a>
+        <a href="#dark-mode" class="sidebar-link">Dark Mode</a>
+        <a href="#best-practices" class="sidebar-link">Best Practices</a>
+
+        <div class="sidebar-group-label">Reference</div>
+        <a href="#tokens" class="sidebar-link">Design Tokens</a>
+        <a href="#examples" class="sidebar-link">Examples</a>
+        <a href="#implementation" class="sidebar-link">Implementation</a>
+        <a href="#file-structure" class="sidebar-link">File Structure</a>
+        <a href="#technical-details" class="sidebar-link">Technical Details</a>
+        <a href="#resources" class="sidebar-link">Resources</a>
+
+        <div class="sidebar-group-label">Appendix</div>
+        <a href="#changelog" class="sidebar-link">Changelog</a>
+        <a href="#migration" class="sidebar-link">Migration</a>
+        <a href="#faq" class="sidebar-link">FAQ</a>
+        <a href="#glossary" class="sidebar-link">Glossary</a>
+        <a href="#contributing" class="sidebar-link">Contributing</a>
+        <a href="#support" class="sidebar-link">Support</a>
+        <a href="#credits" class="sidebar-link">Credits</a>
+        <a href="#version-history" class="sidebar-link">Version History</a>
+        <a href="#summary" class="sidebar-link">Summary</a>
+        <a href="#final-notes" class="sidebar-link">Final Notes</a>
+        <a href="#appendix" class="sidebar-link">Appendix</a>
       </div>
     </nav>
 
@@ -1125,47 +1248,57 @@
         </div>
       </section>
 
-      <section id="layout">
-        <h2>Layout Patterns</h2>
+      <section id="forms">
+        <h2>Form Patterns</h2>
         <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Common layout patterns using CSS Grid and Flexbox with spacing tokens.
+          Common form layouts and validation patterns.
         </p>
-        <div class="component-grid">
-          <div class="component-card">
-            <h3>Grid Layout</h3>
-            <div class="layout-grid">
-              <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 1</div>
-              <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 2</div>
-              <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 3</div>
-            </div>
-            <p style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); margin-top: var(--ds-space-3);">
-              Auto-fit grid with minmax(250px, 1fr)
-            </p>
-          </div>
 
-          <div class="component-card">
-            <h3>Flex Layout</h3>
-            <div class="layout-flex">
-              <div style="background: var(--ds-color-accent-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); flex: 1;">Item 1</div>
-              <div style="background: var(--ds-color-accent-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); flex: 1;">Item 2</div>
-              <div style="background: var(--ds-color-accent-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); flex: 1;">Item 3</div>
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Vertical Form</h3>
+          <form style="display: flex; flex-direction: column; gap: var(--ds-space-4);">
+            <div>
+              <label style="display: block; font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); margin-bottom: var(--ds-space-2);">Full Name</label>
+              <input type="text" class="input" placeholder="John Doe" style="width: 100%;">
             </div>
-            <p style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); margin-top: var(--ds-space-3);">
-              Flexbox with wrap and gap
-            </p>
-          </div>
+            <div>
+              <label style="display: block; font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); margin-bottom: var(--ds-space-2);">Email</label>
+              <input type="email" class="input" placeholder="john@example.com" style="width: 100%;">
+            </div>
+            <div>
+              <label style="display: block; font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); margin-bottom: var(--ds-space-2);">Message</label>
+              <textarea class="textarea" placeholder="Your message..." style="width: 100%;"></textarea>
+            </div>
+            <button type="submit" class="btn btn-primary" style="align-self: flex-start;">Submit</button>
+          </form>
+        </div>
 
-          <div class="component-card">
-            <h3>Stack Layout</h3>
-            <div class="layout-stack">
-              <div style="background: var(--ds-color-success-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 1</div>
-              <div style="background: var(--ds-color-success-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 2</div>
-              <div style="background: var(--ds-color-success-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 3</div>
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Horizontal Form</h3>
+          <form style="display: grid; grid-template-columns: 120px 1fr; gap: var(--ds-space-4); align-items: center;">
+            <label style="font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium);">Name</label>
+            <input type="text" class="input" placeholder="John Doe">
+            <label style="font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium);">Email</label>
+            <input type="email" class="input" placeholder="john@example.com">
+            <div></div>
+            <button type="submit" class="btn btn-primary" style="justify-self: start;">Submit</button>
+          </form>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Form Validation</h3>
+          <form style="display: flex; flex-direction: column; gap: var(--ds-space-4);">
+            <div>
+              <label style="display: block; font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); margin-bottom: var(--ds-space-2);">Email (Required)</label>
+              <input type="email" class="input" placeholder="Invalid email" style="width: 100%; border-color: var(--ds-color-error);">
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-error); margin-top: var(--ds-space-1);">Please enter a valid email address</div>
             </div>
-            <p style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); margin-top: var(--ds-space-3);">
-              Vertical stack with consistent spacing
-            </p>
-          </div>
+            <div>
+              <label style="display: block; font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); margin-bottom: var(--ds-space-2);">Username (Success)</label>
+              <input type="text" class="input" placeholder="Available" style="width: 100%; border-color: var(--ds-color-success);">
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-success); margin-top: var(--ds-space-1);">Username is available</div>
+            </div>
+          </form>
         </div>
       </section>
 
@@ -1207,365 +1340,47 @@
         </div>
       </section>
 
-      <section id="feedback">
-        <h2>Feedback & States</h2>
+      <section id="data-display">
+        <h2>Data Display</h2>
         <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Visual feedback for user actions and system states.
-        </p>
-
-        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Loading States</h3>
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <div style="display: flex; gap: var(--ds-space-4); align-items: center;">
-            <div style="width: 24px; height: 24px; border: 3px solid var(--ds-color-neutral-200); border-top-color: var(--ds-color-primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
-            <span style="color: var(--ds-color-text-secondary);">Loading...</span>
-          </div>
-          <style>
-            @keyframes spin {
-              to { transform: rotate(360deg); }
-            }
-          </style>
-        </div>
-
-        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Progress Bars</h3>
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <div style="margin-bottom: var(--ds-space-4);">
-            <div style="display: flex; justify-content: space-between; margin-bottom: var(--ds-space-2); font-size: var(--ds-text-sm);">
-              <span>Progress</span>
-              <span>75%</span>
-            </div>
-            <div style="height: 8px; background: var(--ds-color-neutral-200); border-radius: var(--ds-radius-full); overflow: hidden;">
-              <div style="width: 75%; height: 100%; background: var(--ds-color-primary); border-radius: var(--ds-radius-full);"></div>
-            </div>
-          </div>
-          <div>
-            <div style="display: flex; justify-content: space-between; margin-bottom: var(--ds-space-2); font-size: var(--ds-text-sm);">
-              <span>Success</span>
-              <span>100%</span>
-            </div>
-            <div style="height: 8px; background: var(--ds-color-neutral-200); border-radius: var(--ds-radius-full); overflow: hidden;">
-              <div style="width: 100%; height: 100%; background: var(--ds-color-success); border-radius: var(--ds-radius-full);"></div>
-            </div>
-          </div>
-        </div>
-
-        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Empty States</h3>
-        <div class="component-card" style="margin-bottom: var(--ds-space-6); text-align: center; padding: var(--ds-space-12);">
-          <div style="font-size: var(--ds-text-6xl); margin-bottom: var(--ds-space-4); opacity: 0.3;">📭</div>
-          <h3 style="margin-bottom: var(--ds-space-2);">No items found</h3>
-          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
-            There are no items to display. Try adjusting your filters or create a new item.
-          </p>
-          <button class="btn btn-primary">Create New Item</button>
-        </div>
-
-        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Error States</h3>
-        <div class="component-card" style="margin-bottom: var(--ds-space-6); text-align: center; padding: var(--ds-space-12);">
-          <div style="font-size: var(--ds-text-6xl); margin-bottom: var(--ds-space-4); opacity: 0.3;">⚠️</div>
-          <h3 style="margin-bottom: var(--ds-space-2); color: var(--ds-color-error);">Something went wrong</h3>
-          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
-            An error occurred while processing your request. Please try again.
-          </p>
-          <button class="btn btn-secondary">Retry</button>
-        </div>
-      </section>
-
-      <section id="utilities">
-        <h2>Utility Classes</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Common utility patterns for spacing, typography, and visibility.
-        </p>
-
-        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Text Utilities</h3>
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <div style="display: flex; flex-direction: column; gap: var(--ds-space-3);">
-            <div style="font-weight: var(--ds-font-weight-normal);">Font weight: normal (400)</div>
-            <div style="font-weight: var(--ds-font-weight-medium);">Font weight: medium (500)</div>
-            <div style="font-weight: var(--ds-font-weight-semibold);">Font weight: semibold (600)</div>
-            <div style="font-weight: var(--ds-font-weight-bold);">Font weight: bold (700)</div>
-          </div>
-        </div>
-
-        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Color Utilities</h3>
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <div style="display: flex; flex-direction: column; gap: var(--ds-space-3);">
-            <div style="color: var(--ds-color-text);">Text color: primary</div>
-            <div style="color: var(--ds-color-text-secondary);">Text color: secondary</div>
-            <div style="color: var(--ds-color-text-muted);">Text color: muted</div>
-            <div style="color: var(--ds-color-primary);">Text color: primary brand</div>
-            <div style="color: var(--ds-color-success);">Text color: success</div>
-            <div style="color: var(--ds-color-warning);">Text color: warning</div>
-            <div style="color: var(--ds-color-error);">Text color: error</div>
-          </div>
-        </div>
-
-        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Background Utilities</h3>
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-3);">
-            <div style="background: var(--ds-color-primary-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">primary-50</div>
-            <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">primary-100</div>
-            <div style="background: var(--ds-color-primary-200); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">primary-200</div>
-            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">success-50</div>
-            <div style="background: var(--ds-color-warning-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">warning-50</div>
-            <div style="background: var(--ds-color-error-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">error-50</div>
-          </div>
-        </div>
-      </section>
-
-      <section id="accessibility">
-        <h2>Accessibility</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Design system accessibility guidelines and best practices.
+          Patterns for displaying data and information.
         </p>
 
         <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Color Contrast</h3>
-          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
-            All color combinations meet WCAG 2.1 AA standards (4.5:1 for normal text, 3:1 for large text).
-          </p>
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--ds-space-4);">
-            <div style="background: var(--ds-color-primary); color: white; padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
-              <div style="font-weight: var(--ds-font-weight-semibold);">Primary on White</div>
-              <div style="font-size: var(--ds-text-xs); margin-top: var(--ds-space-2);">Contrast: 4.5:1 ✓</div>
+          <h3 style="margin-bottom: var(--ds-space-4);">Statistics</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--ds-space-4);">
+            <div style="background: var(--ds-color-primary-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-lg);">
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-2);">Total Users</div>
+              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">1,234</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-success); margin-top: var(--ds-space-2);">↑ 12% from last month</div>
             </div>
-            <div style="background: var(--ds-color-surface); color: var(--ds-color-text); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); border: 1px solid var(--ds-color-border);">
-              <div style="font-weight: var(--ds-font-weight-semibold);">Text on Surface</div>
-              <div style="font-size: var(--ds-text-xs); margin-top: var(--ds-space-2);">Contrast: 15:1 ✓</div>
+            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-lg);">
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-2);">Revenue</div>
+              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-success);">$45.2K</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-success); margin-top: var(--ds-space-2);">↑ 8% from last month</div>
             </div>
-          </div>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Focus States</h3>
-          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
-            All interactive elements have visible focus indicators for keyboard navigation.
-          </p>
-          <div style="display: flex; gap: var(--ds-space-3);">
-            <button class="btn btn-primary">Tab to focus</button>
-            <input type="text" class="input" placeholder="Tab to focus" style="width: 200px;">
-          </div>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Keyboard Navigation</h3>
-          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>All interactive elements are keyboard accessible</li>
-            <li>Focus order follows visual layout</li>
-            <li>Focus indicators are visible and high contrast</li>
-            <li>Escape key closes modals and dropdowns</li>
-            <li>Enter/Space activate buttons and links</li>
-          </ul>
-        </div>
-      </section>
-
-      <section id="responsive">
-        <h2>Responsive Design</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Breakpoints and responsive patterns for different screen sizes.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Breakpoints</h3>
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-3);">
-            <div style="background: var(--ds-color-info-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
-              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Mobile</div>
-              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">&lt; 640px</div>
-            </div>
-            <div style="background: var(--ds-color-info-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
-              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Tablet</div>
-              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">640px - 1024px</div>
-            </div>
-            <div style="background: var(--ds-color-info-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
-              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Desktop</div>
-              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">&gt; 1024px</div>
+            <div style="background: var(--ds-color-warning-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-lg);">
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-2);">Pending</div>
+              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-warning);">23</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-2);">Requires attention</div>
             </div>
           </div>
         </div>
 
         <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Responsive Grid</h3>
-          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
-            Grid layouts automatically adjust columns based on screen size.
-          </p>
-          <div class="layout-grid">
-            <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); text-align: center;">Column 1</div>
-            <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); text-align: center;">Column 2</div>
-            <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); text-align: center;">Column 3</div>
-            <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); text-align: center;">Column 4</div>
-          </div>
-        </div>
-      </section>
-
-      <section id="animations">
-        <h2>Animations & Transitions</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Motion design tokens and animation patterns.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Transition Durations</h3>
-          <div style="display: flex; flex-direction: column; gap: var(--ds-space-4);">
-            <div>
-              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Fast (150ms)</div>
-              <div style="height: 40px; background: var(--ds-color-primary-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-fast) var(--ds-ease-default); cursor: pointer;" onmouseover="this.style.background='var(--ds-color-primary-200)'" onmouseout="this.style.background='var(--ds-color-primary-100)'">Hover me</div>
-            </div>
-            <div>
-              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Normal (250ms)</div>
-              <div style="height: 40px; background: var(--ds-color-accent-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-normal) var(--ds-ease-default); cursor: pointer;" onmouseover="this.style.background='var(--ds-color-accent-200)'" onmouseout="this.style.background='var(--ds-color-accent-100)'">Hover me</div>
-            </div>
-            <div>
-              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Slow (350ms)</div>
-              <div style="height: 40px; background: var(--ds-color-success-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-slow) var(--ds-ease-default); cursor: pointer;" onmouseover="this.style.background='var(--ds-color-success-200)'" onmouseout="this.style.background='var(--ds-color-success-100)'">Hover me</div>
-            </div>
-          </div>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Easing Functions</h3>
-          <div style="display: flex; flex-direction: column; gap: var(--ds-space-4);">
-            <div>
-              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Default (ease-in-out)</div>
-              <div style="height: 40px; background: var(--ds-color-info-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-normal) var(--ds-ease-default); cursor: pointer;" onmouseover="this.style.transform='translateX(20px)'" onmouseout="this.style.transform='translateX(0)'">Hover me</div>
-            </div>
-            <div>
-              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Ease In</div>
-              <div style="height: 40px; background: var(--ds-color-info-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-normal) var(--ds-ease-in); cursor: pointer;" onmouseover="this.style.transform='translateX(20px)'" onmouseout="this.style.transform='translateX(0)'">Hover me</div>
-            </div>
-            <div>
-              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Ease Out</div>
-              <div style="height: 40px; background: var(--ds-color-info-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-normal) var(--ds-ease-out); cursor: pointer;" onmouseover="this.style.transform='translateX(20px)'" onmouseout="this.style.transform='translateX(0)'">Hover me</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="dark-mode">
-        <h2>Dark Mode</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Dark mode support with automatic color adjustments.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Theme Toggle</h3>
-          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
-            Click the theme toggle button in the header to switch between light and dark modes. All colors automatically adjust for optimal contrast and readability.
-          </p>
-          <button class="btn btn-primary" id="theme-toggle-2">Toggle Theme</button>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Dark Mode Colors</h3>
-          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
-            In dark mode, backgrounds shift to darker values while maintaining the same hue. Text colors invert for proper contrast.
-          </p>
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-3);">
-            <div style="background: var(--ds-color-bg); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); border: 1px solid var(--ds-color-border);">
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">Background</div>
-              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">var(--ds-color-bg)</div>
-            </div>
-            <div style="background: var(--ds-color-surface); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); border: 1px solid var(--ds-color-border);">
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">Surface</div>
-              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">var(--ds-color-surface)</div>
-            </div>
-            <div style="background: var(--ds-color-surface); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); border: 1px solid var(--ds-color-border);">
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text);">Text</div>
-              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">var(--ds-color-text)</div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="best-practices">
-        <h2>Best Practices</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Guidelines for using the design system effectively.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Consistency</h3>
-          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>Always use design tokens instead of hardcoded values</li>
-            <li>Follow the spacing scale for margins, padding, and gaps</li>
-            <li>Use the color scale consistently across all components</li>
-            <li>Maintain consistent typography hierarchy</li>
-            <li>Apply the same border radius across similar elements</li>
-          </ul>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Accessibility First</h3>
-          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>Ensure sufficient color contrast (4.5:1 for text)</li>
-            <li>Provide visible focus indicators for all interactive elements</li>
-            <li>Use semantic HTML elements (button, nav, main, etc.)</li>
-            <li>Add appropriate ARIA labels when needed</li>
-            <li>Test with keyboard navigation and screen readers</li>
-          </ul>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Performance</h3>
-          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>Use CSS custom properties for theming (no JavaScript required)</li>
-            <li>Minimize animations for users with reduced motion preferences</li>
-            <li>Optimize images and assets for fast loading</li>
-            <li>Use CSS Grid and Flexbox for efficient layouts</li>
-            <li>Avoid unnecessary re-renders with proper component structure</li>
-          </ul>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Responsive Design</h3>
-          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>Design mobile-first, then enhance for larger screens</li>
-            <li>Use relative units (rem, em, %) instead of fixed pixels</li>
-            <li>Test on multiple devices and screen sizes</li>
-            <li>Ensure touch targets are at least 44x44px for mobile</li>
-            <li>Use responsive grids that adapt to container size</li>
-          </ul>
-        </div>
-      </section>
-
-      <section id="resources">
-        <h2>Resources</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Additional resources and documentation.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Documentation</h3>
-          <ul style="color: var(--ds-color-text-secondary); list-style: none; padding: 0;">
-            <li style="padding: var(--ds-space-3); border-bottom: 1px solid var(--ds-color-border);">
-              <a href="#colors" style="color: var(--ds-color-primary); text-decoration: none; font-weight: var(--ds-font-weight-medium);">Color System →</a>
-              <p style="font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">Complete color palette with scales and usage guidelines</p>
-            </li>
-            <li style="padding: var(--ds-space-3); border-bottom: 1px solid var(--ds-color-border);">
-              <a href="#typography" style="color: var(--ds-color-primary); text-decoration: none; font-weight: var(--ds-font-weight-medium);">Typography →</a>
-              <p style="font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">Font sizes, weights, and line heights</p>
-            </li>
-            <li style="padding: var(--ds-space-3); border-bottom: 1px solid var(--ds-color-border);">
-              <a href="#components" style="color: var(--ds-color-primary); text-decoration: none; font-weight: var(--ds-font-weight-medium);">Components →</a>
-              <p style="font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">Pre-built UI components and patterns</p>
-            </li>
-            <li style="padding: var(--ds-space-3);">
-              <a href="#accessibility" style="color: var(--ds-color-primary); text-decoration: none; font-weight: var(--ds-font-weight-medium);">Accessibility →</a>
-              <p style="font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">Accessibility guidelines and best practices</p>
-            </li>
-          </ul>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Getting Started</h3>
-          <div style="background: var(--ds-color-neutral-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); overflow-x: auto;">
-            <div style="color: var(--ds-color-text-secondary);">/* Import the design system */</div>
-            <div>@import url('design-system.html');</div>
-            <br>
-            <div style="color: var(--ds-color-text-secondary);">/* Use CSS custom properties */</div>
-            <div>.button {</div>
-            <div style="padding-left: var(--ds-space-4);">background: var(--ds-color-primary);</div>
-            <div style="padding-left: var(--ds-space-4);">padding: var(--ds-space-2) var(--ds-space-4);</div>
-            <div style="padding-left: var(--ds-space-4);">border-radius: var(--ds-radius-md);</div>
-            <div>}</div>
-          </div>
+          <h3 style="margin-bottom: var(--ds-space-4);">Key-Value Pairs</h3>
+          <dl style="display: grid; grid-template-columns: 150px 1fr; gap: var(--ds-space-3);">
+            <dt style="font-weight: var(--ds-font-weight-medium); color: var(--ds-color-text-secondary);">Name</dt>
+            <dd>John Doe</dd>
+            <dt style="font-weight: var(--ds-font-weight-medium); color: var(--ds-color-text-secondary);">Email</dt>
+            <dd>john@example.com</dd>
+            <dt style="font-weight: var(--ds-font-weight-medium); color: var(--ds-color-text-secondary);">Role</dt>
+            <dd><span class="badge badge-primary">Admin</span></dd>
+            <dt style="font-weight: var(--ds-font-weight-medium); color: var(--ds-color-text-secondary);">Status</dt>
+            <dd><span class="badge badge-success">Active</span></dd>
+            <dt style="font-weight: var(--ds-font-weight-medium); color: var(--ds-color-text-secondary);">Created</dt>
+            <dd>January 15, 2026</dd>
+          </dl>
         </div>
       </section>
 
@@ -1659,238 +1474,365 @@
         </div>
       </section>
 
-      <section id="forms">
-        <h2>Form Patterns</h2>
+      <section id="feedback">
+        <h2>Feedback & States</h2>
         <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Common form layouts and validation patterns.
+          Visual feedback for user actions and system states.
         </p>
 
+        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Loading States</h3>
         <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Vertical Form</h3>
-          <form style="display: flex; flex-direction: column; gap: var(--ds-space-4);">
-            <div>
-              <label style="display: block; font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); margin-bottom: var(--ds-space-2);">Full Name</label>
-              <input type="text" class="input" placeholder="John Doe" style="width: 100%;">
-            </div>
-            <div>
-              <label style="display: block; font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); margin-bottom: var(--ds-space-2);">Email</label>
-              <input type="email" class="input" placeholder="john@example.com" style="width: 100%;">
-            </div>
-            <div>
-              <label style="display: block; font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); margin-bottom: var(--ds-space-2);">Message</label>
-              <textarea class="textarea" placeholder="Your message..." style="width: 100%;"></textarea>
-            </div>
-            <button type="submit" class="btn btn-primary" style="align-self: flex-start;">Submit</button>
-          </form>
+          <div style="display: flex; gap: var(--ds-space-4); align-items: center;">
+            <div style="width: 24px; height: 24px; border: 3px solid var(--ds-color-neutral-200); border-top-color: var(--ds-color-primary); border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            <span style="color: var(--ds-color-text-secondary);">Loading...</span>
+          </div>
+          <style>
+            @keyframes spin {
+              to { transform: rotate(360deg); }
+            }
+          </style>
         </div>
 
+        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Progress Bars</h3>
         <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Horizontal Form</h3>
-          <form style="display: grid; grid-template-columns: 120px 1fr; gap: var(--ds-space-4); align-items: center;">
-            <label style="font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium);">Name</label>
-            <input type="text" class="input" placeholder="John Doe">
-            <label style="font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium);">Email</label>
-            <input type="email" class="input" placeholder="john@example.com">
-            <div></div>
-            <button type="submit" class="btn btn-primary" style="justify-self: start;">Submit</button>
-          </form>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Form Validation</h3>
-          <form style="display: flex; flex-direction: column; gap: var(--ds-space-4);">
-            <div>
-              <label style="display: block; font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); margin-bottom: var(--ds-space-2);">Email (Required)</label>
-              <input type="email" class="input" placeholder="Invalid email" style="width: 100%; border-color: var(--ds-color-error);">
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-error); margin-top: var(--ds-space-1);">Please enter a valid email address</div>
+          <div style="margin-bottom: var(--ds-space-4);">
+            <div style="display: flex; justify-content: space-between; margin-bottom: var(--ds-space-2); font-size: var(--ds-text-sm);">
+              <span>Progress</span>
+              <span>75%</span>
             </div>
-            <div>
-              <label style="display: block; font-size: var(--ds-text-sm); font-weight: var(--ds-font-weight-medium); margin-bottom: var(--ds-space-2);">Username (Success)</label>
-              <input type="text" class="input" placeholder="Available" style="width: 100%; border-color: var(--ds-color-success);">
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-success); margin-top: var(--ds-space-1);">Username is available</div>
+            <div style="height: 8px; background: var(--ds-color-neutral-200); border-radius: var(--ds-radius-full); overflow: hidden;">
+              <div style="width: 75%; height: 100%; background: var(--ds-color-primary); border-radius: var(--ds-radius-full);"></div>
             </div>
-          </form>
-        </div>
-      </section>
-
-      <section id="data-display">
-        <h2>Data Display</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Patterns for displaying data and information.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Statistics</h3>
-          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--ds-space-4);">
-            <div style="background: var(--ds-color-primary-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-lg);">
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-2);">Total Users</div>
-              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">1,234</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-success); margin-top: var(--ds-space-2);">↑ 12% from last month</div>
+          </div>
+          <div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: var(--ds-space-2); font-size: var(--ds-text-sm);">
+              <span>Success</span>
+              <span>100%</span>
             </div>
-            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-lg);">
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-2);">Revenue</div>
-              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-success);">$45.2K</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-success); margin-top: var(--ds-space-2);">↑ 8% from last month</div>
-            </div>
-            <div style="background: var(--ds-color-warning-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-lg);">
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-2);">Pending</div>
-              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-warning);">23</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-2);">Requires attention</div>
+            <div style="height: 8px; background: var(--ds-color-neutral-200); border-radius: var(--ds-radius-full); overflow: hidden;">
+              <div style="width: 100%; height: 100%; background: var(--ds-color-success); border-radius: var(--ds-radius-full);"></div>
             </div>
           </div>
         </div>
 
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Key-Value Pairs</h3>
-          <dl style="display: grid; grid-template-columns: 150px 1fr; gap: var(--ds-space-3);">
-            <dt style="font-weight: var(--ds-font-weight-medium); color: var(--ds-color-text-secondary);">Name</dt>
-            <dd>John Doe</dd>
-            <dt style="font-weight: var(--ds-font-weight-medium); color: var(--ds-color-text-secondary);">Email</dt>
-            <dd>john@example.com</dd>
-            <dt style="font-weight: var(--ds-font-weight-medium); color: var(--ds-color-text-secondary);">Role</dt>
-            <dd><span class="badge badge-primary">Admin</span></dd>
-            <dt style="font-weight: var(--ds-font-weight-medium); color: var(--ds-color-text-secondary);">Status</dt>
-            <dd><span class="badge badge-success">Active</span></dd>
-            <dt style="font-weight: var(--ds-font-weight-medium); color: var(--ds-color-text-secondary);">Created</dt>
-            <dd>January 15, 2026</dd>
-          </dl>
-        </div>
-      </section>
-
-      <section id="changelog">
-        <h2>Changelog</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Version history and recent changes to the design system.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-2);">v2.0.0 <span class="badge badge-primary" style="margin-left: var(--ds-space-2);">Latest</span></h3>
-          <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-muted); margin-bottom: var(--ds-space-4);">Released: July 24, 2026</div>
-          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>Added 11-step color scales (50-950) for all color families</li>
-            <li>Added interactive customization panel with real-time updates</li>
-            <li>Added color picker controls for all base colors</li>
-            <li>Added font size sliders for all heading levels</li>
-            <li>Added font family selector with multiple options</li>
-            <li>Added export config functionality</li>
-            <li>Improved dark mode support with automatic color adjustments</li>
-            <li>Added comprehensive component examples</li>
-            <li>Added accessibility guidelines and best practices</li>
-            <li>Added responsive design patterns</li>
-            <li>Added animation and transition examples</li>
-            <li>Added form patterns and validation examples</li>
-            <li>Added data display patterns</li>
-            <li>Updated JSON-LD manifest with complete scale data</li>
-          </ul>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-2);">v1.0.0</h3>
-          <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-muted); margin-bottom: var(--ds-space-4);">Released: June 1, 2026</div>
-          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>Initial release of design system</li>
-            <li>Base color palette with 8 semantic colors</li>
-            <li>Typography scale with 10 sizes</li>
-            <li>Spacing scale with 12 values</li>
-            <li>Border radius tokens</li>
-            <li>Shadow elevation system</li>
-            <li>Basic component library</li>
-            <li>Dark mode support</li>
-          </ul>
-        </div>
-      </section>
-
-      <section id="migration">
-        <h2>Migration Guide</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Guide for migrating from v1.0 to v2.0.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Color System Changes</h3>
+        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Empty States</h3>
+        <div class="component-card" style="margin-bottom: var(--ds-space-6); text-align: center; padding: var(--ds-space-12);">
+          <div style="font-size: var(--ds-text-6xl); margin-bottom: var(--ds-space-4); opacity: 0.3;">📭</div>
+          <h3 style="margin-bottom: var(--ds-space-2);">No items found</h3>
           <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
-            The color system has been expanded to include 11-step scales for each color family. The base color variables remain the same, but new scale variables have been added.
+            There are no items to display. Try adjusting your filters or create a new item.
           </p>
-          <div style="background: var(--ds-color-neutral-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); overflow-x: auto;">
-            <div style="color: var(--ds-color-text-secondary);">/* v1.0 - Base colors only */</div>
-            <div>--ds-color-primary: #6366f1;</div>
-            <br>
-            <div style="color: var(--ds-color-text-secondary);">/* v2.0 - Base + scale */</div>
-            <div>--ds-color-primary: #6366f1;</div>
-            <div>--ds-color-primary-50: #eef2ff;</div>
-            <div>--ds-color-primary-100: #e0e7ff;</div>
-            <div>...</div>
-            <div>--ds-color-primary-950: #1e1b4b;</div>
-          </div>
+          <button class="btn btn-primary">Create New Item</button>
         </div>
 
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Backward Compatibility</h3>
+        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Error States</h3>
+        <div class="component-card" style="margin-bottom: var(--ds-space-6); text-align: center; padding: var(--ds-space-12);">
+          <div style="font-size: var(--ds-text-6xl); margin-bottom: var(--ds-space-4); opacity: 0.3;">⚠️</div>
+          <h3 style="margin-bottom: var(--ds-space-2); color: var(--ds-color-error);">Something went wrong</h3>
           <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
-            All v1.0 CSS custom properties remain unchanged. The new scale variables are additive and do not break existing implementations.
+            An error occurred while processing your request. Please try again.
           </p>
-          <div class="alert alert-success">
-            <strong>Good news:</strong> No breaking changes. All existing code continues to work without modification.
+          <button class="btn btn-secondary">Retry</button>
+        </div>
+      </section>
+
+      <section id="layout">
+        <h2>Layout Patterns</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Common layout patterns using CSS Grid and Flexbox with spacing tokens.
+        </p>
+        <div class="component-grid">
+          <div class="component-card">
+            <h3>Grid Layout</h3>
+            <div class="layout-grid">
+              <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 1</div>
+              <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 2</div>
+              <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 3</div>
+            </div>
+            <p style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); margin-top: var(--ds-space-3);">
+              Auto-fit grid with minmax(250px, 1fr)
+            </p>
+          </div>
+
+          <div class="component-card">
+            <h3>Flex Layout</h3>
+            <div class="layout-flex">
+              <div style="background: var(--ds-color-accent-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); flex: 1;">Item 1</div>
+              <div style="background: var(--ds-color-accent-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); flex: 1;">Item 2</div>
+              <div style="background: var(--ds-color-accent-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); flex: 1;">Item 3</div>
+            </div>
+            <p style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); margin-top: var(--ds-space-3);">
+              Flexbox with wrap and gap
+            </p>
+          </div>
+
+          <div class="component-card">
+            <h3>Stack Layout</h3>
+            <div class="layout-stack">
+              <div style="background: var(--ds-color-success-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 1</div>
+              <div style="background: var(--ds-color-success-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 2</div>
+              <div style="background: var(--ds-color-success-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">Item 3</div>
+            </div>
+            <p style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm); margin-top: var(--ds-space-3);">
+              Vertical stack with consistent spacing
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section id="utilities">
+        <h2>Utility Classes</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Common utility patterns for spacing, typography, and visibility.
+        </p>
+
+        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Text Utilities</h3>
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <div style="display: flex; flex-direction: column; gap: var(--ds-space-3);">
+            <div style="font-weight: var(--ds-font-weight-normal);">Font weight: normal (400)</div>
+            <div style="font-weight: var(--ds-font-weight-medium);">Font weight: medium (500)</div>
+            <div style="font-weight: var(--ds-font-weight-semibold);">Font weight: semibold (600)</div>
+            <div style="font-weight: var(--ds-font-weight-bold);">Font weight: bold (700)</div>
+          </div>
+        </div>
+
+        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Color Utilities</h3>
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <div style="display: flex; flex-direction: column; gap: var(--ds-space-3);">
+            <div style="color: var(--ds-color-text);">Text color: primary</div>
+            <div style="color: var(--ds-color-text-secondary);">Text color: secondary</div>
+            <div style="color: var(--ds-color-text-muted);">Text color: muted</div>
+            <div style="color: var(--ds-color-primary);">Text color: primary brand</div>
+            <div style="color: var(--ds-color-success);">Text color: success</div>
+            <div style="color: var(--ds-color-warning);">Text color: warning</div>
+            <div style="color: var(--ds-color-error);">Text color: error</div>
+          </div>
+        </div>
+
+        <h3 style="margin-top: var(--ds-space-8); margin-bottom: var(--ds-space-4);">Background Utilities</h3>
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-3);">
+            <div style="background: var(--ds-color-primary-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">primary-50</div>
+            <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">primary-100</div>
+            <div style="background: var(--ds-color-primary-200); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">primary-200</div>
+            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">success-50</div>
+            <div style="background: var(--ds-color-warning-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">warning-50</div>
+            <div style="background: var(--ds-color-error-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-size: var(--ds-text-xs);">error-50</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="animations">
+        <h2>Animations & Transitions</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Motion design tokens and animation patterns.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Transition Durations</h3>
+          <div style="display: flex; flex-direction: column; gap: var(--ds-space-4);">
+            <div>
+              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Fast (150ms)</div>
+              <div style="height: 40px; background: var(--ds-color-primary-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-fast) var(--ds-ease-default); cursor: pointer;" onmouseover="this.style.background='var(--ds-color-primary-200)'" onmouseout="this.style.background='var(--ds-color-primary-100)'">Hover me</div>
+            </div>
+            <div>
+              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Normal (250ms)</div>
+              <div style="height: 40px; background: var(--ds-color-accent-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-normal) var(--ds-ease-default); cursor: pointer;" onmouseover="this.style.background='var(--ds-color-accent-200)'" onmouseout="this.style.background='var(--ds-color-accent-100)'">Hover me</div>
+            </div>
+            <div>
+              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Slow (350ms)</div>
+              <div style="height: 40px; background: var(--ds-color-success-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-slow) var(--ds-ease-default); cursor: pointer;" onmouseover="this.style.background='var(--ds-color-success-200)'" onmouseout="this.style.background='var(--ds-color-success-100)'">Hover me</div>
+            </div>
           </div>
         </div>
 
         <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">New Features</h3>
+          <h3 style="margin-bottom: var(--ds-space-4);">Easing Functions</h3>
+          <div style="display: flex; flex-direction: column; gap: var(--ds-space-4);">
+            <div>
+              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Default (ease-in-out)</div>
+              <div style="height: 40px; background: var(--ds-color-info-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-normal) var(--ds-ease-default); cursor: pointer;" onmouseover="this.style.transform='translateX(20px)'" onmouseout="this.style.transform='translateX(0)'">Hover me</div>
+            </div>
+            <div>
+              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Ease In</div>
+              <div style="height: 40px; background: var(--ds-color-info-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-normal) var(--ds-ease-in); cursor: pointer;" onmouseover="this.style.transform='translateX(20px)'" onmouseout="this.style.transform='translateX(0)'">Hover me</div>
+            </div>
+            <div>
+              <div style="font-size: var(--ds-text-sm); margin-bottom: var(--ds-space-2);">Ease Out</div>
+              <div style="height: 40px; background: var(--ds-color-info-100); border-radius: var(--ds-radius-md); transition: all var(--ds-transition-normal) var(--ds-ease-out); cursor: pointer;" onmouseover="this.style.transform='translateX(20px)'" onmouseout="this.style.transform='translateX(0)'">Hover me</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="responsive">
+        <h2>Responsive Design</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Breakpoints and responsive patterns for different screen sizes.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Breakpoints</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-3);">
+            <div style="background: var(--ds-color-info-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
+              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Mobile</div>
+              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">&lt; 640px</div>
+            </div>
+            <div style="background: var(--ds-color-info-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
+              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Tablet</div>
+              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">640px - 1024px</div>
+            </div>
+            <div style="background: var(--ds-color-info-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
+              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Desktop</div>
+              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">&gt; 1024px</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Responsive Grid</h3>
+          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
+            Grid layouts automatically adjust columns based on screen size.
+          </p>
+          <div class="layout-grid">
+            <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); text-align: center;">Column 1</div>
+            <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); text-align: center;">Column 2</div>
+            <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); text-align: center;">Column 3</div>
+            <div style="background: var(--ds-color-primary-100); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); text-align: center;">Column 4</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="accessibility">
+        <h2>Accessibility</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Design system accessibility guidelines and best practices.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Color Contrast</h3>
+          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
+            All color combinations meet WCAG 2.1 AA standards (4.5:1 for normal text, 3:1 for large text).
+          </p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: var(--ds-space-4);">
+            <div style="background: var(--ds-color-primary); color: white; padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
+              <div style="font-weight: var(--ds-font-weight-semibold);">Primary on White</div>
+              <div style="font-size: var(--ds-text-xs); margin-top: var(--ds-space-2);">Contrast: 4.5:1 ✓</div>
+            </div>
+            <div style="background: var(--ds-color-surface); color: var(--ds-color-text); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); border: 1px solid var(--ds-color-border);">
+              <div style="font-weight: var(--ds-font-weight-semibold);">Text on Surface</div>
+              <div style="font-size: var(--ds-text-xs); margin-top: var(--ds-space-2);">Contrast: 15:1 ✓</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Focus States</h3>
+          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
+            All interactive elements have visible focus indicators for keyboard navigation.
+          </p>
+          <div style="display: flex; gap: var(--ds-space-3);">
+            <button class="btn btn-primary">Tab to focus</button>
+            <input type="text" class="input" placeholder="Tab to focus" style="width: 200px;">
+          </div>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Keyboard Navigation</h3>
           <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>Color scales can be accessed via <code style="background: var(--ds-color-neutral-100); padding: 2px 6px; border-radius: var(--ds-radius-sm); font-family: var(--ds-font-mono); font-size: var(--ds-text-xs);">--ds-color-{name}-{step}</code></li>
-            <li>Interactive customization panel for real-time theme adjustments</li>
-            <li>Export config functionality for saving custom themes</li>
-            <li>Enhanced dark mode with automatic color adjustments</li>
+            <li>All interactive elements are keyboard accessible</li>
+            <li>Focus order follows visual layout</li>
+            <li>Focus indicators are visible and high contrast</li>
+            <li>Escape key closes modals and dropdowns</li>
+            <li>Enter/Space activate buttons and links</li>
           </ul>
         </div>
       </section>
 
-      <section id="faq">
-        <h2>FAQ</h2>
+      <section id="dark-mode">
+        <h2>Dark Mode</h2>
         <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Frequently asked questions about the design system.
+          Dark mode support with automatic color adjustments.
         </p>
 
-        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
-          <h3 style="margin-bottom: var(--ds-space-3);">How do I customize the colors?</h3>
-          <p style="color: var(--ds-color-text-secondary);">
-            Click the "Customize" button in the header to open the customization panel. Use the color pickers to change any base color, and the entire scale will automatically regenerate. You can also export your custom configuration.
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Theme Toggle</h3>
+          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
+            Click the theme toggle button in the header to switch between light and dark modes. All colors automatically adjust for optimal contrast and readability.
           </p>
+          <button class="btn btn-primary" id="theme-toggle-2">Toggle Theme</button>
         </div>
 
-        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
-          <h3 style="margin-bottom: var(--ds-space-3);">Can I use this design system in my project?</h3>
-          <p style="color: var(--ds-color-text-secondary);">
-            Yes! This design system is designed to be a canonical template that can be adapted for any project. Copy the HTML file and modify the CSS custom properties to match your brand.
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Dark Mode Colors</h3>
+          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
+            In dark mode, backgrounds shift to darker values while maintaining the same hue. Text colors invert for proper contrast.
           </p>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-3);">
+            <div style="background: var(--ds-color-bg); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); border: 1px solid var(--ds-color-border);">
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">Background</div>
+              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">var(--ds-color-bg)</div>
+            </div>
+            <div style="background: var(--ds-color-surface); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); border: 1px solid var(--ds-color-border);">
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">Surface</div>
+              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">var(--ds-color-surface)</div>
+            </div>
+            <div style="background: var(--ds-color-surface); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); border: 1px solid var(--ds-color-border);">
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text);">Text</div>
+              <div style="font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">var(--ds-color-text)</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="best-practices">
+        <h2>Best Practices</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Guidelines for using the design system effectively.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Consistency</h3>
+          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>Always use design tokens instead of hardcoded values</li>
+            <li>Follow the spacing scale for margins, padding, and gaps</li>
+            <li>Use the color scale consistently across all components</li>
+            <li>Maintain consistent typography hierarchy</li>
+            <li>Apply the same border radius across similar elements</li>
+          </ul>
         </div>
 
-        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
-          <h3 style="margin-bottom: var(--ds-space-3);">Does it support dark mode?</h3>
-          <p style="color: var(--ds-color-text-secondary);">
-            Yes, dark mode is fully supported. Click the theme toggle button in the header to switch between light and dark modes. All colors automatically adjust for optimal contrast and readability.
-          </p>
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Accessibility First</h3>
+          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>Ensure sufficient color contrast (4.5:1 for text)</li>
+            <li>Provide visible focus indicators for all interactive elements</li>
+            <li>Use semantic HTML elements (button, nav, main, etc.)</li>
+            <li>Add appropriate ARIA labels when needed</li>
+            <li>Test with keyboard navigation and screen readers</li>
+          </ul>
         </div>
 
-        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
-          <h3 style="margin-bottom: var(--ds-space-3);">Is it accessible?</h3>
-          <p style="color: var(--ds-color-text-secondary);">
-            Yes, the design system follows WCAG 2.1 AA guidelines. All color combinations meet minimum contrast ratios, all interactive elements are keyboard accessible, and focus indicators are visible.
-          </p>
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Performance</h3>
+          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>Use CSS custom properties for theming (no JavaScript required)</li>
+            <li>Minimize animations for users with reduced motion preferences</li>
+            <li>Optimize images and assets for fast loading</li>
+            <li>Use CSS Grid and Flexbox for efficient layouts</li>
+            <li>Avoid unnecessary re-renders with proper component structure</li>
+          </ul>
         </div>
 
-        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
-          <h3 style="margin-bottom: var(--ds-space-3);">How do I update font sizes?</h3>
-          <p style="color: var(--ds-color-text-secondary);">
-            Use the customization panel to adjust font sizes for each heading level. Changes are applied in real-time via CSS custom properties. You can also modify the CSS variables directly in your stylesheet.
-          </p>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
-          <h3 style="margin-bottom: var(--ds-space-3);">Can I change the font family?</h3>
-          <p style="color: var(--ds-color-text-secondary);">
-            Yes, the customization panel includes a font family selector with options for Inter, System UI, Serif, and Mono. You can also specify a custom font stack.
-          </p>
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Responsive Design</h3>
+          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>Design mobile-first, then enhance for larger screens</li>
+            <li>Use relative units (rem, em, %) instead of fixed pixels</li>
+            <li>Test on multiple devices and screen sizes</li>
+            <li>Ensure touch targets are at least 44x44px for mobile</li>
+            <li>Use responsive grids that adapt to container size</li>
+          </ul>
         </div>
       </section>
 
@@ -2241,6 +2183,362 @@
         </div>
       </section>
 
+      <section id="file-structure">
+        <h2>File Structure</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Overview of the design system file organization.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Single File Architecture</h3>
+          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
+            The entire design system is contained in a single HTML file for maximum portability and ease of use.
+          </p>
+          <div style="background: var(--ds-color-neutral-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); overflow-x: auto;">
+            <div>design-system.html</div>
+            <div style="padding-left: var(--ds-space-4); color: var(--ds-color-text-secondary);">├── &lt;head&gt;</div>
+            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── Google Fonts import</div>
+            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── &lt;style&gt; (all CSS)</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── :root (CSS custom properties)</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── [data-theme="dark"]</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Base styles</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Layout styles</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Component styles</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">└── Responsive styles</div>
+            <div style="padding-left: var(--ds-space-4); color: var(--ds-color-text-secondary);">└── &lt;/head&gt;</div>
+            <div style="padding-left: var(--ds-space-4); color: var(--ds-color-text-secondary);">├── &lt;body&gt;</div>
+            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── Sidebar navigation</div>
+            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── Main content</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Header with controls</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Color sections</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Typography sections</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Component sections</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">└── Documentation sections</div>
+            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── Customization panel</div>
+            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── JSON-LD manifest</div>
+            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">└── &lt;script&gt; (all JavaScript)</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Color utilities</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── State management</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Render functions</div>
+            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">└── Event handlers</div>
+            <div style="padding-left: var(--ds-space-4); color: var(--ds-color-text-secondary);">└── &lt;/body&gt;</div>
+          </div>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">File Size</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-3);">
+            <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
+              <div style="font-size: var(--ds-text-2xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">~3500</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Lines of Code</div>
+            </div>
+            <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
+              <div style="font-size: var(--ds-text-2xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">~150KB</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">File Size</div>
+            </div>
+            <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
+              <div style="font-size: var(--ds-text-2xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">0</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Dependencies</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section id="technical-details">
+        <h2>Technical Details</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Technical implementation details and specifications.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Browser Support</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-3);">
+            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-3); border-radius: var(--ds-radius-md); text-align: center;">
+              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Chrome</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">88+</div>
+            </div>
+            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-3); border-radius: var(--ds-radius-md); text-align: center;">
+              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Firefox</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">85+</div>
+            </div>
+            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-3); border-radius: var(--ds-radius-md); text-align: center;">
+              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Safari</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">14+</div>
+            </div>
+            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-3); border-radius: var(--ds-radius-md); text-align: center;">
+              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Edge</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">88+</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">CSS Features Used</h3>
+          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>CSS Custom Properties (Variables) — Dynamic theming</li>
+            <li>CSS Grid — Two-dimensional layouts</li>
+            <li>Flexbox — One-dimensional layouts</li>
+            <li>CSS Transitions — Smooth animations</li>
+            <li>CSS Transform — Element transformations</li>
+            <li>Media Queries — Responsive breakpoints</li>
+            <li>CSS Calc — Dynamic calculations</li>
+            <li>CSS Clamp — Fluid typography</li>
+          </ul>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">JavaScript Features Used</h3>
+          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>ES6+ Syntax — Modern JavaScript features</li>
+            <li>Arrow Functions — Concise function syntax</li>
+            <li>Template Literals — String interpolation</li>
+            <li>Destructuring — Object/array unpacking</li>
+            <li>Spread Operator — Array/object expansion</li>
+            <li>DOM Manipulation — Dynamic content updates</li>
+            <li>Event Listeners — Interactive controls</li>
+            <li>Local Storage — Config persistence (optional)</li>
+          </ul>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Performance Considerations</h3>
+          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>No external dependencies — Zero JavaScript libraries</li>
+            <li>Single HTML file — No HTTP requests for resources</li>
+            <li>CSS Custom Properties — No JavaScript required for theming</li>
+            <li>Lazy rendering — Components render on demand</li>
+            <li>Optimized animations — GPU-accelerated transforms</li>
+            <li>Minimal reflows — Batch DOM updates</li>
+            <li>Efficient event handling — Delegated event listeners</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="resources">
+        <h2>Resources</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Additional resources and documentation.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Documentation</h3>
+          <ul style="color: var(--ds-color-text-secondary); list-style: none; padding: 0;">
+            <li style="padding: var(--ds-space-3); border-bottom: 1px solid var(--ds-color-border);">
+              <a href="#colors" style="color: var(--ds-color-primary); text-decoration: none; font-weight: var(--ds-font-weight-medium);">Color System →</a>
+              <p style="font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">Complete color palette with scales and usage guidelines</p>
+            </li>
+            <li style="padding: var(--ds-space-3); border-bottom: 1px solid var(--ds-color-border);">
+              <a href="#typography" style="color: var(--ds-color-primary); text-decoration: none; font-weight: var(--ds-font-weight-medium);">Typography →</a>
+              <p style="font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">Font sizes, weights, and line heights</p>
+            </li>
+            <li style="padding: var(--ds-space-3); border-bottom: 1px solid var(--ds-color-border);">
+              <a href="#components" style="color: var(--ds-color-primary); text-decoration: none; font-weight: var(--ds-font-weight-medium);">Components →</a>
+              <p style="font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">Pre-built UI components and patterns</p>
+            </li>
+            <li style="padding: var(--ds-space-3);">
+              <a href="#accessibility" style="color: var(--ds-color-primary); text-decoration: none; font-weight: var(--ds-font-weight-medium);">Accessibility →</a>
+              <p style="font-size: var(--ds-text-sm); margin-top: var(--ds-space-1);">Accessibility guidelines and best practices</p>
+            </li>
+          </ul>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Getting Started</h3>
+          <div style="background: var(--ds-color-neutral-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); overflow-x: auto;">
+            <div style="color: var(--ds-color-text-secondary);">/* Import the design system */</div>
+            <div>@import url('design-system.html');</div>
+            <br>
+            <div style="color: var(--ds-color-text-secondary);">/* Use CSS custom properties */</div>
+            <div>.button {</div>
+            <div style="padding-left: var(--ds-space-4);">background: var(--ds-color-primary);</div>
+            <div style="padding-left: var(--ds-space-4);">padding: var(--ds-space-2) var(--ds-space-4);</div>
+            <div style="padding-left: var(--ds-space-4);">border-radius: var(--ds-radius-md);</div>
+            <div>}</div>
+          </div>
+        </div>
+      </section>
+
+      <section id="changelog">
+        <h2>Changelog</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Version history and recent changes to the design system.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-2);">v2.0.0 <span class="badge badge-primary" style="margin-left: var(--ds-space-2);">Latest</span></h3>
+          <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-muted); margin-bottom: var(--ds-space-4);">Released: July 24, 2026</div>
+          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>Added 11-step color scales (50-950) for all color families</li>
+            <li>Added interactive customization panel with real-time updates</li>
+            <li>Added color picker controls for all base colors</li>
+            <li>Added font size sliders for all heading levels</li>
+            <li>Added font family selector with multiple options</li>
+            <li>Added export config functionality</li>
+            <li>Improved dark mode support with automatic color adjustments</li>
+            <li>Added comprehensive component examples</li>
+            <li>Added accessibility guidelines and best practices</li>
+            <li>Added responsive design patterns</li>
+            <li>Added animation and transition examples</li>
+            <li>Added form patterns and validation examples</li>
+            <li>Added data display patterns</li>
+            <li>Updated JSON-LD manifest with complete scale data</li>
+          </ul>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-2);">v1.0.0</h3>
+          <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-muted); margin-bottom: var(--ds-space-4);">Released: June 1, 2026</div>
+          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>Initial release of design system</li>
+            <li>Base color palette with 8 semantic colors</li>
+            <li>Typography scale with 10 sizes</li>
+            <li>Spacing scale with 12 values</li>
+            <li>Border radius tokens</li>
+            <li>Shadow elevation system</li>
+            <li>Basic component library</li>
+            <li>Dark mode support</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="migration">
+        <h2>Migration Guide</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Guide for migrating from v1.0 to v2.0.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Color System Changes</h3>
+          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
+            The color system has been expanded to include 11-step scales for each color family. The base color variables remain the same, but new scale variables have been added.
+          </p>
+          <div style="background: var(--ds-color-neutral-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); overflow-x: auto;">
+            <div style="color: var(--ds-color-text-secondary);">/* v1.0 - Base colors only */</div>
+            <div>--ds-color-primary: #6366f1;</div>
+            <br>
+            <div style="color: var(--ds-color-text-secondary);">/* v2.0 - Base + scale */</div>
+            <div>--ds-color-primary: #6366f1;</div>
+            <div>--ds-color-primary-50: #eef2ff;</div>
+            <div>--ds-color-primary-100: #e0e7ff;</div>
+            <div>...</div>
+            <div>--ds-color-primary-950: #1e1b4b;</div>
+          </div>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">Backward Compatibility</h3>
+          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
+            All v1.0 CSS custom properties remain unchanged. The new scale variables are additive and do not break existing implementations.
+          </p>
+          <div class="alert alert-success">
+            <strong>Good news:</strong> No breaking changes. All existing code continues to work without modification.
+          </div>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <h3 style="margin-bottom: var(--ds-space-4);">New Features</h3>
+          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>Color scales can be accessed via <code style="background: var(--ds-color-neutral-100); padding: 2px 6px; border-radius: var(--ds-radius-sm); font-family: var(--ds-font-mono); font-size: var(--ds-text-xs);">--ds-color-{name}-{step}</code></li>
+            <li>Interactive customization panel for real-time theme adjustments</li>
+            <li>Export config functionality for saving custom themes</li>
+            <li>Enhanced dark mode with automatic color adjustments</li>
+          </ul>
+        </div>
+      </section>
+
+      <section id="faq">
+        <h2>FAQ</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Frequently asked questions about the design system.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
+          <h3 style="margin-bottom: var(--ds-space-3);">How do I customize the colors?</h3>
+          <p style="color: var(--ds-color-text-secondary);">
+            Click the "Customize" button in the header to open the customization panel. Use the color pickers to change any base color, and the entire scale will automatically regenerate. You can also export your custom configuration.
+          </p>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
+          <h3 style="margin-bottom: var(--ds-space-3);">Can I use this design system in my project?</h3>
+          <p style="color: var(--ds-color-text-secondary);">
+            Yes! This design system is designed to be a canonical template that can be adapted for any project. Copy the HTML file and modify the CSS custom properties to match your brand.
+          </p>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
+          <h3 style="margin-bottom: var(--ds-space-3);">Does it support dark mode?</h3>
+          <p style="color: var(--ds-color-text-secondary);">
+            Yes, dark mode is fully supported. Click the theme toggle button in the header to switch between light and dark modes. All colors automatically adjust for optimal contrast and readability.
+          </p>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
+          <h3 style="margin-bottom: var(--ds-space-3);">Is it accessible?</h3>
+          <p style="color: var(--ds-color-text-secondary);">
+            Yes, the design system follows WCAG 2.1 AA guidelines. All color combinations meet minimum contrast ratios, all interactive elements are keyboard accessible, and focus indicators are visible.
+          </p>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
+          <h3 style="margin-bottom: var(--ds-space-3);">How do I update font sizes?</h3>
+          <p style="color: var(--ds-color-text-secondary);">
+            Use the customization panel to adjust font sizes for each heading level. Changes are applied in real-time via CSS custom properties. You can also modify the CSS variables directly in your stylesheet.
+          </p>
+        </div>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-4);">
+          <h3 style="margin-bottom: var(--ds-space-3);">Can I change the font family?</h3>
+          <p style="color: var(--ds-color-text-secondary);">
+            Yes, the customization panel includes a font family selector with options for Inter, System UI, Serif, and Mono. You can also specify a custom font stack.
+          </p>
+        </div>
+      </section>
+
+      <section id="glossary">
+        <h2>Glossary</h2>
+        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
+          Key terms and definitions used in the design system.
+        </p>
+
+        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
+          <dl style="display: flex; flex-direction: column; gap: var(--ds-space-4);">
+            <div>
+              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Design Token</dt>
+              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A named entity that stores a visual design attribute (color, spacing, typography, etc.). Tokens are the building blocks of a design system.</dd>
+            </div>
+            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
+              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">CSS Custom Property</dt>
+              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A CSS variable (e.g., --ds-color-primary) that can be reused throughout a stylesheet. Enables dynamic theming and consistent design values.</dd>
+            </div>
+            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
+              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Color Scale</dt>
+              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A series of related colors from lightest (50) to darkest (950). Each step is optimized for specific use cases (backgrounds, text, borders).</dd>
+            </div>
+            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
+              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Semantic Color</dt>
+              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A color named by its purpose rather than appearance (e.g., "primary", "success", "error" instead of "blue", "green", "red").</dd>
+            </div>
+            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
+              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Component</dt>
+              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A reusable UI element built with design tokens (e.g., button, card, input). Components ensure consistency across the application.</dd>
+            </div>
+            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
+              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Accessibility (a11y)</dt>
+              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">Designing and building interfaces that can be used by everyone, including people with disabilities. Includes keyboard navigation, screen reader support, and sufficient color contrast.</dd>
+            </div>
+            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
+              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Responsive Design</dt>
+              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">An approach to web design that makes pages render well on a variety of devices and screen sizes. Uses flexible grids, layouts, and CSS media queries.</dd>
+            </div>
+            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
+              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Dark Mode</dt>
+              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A color scheme that uses light-colored text on a dark background. Reduces eye strain in low-light environments and can save battery on OLED screens.</dd>
+            </div>
+          </dl>
+        </div>
+      </section>
+
       <section id="contributing">
         <h2>Contributing</h2>
         <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
@@ -2334,122 +2632,6 @@
             <div style="background: var(--ds-color-info-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
               <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">Design Tokens</div>
               <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">Design Tokens W3C spec</p>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section id="glossary">
-        <h2>Glossary</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Key terms and definitions used in the design system.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <dl style="display: flex; flex-direction: column; gap: var(--ds-space-4);">
-            <div>
-              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Design Token</dt>
-              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A named entity that stores a visual design attribute (color, spacing, typography, etc.). Tokens are the building blocks of a design system.</dd>
-            </div>
-            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
-              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">CSS Custom Property</dt>
-              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A CSS variable (e.g., --ds-color-primary) that can be reused throughout a stylesheet. Enables dynamic theming and consistent design values.</dd>
-            </div>
-            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
-              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Color Scale</dt>
-              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A series of related colors from lightest (50) to darkest (950). Each step is optimized for specific use cases (backgrounds, text, borders).</dd>
-            </div>
-            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
-              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Semantic Color</dt>
-              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A color named by its purpose rather than appearance (e.g., "primary", "success", "error" instead of "blue", "green", "red").</dd>
-            </div>
-            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
-              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Component</dt>
-              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A reusable UI element built with design tokens (e.g., button, card, input). Components ensure consistency across the application.</dd>
-            </div>
-            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
-              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Accessibility (a11y)</dt>
-              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">Designing and building interfaces that can be used by everyone, including people with disabilities. Includes keyboard navigation, screen reader support, and sufficient color contrast.</dd>
-            </div>
-            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
-              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Responsive Design</dt>
-              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">An approach to web design that makes pages render well on a variety of devices and screen sizes. Uses flexible grids, layouts, and CSS media queries.</dd>
-            </div>
-            <div style="border-top: 1px solid var(--ds-color-border); padding-top: var(--ds-space-4);">
-              <dt style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-1);">Dark Mode</dt>
-              <dd style="color: var(--ds-color-text-secondary); font-size: var(--ds-text-sm);">A color scheme that uses light-colored text on a dark background. Reduces eye strain in low-light environments and can save battery on OLED screens.</dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-
-      <section id="summary">
-        <h2>Summary</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Quick reference for the design system's key features and capabilities.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Key Features</h3>
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--ds-space-4);">
-            <div style="background: var(--ds-color-primary-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
-              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">🎨 Color System</div>
-              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">8 semantic colors with 11-step scales (50-950)</p>
-            </div>
-            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
-              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">📝 Typography</div>
-              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">10 font sizes with customizable heading levels</p>
-            </div>
-            <div style="background: var(--ds-color-warning-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
-              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">📏 Spacing</div>
-              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">12 spacing values based on 4px grid</p>
-            </div>
-            <div style="background: var(--ds-color-info-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
-              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">🌓 Dark Mode</div>
-              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">Full dark mode support with automatic adjustments</p>
-            </div>
-            <div style="background: var(--ds-color-accent-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
-              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">⚙️ Customization</div>
-              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">Interactive panel for real-time theme adjustments</p>
-            </div>
-            <div style="background: var(--ds-color-error-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
-              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">♿ Accessibility</div>
-              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">WCAG 2.1 AA compliant with keyboard navigation</p>
-            </div>
-          </div>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Quick Start</h3>
-          <ol style="color: var(--ds-color-text-secondary); list-style: decimal; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>Copy the design-system.html file to your project</li>
-            <li>Import it in your HTML head</li>
-            <li>Use CSS custom properties in your stylesheets</li>
-            <li>Customize colors and typography via the panel</li>
-            <li>Build components using the design tokens</li>
-            <li>Test across browsers and devices</li>
-            <li>Verify accessibility compliance</li>
-          </ol>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">File Statistics</h3>
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-4);">
-            <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
-              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">8</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Color Families</div>
-            </div>
-            <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
-              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">88</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Color Tokens</div>
-            </div>
-            <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
-              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">10</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Font Sizes</div>
-            </div>
-            <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
-              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">12</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Spacing Values</div>
             </div>
           </div>
         </div>
@@ -2602,132 +2784,73 @@
         </div>
       </section>
 
-      <section id="technical-details">
-        <h2>Technical Details</h2>
+      <section id="summary">
+        <h2>Summary</h2>
         <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Technical implementation details and specifications.
+          Quick reference for the design system's key features and capabilities.
         </p>
 
         <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Browser Support</h3>
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-3);">
-            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-3); border-radius: var(--ds-radius-md); text-align: center;">
-              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Chrome</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">88+</div>
+          <h3 style="margin-bottom: var(--ds-space-4);">Key Features</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: var(--ds-space-4);">
+            <div style="background: var(--ds-color-primary-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
+              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">🎨 Color System</div>
+              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">8 semantic colors with 11-step scales (50-950)</p>
             </div>
-            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-3); border-radius: var(--ds-radius-md); text-align: center;">
-              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Firefox</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">85+</div>
+            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
+              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">📝 Typography</div>
+              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">10 font sizes with customizable heading levels</p>
             </div>
-            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-3); border-radius: var(--ds-radius-md); text-align: center;">
-              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Safari</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">14+</div>
+            <div style="background: var(--ds-color-warning-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
+              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">📏 Spacing</div>
+              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">12 spacing values based on 4px grid</p>
             </div>
-            <div style="background: var(--ds-color-success-50); padding: var(--ds-space-3); border-radius: var(--ds-radius-md); text-align: center;">
-              <div style="font-weight: var(--ds-font-weight-semibold); font-size: var(--ds-text-sm);">Edge</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">88+</div>
+            <div style="background: var(--ds-color-info-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
+              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">🌓 Dark Mode</div>
+              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">Full dark mode support with automatic adjustments</p>
+            </div>
+            <div style="background: var(--ds-color-accent-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
+              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">⚙️ Customization</div>
+              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">Interactive panel for real-time theme adjustments</p>
+            </div>
+            <div style="background: var(--ds-color-error-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md);">
+              <div style="font-weight: var(--ds-font-weight-semibold); margin-bottom: var(--ds-space-2);">♿ Accessibility</div>
+              <p style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary);">WCAG 2.1 AA compliant with keyboard navigation</p>
             </div>
           </div>
         </div>
 
         <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">CSS Features Used</h3>
-          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>CSS Custom Properties (Variables) — Dynamic theming</li>
-            <li>CSS Grid — Two-dimensional layouts</li>
-            <li>Flexbox — One-dimensional layouts</li>
-            <li>CSS Transitions — Smooth animations</li>
-            <li>CSS Transform — Element transformations</li>
-            <li>Media Queries — Responsive breakpoints</li>
-            <li>CSS Calc — Dynamic calculations</li>
-            <li>CSS Clamp — Fluid typography</li>
-          </ul>
+          <h3 style="margin-bottom: var(--ds-space-4);">Quick Start</h3>
+          <ol style="color: var(--ds-color-text-secondary); list-style: decimal; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
+            <li>Copy the design-system.html file to your project</li>
+            <li>Import it in your HTML head</li>
+            <li>Use CSS custom properties in your stylesheets</li>
+            <li>Customize colors and typography via the panel</li>
+            <li>Build components using the design tokens</li>
+            <li>Test across browsers and devices</li>
+            <li>Verify accessibility compliance</li>
+          </ol>
         </div>
 
         <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">JavaScript Features Used</h3>
-          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>ES6+ Syntax — Modern JavaScript features</li>
-            <li>Arrow Functions — Concise function syntax</li>
-            <li>Template Literals — String interpolation</li>
-            <li>Destructuring — Object/array unpacking</li>
-            <li>Spread Operator — Array/object expansion</li>
-            <li>DOM Manipulation — Dynamic content updates</li>
-            <li>Event Listeners — Interactive controls</li>
-            <li>Local Storage — Config persistence (optional)</li>
-          </ul>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Performance Considerations</h3>
-          <ul style="color: var(--ds-color-text-secondary); list-style: disc; padding-left: var(--ds-space-6); line-height: var(--ds-leading-relaxed);">
-            <li>No external dependencies — Zero JavaScript libraries</li>
-            <li>Single HTML file — No HTTP requests for resources</li>
-            <li>CSS Custom Properties — No JavaScript required for theming</li>
-            <li>Lazy rendering — Components render on demand</li>
-            <li>Optimized animations — GPU-accelerated transforms</li>
-            <li>Minimal reflows — Batch DOM updates</li>
-            <li>Efficient event handling — Delegated event listeners</li>
-          </ul>
-        </div>
-      </section>
-
-      <section id="file-structure">
-        <h2>File Structure</h2>
-        <p style="margin-bottom: var(--ds-space-6); color: var(--ds-color-text-secondary);">
-          Overview of the design system file organization.
-        </p>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">Single File Architecture</h3>
-          <p style="color: var(--ds-color-text-secondary); margin-bottom: var(--ds-space-4);">
-            The entire design system is contained in a single HTML file for maximum portability and ease of use.
-          </p>
-          <div style="background: var(--ds-color-neutral-50); padding: var(--ds-space-4); border-radius: var(--ds-radius-md); font-family: var(--ds-font-mono); font-size: var(--ds-text-sm); overflow-x: auto;">
-            <div>design-system.html</div>
-            <div style="padding-left: var(--ds-space-4); color: var(--ds-color-text-secondary);">├── &lt;head&gt;</div>
-            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── Google Fonts import</div>
-            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── &lt;style&gt; (all CSS)</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── :root (CSS custom properties)</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── [data-theme="dark"]</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Base styles</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Layout styles</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Component styles</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">└── Responsive styles</div>
-            <div style="padding-left: var(--ds-space-4); color: var(--ds-color-text-secondary);">└── &lt;/head&gt;</div>
-            <div style="padding-left: var(--ds-space-4); color: var(--ds-color-text-secondary);">├── &lt;body&gt;</div>
-            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── Sidebar navigation</div>
-            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── Main content</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Header with controls</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Color sections</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Typography sections</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Component sections</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">└── Documentation sections</div>
-            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── Customization panel</div>
-            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">├── JSON-LD manifest</div>
-            <div style="padding-left: var(--ds-space-8); color: var(--ds-color-text-secondary);">└── &lt;script&gt; (all JavaScript)</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Color utilities</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── State management</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">├── Render functions</div>
-            <div style="padding-left: var(--ds-space-12); color: var(--ds-color-text-secondary);">└── Event handlers</div>
-            <div style="padding-left: var(--ds-space-4); color: var(--ds-color-text-secondary);">└── &lt;/body&gt;</div>
-          </div>
-        </div>
-
-        <div class="component-card" style="margin-bottom: var(--ds-space-6);">
-          <h3 style="margin-bottom: var(--ds-space-4);">File Size</h3>
-          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-3);">
+          <h3 style="margin-bottom: var(--ds-space-4);">File Statistics</h3>
+          <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--ds-space-4);">
             <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
-              <div style="font-size: var(--ds-text-2xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">~3500</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Lines of Code</div>
+              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">8</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Color Families</div>
             </div>
             <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
-              <div style="font-size: var(--ds-text-2xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">~150KB</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">File Size</div>
+              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">88</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Color Tokens</div>
             </div>
             <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
-              <div style="font-size: var(--ds-text-2xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">0</div>
-              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Dependencies</div>
+              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">10</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Font Sizes</div>
+            </div>
+            <div style="text-align: center; padding: var(--ds-space-4); background: var(--ds-color-neutral-50); border-radius: var(--ds-radius-md);">
+              <div style="font-size: var(--ds-text-3xl); font-weight: var(--ds-font-weight-bold); color: var(--ds-color-primary);">12</div>
+              <div style="font-size: var(--ds-text-xs); color: var(--ds-color-text-secondary); margin-top: var(--ds-space-1);">Spacing Values</div>
             </div>
           </div>
         </div>

@@ -80,9 +80,6 @@ glitch-website/scripts/screenshot.mjs
 node_modules/
 plugins/mcp-server/node_modules/
 
-# User data (separate git submodule for Troy, or local for others)
-user/
-!/user/.gitkeep
 
 # Security testing binaries (downloaded by bootstrap)
 tools/security/*.exe
