@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings Panel — Design System Test</title>
+<style>
+/* ============================================================
+   DESIGN TOKENS — Exact values from extract-design-tokens.mjs
+   Source: samples/design-system.html
+   ============================================================ */
+:root {
+  /* --- Color Tokens (Light — from extractor) --- */
+  --ds-color-bg: #f8f9fc;
+  --ds-color-surface: #ffffff;
+  --ds-color-text: #0f172a;
+  --ds-color-text-secondary: #64748b;
+  --ds-color-text-muted: #94a3b8;
+  --ds-color-border: #e2e8f0;
+  --ds-color-primary: #6366f1;
+  --ds-color-primary-hover: #4f46e5;
+  --ds-color-primary-light: #eef2ff;
+  --ds-color-secondary: #64748b;
+  --ds-color-accent: #ec4899;
+  --ds-color-success: #22c55e;
+  --ds-color-success-light: #f0fdf4;
+  --ds-color-warning: #f59e0b;
+  --ds-color-warning-light: #fffbeb;
+  --ds-color-error: #ef4444;
+  --ds-color-error-light: #fef2f2;
+  --ds-color-info: #3b82f6;
+  --ds-color-info-light: #eff6ff;
+  --ds-color-overlay: rgba(0,0,0,0.3);
+
+  /* --- Typography Tokens --- */
+  --ds-font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --ds-font-mono: 'JetBrains Mono', 'SF Mono', Monaco, monospace;
+  --ds-text-xs: 0.75rem;
+  --ds-text-sm: 0.875rem;
+  --ds-text-base: 1rem;
+  --ds-text-lg: 1.125rem;
+  --ds-text-xl: 1.25rem;
+  --ds-text-2xl: 1.5rem;
+  --ds-text-3xl: 1.875rem;
+  --ds-font-weight-normal: 400;
+  --ds-font-weight-medium: 500;
+  --ds-font-weight-semibold: 600;
+  --ds-font-weight-bold: 700;
+  --ds-leading-tight: 1.25;
+  --ds-leading-normal: 1.5;
+  --ds-leading-relaxed: 1.75;
+  --ds-tracking-tight: -0.025em;
+  --ds-tracking-normal: 0;
+  --ds-tracking-wide: 0.025em;
+
+  /* --- Spacing Tokens --- */
+  --ds-space-0: 0;
+  --ds-space-1: 0.25rem;
+  --ds-space-2: 0.5rem;
+  --ds-space-3: 0.75rem;
+  --ds-space-4: 1rem;
+  --ds-space-5: 1.25rem;
+  --ds-space-6: 1.5rem;
+  --ds-space-8: 2rem;
+  --ds-space-10: 2.5rem;
+  --ds-space-12: 3rem;
+  --ds-space-16: 4rem;
+
+  /* --- Radius Tokens --- */
+  --ds-radius-none: 0;
+  --ds-radius-sm: 0.25rem;
+  --ds-radius-md: 0.375rem;
+  --ds-radius-lg: 0.5rem;
+  --ds-radius-xl: 0.75rem;
+  --ds-radius-2xl: 1rem;
+  --ds-radius-full: 9999px;
+
+  /* --- Shadow Tokens --- */
+  --ds-shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --ds-shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px -2px rgba(0,0,0,0.05);
+  --ds-shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -4px rgba(0,0,0,0.04);
+  --ds-shadow-xl: 0 20px 25px -5px rgba(0,0,0,0.1), 0 8px 10px -6px rgba(0,0,0,0.04);
+  --ds-shadow-primary: 0 4px 14px rgba(99,102,241,0.25);
+  --ds-shadow-error: 0 4px 14px rgba(239,68,68,0.25);
+
+  /* --- Transition Tokens --- */
+  --ds-transition-fast: 150ms ease;
+  --ds-transition-base: 200ms ease;
+  --ds-transition-slow: 300ms ease;
+}
+
+/* ============================================================
+   DARK THEME OVERRIDES
+   Semantic tokens (primary, error, etc.) stay identical.
+   Surface/text/border tokens inverted for dark context.
+   ============================================================ */
+[data-theme="dark"] {
+  --ds-color-bg: #0f172a;
+  --ds-color-surface: #1e293b;
+  --ds-color-text: #f1f5f9;
+  --ds-color-text-secondary: #94a3b8;
+  --ds-color-text-muted: #64748b;
+  --ds-color-border: #334155;
+  --ds-color-primary-light: rgba(99,102,241,0.15);
+  --ds-color-error-light: rgba(239,68,68,0.12);
+  --ds-color-success-light: rgba(34,197,94,0.12);
+}
+
+/* ============================================================
+   BASE RESET
+   ============================================================ */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-normal);
+  line-height: var(--ds-leading-normal);
+  color: var(--ds-color-text);
+  background: var(--ds-color-bg);
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--ds-space-8);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ============================================================
+   SETTINGS PANEL
+   Component tokens used:
+     bg: --ds-color-surface
+     border: --ds-color-border
+     radius: --ds-radius-xl (card token)
+     shadow: --ds-shadow-lg
+     padding: --ds-space-8
+   ============================================================ */
+.settings-panel {
+  width: 100%;
+  max-width: 560px;
+  background: var(--ds-color-surface);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-xl);
+  box-shadow: var(--ds-shadow-lg);
+  overflow: hidden;
+}
+
+/* --- Panel Header --- */
+.panel-header {
+  padding: var(--ds-space-6) var(--ds-space-8);
+  border-bottom: 1px solid var(--ds-color-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.panel-header h1 {
+  font-size: var(--ds-text-xl);
+  font-weight: var(--ds-font-weight-semibold);
+  line-height: var(--ds-leading-tight);
+  letter-spacing: var(--ds-tracking-tight);
+  color: var(--ds-color-text);
+}
+
+.panel-header .close-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--ds-color-text-muted);
+  border-radius: var(--ds-radius-lg);
+  cursor: pointer;
+  transition: background var(--ds-transition-fast), color var(--ds-transition-fast);
+}
+
+.panel-header .close-btn:hover {
+  background: var(--ds-color-primary-light);
+  color: var(--ds-color-text);
+}
+
+/* --- Panel Body --- */
+.panel-body {
+  padding: var(--ds-space-8);
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-8);
+}
+
+/* ============================================================
+   SECTION
+   ============================================================ */
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-5);
+}
+
+.section-title {
+  font-size: var(--ds-text-xs);
+  font-weight: var(--ds-font-weight-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--ds-tracking-wide);
+  color: var(--ds-color-text-muted);
+}
+
+/* ============================================================
+   FORM FIELDS
+   Component tokens used:
+     border: --ds-color-border
+     focusBorder: --ds-color-primary
+     focusRing: --ds-color-primary-light
+     radius: --ds-radius-lg (input token)
+     font: --ds-text-sm (input token)
+   ============================================================ */
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-2);
+}
+
+.field-label {
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  color: var(--ds-color-text);
+}
+
+.field-input {
+  width: 100%;
+  padding: var(--ds-space-3) var(--ds-space-4);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-normal);
+  line-height: var(--ds-leading-normal);
+  color: var(--ds-color-text);
+  background: var(--ds-color-bg);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-lg);
+  outline: none;
+  transition: border-color var(--ds-transition-fast), box-shadow var(--ds-transition-fast);
+}
+
+.field-input::placeholder {
+  color: var(--ds-color-text-muted);
+}
+
+.field-input:focus {
+  border-color: var(--ds-color-primary);
+  box-shadow: 0 0 0 3px var(--ds-color-primary-light);
+}
+
+/* --- Avatar Upload --- */
+.avatar-row {
+  display: flex;
+  align-items: center;
+  gap: var(--ds-space-4);
+}
+
+.avatar-preview {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-color-primary-light);
+  border: 2px solid var(--ds-color-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ds-color-primary);
+  font-size: var(--ds-text-lg);
+  font-weight: var(--ds-font-weight-semibold);
+  flex-shrink: 0;
+}
+
+.avatar-upload-btn {
+  padding: var(--ds-space-2) var(--ds-space-4);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  color: var(--ds-color-text-secondary);
+  background: transparent;
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-lg);
+  cursor: pointer;
+  transition: all var(--ds-transition-fast);
+}
+
+.avatar-upload-btn:hover {
+  color: var(--ds-color-text);
+  border-color: var(--ds-color-text-muted);
+}
+
+/* ============================================================
+   TOGGLE SWITCH
+   Component tokens used:
+     trackOff: --ds-color-border (toggle token)
+     trackOn: --ds-color-primary (toggle token)
+     thumb: #ffffff (toggle token)
+     radius: --ds-radius-full (toggle token)
+   ============================================================ */
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--ds-space-3) 0;
+}
+
+.toggle-row + .toggle-row {
+  border-top: 1px solid var(--ds-color-border);
+}
+
+.toggle-info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-1);
+}
+
+.toggle-label {
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  color: var(--ds-color-text);
+}
+
+.toggle-desc {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-color-text-muted);
+}
+
+.toggle {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+}
+
+.toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--ds-color-border);
+  border-radius: var(--ds-radius-full);
+  cursor: pointer;
+  transition: background var(--ds-transition-fast);
+}
+
+.toggle input:checked + .toggle-track {
+  background: var(--ds-color-primary);
+}
+
+.toggle-track::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: #ffffff;
+  border-radius: var(--ds-radius-full);
+  box-shadow: var(--ds-shadow-sm);
+  transition: transform var(--ds-transition-fast);
+}
+
+.toggle input:checked + .toggle-track::after {
+  transform: translateX(20px);
+}
+
+/* ============================================================
+   RADIO BUTTONS
+   Component tokens used:
+     border: --ds-color-border (radio token)
+     selectedDot: --ds-color-primary (radio token)
+   ============================================================ */
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--ds-space-3);
+}
+
+.radio-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--ds-space-3);
+  padding: var(--ds-space-3) var(--ds-space-4);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-lg);
+  cursor: pointer;
+  transition: border-color var(--ds-transition-fast), background var(--ds-transition-fast);
+}
+
+.radio-option:hover {
+  border-color: var(--ds-color-text-muted);
+}
+
+.radio-option.selected {
+  border-color: var(--ds-color-primary);
+  background: var(--ds-color-primary-light);
+}
+
+.radio-dot {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-full);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin-top: 1px;
+  transition: border-color var(--ds-transition-fast);
+}
+
+.radio-option.selected .radio-dot {
+  border-color: var(--ds-color-primary);
+}
+
+.radio-dot::after {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: var(--ds-radius-full);
+  background: var(--ds-color-primary);
+  transform: scale(0);
+  transition: transform var(--ds-transition-fast);
+}
+
+.radio-option.selected .radio-dot::after {
+  transform: scale(1);
+}
+
+.radio-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.radio-text strong {
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  color: var(--ds-color-text);
+}
+
+.radio-text span {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-color-text-muted);
+}
+
+/* ============================================================
+   BUTTONS
+   Component tokens used:
+     bg: --ds-color-primary (button token)
+     text: #ffffff (button token)
+     hoverBg: --ds-color-primary-hover (button token)
+     hoverShadow: --ds-shadow-primary (button token)
+     radius: --ds-radius-lg (button token)
+     font: --ds-font-weight-medium (button token)
+     transition: --ds-transition-fast (button token)
+   ============================================================ */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--ds-space-2);
+  padding: var(--ds-space-3) var(--ds-space-5);
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-medium);
+  line-height: var(--ds-leading-normal);
+  border: none;
+  border-radius: var(--ds-radius-lg);
+  cursor: pointer;
+  transition: all var(--ds-transition-fast);
+}
+
+.btn-primary {
+  background: var(--ds-color-primary);
+  color: #ffffff;
+}
+
+.btn-primary:hover {
+  background: var(--ds-color-primary-hover);
+  box-shadow: var(--ds-shadow-primary);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ds-color-text-secondary);
+}
+
+.btn-ghost:hover {
+  background: var(--ds-color-primary-light);
+  color: var(--ds-color-text);
+}
+
+/* --- Danger Zone ---
+   Uses: --ds-color-error, --ds-color-error-light, --ds-shadow-error */
+.danger-zone {
+  padding: var(--ds-space-5);
+  border: 1px solid var(--ds-color-error-light);
+  border-radius: var(--ds-radius-lg);
+  background: var(--ds-color-error-light);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--ds-space-4);
+}
+
+.danger-text h3 {
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-semibold);
+  color: var(--ds-color-error);
+  margin-bottom: 2px;
+}
+
+.danger-text p {
+  font-size: var(--ds-text-xs);
+  color: var(--ds-color-text-muted);
+}
+
+.btn-danger {
+  background: var(--ds-color-error);
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+  box-shadow: var(--ds-shadow-error);
+}
+
+/* ============================================================
+   PANEL FOOTER
+   ============================================================ */
+.panel-footer {
+  padding: var(--ds-space-5) var(--ds-space-8);
+  border-top: 1px solid var(--ds-color-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--ds-space-3);
+}
+
+/* ============================================================
+   TOKEN ANNOTATION (visible at bottom)
+   ============================================================ */
+.token-annotation {
+  margin-top: var(--ds-space-8);
+  max-width: 560px;
+  width: 100%;
+  padding: var(--ds-space-5);
+  background: var(--ds-color-surface);
+  border: 1px solid var(--ds-color-border);
+  border-radius: var(--ds-radius-lg);
+  font-family: var(--ds-font-mono);
+  font-size: var(--ds-text-xs);
+  color: var(--ds-color-text-muted);
+  line-height: var(--ds-leading-relaxed);
+}
+
+.token-annotation h4 {
+  font-family: var(--ds-font-sans);
+  font-size: var(--ds-text-sm);
+  font-weight: var(--ds-font-weight-semibold);
+  color: var(--ds-color-text);
+  margin-bottom: var(--ds-space-3);
+}
+
+.token-annotation table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.token-annotation th,
+.token-annotation td {
+  text-align: left;
+  padding: var(--ds-space-1) var(--ds-space-2);
+  border-bottom: 1px solid var(--ds-color-border);
+}
+
+.token-annotation th {
+  font-family: var(--ds-font-sans);
+  font-weight: var(--ds-font-weight-medium);
+  color: var(--ds-color-text-secondary);
+  font-size: var(--ds-text-xs);
+}
+
+.token-annotation td:first-child {
+  color: var(--ds-color-primary);
+}
+</style>
+</head>
+<body data-theme="dark">
+
+<div style="display: flex; flex-direction: column; align-items: center;">
+
+<div class="settings-panel">
+  <div class="panel-header">
+    <h1>Settings</h1>
+    <button class="close-btn" aria-label="Close">
+      <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <line x1="4" y1="4" x2="12" y2="12"/><line x1="12" y1="4" x2="4" y2="12"/>
+      </svg>
+    </button>
+  </div>
+
+  <div class="panel-body">
+
+    <!-- ===== PROFILE SECTION ===== -->
+    <div class="section">
+      <div class="section-title">Profile</div>
+
+      <div class="avatar-row">
+        <div class="avatar-preview">T</div>
+        <button class="avatar-upload-btn">Upload photo</button>
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="name">Display name</label>
+        <input class="field-input" type="text" id="name" placeholder="Troy" value="Troy">
+      </div>
+
+      <div class="field">
+        <label class="field-label" for="email">Email</label>
+        <input class="field-input" type="email" id="email" placeholder="you@example.com" value="troy@cothekdesigns.com">
+      </div>
+    </div>
+
+    <!-- ===== NOTIFICATIONS SECTION ===== -->
+    <div class="section">
+      <div class="section-title">Notifications</div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <span class="toggle-label">Email notifications</span>
+          <span class="toggle-desc">Receive updates about activity via email</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked>
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <span class="toggle-label">Push notifications</span>
+          <span class="toggle-desc">Get push notifications in your browser</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox">
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+
+      <div class="toggle-row">
+        <div class="toggle-info">
+          <span class="toggle-label">Weekly digest</span>
+          <span class="toggle-desc">Summary of your weekly activity</span>
+        </div>
+        <label class="toggle">
+          <input type="checkbox" checked>
+          <span class="toggle-track"></span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ===== PRIVACY SECTION ===== -->
+    <div class="section">
+      <div class="section-title">Privacy</div>
+
+      <div class="radio-group">
+        <div class="radio-option selected" onclick="selectRadio(this)">
+          <div class="radio-dot"></div>
+          <div class="radio-text">
+            <strong>Public profile</strong>
+            <span>Anyone can see your profile and activity</span>
+          </div>
+        </div>
+        <div class="radio-option" onclick="selectRadio(this)">
+          <div class="radio-dot"></div>
+          <div class="radio-text">
+            <strong>Private profile</strong>
+            <span>Only you can see your profile details</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== DANGER ZONE ===== -->
+    <div class="section">
+      <div class="section-title">Danger Zone</div>
+
+      <div class="danger-zone">
+        <div class="danger-text">
+          <h3>Delete account</h3>
+          <p>Permanently remove your account and all data. This cannot be undone.</p>
+        </div>
+        <button class="btn btn-danger">Delete</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="panel-footer">
+    <button class="btn btn-ghost">Cancel</button>
+    <button class="btn btn-primary">Save changes</button>
+  </div>
+</div>
+
+<!-- ===== TOKEN ANNOTATION TABLE ===== -->
+<div class="token-annotation">
+  <h4>Token Usage Map</h4>
+  <table>
+    <thead>
+      <tr><th>Element</th><th>Token</th><th>Value</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Panel background</td><td>--ds-color-surface</td><td>#1e293b (dark)</td></tr>
+      <tr><td>Panel border</td><td>--ds-color-border</td><td>#334155 (dark)</td></tr>
+      <tr><td>Panel radius</td><td>--ds-radius-xl</td><td>0.75rem / 12px</td></tr>
+      <tr><td>Panel shadow</td><td>--ds-shadow-lg</td><td>0 10px 15px -3px ...</td></tr>
+      <tr><td>Section padding</td><td>--ds-space-8</td><td>2rem / 32px</td></tr>
+      <tr><td>Input border</td><td>--ds-color-border</td><td>#334155 (dark)</td></tr>
+      <tr><td>Input focus border</td><td>--ds-color-primary</td><td>#6366f1</td></tr>
+      <tr><td>Input focus ring</td><td>--ds-color-primary-light</td><td>rgba(99,102,241,0.15)</td></tr>
+      <tr><td>Input radius</td><td>--ds-radius-lg</td><td>0.5rem / 8px</td></tr>
+      <tr><td>Input font</td><td>--ds-text-sm</td><td>0.875rem / 14px</td></tr>
+      <tr><td>Primary button bg</td><td>--ds-color-primary</td><td>#6366f1</td></tr>
+      <tr><td>Primary button hover</td><td>--ds-color-primary-hover</td><td>#4f46e5</td></tr>
+      <tr><td>Primary button shadow</td><td>--ds-shadow-primary</td><td>0 4px 14px rgba(99,102,241,0.25)</td></tr>
+      <tr><td>Primary button radius</td><td>--ds-radius-lg</td><td>0.5rem / 8px</td></tr>
+      <tr><td>Danger button bg</td><td>--ds-color-error</td><td>#ef4444</td></tr>
+      <tr><td>Danger button shadow</td><td>--ds-shadow-error</td><td>0 4px 14px rgba(239,68,68,0.25)</td></tr>
+      <tr><td>Danger zone bg</td><td>--ds-color-error-light</td><td>rgba(239,68,68,0.12)</td></tr>
+      <tr><td>Toggle track on</td><td>--ds-color-primary</td><td>#6366f1</td></tr>
+      <tr><td>Toggle track off</td><td>--ds-color-border</td><td>#334155 (dark)</td></tr>
+      <tr><td>Toggle thumb</td><td>#ffffff</td><td>#ffffff</td></tr>
+      <tr><td>Toggle radius</td><td>--ds-radius-full</td><td>9999px</td></tr>
+      <tr><td>Radio selected dot</td><td>--ds-color-primary</td><td>#6366f1</td></tr>
+      <tr><td>Radio border</td><td>--ds-color-border</td><td>#334155 (dark)</td></tr>
+      <tr><td>Heading font</td><td>--ds-text-xl</td><td>1.25rem / 20px</td></tr>
+      <tr><td>Heading weight</td><td>--ds-font-weight-semibold</td><td>600</td></tr>
+      <tr><td>Body font</td><td>--ds-text-sm</td><td>0.875rem / 14px</td></tr>
+      <tr><td>Label font</td><td>--ds-font-weight-medium</td><td>500</td></tr>
+      <tr><td>Muted text</td><td>--ds-color-text-muted</td><td>#64748b</td></tr>
+      <tr><td>Transition</td><td>--ds-transition-fast</td><td>150ms ease</td></tr>
+    </tbody>
+  </table>
+</div>
+
+</div>
+
+<script>
+function selectRadio(el) {
+  el.parentElement.querySelectorAll('.radio-option').forEach(opt => opt.classList.remove('selected'));
+  el.classList.add('selected');
+}
+</script>
+</body>
+</html>
