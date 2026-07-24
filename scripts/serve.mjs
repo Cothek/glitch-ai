@@ -619,6 +619,10 @@ async function main() {
 
   let shouldRestart = true;
   while (shouldRestart) {
+    // Log restart loop iteration
+    const loopLogPath = join(ROOT_DIR, 'data', 'restart-loop.log');
+    writeFileSync(loopLogPath, `[${new Date().toISOString()}] Entered restart loop\n`, 'utf-8');
+
     await launchServer({ OpenCodeBin, ROOT_DIR, HandyBin });
 
     // ---- Check for restart flag (seamless restart) ----
@@ -687,9 +691,11 @@ async function main() {
 
       log(DARK_GREEN, '  Restart ready');
       log('');
+      writeFileSync(loopLogPath, `[${new Date().toISOString()}] Restarting...\n`, 'utf-8');
       continue; // Loop back to launchServer()
     }
     shouldRestart = false;
+    writeFileSync(loopLogPath, `[${new Date().toISOString()}] Loop exited (no restart flag)\n`, 'utf-8');
   }
 }
 

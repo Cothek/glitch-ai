@@ -841,45 +841,100 @@ async function main() {
     log(YELLOW, `  Plugin manager error: ${e.message}`);
   }
 
-  // ---- Launch ----
-  if (isServe) {
-    // Server (web) mode
-    const { launchServer } = await import('./lib/server-mode.mjs');
-    await launchServer({ OpenCodeBin, ROOT_DIR, HandyBin });
-  } else {
-    // TUI mode
-    log(CYAN, '  Starting OpenCode...');
-    console.log('');
+  // ---- Launch with restart loop ----
+  let shouldRestart = true;
+  while (shouldRestart) {
+    if (isServe) {
+      // Server (web) mode
+      const { launchServer } = await import('./lib/server-mode.mjs');
+      await launchServer({ OpenCodeBin, ROOT_DIR, HandyBin });
+    } else {
+      // TUI mode
+      log(CYAN, '  Starting OpenCode...');
+      console.log('');
 
-    try {
-      const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
-      if (!result.success && result.status !== null) {
-        log(RED, `  OpenCode exited with error (code ${result.status})`);
+      try {
+        const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
+        if (!result.success && result.status !== null) {
+          log(RED, `  OpenCode exited with error (code ${result.status})`);
+        }
+      } catch (e) {
+        log(RED, `  OpenCode exited with error: ${e.message || e}`);
       }
-    } catch (e) {
-      log(RED, `  OpenCode exited with error: ${e.message || e}`);
+
+      console.log('');
+      log(MAGENTA, 'Glitch session ended.');
     }
 
-    console.log('');
-    log(MAGENTA, 'Glitch session ended.');
-  }
+    // ---- Check for restart flag (seamless restart) ----
+    const restartFlag = join(ROOT_DIR, 'data', '.restart-flag');
+    if (existsSync(restartFlag)) {
+      unlinkSync(restartFlag);
+      log('');
+      log(MAGENTA, '  Restarting Glitch...');
+      log('');
 
-  // ---- Check for restart flag (seamless restart) ----
-  const restartFlag = join(ROOT_DIR, 'data', '.restart-flag');
-  if (existsSync(restartFlag)) {
-    unlinkSync(restartFlag);
-    log('');
-    log(MAGENTA, '  Restarting Glitch...');
-    log('');
-    // Re-launch with same args + --restart flag
-    const args = process.argv.slice(1);
-    if (!args.includes('--restart')) args.push('--restart');
-    const child = spawn(process.argv[0], args, {
-      stdio: 'inherit',
-      detached: true,
-    });
-    child.unref();
-    process.exit(0);
+      // Re-generate config (picks up any model-assignments.json changes)
+      log(CYAN, '  Generating runtime config from template...');
+      const templateText = readFileSync(TemplatePath, 'utf-8');
+      const engineInstructions = [
+        'glitch-memorycore/prompt-rules.md',
+        'glitch-memorycore/CLAUDE.md',
+        'glitch-memorycore/master-memory.md',
+        'glitch-memorycore/core/identity.md',
+        'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
+      ];
+      let userInstructions = buildUserInstructions(ROOT_DIR, UserName);
+      const allInstructions = [...engineInstructions, ...userInstructions];
+      const instrJson = allInstructions.map(s => `    "${s}"`).join(',\n');
+      const instrBlock = `"instructions": [\n${instrJson}\n  ]`;
+      const runtimeJson = templateText.replace(/"[Ii]nstructions"\s*:\s*\[[^\]]*\]/, instrBlock);
+
+      try {
+        let configObj = JSON.parse(runtimeJson);
+        // Apply model overrides from data/model-assignments.json
+        const assignmentsPath = join(ROOT_DIR, 'data', 'model-assignments.json');
+        if (existsSync(assignmentsPath)) {
+          try {
+            const assignmentsRaw = readFileSync(assignmentsPath, 'utf-8');
+            const assignments = JSON.parse(assignmentsRaw);
+            let overrideCount = 0;
+            for (const [agentName, modelId] of Object.entries(assignments)) {
+              if (configObj.agent?.[agentName]) {
+                configObj.agent[agentName].model = modelId;
+                overrideCount++;
+              }
+            }
+            if (overrideCount > 0) {
+              log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from model-assignments.json`);
+            }
+          } catch (e) {
+            log(YELLOW, `  Warning: Could not read model-assignments.json (${e.message})`);
+          }
+        }
+        const finalJson = JSON.stringify(configObj, null, 2);
+        writeFileSync(ConfigPath, finalJson, 'utf-8');
+        log(DARK_GREEN, `  Config written (${allInstructions.length} instruction files)`);
+      } catch (e) {
+        log(RED, '  ERROR: Generated config is invalid JSON!');
+        log(RED, `  ${e.message}`);
+        process.exit(1);
+      }
+
+      // Update mode marker timestamp
+      const modeInfo = JSON.stringify({
+        mode: 'normal',
+        timestamp: new Date().toISOString(),
+        model: 'opencode-go/deepseek-v4-flash'
+      }, null, 2);
+      if (!existsSync(BackupDir)) mkdirSync(BackupDir, { recursive: true });
+      writeFileSync(ModeFile, modeInfo, 'utf-8');
+
+      log(DARK_GREEN, '  Restart ready');
+      log('');
+      continue; // Loop back to launch
+    }
+    shouldRestart = false;
   }
 }
 
