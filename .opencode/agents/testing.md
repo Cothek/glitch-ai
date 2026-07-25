@@ -27,6 +27,7 @@ permission:
   question: allow
   todowrite: allow
   skill: allow
+  task: deny
 ---
 
 # @testing --- Senior QA Engineer
