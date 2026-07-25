@@ -8,13 +8,10 @@
                    ".opencode/plugins/recall.js",
                    ".opencode/plugins/stuck-detector.js"
                ],
-    "instructions":  [
-                         "glitch-memorycore/prompt-rules.md",
-                         "glitch-memorycore/glitch.md",
-                         "glitch-memorycore/master-memory.md",
-                         "glitch-memorycore/core/identity.md",
-                         "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
-                     ],
+     "instructions":  [
+                          ".opencode/instructions/coordinator-instructions.md",
+                          "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+                      ],
     "agent":  {
                   "glitch":  {
                                  "model":  "__MODEL__",
@@ -39,42 +36,52 @@
                                                 },
                                  "prompt":  "__PROMPT__"
                              },
-                  "general":  {
-                                  "model":  "__MODEL__",
-                                  "mode":  "subagent",
-                                  "description":  "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
-                                  "permission":  {
-                                                     "read":  "allow",
-                                                     "edit":  "allow",
-                                                     "bash":  "allow",
-                                                     "glob":  "allow",
-                                                     "grep":  "allow",
-                                                     "list":  "allow",
-                                                     "webfetch":  "allow",
-                                                     "websearch":  "deny",
-                                                     "question":  "allow",
-                                                     "todowrite":  "allow"
-                                                 },
-                                  "temperature":  0.2
-                              },
-                  "explore":  {
-                                  "model":  "__MODEL__",
-                                  "mode":  "subagent",
-                                  "description":  "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
-                                  "temperature":  0.2
-                              },
+                   "general":  {
+                                   "model":  "__MODEL__",
+                                   "mode":  "subagent",
+                                   "description":  "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
+                                   "permission":  {
+                                                      "read":  "allow",
+                                                      "edit":  "allow",
+                                                      "bash":  "allow",
+                                                      "glob":  "allow",
+                                                      "grep":  "allow",
+                                                      "list":  "allow",
+                                                      "webfetch":  "allow",
+                                                      "websearch":  "deny",
+                                                      "question":  "allow",
+                                                      "todowrite":  "allow",
+                                                      "task":  "deny"
+                                                  },
+                                   "temperature":  0.2
+                               },
+                   "explore":  {
+                                   "model":  "__MODEL__",
+                                   "mode":  "subagent",
+                                   "description":  "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
+                                   "permission":  {
+                                                      "task":  "deny"
+                                                  },
+                                   "temperature":  0.2
+                               },
                   "plan":  {
                                "model":  "__MODEL__",
-                               "mode":  "primary",
-                               "description":  "Planning mode -- reason about architecture and designs without executing code.",
-                               "temperature":  0.2
-                           },
-                  "build":  {
-                                "model":  "__MODEL__",
                                 "mode":  "subagent",
-                                "description":  "Code scaffolding -- generates code from prompts.",
+                                "description":  "Planning mode -- reason about architecture and designs without executing code.",
+                                "permission":  {
+                                                   "task":  "deny"
+                                               },
                                 "temperature":  0.2
-                            },
+                           },
+                   "build":  {
+                                 "model":  "__MODEL__",
+                                 "mode":  "subagent",
+                                 "description":  "Code scaffolding -- generates code from prompts.",
+                                 "permission":  {
+                                                    "task":  "deny"
+                                                },
+                                 "temperature":  0.2
+                             },
                   "memory":  {
                                  "model":  "__MODEL__",
                                  "mode":  "subagent",
@@ -94,11 +101,9 @@
                                                      "todowrite":  "deny",
                                                      "task":  "deny"
                                                  },
-                                                 "temperature": 0.2
-                                               }
-                                             }
-                                           }
-              },
+                                                  "temperature": 0.2
+                                                }
+               },
     "attachment":  {
                        "image":  {
                                      "auto_resize":  true,
