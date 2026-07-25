@@ -112,6 +112,44 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ---- Route /plugins/glitch-ui/* to model UI server (port 4104) ----
+  if (req.url && req.url.startsWith('/plugins/glitch-ui/')) {
+    const modelUIUpstream = new URL('http://localhost:4104');
+    let targetPath = req.url;
+    // Strip auth_token from forwarded URL
+    try {
+      const parsed = new URL(targetPath, 'http://localhost');
+      parsed.searchParams.delete('auth_token');
+      targetPath = parsed.pathname + parsed.search;
+    } catch {}
+    const options = {
+      hostname: modelUIUpstream.hostname,
+      port: modelUIUpstream.port,
+      path: targetPath,
+      method: req.method,
+      headers: {
+        ...(Object.fromEntries(
+          Object.entries(req.headers)
+            .filter(([key]) => !['host', 'authorization'].includes(key.toLowerCase()))
+        )),
+        host: modelUIUpstream.host,
+      },
+    };
+    const proxyReq = http.request(options, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(res);
+    });
+    proxyReq.on('error', (err) => {
+      console.error(`Model UI asset proxy error for ${req.method} ${req.url}:`, err.message);
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'text/plain' });
+        res.end('Model UI asset server unavailable');
+      }
+    });
+    req.pipe(proxyReq);
+    return;
+  }
+
   // Strip directory and workspace params from /agent requests
   // (server bug: workspace crashes, directory filters out custom agents)
   let targetPath = req.url;
@@ -168,5 +206,6 @@ const server = http.createServer((req, res) => {
 server.listen(PROXY_PORT, () => {
   console.log(`  Auth proxy listening on :${PROXY_PORT} -> ${UPSTREAM_URL}`);
   console.log(`  /models -> http://localhost:4104`);
+  console.log(`  /plugins/glitch-ui/ -> http://localhost:4104`);
   console.log(`  Password: ${password}`);
 });
