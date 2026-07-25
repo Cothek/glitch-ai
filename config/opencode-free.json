@@ -8,13 +8,10 @@
                    ".opencode/plugins/recall.js",
                    ".opencode/plugins/stuck-detector.js"
                ],
-    "instructions":  [
-                         "glitch-memorycore/prompt-rules.md",
-                         "glitch-memorycore/glitch.md",
-                         "glitch-memorycore/master-memory.md",
-                         "glitch-memorycore/core/identity.md",
-                         "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
-                     ],
+     "instructions":  [
+                          ".opencode/instructions/coordinator-instructions.md",
+                          "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+                      ],
     "agent":  {
                   "glitch":  {
                                  "model":  "__MODEL__",
@@ -39,96 +36,120 @@
                                                 },
                                  "prompt":  "__PROMPT__"
                              },
-                  "general":  {
-                                  "model":  "__MODEL__",
-                                  "mode":  "subagent",
-                                  "description":  "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
-                                  "permission":  {
-                                                     "read":  "allow",
-                                                     "edit":  "allow",
-                                                     "bash":  "allow",
-                                                     "glob":  "allow",
-                                                     "grep":  "allow",
-                                                     "list":  "allow",
-                                                     "webfetch":  "allow",
-                                                     "websearch":  "deny",
-                                                     "question":  "allow",
-                                                     "todowrite":  "allow"
-                                                 },
-                                  "temperature":  0.2
-                              },
-                  "explore":  {
-                                  "model":  "__MODEL__",
-                                  "mode":  "subagent",
-                                  "description":  "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
-                                  "temperature":  0.2
-                              },
-                  "plan":  {
-                               "model":  "__MODEL__",
-                               "mode":  "subagent",
-                               "description":  "Planning mode -- reason about architecture and designs without executing code.",
-                               "temperature":  0.2
-                           },
-                  "build":  {
-                                "model":  "__MODEL__",
-                                "mode":  "subagent",
-                                "description":  "Code scaffolding -- generates code from prompts.",
-                                "temperature":  0.2
-                            },
-                  "coder":  {
-                                "model":  "__MODEL__",
-                                "mode":  "subagent",
-                                "description":  "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
-                                "temperature":  0.2
-                            },
-                  "ui-designer":  {
-                                      "model":  "__MODEL__",
-                                      "mode":  "subagent",
-                                      "description":  "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
-                                      "temperature":  0.2
-                                  },
-                  "reviewer":  {
+                   "general":  {
                                    "model":  "__MODEL__",
                                    "mode":  "subagent",
-                                   "description":  "Independent code quality gate -- read-only, severity-rated reports",
+                                   "description":  "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
+                                   "permission":  {
+                                                      "read":  "allow",
+                                                      "edit":  "allow",
+                                                      "bash":  "allow",
+                                                      "glob":  "allow",
+                                                      "grep":  "allow",
+                                                      "list":  "allow",
+                                                      "webfetch":  "allow",
+                                                      "websearch":  "deny",
+                                                      "question":  "allow",
+                                                      "todowrite":  "allow",
+                                                      "task":  "deny"
+                                                  },
                                    "temperature":  0.2
                                },
-                  "testing":  {
-                                  "model":  "__MODEL__",
-                                  "mode":  "subagent",
-                                  "description":  "Test writer -- TDD, framework detection, edge case coverage",
-                                  "temperature":  0.2
-                              },
-                  "vision":  {
-                                 "model":  "__VISION_MODEL__",
+                   "explore":  {
+                                   "model":  "__MODEL__",
+                                   "mode":  "subagent",
+                                   "description":  "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
+                                   "permission":  {
+                                                      "task":  "deny"
+                                                  },
+                                   "temperature":  0.2
+                               },
+                   "plan":  {
+                                "model":  "__MODEL__",
+                                "mode":  "subagent",
+                                "description":  "Planning mode -- reason about architecture and designs without executing code.",
+                                "permission":  {
+                                                   "task":  "deny"
+                                               },
+                                "temperature":  0.2
+                            },
+                   "build":  {
+                                 "model":  "__MODEL__",
                                  "mode":  "subagent",
-                                 "description":  "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
+                                 "description":  "Code scaffolding -- generates code from prompts.",
                                  "permission":  {
-                                                    "read":  "allow",
-                                                    "bash":  "deny",
-                                                    "glob":  "allow",
-                                                    "grep":  "deny",
-                                                    "edit":  "deny",
-                                                    "skill":  "deny",
-                                                    "list":  "allow",
-                                                    "webfetch":  "allow"
+                                                    "task":  "deny"
                                                 },
                                  "temperature":  0.2
                              },
-                             "vision-alt": {
-                               "model": "__VISION_MODEL__",
-                               "mode": "subagent",
-                               "description": "Alternative image and visual content analysis agent. Fallback when @vision fails with model-level errors (NVIDIA DEGRADED function, quota exhaustion, model not found). Uses a different underlying model than @vision.",
-                               "permission": {
-                                 "read": "allow",
-                                 "bash": "deny",
-                                 "glob": "allow",
-                                 "grep": "deny",
-                                 "edit": "deny",
-                                 "skill": "deny",
-                                 "list": "allow",
-                                 "webfetch": "allow"
+                   "coder":  {
+                                 "model":  "__MODEL__",
+                                 "mode":  "subagent",
+                                 "description":  "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
+                                 "permission":  {
+                                                    "task":  "deny"
+                                                },
+                                 "temperature":  0.2
+                             },
+                   "ui-designer":  {
+                                       "model":  "__MODEL__",
+                                       "mode":  "subagent",
+                                       "description":  "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
+                                       "permission":  {
+                                                          "task":  "deny"
+                                                      },
+                                       "temperature":  0.2
+                                   },
+                   "reviewer":  {
+                                    "model":  "__MODEL__",
+                                    "mode":  "subagent",
+                                    "description":  "Independent code quality gate -- read-only, severity-rated reports",
+                                    "permission":  {
+                                                       "task":  "deny"
+                                                   },
+                                    "temperature":  0.2
+                                },
+                   "testing":  {
+                                   "model":  "__MODEL__",
+                                   "mode":  "subagent",
+                                   "description":  "Test writer -- TDD, framework detection, edge case coverage",
+                                   "permission":  {
+                                                      "task":  "deny"
+                                                  },
+                                   "temperature":  0.2
                                },
+                   "vision":  {
+                                  "model":  "__VISION_MODEL__",
+                                  "mode":  "subagent",
+                                  "description":  "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
+                                  "permission":  {
+                                                     "read":  "allow",
+                                                     "bash":  "deny",
+                                                     "glob":  "allow",
+                                                     "grep":  "deny",
+                                                     "edit":  "deny",
+                                                     "skill":  "deny",
+                                                     "list":  "allow",
+                                                     "webfetch":  "allow",
+                                                     "task":  "deny"
+                                                 },
+                                  "temperature":  0.2
+                              },
+                              "vision-alt": {
+                                "model": "__VISION_MODEL__",
+                                "mode": "subagent",
+                                "description": "Alternative image and visual content analysis agent. Fallback when @vision fails with model-level errors (NVIDIA DEGRADED function, quota exhaustion, model not found). Uses a different underlying model than @vision.",
+                                "permission": {
+                                  "read": "allow",
+                                  "bash": "deny",
+                                  "glob": "allow",
+                                  "grep": "deny",
+                                  "edit": "deny",
+                                  "skill": "deny",
+                                  "list": "allow",
+                                  "webfetch": "allow",
+                                  "task": "deny"
+                                },
                                "temperature": 0.2
                              },
                    "memory":  {

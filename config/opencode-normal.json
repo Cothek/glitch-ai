@@ -9,10 +9,7 @@
     ".opencode/plugins/stuck-detector.js"
   ],
   "instructions": [
-    "glitch-memorycore/prompt-rules.md",
-    "glitch-memorycore/glitch.md",
-    "glitch-memorycore/master-memory.md",
-    "glitch-memorycore/core/identity.md",
+    ".opencode/instructions/coordinator-instructions.md",
     "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
   ],
   "agent": {
@@ -52,7 +49,8 @@
         "webfetch": "allow",
         "websearch": "deny",
         "question": "allow",
-        "todowrite": "allow"
+        "todowrite": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -68,7 +66,8 @@
         "glob": "allow",
         "grep": "allow",
         "list": "allow",
-        "webfetch": "allow"
+        "webfetch": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -83,7 +82,8 @@
         "glob": "allow",
         "grep": "allow",
         "list": "allow",
-        "webfetch": "allow"
+        "webfetch": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -101,7 +101,9 @@
         "webfetch": "allow",
         "websearch": "deny",
         "question": "allow",
-        "todowrite": "allow"
+        "todowrite": "allow",
+        "task": "deny",
+        "skill": "allow"
       },
       "temperature": 0.2
     },
@@ -120,7 +122,8 @@
         "websearch": "deny",
         "question": "allow",
         "todowrite": "allow",
-        "skill": "allow"
+        "skill": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -137,7 +140,8 @@
         "list": "allow",
         "webfetch": "allow",
         "websearch": "deny",
-        "skill": "allow"
+        "skill": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -156,7 +160,8 @@
         "websearch": "deny",
         "question": "allow",
         "todowrite": "allow",
-        "skill": "allow"
+        "skill": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -173,7 +178,8 @@
         "list": "allow",
         "webfetch": "allow",
         "websearch": "deny",
-        "skill": "allow"
+        "skill": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -189,7 +195,8 @@
         "edit": "deny",
         "list": "allow",
         "webfetch": "allow",
-        "skill": "deny"
+        "skill": "deny",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -205,7 +212,8 @@
         "edit": "deny",
         "list": "allow",
         "webfetch": "allow",
-        "skill": "deny"
+        "skill": "deny",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -285,7 +293,8 @@
         "list": "allow",
         "webfetch": "allow",
         "websearch": "deny",
-        "skill": "allow"
+        "skill": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -303,7 +312,8 @@
         "webfetch": "allow",
         "websearch": "deny",
         "question": "allow",
-        "todowrite": "allow"
+        "todowrite": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -319,7 +329,8 @@
         "grep": "allow",
         "list": "allow",
         "webfetch": "allow",
-        "websearch": "deny"
+        "websearch": "deny",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -334,7 +345,8 @@
         "glob": "allow",
         "grep": "allow",
         "list": "allow",
-        "webfetch": "allow"
+        "webfetch": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -352,7 +364,8 @@
         "webfetch": "allow",
         "websearch": "deny",
         "question": "allow",
-        "todowrite": "allow"
+        "todowrite": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -371,7 +384,8 @@
         "websearch": "deny",
         "question": "allow",
         "todowrite": "allow",
-        "skill": "allow"
+        "skill": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -388,7 +402,8 @@
         "list": "allow",
         "webfetch": "allow",
         "websearch": "deny",
-        "skill": "allow"
+        "skill": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -407,7 +422,8 @@
         "websearch": "deny",
         "question": "allow",
         "todowrite": "allow",
-        "skill": "allow"
+        "skill": "allow",
+        "task": "deny"
       },
       "temperature": 0.2
     },
@@ -424,7 +440,8 @@
         "list": "allow",
         "webfetch": "allow",
         "websearch": "deny",
-        "skill": "deny"
+        "skill": "deny",
+        "task": "deny"
       },
       "temperature": 0.2
     }

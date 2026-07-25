@@ -10,6 +10,7 @@ import { tmpdir } from 'os';
 import { checkUserRepoUpdates } from './lib/git-sync.mjs';
 import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
+import { bootstrapOpenCode } from './lib/bootstrap-opencode.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -375,37 +376,25 @@ async function main() {
   // ---- Auto-bootstrap: download OpenCode if missing ----
   if (!existsSync(OpenCodeBin)) {
     log(YELLOW, '  OpenCode not found. Running bootstrap to download...');
-    if (isWin) {
-      const bootstrapScript = join(ROOT_DIR, 'scripts', 'bootstrap.ps1');
-      if (existsSync(bootstrapScript)) {
-        const result = pwsh(['-File', bootstrapScript], { stdio: 'inherit', timeout: 120000 });
-        if (!result.success) {
-          log(RED, `  ERROR: Bootstrap failed: ${result.error}`);
-          log(YELLOW, '  Try running manually: .\\scripts\\bootstrap.ps1');
-          process.exit(1);
-        }
-      } else {
-        log(RED, '  ERROR: bootstrap.ps1 not found.');
-        process.exit(1);
-      }
-    } else {
-      log(YELLOW, '  On Unix/macOS, please install opencode manually: npm install -g opencode-ai');
-      log(YELLOW, '  Then copy the binary to opencode/opencode in the project root.');
+    const bootstrapOk = await bootstrapOpenCode(ROOT_DIR);
+    if (!bootstrapOk) {
+      log(RED, '  ERROR: Failed to bootstrap OpenCode.');
+      log(YELLOW, '  Try running: npm install -g opencode-ai');
       process.exit(1);
     }
     if (!existsSync(OpenCodeBin)) {
       log(RED, '  ERROR: Bootstrap finished but OpenCode still not found.');
-      log(YELLOW, '  Try running manually: .\\scripts\\bootstrap.ps1');
+      log(YELLOW, '  Try running: npm install -g opencode-ai');
       process.exit(1);
     }
     log(GREEN, '  OpenCode downloaded successfully.');
   }
 
   // ---- Self-heal: initialize git submodules if needed ----
-  if (!existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
+  if (!existsSync(join(ROOT_DIR, 'glitch-memorycore', 'glitch.md'))) {
     log(CYAN, '  Initializing glitch-memorycore submodule...');
     const result = run(GIT_BIN, ['submodule', 'update', '--init', '--recursive'], { cwd: ROOT_DIR, timeout: 60000 });
-    if (result.success && existsSync(join(ROOT_DIR, 'glitch-memorycore', 'prompt-rules.md'))) {
+    if (result.success && existsSync(join(ROOT_DIR, 'glitch-memorycore', 'glitch.md'))) {
       log(GREEN, '  Engine ready!');
     } else {
       log(YELLOW, '  WARNING: Could not load engine.');
@@ -507,10 +496,7 @@ async function main() {
 
   // Build instructions list (engine + user)
   const engineInstructions = [
-    'glitch-memorycore/prompt-rules.md',
-    'glitch-memorycore/glitch.md',
-    'glitch-memorycore/master-memory.md',
-    'glitch-memorycore/core/identity.md',
+    '.opencode/instructions/coordinator-instructions.md',
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
   ];
 

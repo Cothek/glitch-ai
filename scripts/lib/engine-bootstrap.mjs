@@ -27,7 +27,7 @@ export async function ensureEngine(options) {
   const path = await import('path');
 
   const engineDir = path.join(rootDir, 'glitch-memorycore');
-  const promptRulesPath = path.join(engineDir, 'prompt-rules.md');
+  const promptRulesPath = path.join(engineDir, 'glitch.md');
 
   // a. Check if engine already exists
   if (fs.existsSync(promptRulesPath)) {
