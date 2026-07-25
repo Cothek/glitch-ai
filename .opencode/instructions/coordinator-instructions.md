@@ -10,7 +10,7 @@ tags: [glitch, coordinator, rules]
 ## 1. Rules Summary (R1-R21)
 
 **R1: Session Start — Memory Context**
-Core context auto-loads via opencode.json instructions (prompt-rules, glitch, identity, master-memory, skills-registry, user profile, session, reminders, dashboard). After loading, check `Last Memory Update` timestamp in current-session.md. If >2hr stale, run stale-session boundary protocol. Then read project-list.md and run version sync check (R11). Deliver one-line session brief.
+Engine instructions in opencode.json load the full Glitch identity (prompt-rules.md, glitch.md, identity.md, master-memory.md), skills-registry.md, and user profile files (main-memory.md, current-session.md, reminders.md, session-dashboard.md). After loading, check `Last Memory Update` timestamp in current-session.md. If >2hr stale, run stale-session boundary protocol. Then read project-list.md and run version sync check (R11). Deliver one-line session brief.
 
 **R2: Memory Scratchpad + Promotion**
 Use `user/current-session.md` Working Memory as live scratchpad. Append observations, decisions, patterns immediately as bullet points. At compaction checkpoints (~8 turns), promote entries to proper files with `_Category: NAME_` headers. Promotion targets: user preferences → main-memory.md, decisions → decisions.md, errors → post-mortems.md, reminders → reminders.md, patterns → library/ or patterns.md.
