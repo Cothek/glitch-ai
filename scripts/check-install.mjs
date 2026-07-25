@@ -166,6 +166,24 @@ check('Git Repo', 'Core', () => {
   };
 });
 
+check('glitch-memorycore', 'Core', () => {
+  const f = join(ROOT_DIR, 'glitch-memorycore', 'glitch.md');
+  if (!existsSync(f)) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'submodule not initialized — run: git submodule update --init',
+    };
+  }
+  return {
+    ok: true,
+    version: 'initialized',
+    path: 'glitch-memorycore/glitch.md',
+    note: null,
+  };
+});
+
 // --- Tools ---
 
 check('Handy', 'Tools', () => {
@@ -226,21 +244,81 @@ check('Image Gen', 'Tools', () => {
 
 // --- Config ---
 
-check('opencode.json', 'Config', () => {
-  const f = join(ROOT_DIR, 'opencode.json');
-  if (!existsSync(f)) {
+check('Agent Config', 'Config', () => {
+  const opencodeDir = join(ROOT_DIR, '.opencode');
+  const agentsDir = join(opencodeDir, 'agents');
+  const pluginsDir = join(opencodeDir, 'plugins');
+  if (!existsSync(opencodeDir)) {
     return {
       ok: false,
       version: null,
       path: null,
-      note: 'regenerate via launch script',
+      note: '.opencode/ missing — repo incomplete',
+    };
+  }
+  const hasAgents = existsSync(agentsDir);
+  const hasPlugins = existsSync(pluginsDir);
+  if (!hasAgents || !hasPlugins) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: `missing ${!hasAgents ? 'agents/' : ''}${!hasAgents && !hasPlugins ? ' and ' : ''}${!hasPlugins ? 'plugins/' : ''}`,
     };
   }
   return {
     ok: true,
-    version: 'found',
-    path: 'opencode.json',
+    version: 'present',
+    path: '.opencode/{agents,plugins}',
     note: null,
+  };
+});
+
+check('Config Templates', 'Config', () => {
+  const templates = [
+    'opencode-normal.json',
+    'opencode-free.json',
+    'opencode-local.json',
+    'opencode-safe.json',
+  ];
+  const missing = templates.filter((t) => !existsSync(join(ROOT_DIR, 'config', t)));
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: `missing: ${missing.join(', ')}`,
+    };
+  }
+  return {
+    ok: true,
+    version: '4/4',
+    path: 'config/opencode-*.json',
+    note: null,
+  };
+});
+
+check('Launch Script', 'Config', () => {
+  const bat = join(ROOT_DIR, 'launch-glitch.bat');
+  const sh = join(ROOT_DIR, 'launch-glitch.sh');
+  const hasBat = existsSync(bat);
+  const hasSh = existsSync(sh);
+  if (!hasBat && !hasSh) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'launch-glitch.bat / launch-glitch.sh missing',
+    };
+  }
+  const found = [];
+  if (hasBat) found.push('bat');
+  if (hasSh) found.push('sh');
+  return {
+    ok: true,
+    version: found.join('+'),
+    path: `launch-glitch.${found[0]}`,
+    note: found.length > 1 ? `also: launch-glitch.${found[1]}` : null,
   };
 });
 
@@ -286,7 +364,7 @@ check('Glitch Head', 'Config', () => {
 // Run + Report
 // ---------------------------------------------------------------------------
 
-const CRITICAL = new Set(['Node.js', 'OpenCode', 'Git Repo']);
+const CRITICAL = new Set(['Node.js', 'OpenCode', 'Git Repo', 'glitch-memorycore']);
 
 function runAll() {
   const results = checks.map((c) => ({ name: c.name, group: c.group, ...c.run() }));
@@ -307,7 +385,7 @@ function render(results) {
     lines.push(` ${C.bold}${g}${C.reset}`);
     for (const r of items) {
       const sym = r.ok ? SYM.ok : SYM.fail;
-      const ver = r.ok ? pad(r.version || 'ok', 12) : pad('not found', 12);
+      const ver = r.ok ? pad(r.version || 'ok', 12) : pad('—', 12);
       const path = r.path || '—';
       const note = r.note ? `  ${C.dim}${r.note}${C.reset}` : '';
       lines.push(`  ${sym} ${pad(r.name, 14)} ${ver} ${C.gray}(${path})${C.reset}${note}`);
