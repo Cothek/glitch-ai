@@ -356,7 +356,21 @@ if ($setupProfile -eq '' -or $setupProfile -like 'y*') {
     }
 }
 
-# 6. Launch
+# 6. Verify installation
+Write-Header "Verifying installation..."
+Push-Location $InstallDir
+$checkNode = if (Test-Path "$InstallDir\data\node\node.exe") { "$InstallDir\data\node\node.exe" } else { "node" }
+Write-Step "Running install verification..."
+& $checkNode scripts/check-install.mjs 2>&1 | Write-Host
+$checkExit = $LASTEXITCODE
+Pop-Location
+
+if ($checkExit -ne 0) {
+    Write-Warn "Some checks did not pass. Review the report above for details."
+    Write-Warn "Items marked with ✗ under 'Core' indicate critical issues."
+}
+
+# 7. Launch
 if (-not $NoLaunch) {
     Write-Header "Launch Glitch AI"
     Write-Prompt "Launch Glitch now? (Y/n): "

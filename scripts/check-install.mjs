@@ -1,0 +1,445 @@
+#!/usr/bin/env node
+/**
+ * Glitch AI — Install Status Checker
+ *
+ * Verifies that all Glitch AI components are installed correctly.
+ * Run: node scripts/check-install.mjs
+ *
+ * Exit codes:
+ *   0 = all critical components present
+ *   1 = one or more critical components missing
+ */
+
+import { existsSync, statSync, readFileSync } from 'node:fs';
+import { execFileSync, execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
+
+// ---------------------------------------------------------------------------
+// Setup
+// ---------------------------------------------------------------------------
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const ROOT_DIR = dirname(__dirname);
+
+// ANSI colors (no deps)
+const C = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  green: '\x1b[32m',
+  red: '\x1b[31m',
+  yellow: '\x1b[33m',
+  cyan: '\x1b[36m',
+  gray: '\x1b[90m',
+};
+
+const SYM = {
+  ok: `${C.green}✓${C.reset}`,
+  fail: `${C.red}✗${C.reset}`,
+  warn: `${C.yellow}⚠${C.reset}`,
+};
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function safeExec(cmd, args = []) {
+  try {
+    const out = execFileSync(cmd, args, {
+      cwd: ROOT_DIR,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 5000,
+    });
+    return out.trim();
+  } catch {
+    return null;
+  }
+}
+
+function tryReadVersion(filePath, versionFlag = '--version') {
+  if (!existsSync(filePath)) return null;
+  const out = safeExec(filePath, [versionFlag]);
+  if (!out) return null;
+  // Extract first version-like token (e.g. v1.2.3, 22.14.0, 2026.2.0)
+  const match = out.match(/v?\d+(?:\.\d+){1,3}(?:-[\w.]+)?/);
+  return match ? match[0] : out.split(/\s+/)[0];
+}
+
+function getGitBranch() {
+  const out = safeExec('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
+  return out || null;
+}
+
+function getGitRemote() {
+  const out = safeExec('git', ['config', '--get', 'remote.origin.url']);
+  if (!out) return null;
+  // Normalize to owner/repo
+  const m = out.match(/github\.com[:/](.+?)\.git$/);
+  return m ? m[1] : out;
+}
+
+function pad(s, n) {
+  s = String(s);
+  return s.length >= n ? s : s + ' '.repeat(n - s.length);
+}
+
+// ---------------------------------------------------------------------------
+// Checks
+// ---------------------------------------------------------------------------
+
+const checks = [];
+
+function check(name, group, run) {
+  checks.push({ name, group, run });
+}
+
+// --- Core ---
+
+check('Node.js', 'Core', () => {
+  const bundled = join(ROOT_DIR, 'data', 'node', 'node.exe');
+  if (existsSync(bundled)) {
+    const v = tryReadVersion(bundled);
+    return {
+      ok: true,
+      version: v || 'unknown',
+      path: 'data/node/node.exe',
+      note: 'bundled',
+    };
+  }
+  // Fall back to system node
+  const v = safeExec('node', ['--version']);
+  if (v) {
+    return {
+      ok: true,
+      version: v.replace(/^v/, ''),
+      path: 'system',
+      note: 'system PATH',
+    };
+  }
+  return {
+    ok: false,
+    version: null,
+    path: null,
+    note: 'install: scripts/bootstrap.ps1',
+  };
+});
+
+check('OpenCode', 'Core', () => {
+  const exe = join(ROOT_DIR, 'opencode', 'opencode.exe');
+  if (!existsSync(exe)) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'install: scripts/bootstrap.ps1',
+    };
+  }
+  const v = tryReadVersion(exe);
+  return {
+    ok: true,
+    version: v || 'unknown',
+    path: 'opencode/opencode.exe',
+    note: null,
+  };
+});
+
+check('Git Repo', 'Core', () => {
+  const gitDir = join(ROOT_DIR, '.git');
+  if (!existsSync(gitDir)) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'repo not cloned',
+    };
+  }
+  const branch = getGitBranch();
+  const remote = getGitRemote();
+  return {
+    ok: true,
+    version: branch || 'detached',
+    path: remote || 'local',
+    note: null,
+  };
+});
+
+check('glitch-memorycore', 'Core', () => {
+  const f = join(ROOT_DIR, 'glitch-memorycore', 'glitch.md');
+  if (!existsSync(f)) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'submodule not initialized — run: git submodule update --init',
+    };
+  }
+  return {
+    ok: true,
+    version: 'initialized',
+    path: 'glitch-memorycore/glitch.md',
+    note: null,
+  };
+});
+
+// --- Tools ---
+
+check('Handy', 'Tools', () => {
+  const exe = join(ROOT_DIR, 'handy-voice', 'Handy', 'handy.exe');
+  if (!existsSync(exe)) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'optional — voice input',
+    };
+  }
+  return {
+    ok: true,
+    version: 'installed',
+    path: 'handy-voice/Handy/handy.exe',
+    note: null,
+  };
+});
+
+check('Cloudflared', 'Tools', () => {
+  const exe = join(ROOT_DIR, 'cloudflared.exe');
+  if (!existsSync(exe)) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'optional — tunnel access',
+    };
+  }
+  const v = tryReadVersion(exe);
+  return {
+    ok: true,
+    version: v || 'unknown',
+    path: 'cloudflared.exe',
+    note: null,
+  };
+});
+
+check('Image Gen', 'Tools', () => {
+  // ComfyUI / image-gen marker — check for the install script or a known marker
+  const script = join(ROOT_DIR, 'scripts', 'install-image-gen.ps1');
+  if (!existsSync(script)) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'install: scripts/install-image-gen.ps1',
+    };
+  }
+  return {
+    ok: true,
+    version: 'available',
+    path: 'scripts/install-image-gen.ps1',
+    note: 'installer present',
+  };
+});
+
+// --- Config ---
+
+check('Agent Config', 'Config', () => {
+  const opencodeDir = join(ROOT_DIR, '.opencode');
+  const agentsDir = join(opencodeDir, 'agents');
+  const pluginsDir = join(opencodeDir, 'plugins');
+  if (!existsSync(opencodeDir)) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: '.opencode/ missing — repo incomplete',
+    };
+  }
+  const hasAgents = existsSync(agentsDir);
+  const hasPlugins = existsSync(pluginsDir);
+  if (!hasAgents || !hasPlugins) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: `missing ${!hasAgents ? 'agents/' : ''}${!hasAgents && !hasPlugins ? ' and ' : ''}${!hasPlugins ? 'plugins/' : ''}`,
+    };
+  }
+  return {
+    ok: true,
+    version: 'present',
+    path: '.opencode/{agents,plugins}',
+    note: null,
+  };
+});
+
+check('Config Templates', 'Config', () => {
+  const templates = [
+    'opencode-normal.json',
+    'opencode-free.json',
+    'opencode-local.json',
+    'opencode-safe.json',
+  ];
+  const missing = templates.filter((t) => !existsSync(join(ROOT_DIR, 'config', t)));
+  if (missing.length > 0) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: `missing: ${missing.join(', ')}`,
+    };
+  }
+  return {
+    ok: true,
+    version: '4/4',
+    path: 'config/opencode-*.json',
+    note: null,
+  };
+});
+
+check('Launch Script', 'Config', () => {
+  const bat = join(ROOT_DIR, 'launch-glitch.bat');
+  const sh = join(ROOT_DIR, 'launch-glitch.sh');
+  const hasBat = existsSync(bat);
+  const hasSh = existsSync(sh);
+  if (!hasBat && !hasSh) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'launch-glitch.bat / launch-glitch.sh missing',
+    };
+  }
+  const found = [];
+  if (hasBat) found.push('bat');
+  if (hasSh) found.push('sh');
+  return {
+    ok: true,
+    version: found.join('+'),
+    path: `launch-glitch.${found[0]}`,
+    note: found.length > 1 ? `also: launch-glitch.${found[1]}` : null,
+  };
+});
+
+check('User Profile', 'Config', () => {
+  const userDir = join(ROOT_DIR, 'user');
+  const gitDir = join(userDir, '.git');
+  if (!existsSync(userDir)) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'user memory not initialized',
+    };
+  }
+  const synced = existsSync(gitDir);
+  return {
+    ok: true,
+    version: synced ? 'synced' : 'local-only',
+    path: 'user/',
+    note: synced ? null : 'no .git — local only',
+  };
+});
+
+check('Glitch Head', 'Config', () => {
+  const f = join(ROOT_DIR, 'glitch-head.txt');
+  if (!existsSync(f)) {
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'optional — startup banner',
+    };
+  }
+  return {
+    ok: true,
+    version: 'found',
+    path: 'glitch-head.txt',
+    note: null,
+  };
+});
+
+// ---------------------------------------------------------------------------
+// Run + Report
+// ---------------------------------------------------------------------------
+
+const CRITICAL = new Set(['Node.js', 'OpenCode', 'Git Repo', 'glitch-memorycore']);
+
+function runAll() {
+  const results = checks.map((c) => ({ name: c.name, group: c.group, ...c.run() }));
+  return results;
+}
+
+function render(results) {
+  const lines = [];
+  const groups = ['Core', 'Tools', 'Config'];
+
+  lines.push(`${C.bold}${C.cyan}Glitch AI — Install Status${C.reset}`);
+  lines.push(`${C.cyan}${'═'.repeat(34)}${C.reset}`);
+  lines.push('');
+
+  for (const g of groups) {
+    const items = results.filter((r) => r.group === g);
+    if (items.length === 0) continue;
+    lines.push(` ${C.bold}${g}${C.reset}`);
+    for (const r of items) {
+      const sym = r.ok ? SYM.ok : SYM.fail;
+      const ver = r.ok ? pad(r.version || 'ok', 12) : pad('—', 12);
+      const path = r.path || '—';
+      const note = r.note ? `  ${C.dim}${r.note}${C.reset}` : '';
+      lines.push(`  ${sym} ${pad(r.name, 14)} ${ver} ${C.gray}(${path})${C.reset}${note}`);
+    }
+    lines.push('');
+  }
+
+  const total = results.length;
+  const passed = results.filter((r) => r.ok).length;
+  const criticalFailed = results.filter((r) => !r.ok && CRITICAL.has(r.name));
+
+  let verdict;
+  let verdictColor;
+  if (criticalFailed.length > 0) {
+    verdict = 'FAIL';
+    verdictColor = C.red;
+  } else if (passed === total) {
+    verdict = 'PASS';
+    verdictColor = C.green;
+  } else {
+    verdict = 'PARTIAL';
+    verdictColor = C.yellow;
+  }
+
+  lines.push(
+    `${C.bold}Result: ${passed}/${total} components OK — ${verdictColor}${verdict}${C.reset}`
+  );
+
+  if (criticalFailed.length > 0) {
+    lines.push('');
+    lines.push(`${C.red}Critical missing:${C.reset}`);
+    for (const r of criticalFailed) {
+      lines.push(`  ${SYM.fail} ${r.name} — ${r.note || 'required'}`);
+    }
+  }
+
+  return lines.join('\n');
+}
+
+function main() {
+  const results = runAll();
+  const report = render(results);
+  console.log(report);
+
+  const criticalFailed = results.filter((r) => !r.ok && CRITICAL.has(r.name));
+  process.exit(criticalFailed.length > 0 ? 1 : 0);
+}
+
+// Export for programmatic use (e.g. from @general dispatch)
+export { runAll, render, CRITICAL };
+
+// Run when invoked directly
+const isMain =
+  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1].replace(/\\/g, '/');
+if (isMain || process.argv[1]?.endsWith('check-install.mjs')) {
+  main();
+}

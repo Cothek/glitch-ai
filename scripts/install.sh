@@ -427,7 +427,92 @@ else
     echo "  To sync later: cd $USER_DIR && git init && git remote add origin <url> && git push"
 fi
 
-# 6. Launch
+# 6. Verify installation
+header "Verifying installation..."
+cd "$INSTALL_DIR"
+
+if command -v node >/dev/null 2>&1; then
+    if node scripts/check-install.mjs 2>&1; then
+        :
+    else
+        warn "Some checks did not pass. Review the report above."
+        echo "  Items marked with ✗ under 'Core' indicate critical issues."
+    fi
+else
+    # Basic file-existence checks when Node.js isn't available
+    echo "  Node.js not found — running basic file checks..."
+    
+    BASIC_PASS=true
+    
+    # Check git repo
+    if [ -d ".git" ]; then
+        success "  ✓ Git repository found"
+    else
+        error "  ✗ Git repository missing"
+        BASIC_PASS=false
+    fi
+    
+    # Check opencode binary
+    if [ -f "opencode/opencode" ] || [ -f "opencode/opencode.exe" ]; then
+        success "  ✓ OpenCode binary found"
+    else
+        warn "  ⚠ OpenCode binary not found (downloaded on first launch)"
+    fi
+    
+    # Check glitch-memorycore submodule
+    if [ -f "glitch-memorycore/glitch.md" ]; then
+        success "  ✓ glitch-memorycore submodule initialized"
+    else
+        error "  ✗ glitch-memorycore submodule not initialized"
+        echo "    Run: git submodule update --init --recursive"
+        BASIC_PASS=false
+    fi
+    
+    # Check config templates
+    CONFIG_DIR="config"
+    if [ -d "$CONFIG_DIR" ]; then
+        TEMPLATE_OK=true
+        for tmpl in opencode-normal.json opencode-free.json opencode-local.json opencode-safe.json; do
+            if [ ! -f "$CONFIG_DIR/$tmpl" ]; then
+                TEMPLATE_OK=false
+            fi
+        done
+        if [ "$TEMPLATE_OK" = true ]; then
+            success "  ✓ Config templates found"
+        else
+            warn "  ⚠ Some config templates missing"
+        fi
+    else
+        warn "  ⚠ config/ directory missing"
+    fi
+    
+    # Check launch script
+    if [ -f "launch-glitch.sh" ]; then
+        success "  ✓ Launch script found"
+    else
+        error "  ✗ launch-glitch.sh not found"
+        BASIC_PASS=false
+    fi
+    
+    # Check user profile
+    if [ -f "user/main-memory.md" ]; then
+        success "  ✓ User profile initialized"
+    else
+        warn "  ⚠ User profile incomplete"
+    fi
+    
+    echo ""
+    if [ "$BASIC_PASS" = true ]; then
+        success "  Basic checks passed."
+    else
+        error "  Some critical checks failed. Review above."
+    fi
+    echo ""
+    echo "  For a full verification, install Node.js and run:"
+    echo "    cd $INSTALL_DIR && node scripts/check-install.mjs"
+fi
+
+# 7. Launch
 if [ "$NO_LAUNCH" = false ]; then
     header "Launch Glitch AI"
     prompt "Launch Glitch now? (Y/n): "

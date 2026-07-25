@@ -133,6 +133,37 @@ function extractAgents(config) {
   return agents;
 }
 
+function restartOpenCode() {
+  const restartFlagPath = join(ROOT_DIR, 'data', '.restart-flag');
+  writeFileSync(restartFlagPath, '1', 'utf-8');
+  const pidFilePath = join(ROOT_DIR, 'data', 'opencode.pid');
+  const logPath = join(ROOT_DIR, 'data', 'restart-kill.log');
+  setTimeout(() => {
+    try {
+      const pidStr = readFileSync(pidFilePath, 'utf-8').trim();
+      const pid = parseInt(pidStr, 10);
+      if (pid > 0) {
+        const logMsg = `[${new Date().toISOString()}] Killing opencode PID ${pid}...\n`;
+        writeFileSync(logPath, logMsg, 'utf-8');
+        if (process.platform === 'win32') {
+          const killProc = spawn('taskkill', ['/PID', String(pid), '/F'], { stdio: ['ignore', 'pipe', 'pipe'] });
+          let stdout = '', stderr = '';
+          killProc.stdout.on('data', (d) => { stdout += d.toString(); });
+          killProc.stderr.on('data', (d) => { stderr += d.toString(); });
+          killProc.on('close', (code) => {
+            writeFileSync(logPath, `exit code: ${code}\nstdout: ${stdout}\nstderr: ${stderr}\n`, 'utf-8');
+          });
+        } else {
+          process.kill(pid, 'SIGTERM');
+          writeFileSync(logPath, 'SIGTERM sent\n', 'utf-8');
+        }
+      }
+    } catch (e) {
+      writeFileSync(logPath, `Error: ${e.message}\n`, 'utf-8');
+    }
+  }, 2000);
+}
+
 async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -375,61 +406,22 @@ async function handler(req, res) {
         sendJson(res, 400, { error: 'No pending changes to apply' });
         return;
       }
-
-      // Write pending changes to model-assignments.json (persistent overrides file)
       const assignments = readJson(ASSIGNMENTS_PATH) || {};
       for (const change of pendingChanges) {
         assignments[change.agent] = change.new_model;
       }
       writeJson(ASSIGNMENTS_PATH, assignments);
-
       const applied = pendingChanges.length;
       const changes = [...pendingChanges];
       pendingChanges = [];
+      sendJson(res, 200, { success: true, applied, changes, restarting: true });
+      restartOpenCode();
+      return;
+    }
 
-      // Write restart flag so serve.mjs/launch.mjs knows to restart
-      const restartFlagPath = join(ROOT_DIR, 'data', '.restart-flag');
-      writeFileSync(restartFlagPath, '1', 'utf-8');
-
-      // Send response first
-      sendJson(res, 200, {
-        success: true,
-        applied,
-        changes,
-        restarting: true,
-      });
-
-      // Kill opencode after 2s delay
-      const pidFilePath = join(ROOT_DIR, 'data', 'opencode.pid');
-      const logPath = join(ROOT_DIR, 'data', 'restart-kill.log');
-      setTimeout(() => {
-        try {
-          const pidStr = readFileSync(pidFilePath, 'utf-8').trim();
-          const pid = parseInt(pidStr, 10);
-          if (pid > 0) {
-            const logMsg = `[${new Date().toISOString()}] Killing opencode PID ${pid}...\n`;
-            writeFileSync(logPath, logMsg, 'utf-8');
-            if (process.platform === 'win32') {
-              const killProc = spawn('taskkill', ['/PID', String(pid), '/F'], {
-                stdio: ['ignore', 'pipe', 'pipe'],
-              });
-              let stdout = '';
-              let stderr = '';
-              killProc.stdout.on('data', (d) => { stdout += d.toString(); });
-              killProc.stderr.on('data', (d) => { stderr += d.toString(); });
-              killProc.on('close', (code) => {
-                const result = `exit code: ${code}\nstdout: ${stdout}\nstderr: ${stderr}\n`;
-                writeFileSync(logPath, result, 'utf-8');
-              });
-            } else {
-              process.kill(pid, 'SIGTERM');
-              writeFileSync(logPath, 'SIGTERM sent\n', 'utf-8');
-            }
-          }
-        } catch (e) {
-          writeFileSync(logPath, `Error: ${e.message}\n`, 'utf-8');
-        }
-      }, 2000);
+    if (req.method === 'POST' && pathname === '/api/restart') {
+      sendJson(res, 200, { success: true, restarting: true });
+      restartOpenCode();
       return;
     }
 

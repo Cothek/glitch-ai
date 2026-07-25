@@ -431,6 +431,10 @@ async function main() {
 
   const engineInstructions = [
     '.opencode/instructions/coordinator-instructions.md',
+    'glitch-memorycore/prompt-rules.md',
+    'glitch-memorycore/glitch.md',
+    'glitch-memorycore/master-memory.md',
+    'glitch-memorycore/core/identity.md',
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
   ];
 
@@ -624,6 +628,10 @@ async function main() {
       const templateText = readFileSync(TemplatePath, 'utf-8');
       const engineInstructions = [
         '.opencode/instructions/coordinator-instructions.md',
+        'glitch-memorycore/prompt-rules.md',
+        'glitch-memorycore/glitch.md',
+        'glitch-memorycore/master-memory.md',
+        'glitch-memorycore/core/identity.md',
         'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
       ];
       let userInstructions = buildUserInstructions(ROOT_DIR, UserName);

@@ -28,6 +28,7 @@ permission:
   question: allow
   todowrite: allow
   skill: allow
+  task: deny
 ---
 
 # @ui-designer --- Senior UI Designer
