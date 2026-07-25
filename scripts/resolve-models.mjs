@@ -39,8 +39,6 @@ const DEFAULT_BUDGET = {
   agent_defaults: {
     general:     { max_tier: 'free' },
     explore:     { max_tier: 'free' },
-    plan:        { max_tier: 'free' },
-    build:       { max_tier: 'free' },
     coder:       { max_tier: 'mid_paid' },
     'ui-designer': { max_tier: 'budget_paid' },
     reviewer:    { max_tier: 'mid_paid' },

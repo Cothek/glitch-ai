@@ -479,15 +479,13 @@ function buildFreePrompt(primaryId, primaryName, visionId, visionName) {
 | Code (1-5 files, standard logic) | @coder | ${primaryId} (${primaryName}) |
 | Complex code (5+ files, auth, architecture) | @coder | ${primaryId} (${primaryName}) |
 | Codebase research | @explore | ${primaryId} (${primaryName}) |
-| Architecture / planning | @plan | ${primaryId} (${primaryName}) |
-| Code scaffolding | @build | ${primaryId} (${primaryName}) |
 | UI/design system work | @ui-designer | ${primaryId} (${primaryName}) |
 | Code review / quality gate | @reviewer | ${primaryId} (${primaryName}) |
 | Test writing / TDD | @testing | ${primaryId} (${primaryName}) |
 ${same ? '' : `| Image / visual analysis | @vision | ${visionId} (${visionName}) |`}
 
 ## Available Glitch Variants in Free Mode
-- **Glitch (default)**: Delegates first, executes directly only as last resort. Uses @general, @explore, @plan, @build, @coder, @ui-designer, @reviewer, @testing, @vision sub-agents.
+- **Glitch (default)**: Delegates first, executes directly only as last resort. Uses @general, @explore, @coder, @ui-designer, @reviewer, @testing, @vision sub-agents.
 - **Glitch Omni**: Does everything itself -- no delegation. Executes code, writes files, runs bash directly. Use @glitch-omni to invoke.
 
 ## !! Dispatch-First Mandate (Immutable)
@@ -517,7 +515,7 @@ const HELP_TEXT = `
   Set either model via environment variable to skip its picker entirely.
 
   Environment:
-    GLITCH_FREE_MODEL          Set PRIMARY free model ID (for @general, @explore, @plan, @build)
+    GLITCH_FREE_MODEL          Set PRIMARY free model ID (for @general, @explore, @coder)
     GLITCH_FREE_VISION_MODEL   Set VISION free model ID (for @vision agent only; default = primary)
   `;
 
@@ -649,7 +647,7 @@ async function main() {
   }
 
   // ---------------------------------------------------------------------
-  // PRIMARY MODEL (for @general, @explore, @plan, @build)
+  // PRIMARY MODEL (for @general, @explore, @coder)
   // Env var skips the picker; otherwise show interactive menu (saved preference = default)
   // ---------------------------------------------------------------------
 
@@ -658,7 +656,7 @@ async function main() {
     log(CYAN, ` Primary model from env var: ${primaryModel}`);
   } else {
     // Show picker every time - saved preference marks the default with *
-    primaryModel = await pickSingleModel('Primary Model (for @general, @explore, @plan, @build)', getPreference(), false);
+    primaryModel = await pickSingleModel('Primary Model (for @general, @explore, @coder)', getPreference(), false);
   }
 
   // ---- Validate primary model ----

@@ -330,8 +330,6 @@ function buildLocalPrompt(modelId, modelName) {
 | Bash, file ops, simple edits | @general | ${modelId} |
 | Code (1-5 files, standard logic) | @coder | ${modelId} |
 | Codebase research | @explore | ${modelId} |
-| Architecture / planning | @plan | ${modelId} |
-| Code scaffolding | @build | ${modelId} |
 
 ## [bolt] Dispatch-First Mandate (Immutable)
 Glitch's job is coordination. The first action for every code task is DISPATCH, not execution.
