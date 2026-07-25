@@ -21,11 +21,14 @@ node scripts\launch.mjs        # Cross-platform launcher
 ### Mac / Linux
 
 ```bash
+# Option 1: Install script (recommended) — auto-clones, sets up user profile, launches
+curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash
+
+# Option 2: Manual
 git clone https://github.com/Cothek/glitch-ai.git
 cd glitch-ai
 git submodule update --init --recursive
-node scripts/setup.mjs         # First-time setup
-./launch-glitch.sh             # Start using Glitch (unified launcher)
+./launch-glitch.sh             # Auto-bootstraps Node.js if not found
 ```
 
 ### For Troy (Returning User, cross-platform)
@@ -38,7 +41,7 @@ git clone https://cothek@github.com/Cothek/glitch-user-troy.git user/
 ./launch-glitch.sh
 ```
 
-> **Note**: The `.sh` scripts require [Node.js](https://nodejs.org) 22+. The `.bat` scripts (Windows) are the legacy path — both call the same `.mjs` launcher under the hood.
+> **Note**: The `.sh` scripts auto-bootstrap Node.js if not found (downloads Node.js 22+ for your platform). The `.bat` scripts (Windows) use npm-installed OpenCode — both call the same `.mjs` launcher under the hood.
 
 **If you get a GitHub login pop-up after `git submodule sync`**, the submodule remote got reset. Fix it:
 
@@ -70,9 +73,15 @@ Glitch is split into three layers:
 
 ## Access from Anywhere (Phone / Other PC)
 
+**Windows:**
 ```powershell
 .\scripts\setup-tunnel.ps1    # One-time: authenticate Cloudflare + create tunnel
 .\launch-glitch.bat           # Each session: select server mode (option 4)
+```
+
+**Mac / Linux:**
+```bash
+./scripts/glitch.sh server    # Start server mode with cloudflared tunnel
 ```
 
 This starts OpenCode as a web server proxied through Cloudflare Tunnel. No open ports, no VPN required. Login with username `opencode` and the auto-generated password shown in the terminal.
@@ -96,18 +105,21 @@ glitch-ai/                    ← This repo (public)
 │   └── projects/             ← Active projects
 │
 ├── scripts/                  ← Launch & utility scripts
+│   ├── install.sh            ← Mac/Linux installer (curl | bash)
 │   ├── launch.mjs            ← Cross-platform launcher (primary)
 │   ├── launch-free.mjs       ← Free mode launcher
 │   ├── launch-safe.mjs       ← Safe mode launcher
 │   ├── serve.mjs             ← Web server mode
+│   ├── glitch.sh             ← Mode switcher (Mac/Linux wrapper)
+│   ├── switch-mode.sh        ← Mode switcher (Mac/Linux wrapper)
 │   ├── validate-config.mjs   ← Config + syntax validator
-│   ├── bootstrap.ps1         ← Downloads dependencies
-│   ├── setup.ps1             ← Profile wizard
-│   ├── check-updates.ps1     ← Dependency update checker
-│   ├── check-models.ps1      ← New model discovery
-│   ├── switch-branch.ps1     ← Git branch manager
-│   ├── switch-model.ps1      ← Free model selector
-│   ├── sync-user.ps1         ← User data sync helper
+│   ├── bootstrap.ps1         ← Windows dependency downloader
+│   ├── setup.ps1             ← Windows profile wizard
+│   ├── check-updates.ps1     ← Windows update checker
+│   ├── check-models.ps1      ← Windows model discovery
+│   ├── switch-branch.ps1     ← Windows branch manager
+│   ├── switch-model.ps1      ← Windows model selector
+│   ├── sync-user.ps1         ← Windows user sync helper
 │   ├── fix-paths.mjs         ← SQLite path normalizer
 │   └── query-opencode-db.*   ← Session DB query tools
 │
@@ -139,7 +151,7 @@ glitch-ai/                    ← This repo (public)
 |------|-------------|
 | `glitch-memorycore/` | Engine submodule — Glitch identity, rules, skills, plugins |
 | `user/` | Your personal memory, diary, projects (gitignored) |
-| `scripts/` | Launch, setup, validation, and utility scripts (.mjs cross-platform, .ps1 legacy) |
+| `scripts/` | Launch, setup, validation, and utility scripts (.mjs cross-platform, .sh for Mac/Linux, .ps1 legacy for Windows) |
 | `config/` | Terminal UI config, Cloudflare Tunnel config |
 | `data/` | Auto-generated status files (gitignored) |
 | `launch-glitch.bat` / `.sh` | Unified launcher — all modes (normal, free, local, safe, server) |
