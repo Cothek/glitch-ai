@@ -491,6 +491,105 @@
     .model-list .model-card:nth-child(9) { animation-delay: 0.18s; }
     .model-list .model-card:nth-child(10) { animation-delay: 0.2s; }
 
+    .restart-dropdown-arrow {
+      margin-left: 6px;
+      font-size: 9px;
+      opacity: 0.7;
+    }
+    .restart-dropdown-menu {
+      display: none;
+      position: absolute;
+      top: 100%;
+      right: 0;
+      margin-top: 4px;
+      min-width: 220px;
+      z-index: 100;
+      border: 1px solid var(--glitch-accent);
+      border-radius: var(--glitch-radius-lg, 8px);
+      background: var(--glitch-bg-elevated);
+      overflow: hidden;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+    }
+    .restart-dropdown-menu.open {
+      display: block;
+    }
+    .restart-dropdown-menu .gl-dropdown__option {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      width: 100%;
+      padding: 10px 14px;
+      border: none;
+      background: none;
+      color: var(--glitch-text-primary);
+      font-size: var(--glitch-text-sm);
+      text-align: left;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .restart-dropdown-menu .gl-dropdown__option:hover {
+      background-color: color-mix(in srgb, var(--glitch-accent) 15%, transparent);
+      color: var(--glitch-accent-text, var(--glitch-text-primary));
+    }
+    .restart-dropdown-menu .gl-dropdown__option:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+    }
+    .restart-dropdown-menu .gl-dropdown__option:disabled:hover {
+      background: none;
+      color: var(--glitch-text-primary);
+    }
+
+    /* Split restart button group */
+    .restart-split-group {
+      display: flex;
+      align-items: stretch;
+    }
+    .restart-split-left {
+      border-radius: 6px 0 0 6px !important;
+      border-right: none !important;
+    }
+    .restart-split-right {
+      border-radius: 0 6px 6px 0 !important;
+      border-left: none !important;
+      padding: 0 8px !important;
+      min-width: auto !important;
+    }
+    .restart-split-divider {
+      width: 1px;
+      background-color: rgba(255,255,255,0.2);
+      flex-shrink: 0;
+    }
+    #btn-apply-restart:disabled + .restart-split-divider + #btn-restart-toggle {
+      border-left: none;
+    }
+
+    /* Mobile: stack header below title, full-width buttons */
+    @media (max-width: 767px) {
+      .page-header-row {
+        flex-direction: column !important;
+        gap: 8px;
+      }
+      .header-buttons {
+        width: 100%;
+        display: flex;
+      }
+      .header-buttons > button,
+      .header-buttons > .restart-dropdown {
+        flex: 1;
+      }
+      .header-buttons > .restart-dropdown {
+        min-width: 0;
+      }
+      .restart-split-group {
+        width: 100%;
+      }
+      .restart-split-left {
+        flex: 1;
+        min-width: 0;
+      }
+    }
+
     /* Respect reduced motion */
     @media (prefers-reduced-motion: reduce) {
       .status-card,
@@ -514,9 +613,23 @@
             <h1 class="glitch-page-header__title">Model Management</h1>
             <p class="glitch-page-header__desc">Browse and manage agent model assignments. Changes are staged until you apply them.</p>
           </div>
-          <div class="gl-flex gl-gap-3">
+          <div class="header-buttons gl-flex gl-gap-3" style="align-items: flex-start;">
             <button class="gl-btn gl-btn--secondary gl-btn--md" id="btn-rollback" disabled>&#8634; Rollback</button>
-            <button class="gl-btn gl-btn--primary gl-btn--md" id="btn-apply-restart" disabled>&#8635; Apply & Restart</button>
+            <div class="restart-dropdown" style="position: relative;">
+              <div class="restart-split-group">
+                <button class="gl-btn gl-btn--primary gl-btn--md restart-split-left" id="btn-apply-restart" disabled>
+                  &#8635; Apply & Restart
+                </button>
+                <div class="restart-split-divider"></div>
+                <button class="gl-btn gl-btn--primary gl-btn--md restart-split-right" id="btn-restart-toggle">
+                  &#9660;
+                </button>
+              </div>
+              <div class="restart-dropdown-menu gl-dropdown__menu" id="restart-dropdown-menu">
+                <button class="gl-dropdown__option" id="dropdown-apply-restart" disabled>&#8635; Apply & Restart</button>
+                <button class="gl-dropdown__option" id="dropdown-manual-restart">&#8635; Manual Restart</button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -961,6 +1074,7 @@
       const hasPending = state.pendingChanges.length > 0;
       document.getElementById('btn-rollback').disabled = !hasPending;
       document.getElementById('btn-apply-restart').disabled = !hasPending;
+      document.getElementById('dropdown-apply-restart').disabled = !hasPending;
       document.getElementById('stat-pending').textContent = state.pendingChanges.length;
       document.getElementById('stat-pending-sub').textContent = state.pendingChanges.length === 1 ? 'change staged' : 'changes staged';
 
@@ -1237,6 +1351,39 @@
       }
     }
 
+    async function manualRestart() {
+      try {
+        showToast('Restarting Glitch...', 'info');
+        document.querySelectorAll('.gl-btn').forEach(b => b.disabled = true);
+        const overlay = document.createElement('div');
+        overlay.id = 'restart-overlay';
+        overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 16px;';
+        overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload automatically.</div>';
+        document.body.appendChild(overlay);
+        const data = await api('restart', { method: 'POST' });
+        if (data.restarting) {
+          let attempts = 0;
+          const maxAttempts = 20;
+          function pollServer() {
+            attempts++;
+            fetch('/api/status')
+              .then(r => {
+                if (r.ok) window.location.reload();
+                else if (attempts < maxAttempts) setTimeout(pollServer, 3000);
+                else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
+              })
+              .catch(() => {
+                if (attempts < maxAttempts) setTimeout(pollServer, 3000);
+                else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
+              });
+          }
+          setTimeout(pollServer, 3000);
+        }
+      } catch (err) {
+        showToast(`Failed to restart: ${err.message}`, 'error');
+      }
+    }
+
     async function rollbackChanges() {
       try {
         await api('rollback', { method: 'POST' });
@@ -1329,7 +1476,34 @@
     document.getElementById('model-retry-btn').addEventListener('click', fetchModels);
 
     document.getElementById('btn-rollback').addEventListener('click', rollbackChanges);
-    document.getElementById('btn-apply-restart').addEventListener('click', applyAndRestart);
+
+    // Main Apply & Restart button - triggers apply directly
+    document.getElementById('btn-apply-restart').addEventListener('click', (e) => {
+      if (!e.target.closest('#btn-apply-restart')) return;
+      applyAndRestart();
+    });
+
+    // Dropdown toggle button - always enabled, toggles the menu
+    document.getElementById('btn-restart-toggle').addEventListener('click', (e) => {
+      e.stopPropagation();
+      document.getElementById('restart-dropdown-menu').classList.toggle('open');
+    });
+
+    document.getElementById('dropdown-apply-restart').addEventListener('click', () => {
+      document.getElementById('restart-dropdown-menu').classList.remove('open');
+      applyAndRestart();
+    });
+
+    document.getElementById('dropdown-manual-restart').addEventListener('click', () => {
+      document.getElementById('restart-dropdown-menu').classList.remove('open');
+      manualRestart();
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('.restart-dropdown')) {
+        document.getElementById('restart-dropdown-menu').classList.remove('open');
+      }
+    });
 
     document.getElementById('btn-plugin-toggle').addEventListener('click', async () => {
       try {
