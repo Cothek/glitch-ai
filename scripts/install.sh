@@ -315,10 +315,73 @@ fi
 # 5. User profile setup
 header "User Profile Setup"
 cat <<'EOF'
-Glitch AI stores your personal memory, preferences, and projects in a separate Git repo.
-This lets you sync your AI companion across machines via GitHub.
+Glitch AI stores your personal memory, preferences, and projects in a separate directory.
+This lets your AI companion remember you across sessions.
 EOF
-prompt "Set up user profile from GitHub? (Y/n): "
+
+# Always create a local user profile so Glitch has memory from the start
+USER_DIR="$INSTALL_DIR/user"
+step "Creating local user profile..."
+mkdir -p "$USER_DIR"
+
+# Create starter files for the profile
+cat > "$USER_DIR/main-memory.md" << 'PROFILEEOF'
+---
+type: UserProfile
+title: Main Memory
+description: Your personal profile and preferences
+tags: [user, profile]
+timestamp: 
+---
+
+# Main Memory
+
+## User Profile
+*To be filled in through interaction with Glitch*
+PROFILEEOF
+
+cat > "$USER_DIR/current-session.md" << 'SESSIONEOF'
+---
+type: SessionMemory
+title: Current Session Memory
+tags: [session, ram]
+timestamp: 
+---
+
+# Current Session Memory
+
+## Session Recap
+*First session with Glitch*
+SESSIONEOF
+
+cat > "$USER_DIR/reminders.md" << 'REMINDERSEOF'
+---
+type: ReminderLog
+title: Reminders
+description: Cross-session reminders
+tags: [reminders]
+timestamp: 
+---
+
+# Reminders
+REMINDERSEOF
+
+cat > "$USER_DIR/session-dashboard.md" << 'DASHEOF'
+---
+type: Dashboard
+title: Session Dashboard
+description: Active workstream tracker
+tags: [dashboard]
+timestamp: 
+---
+
+# Session Dashboard
+DASHEOF
+
+success "Local user profile created at $USER_DIR"
+
+# Optional: sync with GitHub for cross-machine access
+prompt "Sync this profile with a GitHub repository? (Y/n): "
 read -r setup_profile </dev/tty
 if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
     prompt "GitHub username (your GitHub handle): "
@@ -328,41 +391,40 @@ if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
         read -r repo_name </dev/tty
         [ -z "$repo_name" ] && repo_name="glitch-user-$gh_user"
 
-        USER_DIR="$INSTALL_DIR/user"
-        if [ -d "$USER_DIR/.git" ]; then
-            warn "User profile already exists at $USER_DIR"
-        else
-            step "Initializing user profile..."
-            mkdir -p "$USER_DIR"
-            cd "$USER_DIR"
-            git init >/dev/null
-            # Detect what branch git init created (reflects user's init.defaultBranch setting)
-            # Guard against empty repo (no commits yet) where HEAD is ambiguous
-            local_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-            git remote add origin "https://github.com/$gh_user/$repo_name.git" 2>/dev/null
-            # Try to detect remote's default branch
-            remote_head=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
-            if [ -n "$remote_head" ]; then
-                default_branch="$remote_head"
-                # Rename local branch to match remote if needed
-                if [ "$local_branch" != "$default_branch" ]; then
-                    git branch -m "$default_branch" 2>/dev/null
-                fi
-                if git pull origin "$default_branch" --allow-unrelated-histories 2>/dev/null; then
-                    success "User profile pulled from GitHub"
-                    git branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null
-                else
-                    warn "No existing profile on GitHub (or pull failed). Starting fresh."
-                    echo "  Your memory will be saved locally. To push later:"
-                    echo "    cd $USER_DIR && git add -A && git commit -m 'initial profile' && git push -u origin $default_branch"
-                fi
-            else
-                warn "No existing profile on GitHub. Starting fresh."
-                echo "  Your memory will be saved locally. To push later:"
-                echo "    cd $USER_DIR && git add -A && git commit -m 'initial profile' && git push -u origin $default_branch"
+        cd "$USER_DIR"
+        git init >/dev/null
+        git add -A >/dev/null
+        git commit -m "initial user profile" >/dev/null 2>&1 || true
+        local_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+        git remote add origin "https://github.com/$gh_user/$repo_name.git" 2>/dev/null
+
+        # Try to detect remote's default branch
+        remote_head=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
+        if [ -n "$remote_head" ]; then
+            default_branch="$remote_head"
+            if [ "$local_branch" != "$default_branch" ]; then
+                git branch -m "$default_branch" 2>/dev/null
             fi
+            if git pull origin "$default_branch" --allow-unrelated-histories 2>/dev/null; then
+                success "User profile synced from GitHub"
+                git branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null
+            else
+                warn "Remote repository not found (or pull failed)."
+                echo "  Local profile ready. Push later:"
+                echo "    cd $USER_DIR && git push -u origin $default_branch"
+            fi
+        else
+            warn "Remote not found. Profile is local-only."
+            echo "  Push later:"
+            echo "    cd $USER_DIR && git push -u origin $local_branch"
         fi
+    else
+        echo "  No GitHub username entered. Profile stays local-only."
+        echo "  To sync later: cd $USER_DIR && git init && git remote add origin <url> && git push"
     fi
+else
+    echo "  Profile stays local-only (no GitHub sync)."
+    echo "  To sync later: cd $USER_DIR && git init && git remote add origin <url> && git push"
 fi
 
 # 6. Launch
