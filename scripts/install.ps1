@@ -269,16 +269,104 @@ if (-not (Test-Path "$InstallDir\.git")) {
     if (-not (Test-Path $parentDir)) {
         New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
     }
-    
+
+    # Track submodule status for end-of-install summary
+    $script:SubmoduleSuccess = @()
+    $script:SubmoduleFailures = @()
+    $script:CloneSucceeded = $false
+
     try {
       Invoke-WithSpinner -Label "Cloning Glitch AI repository" -DoneMessage "Repository" -ScriptBlock {
-        $r = git clone --recursive https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
+        # Clone WITHOUT --recursive so submodule failures don't kill the install
+        $r = git clone https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Clone failed (exit $LASTEXITCODE)`n$r" }
+        $script:CloneSucceeded = $true
       }
       Write-Success "Repository cloned to $InstallDir"
     } catch {
       Write-Error "Clone failed: $_"
       exit 1
+    }
+
+    # Initialize submodules individually so one failure doesn't block the others
+    if ($script:CloneSucceeded) {
+        Push-Location $InstallDir
+        try {
+            # Init submodule paths (registers them in .git/config)
+            $initOutput = git submodule init 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warn "git submodule init returned non-zero (continuing): $initOutput"
+            }
+        } catch {
+            Write-Warn "git submodule init failed (continuing): $_"
+        }
+
+        # Read submodule list from .gitmodules (authoritative source)
+        $rawLines = git config --file .gitmodules --get-regexp path 2>&1
+        $submodules = @()
+        foreach ($line in $rawLines) {
+            if ($line -match 'submodule\..+\.path\s+(.+)') {
+                $submodules += $matches[1].Trim()
+            }
+        }
+        if ($submodules.Count -eq 0) {
+            Write-Warn "No submodules found in .gitmodules"
+        }
+        foreach ($sub in $submodules) {
+            try {
+                Write-Step "Fetching submodule: $sub"
+                $updateOutput = git submodule update --init "$sub" 2>&1
+                if ($LASTEXITCODE -ne 0) {
+                    throw "git submodule update --init $sub failed (exit $LASTEXITCODE)`n$updateOutput"
+                }
+                $script:SubmoduleSuccess += $sub
+                Write-Success "  $sub ready"
+            } catch {
+                $script:SubmoduleFailures += @{
+                    Name = $sub
+                    Error = $_.ToString()
+                }
+                Write-Warn "  $sub failed (logged to data\install-issues.md)"
+
+                # Log the issue to data/install-issues.md
+                try {
+                    $issueFile = Join-Path $InstallDir "data\install-issues.md"
+                    $issueDir = Split-Path $issueFile -Parent
+                    if (-not (Test-Path $issueDir)) {
+                        New-Item -ItemType Directory -Path $issueDir -Force | Out-Null
+                    }
+                    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                    $cleanError = ($_.ToString() -replace "`r`n", " " -replace "`n", " ") -replace '\s+', ' '
+                    $entry = @"
+
+## Install Issue - $timestamp
+- **Subsystem**: Submodule clone
+- **Component**: $sub
+- **Error**: $cleanError
+- **Impact**: Some memory/skill files may be missing until resolved
+- **Fix**: Tell Glitch "check install issues" or run: cd $InstallDir && git submodule update --init --recursive
+
+"@
+                    Add-Content -LiteralPath $issueFile -Value $entry -Encoding UTF8
+                } catch {
+                    Write-Warn "  Could not write to install-issues.md: $_"
+                }
+            }
+        }
+        Pop-Location
+
+        # Show clear status to user
+        Write-Host ""
+        Write-Step "Submodule status:"
+        foreach ($s in $script:SubmoduleSuccess) {
+            Write-Success "  [OK]   $s"
+        }
+        foreach ($f in $script:SubmoduleFailures) {
+                Write-Warn "  [WARN] $($f.Name) - see data\install-issues.md"
+        }
+        if ($script:SubmoduleFailures.Count -gt 0) {
+            Write-Step "Glitch will attempt to fix these on first launch."
+        }
     }
 }
 
@@ -387,6 +475,16 @@ if (-not $NoLaunch) {
         Write-Host "    .\launch-glitch.bat" -ForegroundColor Gray
         Pop-Location
     }
+}
+
+# Summary of any install issues (shown only if something failed)
+if ($script:SubmoduleFailures.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  WARNING: Some components couldn't be downloaded during install." -ForegroundColor Yellow
+    Write-Host "    Issues logged to: $InstallDir\data\install-issues.md" -ForegroundColor Yellow
+    Write-Host "    Glitch will review and attempt to fix these on first launch." -ForegroundColor Yellow
+    Write-Host "    Manual fix: cd $InstallDir && git submodule update --init --recursive" -ForegroundColor Yellow
+    Write-Host ""
 }
 
 Write-Header "Installation Complete!"

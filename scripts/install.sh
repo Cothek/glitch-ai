@@ -12,6 +12,7 @@ set -euo pipefail
 # Default values
 INSTALL_DIR="${1:-$HOME/glitch-ai}"
 NO_LAUNCH=false
+INSTALL_ISSUES=false
 
 # Parse arguments
 for arg in "$@"; do
@@ -60,10 +61,6 @@ warn()   { printf "  ${YELLOW}%s${NC}\n" "$1"; }
 error()  { printf "  ${RED}%s${NC}\n" "$1" >&2; }
 prompt() { printf "  ${CYAN}%s${NC}" "$1"; }
 
-# ── Spinner helper for long operations ──
-# Shows a rotating spinner + elapsed seconds while running a command.
-# Usage: spinner "Label" command arg1 arg2 ...
-# Exit code: returns the command's exit code (caller should handle errors)
 # ── Spinner helper for long operations ──
 # Shows a rotating spinner + elapsed seconds while running a command.
 # Captures stdout+stderr to a temp file shown on failure.
@@ -294,11 +291,80 @@ if [ ! -d "$INSTALL_DIR/.git" ]; then
     parent_dir="$(dirname "$INSTALL_DIR")"
     mkdir -p "$parent_dir" 2>/dev/null || true
     
-    if spinner "Cloning Glitch AI repository" git clone --recursive https://github.com/Cothek/glitch-ai.git "$INSTALL_DIR"; then
+    # Two-step clone: repo first, submodules individually so one failure doesn't kill install
+    if spinner "Cloning Glitch AI repository" git clone https://github.com/Cothek/glitch-ai.git "$INSTALL_DIR"; then
         success "Repository cloned to $INSTALL_DIR"
     else
         error "Clone failed"
         exit 1
+    fi
+    
+    # Initialize submodules individually - failures are logged, not fatal
+    ISSUE_FILE="$INSTALL_DIR/data/install-issues.md"
+    mkdir -p "$INSTALL_DIR/data"
+    
+    cd "$INSTALL_DIR" || exit 1
+    
+    echo ""
+    step "Initializing submodules..."
+    
+    # Init submodule registry (non-fatal)
+    git submodule init 2>&1 | sed 's/^/    /' || true
+    
+    # Track each submodule's status
+    SUBMODULE_OK=()
+    SUBMODULE_FAILED=()
+    
+    # Read submodule list from .gitmodules (authoritative source)
+    submodules=()
+    while IFS= read -r line; do
+        submodules+=("$line")
+    done < <(git config --file .gitmodules --get-regexp path | awk '{print $2}')
+
+    if [ ${#submodules[@]} -eq 0 ]; then
+        warn "No submodules found in .gitmodules"
+    else
+        for submodule in "${submodules[@]}"; do
+            echo ""
+            step "Updating submodule: $submodule"
+            # Use if/then so set -e doesn't kill the script on a single submodule failure
+            if git submodule update --init "$submodule" > /tmp/glitch-sub-err.tmp 2>&1; then
+                success "  $submodule: OK"
+                SUBMODULE_OK+=("$submodule")
+            else
+                SUBMODULE_EXIT=$?
+                SUBMODULE_OUTPUT=$(cat /tmp/glitch-sub-err.tmp)
+                warn "  $submodule: FAILED"
+                echo "$SUBMODULE_OUTPUT" | sed 's/^/    /'
+                SUBMODULE_FAILED+=("$submodule")
+                INSTALL_ISSUES=true
+
+                # Log to install-issues.md
+                {
+                    echo ""
+                    echo "## Install Issue - $(date '+%Y-%m-%d %H:%M:%S')"
+                    echo "- **Subsystem**: Submodule clone"
+                    echo "- **Component**: $submodule"
+                    echo "- **Error**:"
+                    echo '```'
+                    echo "$SUBMODULE_OUTPUT"
+                    echo '```'
+                    echo "- **Impact**: Some memory/skill files may be missing until resolved"
+                    echo "- **Fix**: Tell Glitch \"check install issues\" or run: cd $INSTALL_DIR && git submodule update --init --recursive"
+                    echo ""
+                } >> "$ISSUE_FILE"
+            fi
+            rm -f /tmp/glitch-sub-err.tmp
+        done
+    fi
+    
+    echo ""
+    if [ "$INSTALL_ISSUES" = false ]; then
+        success "All submodules initialized successfully"
+    else
+        warn "Some submodules failed to clone (see above)"
+        warn "Issues logged to: $ISSUE_FILE"
+        warn "Glitch will attempt to fix these on first launch."
     fi
 fi
 
@@ -534,6 +600,15 @@ if [ "$NO_LAUNCH" = false ]; then
 fi
 
 # Completion
+if [ "$INSTALL_ISSUES" = true ]; then
+    echo ""
+    warn "Some components couldn't be downloaded during install."
+    warn "  Issues logged to: $INSTALL_DIR/data/install-issues.md"
+    warn "  Glitch will review and attempt to fix these on first launch."
+    warn "  Manual fix: cd $INSTALL_DIR && git submodule update --init --recursive"
+    echo ""
+fi
+
 header "Installation Complete!"
 cat <<EOF
 Glitch AI is installed at: $INSTALL_DIR
