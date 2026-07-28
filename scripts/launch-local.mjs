@@ -494,11 +494,7 @@ async function main() {
 
   // Build instructions list (engine + user)
   const engineInstructions = [
-    '.opencode/instructions/coordinator-instructions.md',
-    'glitch-memorycore/prompt-rules.md',
-    'glitch-memorycore/glitch.md',
-    'glitch-memorycore/master-memory.md',
-    'glitch-memorycore/core/identity.md',
+    '.opencode/instructions/shared-agent-rules.md',
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
   ];
 

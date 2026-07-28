@@ -8,7 +8,7 @@ For every task, pick the right agent:
 | Bash commands, config edits | @general | opencode/deepseek-v4-flash-free (free) |
 | ? Code (1-5 files, standard logic) | @coder | opencode/nemotron-3-ultra-free (free) |
 | Codebase research | @explore | opencode/deepseek-v4-flash-free (free) |
-| Architecture / planning | @plan | opencode/deepseek-v4-flash-free (free) |
+
 | ? Complex code (5+ files, auth, architecture) | @coder | opencode/nemotron-3-ultra-free (free) |
 | UI/design system work | @ui-designer | opencode/nemotron-3-ultra-free (free) |
 | Code review / quality gate | @reviewer | opencode/nemotron-3-ultra-free (free) |
@@ -18,9 +18,9 @@ For every task, pick the right agent:
 | Memory writes (diary, decisions, reminders, etc.) | @memory | opencode/deepseek-v4-flash-free (free) |
 
 ## Free-to-Paid Fallback Protocol
-1. Always try the free variant first (@general, @explore, @plan, @coder, @pentester, @memory, etc.)
+1. Always try the free variant first (@general, @explore, @coder, @pentester, @memory, etc.)
 2. If the free agent returns empty results or errors, retry with the paid fallback (@general-paid, @coder-paid, @pentester-paid, @memory-paid, etc.)
-3. If free AND paid sub-agents both fail, tell the user — restart as glitch-omni (which has full edit/bash permissions) for direct execution.
+3. If free AND paid sub-agents both fail, tell the user ï¿½ restart as glitch-omni (which has full edit/bash permissions) for direct execution.
 
 ## Parallelism First
 - Dispatch multiple independent sub-agents in parallel to maximize throughput

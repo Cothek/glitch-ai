@@ -60,11 +60,7 @@ async function switchMode(targetMode, options = {}) {
 
 async function generateNormalConfig(templateText) {
   const engineInstructions = [
-    '.opencode/instructions/coordinator-instructions.md',
-    'glitch-memorycore/prompt-rules.md',
-    'glitch-memorycore/glitch.md',
-    'glitch-memorycore/master-memory.md',
-    'glitch-memorycore/core/identity.md',
+    '.opencode/instructions/shared-agent-rules.md',
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
   ];
   let UserName = process.env.GLITCH_USER || null; let userFound = false; const UserDir = join(ROOT_DIR, 'user');

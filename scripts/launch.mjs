@@ -445,11 +445,7 @@ async function main() {
   if (templateText.charCodeAt(0) === 0xFEFF) templateText = templateText.slice(1);
 
   const engineInstructions = [
-    '.opencode/instructions/coordinator-instructions.md',
-    'glitch-memorycore/prompt-rules.md',
-    'glitch-memorycore/glitch.md',
-    'glitch-memorycore/master-memory.md',
-    'glitch-memorycore/core/identity.md',
+    '.opencode/instructions/shared-agent-rules.md',
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
   ];
 
@@ -856,11 +852,7 @@ async function main() {
       log(CYAN, '  Generating runtime config from template...');
       const templateText = readFileSync(TemplatePath, 'utf-8');
       const engineInstructions = [
-        '.opencode/instructions/coordinator-instructions.md',
-        'glitch-memorycore/prompt-rules.md',
-        'glitch-memorycore/glitch.md',
-        'glitch-memorycore/master-memory.md',
-        'glitch-memorycore/core/identity.md',
+        '.opencode/instructions/shared-agent-rules.md',
         'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
       ];
       let userInstructions = buildUserInstructions(ROOT_DIR, UserName);
