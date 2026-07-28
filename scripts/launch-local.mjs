@@ -330,8 +330,6 @@ function buildLocalPrompt(modelId, modelName) {
 | Bash, file ops, simple edits | @general | ${modelId} |
 | Code (1-5 files, standard logic) | @coder | ${modelId} |
 | Codebase research | @explore | ${modelId} |
-| Architecture / planning | @plan | ${modelId} |
-| Code scaffolding | @build | ${modelId} |
 
 ## [bolt] Dispatch-First Mandate (Immutable)
 Glitch's job is coordination. The first action for every code task is DISPATCH, not execution.
@@ -496,11 +494,7 @@ async function main() {
 
   // Build instructions list (engine + user)
   const engineInstructions = [
-    '.opencode/instructions/coordinator-instructions.md',
-    'glitch-memorycore/prompt-rules.md',
-    'glitch-memorycore/glitch.md',
-    'glitch-memorycore/master-memory.md',
-    'glitch-memorycore/core/identity.md',
+    '.opencode/instructions/shared-agent-rules.md',
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
   ];
 

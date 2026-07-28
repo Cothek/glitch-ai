@@ -10,14 +10,14 @@
 // URIs, extracts the base64 data, saves them to screenshots/ as files, and
 // updates a manifest.json with the latest image path.
 //
-// Usage: After the user pastes an image, check for screenshots/.new-image
+// Usage: After the user pastes an image, check for screenshots/NEW_IMAGE_FLAG
 // (which contains the absolute path of the latest saved image). If it exists,
-// read it and dispatch to @vision with that path. Then delete .new-image to
+// read it and dispatch to @vision with that path. Then delete NEW_IMAGE_FLAG to
 // prevent re-processing.
 //
 // This plugin writes TWO files for every image:
-//   screenshots/manifest.json — canonical record (absolute path, metadata)
-//   screenshots/.new-image    — trigger flag (absolute path only, deleted after dispatch)
+//   screenshots/manifest.json   — canonical record (absolute path, metadata)
+//   screenshots/NEW_IMAGE_FLAG  — trigger flag (absolute path only, deleted after dispatch)
 //
 // Install: Add to .opencode/opencode.json:
 //   "plugin": [".opencode/plugins/graphify.js", ".opencode/plugins/save-images.js"]
@@ -101,7 +101,7 @@ export const SaveImagesPlugin = async ({ directory }) => {
             // Write trigger flag — Glitch checks for this file at response start.
             // Content is the absolute path ONLY. Glitch reads this, dispatches to
             // @vision, then deletes the trigger to prevent re-processing.
-            const triggerPath = join(screenshotsDir, ".new-image");
+            const triggerPath = join(screenshotsDir, "NEW_IMAGE_FLAG");
             writeFileSync(triggerPath, filepath + "\n");
 
             console.log(

@@ -9,9 +9,9 @@
                    ".opencode/plugins/stuck-detector.js"
                ],
      "instructions":  [
-                          ".opencode/instructions/coordinator-instructions.md",
-                          "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
-                      ],
+    ".opencode/instructions/shared-agent-rules.md",
+    "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+],
     "agent":  {
                   "glitch":  {
                                  "model":  "__MODEL__",
@@ -63,25 +63,16 @@
                                                       "task":  "deny"
                                                   },
                                    "temperature":  0.2
-                               },
-                  "plan":  {
-                               "model":  "__MODEL__",
-                                "mode":  "subagent",
-                                "description":  "Planning mode -- reason about architecture and designs without executing code.",
-                                "permission":  {
-                                                   "task":  "deny"
-                                               },
-                                "temperature":  0.2
-                           },
-                   "build":  {
-                                 "model":  "__MODEL__",
-                                 "mode":  "subagent",
-                                 "description":  "Code scaffolding -- generates code from prompts.",
-                                 "permission":  {
-                                                    "task":  "deny"
-                                                },
-                                 "temperature":  0.2
-                             },
+                                },
+                     "coder":  {
+                                  "model":  "__MODEL__",
+                                  "mode":  "subagent",
+                                  "description":  "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
+                                  "permission":  {
+                                                     "task":  "deny"
+                                                 },
+                                  "temperature":  0.2
+                              },
                   "memory":  {
                                  "model":  "__MODEL__",
                                  "mode":  "subagent",
