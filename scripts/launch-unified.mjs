@@ -216,6 +216,33 @@ async function main() {
   const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
   handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
 
+  // ---- Check for install issues (submodule failures, etc.) ----
+  const issuesFile = join(ROOT_DIR, 'data', 'install-issues.md');
+  if (existsSync(issuesFile)) {
+    log(YELLOW, '  Install issues detected — attempting auto-fix...');
+    try {
+      const result = execFileSync('node', [join(SCRIPT_DIR, 'check-install-issues.mjs'), '--fix'], {
+        cwd: ROOT_DIR,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 120000,
+      });
+      const parsed = JSON.parse(result.trim());
+      if (parsed.status === 'fixed') {
+        log(GREEN, '  All install issues resolved!');
+      } else if (parsed.status === 'partial') {
+        log(YELLOW, `  ${parsed.remainingIssues.length} issue(s) could not be auto-fixed.`);
+        log(YELLOW, '  Ask Glitch to "check install issues" for help resolving them.');
+      } else {
+        log(GREEN, '  No install issues found.');
+      }
+      log('');
+    } catch (e) {
+      log(YELLOW, '  Could not run install issues check. Ask Glitch to "check install issues".');
+      log('');
+    }
+  }
+
   const args = process.argv.slice(2);
 
   if (args.includes('--help') || args.includes('-h')) {
