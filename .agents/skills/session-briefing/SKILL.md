@@ -14,12 +14,12 @@ At the start of every session, before responding to the first message, deliver a
 1. Read `main/current-session.md` for last session recap
 2. Read `main/reminders.md` for open reminders (skip if none)
 3. Read `projects/project-list.md` for active projects (skip if none)
-4. Detect current time period (Morning/Afternoon/Evening/Night)
+4. Detect current time period for internal energy calibration
 
 ### Step 2: Compose Brief
 Format (under 12 lines):
 ```
-📋 Session Brief · [Time Period]
+📋 Session Brief
 
 Last session: [1-line recap]
 Active: [project name] · [status]
