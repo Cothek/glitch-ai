@@ -154,7 +154,7 @@ if (Test-Path $NodeBin) {
 Write-Host "[2/5] Initializing git submodules..." -ForegroundColor Cyan
 try {
   Invoke-WithSpinner -Label "Initializing git submodules" -DoneMessage "Submodules" -ScriptBlock {
-    git submodule update --init --recursive 2>&1 | Out-Null
+    git -C "$using:RootDir" submodule update --init --recursive 2>&1 | Out-Null
   }
 } catch {
   Write-Host "  Skipping submodules (not a git repo or git not available)" -ForegroundColor Yellow
