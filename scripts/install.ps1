@@ -48,6 +48,30 @@ param(
     [string]$UserRepo
 )
 
+# Set up logging - captures all output to a file for diagnosis
+$script:LogFile = $null
+try {
+    # Determine log location: use InstallDir if it exists, else temp
+    $logDir = if (Test-Path $InstallDir) { $InstallDir } else { "$env:TEMP\glitch-install" }
+    if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
+    $script:LogFile = Join-Path $logDir "install.log"
+    Start-Transcript -Path $script:LogFile -Append | Out-Null
+    Write-Host "  Logging to: $script:LogFile" -ForegroundColor DarkGray
+} catch {
+    # If transcript fails, continue without logging
+    Write-Host "  (Could not start logging: $_)" -ForegroundColor DarkGray
+}
+
+# Catch all unhandled errors and log them
+$ErrorActionPreference = "Stop"
+trap {
+    Write-Host "`n  FATAL ERROR: $_" -ForegroundColor Red
+    Write-Host "  Log file: $script:LogFile" -ForegroundColor Yellow
+    Write-Host "  Please share this log file when reporting the issue." -ForegroundColor Yellow
+    try { Stop-Transcript | Out-Null } catch {}
+    exit 1
+}
+
 # Color output helpers
 function Write-Header { param([string]$msg) Write-Host "`n$msg" -ForegroundColor Magenta }
 function Write-Step   { param([string]$msg) Write-Host "  $msg" -ForegroundColor Cyan }
@@ -595,3 +619,6 @@ Next steps:
 
 Documentation: https://github.com/Cothek/glitch-ai
 "@ -ForegroundColor Green
+
+# Stop logging
+try { Stop-Transcript | Out-Null } catch {}

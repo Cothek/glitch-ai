@@ -13,6 +13,21 @@ set -euo pipefail
 INSTALL_DIR="${1:-$HOME/glitch-ai}"
 NO_LAUNCH=false
 USER_REPO=""
+
+# Set up logging
+LOG_FILE=""
+setup_logging() {
+    local log_dir="${1:-$HOME/glitch-install}"
+    mkdir -p "$log_dir" 2>/dev/null || log_dir="/tmp"
+    LOG_FILE="$log_dir/install.log"
+    exec > >(tee -a "$LOG_FILE") 2>&1
+    echo "=== Install started: $(date) ==="
+}
+setup_logging "$HOME/glitch-install"
+
+# Catch errors and show log location
+trap 'echo ""; echo "  FATAL ERROR: Line $LINENO"; echo "  Log file: $LOG_FILE"; echo "  Please share this log file when reporting the issue."; exit 1' ERR
+
 INSTALL_ISSUES=false
 
 # Parse arguments
