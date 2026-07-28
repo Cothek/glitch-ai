@@ -243,6 +243,19 @@ async function main() {
     }
   }
 
+  // ---- Check if user profile needs GitHub sync setup ----
+  const userDir = join(ROOT_DIR, 'user');
+  const userGitDir = join(userDir, '.git');
+  const userMainMem = join(userDir, 'main-memory.md');
+
+  if (existsSync(userMainMem) && !existsSync(userGitDir)) {
+    // User profile exists but is not a git repo - offer to set up sync
+    log(YELLOW, '  User profile is local-only (not synced to GitHub).');
+    log(YELLOW, '  To enable cross-machine sync, run:');
+    log(DARK_GRAY, '    cd user && git init && git remote add origin <your-repo-url> && git push');
+    log('');
+  }
+
   const args = process.argv.slice(2);
 
   if (args.includes('--help') || args.includes('-h')) {

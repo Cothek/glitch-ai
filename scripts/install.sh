@@ -12,24 +12,28 @@ set -euo pipefail
 # Default values
 INSTALL_DIR="${1:-$HOME/glitch-ai}"
 NO_LAUNCH=false
+USER_REPO=""
 INSTALL_ISSUES=false
 
 # Parse arguments
 for arg in "$@"; do
     case "$arg" in
         --no-launch) NO_LAUNCH=true ;;
+        --user-repo) ;; # handled by next iteration
+        --user-repo=*) USER_REPO="${arg#*=}" ;;
         --help|-h)
             cat <<'EOF'
 Glitch AI Installer for macOS/Linux
 
 Usage:
-  curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch]
-  wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch]
+  curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>]
+  wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>]
 
 Arguments:
-  install_dir    Custom install directory (default: $HOME/glitch-ai)
-  --no-launch    Skip launch prompt after installation
-  --help, -h     Show this help
+  install_dir              Custom install directory (default: $HOME/glitch-ai)
+  --no-launch              Skip launch prompt after installation
+  --user-repo <url>        GitHub user repo URL for profile sync (e.g. https://github.com/user/repo.git)
+  --help, -h               Show this help
 
 Prerequisites:
   - git
@@ -40,8 +44,14 @@ Node.js is NOT required - the launch scripts handle everything.
 EOF
             exit 0
             ;;
-        *) ;; # ignore unknown args (first positional is install_dir)
+        *)
+            # Check if previous arg was --user-repo
+            if [ "${PREV_ARG:-}" = "--user-repo" ]; then
+                USER_REPO="$arg"
+            fi
+            ;;
     esac
+    PREV_ARG="$arg"
 done
 
 # Color codes (ANSI)
@@ -447,46 +457,65 @@ DASHEOF
 success "Local user profile created at $USER_DIR"
 
 # Optional: sync with GitHub for cross-machine access
-prompt "Sync this profile with a GitHub repository? (Y/n): "
-read -r setup_profile </dev/tty
-if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
-    prompt "GitHub username (your GitHub handle): "
-    read -r gh_user </dev/tty
-    if [ -n "$gh_user" ]; then
-        prompt "Repository name (default: glitch-user-$gh_user): "
-        read -r repo_name </dev/tty
-        [ -z "$repo_name" ] && repo_name="glitch-user-$gh_user"
+SHOULD_SYNC=false
+GH_USER=""
+REPO_NAME=""
 
-        cd "$USER_DIR"
-        git init >/dev/null
-        git add -A >/dev/null
-        git commit -m "initial user profile" >/dev/null 2>&1 || true
-        local_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-        git remote add origin "https://github.com/$gh_user/$repo_name.git" 2>/dev/null
-
-        # Try to detect remote's default branch
-        remote_head=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
-        if [ -n "$remote_head" ]; then
-            default_branch="$remote_head"
-            if [ "$local_branch" != "$default_branch" ]; then
-                git branch -m "$default_branch" 2>/dev/null
-            fi
-            if git pull origin "$default_branch" --allow-unrelated-histories 2>/dev/null; then
-                success "User profile synced from GitHub"
-                git branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null
-            else
-                warn "Remote repository not found (or pull failed)."
-                echo "  Local profile ready. Push later:"
-                echo "    cd $USER_DIR && git push -u origin $default_branch"
-            fi
+if [ -n "$USER_REPO" ]; then
+    # Parse URL: https://github.com/user/repo.git or user/repo
+    PARSED=$(echo "$USER_REPO" | sed 's|https\?://github\.com/||' | sed 's|\.git$||')
+    GH_USER=$(echo "$PARSED" | cut -d'/' -f1)
+    REPO_NAME=$(echo "$PARSED" | cut -d'/' -f2)
+    if [ -n "$GH_USER" ] && [ -n "$REPO_NAME" ]; then
+        SHOULD_SYNC=true
+        step "Using specified user repo: $GH_USER/$REPO_NAME"
+    else
+        warn "Could not parse --user-repo URL: $USER_REPO"
+        warn "Expected format: https://github.com/username/repo.git"
+    fi
+else
+    prompt "Sync this profile with a GitHub repository? (Y/n): "
+    read -r setup_profile </dev/tty
+    if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
+        SHOULD_SYNC=true
+        prompt "GitHub username (your GitHub handle): "
+        read -r GH_USER </dev/tty
+        if [ -n "$GH_USER" ]; then
+            prompt "Repository name (default: glitch-user-$GH_USER): "
+            read -r REPO_NAME </dev/tty
+            [ -z "$REPO_NAME" ] && REPO_NAME="glitch-user-$GH_USER"
         else
-            warn "Remote not found. Profile is local-only."
-            echo "  Push later:"
-            echo "    cd $USER_DIR && git push -u origin $local_branch"
+            SHOULD_SYNC=false
+        fi
+    fi
+fi
+
+if [ "$SHOULD_SYNC" = true ] && [ -n "$GH_USER" ]; then
+    cd "$USER_DIR"
+    git init >/dev/null
+    git add -A >/dev/null
+    git commit -m "initial user profile" >/dev/null 2>&1 || true
+    local_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+    git remote add origin "https://github.com/$GH_USER/$REPO_NAME.git" 2>/dev/null
+
+    remote_head=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
+    if [ -n "$remote_head" ]; then
+        default_branch="$remote_head"
+        if [ "$local_branch" != "$default_branch" ]; then
+            git branch -m "$default_branch" 2>/dev/null
+        fi
+        if git pull origin "$default_branch" --allow-unrelated-histories 2>/dev/null; then
+            success "User profile synced from GitHub"
+            git branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null
+        else
+            warn "Remote repository not found (or pull failed)."
+            echo "  Local profile ready. Push later:"
+            echo "    cd $USER_DIR && git push -u origin $default_branch"
         fi
     else
-        echo "  No GitHub username entered. Profile stays local-only."
-        echo "  To sync later: cd $USER_DIR && git init && git remote add origin <url> && git push"
+        warn "Remote not found. Profile is local-only."
+        echo "  Push later:"
+        echo "    cd $USER_DIR && git push -u origin $local_branch"
     fi
 else
     echo "  Profile stays local-only (no GitHub sync)."

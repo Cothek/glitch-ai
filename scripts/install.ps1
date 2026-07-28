@@ -17,6 +17,10 @@
 .PARAMETER Help
     Show this help message.
 
+.PARAMETER UserRepo
+    GitHub user repo URL for profile sync (e.g. https://github.com/user/repo.git).
+    When provided, skips the interactive sync prompt and uses this repo directly.
+
 .EXAMPLE
     irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex
 
@@ -25,6 +29,9 @@
 
 .EXAMPLE
     irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex -NoLaunch
+
+.EXAMPLE
+    irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex -UserRepo "https://github.com/Cothek/glitch-user-cothek.git"
 #>
 
 param(
@@ -35,7 +42,10 @@ param(
     [switch]$NoLaunch,
 
     [Parameter(Mandatory=$false)]
-    [switch]$Help
+    [switch]$Help,
+
+    [Parameter(Mandatory=$false)]
+    [string]$UserRepo
 )
 
 # Color output helpers
@@ -88,12 +98,13 @@ if ($Help) {
 Glitch AI Installer for Windows
 
 Usage:
-  irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex [-InstallDir <path>] [-NoLaunch] [-Help]
+  irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex [-InstallDir <path>] [-NoLaunch] [-Help] [-UserRepo <url>]
 
 Parameters:
   -InstallDir <path>   Custom install directory (default: $HOME\glitch-ai)
   -NoLaunch            Skip launch prompt after installation
   -Help                Show this help
+  -UserRepo <url>      GitHub user repo URL for profile sync (e.g. https://github.com/user/repo.git)
 
 Prerequisites:
   - Git (auto-downloaded if missing -- portable MinGit ~40 MB)
@@ -453,52 +464,76 @@ timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
 }
 
 # Optional: Sync with GitHub for cross-machine access
-Write-Host ""
-Write-Host "Glitch AI stores your personal memory in the user/ directory." -ForegroundColor White
-Write-Host "You can optionally sync it to GitHub for cross-machine access." -ForegroundColor White
-Write-Host ""
-Write-Prompt "Sync user profile to GitHub? (y/N): "
-$syncProfile = Read-Host
-if ($syncProfile -like 'y*') {
-    Write-Prompt "GitHub username: "
-    $ghUser = Read-Host
-    if ($ghUser) {
-        Write-Prompt "Repository name (default: glitch-user-$ghUser): "
-        $repoName = Read-Host
-        if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
-        
-        Push-Location $userDir
-        # Check if already a git repo
-        if (-not (Test-Path ".git")) {
-            git init | Out-Null
-            $localBranch = git rev-parse --abbrev-ref HEAD
-            git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
-        } else {
-            $localBranch = git rev-parse --abbrev-ref HEAD
-        }
-        
-        # Try to detect remote's default branch
-        $remoteHead = git ls-remote --symref origin HEAD 2>$null
-        if ($remoteHead -match 'ref: refs/heads/(\S+)') {
-            $defaultBranch = $matches[1]
-            if ($localBranch -ne $defaultBranch) {
-                git branch -m $defaultBranch 2>&1 | Out-Null
-            }
-            $pullResult = git pull origin $defaultBranch --allow-unrelated-histories 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "User profile synced from GitHub"
-                git branch --set-upstream-to="origin/$defaultBranch" $defaultBranch 2>&1 | Out-Null
-            } else {
-                Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
-                Write-Host "  Push later with: cd $userDir && git push -u origin $defaultBranch"
-            }
-        } else {
-            Write-Warn "Remote repository not found. Profile is local-only."
-            Write-Host "  Push later with: cd $userDir && git push -u origin $localBranch"
-        }
-        Pop-Location
+$shouldSync = $false
+$ghUser = $null
+$repoName = $null
+
+if ($UserRepo) {
+    # Parse URL: https://github.com/user/repo.git or user/repo
+    $parsed = $UserRepo -replace 'https?://github\.com/', '' -replace '\.git$', ''
+    $parts = $parsed -split '/'
+    if ($parts.Count -eq 2) {
+        $ghUser = $parts[0]
+        $repoName = $parts[1]
+        $shouldSync = $true
+        Write-Host "  Using specified user repo: $ghUser/$repoName" -ForegroundColor Cyan
+    } else {
+        Write-Warn "Could not parse UserRepo URL: $UserRepo"
+        Write-Warn "Expected format: https://github.com/username/repo.git"
     }
 } else {
+    Write-Host ""
+    Write-Host "Glitch AI stores your personal memory in the user/ directory." -ForegroundColor White
+    Write-Host "You can optionally sync it to GitHub for cross-machine access." -ForegroundColor White
+    Write-Host ""
+    Write-Prompt "Sync user profile to GitHub? (y/N): "
+    $syncProfile = Read-Host
+    if ($syncProfile -like 'y*') {
+        $shouldSync = $true
+        Write-Prompt "GitHub username: "
+        $ghUser = Read-Host
+        if ($ghUser) {
+            Write-Prompt "Repository name (default: glitch-user-$ghUser): "
+            $repoName = Read-Host
+            if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
+        } else {
+            $shouldSync = $false
+        }
+    }
+}
+
+if ($shouldSync -and $ghUser) {
+    Push-Location $userDir
+    # Check if already a git repo
+    if (-not (Test-Path ".git")) {
+        git init | Out-Null
+        $localBranch = git rev-parse --abbrev-ref HEAD
+        git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
+    } else {
+        $localBranch = git rev-parse --abbrev-ref HEAD
+    }
+    
+    # Try to detect remote's default branch
+    $remoteHead = git ls-remote --symref origin HEAD 2>$null
+    if ($remoteHead -match 'ref: refs/heads/(\S+)') {
+        $defaultBranch = $matches[1]
+        if ($localBranch -ne $defaultBranch) {
+            git branch -m $defaultBranch 2>&1 | Out-Null
+        }
+        $pullResult = git pull origin $defaultBranch --allow-unrelated-histories 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "User profile synced from GitHub"
+            git branch --set-upstream-to="origin/$defaultBranch" $defaultBranch 2>&1 | Out-Null
+        } else {
+            Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
+            Write-Host "  Push later with: cd $userDir && git push -u origin $defaultBranch"
+        }
+    } else {
+        Write-Warn "Remote repository not found. Profile is local-only."
+        Write-Host "  Push later with: cd $userDir && git push -u origin $localBranch"
+    }
+    Pop-Location
+} elseif (-not $UserRepo) {
     Write-Host "  Profile stays local-only. To sync later:" -ForegroundColor DarkGray
     Write-Host "    cd $userDir && git init && git remote add origin <url> && git push" -ForegroundColor DarkGray
 }
