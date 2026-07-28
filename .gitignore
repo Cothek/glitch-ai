@@ -89,6 +89,9 @@ tools/security/*.zip
 # Runtime data directory (config backups, node bundle, model cache, screenshots)
 data/
 
+# Personal user profile (created per-installation, NOT shared via git)
+user/
+
 # Handy voice input (downloaded third-party binary)
 handy-voice/
 

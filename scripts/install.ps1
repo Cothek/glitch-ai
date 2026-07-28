@@ -392,56 +392,115 @@ Write-Success "Bootstrap completed successfully"
 
 # 5. User profile setup
 Write-Header "User Profile Setup"
-Write-Host "Glitch AI stores your personal memory, preferences, and projects in a separate Git repo."
-Write-Host "This lets you sync your AI companion across machines via GitHub."
+
+$userDir = "$InstallDir\user"
+$userProfileExists = Test-Path "$userDir\main-memory.md"
+
+if (-not $userProfileExists) {
+    Write-Step "Creating local user profile..."
+    if (-not (Test-Path $userDir)) {
+        New-Item -ItemType Directory -Path $userDir -Force | Out-Null
+    }
+    
+    # Create starter files
+    $starterMemory = @"
+---
+type: UserProfile
+title: Main Memory
+description: Your personal profile and preferences
+tags: [user, profile]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+
+# Main Memory
+
+## User Profile
+*To be filled in through interaction with Glitch*
+"@
+    Set-Content -LiteralPath "$userDir\main-memory.md" -Value $starterMemory -Encoding UTF8
+
+    $starterSession = @"
+---
+type: SessionMemory
+title: Current Session Memory
+tags: [session, ram]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+
+# Current Session Memory
+
+## Session Recap
+*First session with Glitch*
+"@
+    Set-Content -LiteralPath "$userDir\current-session.md" -Value $starterSession -Encoding UTF8
+
+    $starterReminders = @"
+---
+type: ReminderLog
+title: Reminders
+description: Cross-session reminders
+tags: [reminders]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+
+# Reminders
+"@
+    Set-Content -LiteralPath "$userDir\reminders.md" -Value $starterReminders -Encoding UTF8
+
+    Write-Success "User profile created at $userDir"
+} else {
+    Write-Success "User profile already exists at $userDir"
+}
+
+# Optional: Sync with GitHub for cross-machine access
 Write-Host ""
-Write-Prompt "Set up user profile from GitHub? (Y/n): "
-$setupProfile = Read-Host
-if ($setupProfile -eq '' -or $setupProfile -like 'y*') {
-    Write-Prompt "GitHub username (your GitHub handle): "
+Write-Host "Glitch AI stores your personal memory in the user/ directory." -ForegroundColor White
+Write-Host "You can optionally sync it to GitHub for cross-machine access." -ForegroundColor White
+Write-Host ""
+Write-Prompt "Sync user profile to GitHub? (y/N): "
+$syncProfile = Read-Host
+if ($syncProfile -like 'y*') {
+    Write-Prompt "GitHub username: "
     $ghUser = Read-Host
     if ($ghUser) {
         Write-Prompt "Repository name (default: glitch-user-$ghUser): "
         $repoName = Read-Host
         if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
         
-        $userDir = "$InstallDir\user"
-        if (Test-Path "$userDir\.git") {
-            Write-Warn "User profile already exists at $userDir"
-        } else {
-            Write-Step "Initializing user profile..."
-            if (-not (Test-Path $userDir)) {
-                New-Item -ItemType Directory -Path $userDir -Force | Out-Null
-            }
-            Push-Location $userDir
+        Push-Location $userDir
+        # Check if already a git repo
+        if (-not (Test-Path ".git")) {
             git init | Out-Null
-            # Detect what branch git init created (reflects user's init.defaultBranch setting)
             $localBranch = git rev-parse --abbrev-ref HEAD
             git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
-            # Try to detect remote's default branch
-            $remoteHead = git ls-remote --symref origin HEAD 2>$null
-            if ($remoteHead -match 'ref: refs/heads/(\S+)') {
-                $defaultBranch = $matches[1]
-                # Rename local branch to match remote if needed
-                if ($localBranch -ne $defaultBranch) {
-                    git branch -m $defaultBranch 2>&1 | Out-Null
-                }
-                # Pull from remote
-                $pullResult = git pull origin $defaultBranch --allow-unrelated-histories 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Success "User profile pulled from GitHub"
-                    git branch --set-upstream-to="origin/$defaultBranch" $defaultBranch 2>&1 | Out-Null
-                } else {
-                    Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
-                    Write-Host "  Your memory will be saved locally and can be pushed later with: .\scripts\sync-user.ps1 -Push"
-                }
-            } else {
-                Write-Warn "No existing profile on GitHub. Starting fresh."
-                Write-Host "  Your memory will be saved locally and can be pushed later with: .\scripts\sync-user.ps1 -Push"
-            }
-            Pop-Location
+        } else {
+            $localBranch = git rev-parse --abbrev-ref HEAD
         }
+        
+        # Try to detect remote's default branch
+        $remoteHead = git ls-remote --symref origin HEAD 2>$null
+        if ($remoteHead -match 'ref: refs/heads/(\S+)') {
+            $defaultBranch = $matches[1]
+            if ($localBranch -ne $defaultBranch) {
+                git branch -m $defaultBranch 2>&1 | Out-Null
+            }
+            $pullResult = git pull origin $defaultBranch --allow-unrelated-histories 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "User profile synced from GitHub"
+                git branch --set-upstream-to="origin/$defaultBranch" $defaultBranch 2>&1 | Out-Null
+            } else {
+                Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
+                Write-Host "  Push later with: cd $userDir && git push -u origin $defaultBranch"
+            }
+        } else {
+            Write-Warn "Remote repository not found. Profile is local-only."
+            Write-Host "  Push later with: cd $userDir && git push -u origin $localBranch"
+        }
+        Pop-Location
     }
+} else {
+    Write-Host "  Profile stays local-only. To sync later:" -ForegroundColor DarkGray
+    Write-Host "    cd $userDir && git init && git remote add origin <url> && git push" -ForegroundColor DarkGray
 }
 
 # 6. Verify installation
