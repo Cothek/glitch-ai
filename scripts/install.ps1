@@ -318,8 +318,12 @@ if (Test-Path "$InstallDir\.git") {
     # Check if directory has actual content (not just our log file)
     $dirHasContent = (Get-ChildItem $InstallDir -Force | Where-Object { $_.Name -ne "install.log" }).Count -gt 0
     if (-not $dirHasContent) {
-        # Empty or only has our log file - treat as fresh install
+        # Empty or only has our log file - delete so clone can create it fresh
         Write-Step "Directory exists but is empty. Proceeding with fresh install..."
+        # Stop transcript so install.log isn't locked during delete
+        try { Stop-Transcript | Out-Null } catch {}
+        Remove-Item $InstallDir -Recurse -Force
+        Write-Success "Directory cleared."
     } else {
         # Directory exists and has actual content -- ask what to do
         Write-Warn "Directory '$InstallDir' already exists (not a git repo)."
