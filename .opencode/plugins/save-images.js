@@ -24,6 +24,7 @@
 
 import { writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
+import { logVisionDetection } from "../../scripts/lib/vision-logger.mjs";
 
 export const SaveImagesPlugin = async ({ directory }) => {
   const screenshotsDir = join(directory, "screenshots");
@@ -103,6 +104,9 @@ export const SaveImagesPlugin = async ({ directory }) => {
             // @vision, then deletes the trigger to prevent re-processing.
             const triggerPath = join(screenshotsDir, "NEW_IMAGE_FLAG");
             writeFileSync(triggerPath, filepath + "\n");
+
+            // Log vision detection for compliance tracking
+            logVisionDetection(filepath);
 
             console.log(
               `[save-images] Saved: screenshots/${filename} (${(buffer.length / 1024).toFixed(1)} KB, ${part.mime})`

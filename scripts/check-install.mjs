@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Glitch AI — Install Status Checker
+ * Glitch AI -- Install Status Checker
  *
  * Verifies that all Glitch AI components are installed correctly.
  * Run: node scripts/check-install.mjs
@@ -36,9 +36,9 @@ const C = {
 };
 
 const SYM = {
-  ok: `${C.green}✓${C.reset}`,
-  fail: `${C.red}✗${C.reset}`,
-  warn: `${C.yellow}⚠${C.reset}`,
+  ok: `${C.green}OK${C.reset}`,
+  fail: `${C.red}X${C.reset}`,
+  warn: `${C.yellow}!${C.reset}`,
 };
 
 // ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ function tryReadVersion(filePath, versionFlag = '--version') {
 }
 
 function getGitBranch() {
-  const out = safeExec('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const out = safeExec('git', ['symbolic-ref', '--short', 'HEAD']);
   return out || null;
 }
 
@@ -173,7 +173,7 @@ check('glitch-memorycore', 'Core', () => {
       ok: false,
       version: null,
       path: null,
-      note: 'submodule not initialized — run: git submodule update --init',
+      note: 'submodule not initialized -- run: git submodule update --init',
     };
   }
   return {
@@ -193,7 +193,7 @@ check('Handy', 'Tools', () => {
       ok: false,
       version: null,
       path: null,
-      note: 'optional — voice input',
+      note: 'optional -- voice input',
     };
   }
   return {
@@ -211,7 +211,7 @@ check('Cloudflared', 'Tools', () => {
       ok: false,
       version: null,
       path: null,
-      note: 'optional — tunnel access',
+      note: 'optional -- tunnel access',
     };
   }
   const v = tryReadVersion(exe);
@@ -224,7 +224,7 @@ check('Cloudflared', 'Tools', () => {
 });
 
 check('Image Gen', 'Tools', () => {
-  // ComfyUI / image-gen marker — check for the install script or a known marker
+  // ComfyUI / image-gen marker -- check for the install script or a known marker
   const script = join(ROOT_DIR, 'scripts', 'install-image-gen.ps1');
   if (!existsSync(script)) {
     return {
@@ -253,7 +253,7 @@ check('Agent Config', 'Config', () => {
       ok: false,
       version: null,
       path: null,
-      note: '.opencode/ missing — repo incomplete',
+      note: '.opencode/ missing -- repo incomplete',
     };
   }
   const hasAgents = existsSync(agentsDir);
@@ -338,7 +338,7 @@ check('User Profile', 'Config', () => {
     ok: true,
     version: synced ? 'synced' : 'local-only',
     path: 'user/',
-    note: synced ? null : 'no .git — local only',
+    note: synced ? null : 'no .git -- local only',
   };
 });
 
@@ -349,7 +349,7 @@ check('Glitch Head', 'Config', () => {
       ok: false,
       version: null,
       path: null,
-      note: 'optional — startup banner',
+      note: 'optional -- startup banner',
     };
   }
   return {
@@ -375,8 +375,8 @@ function render(results) {
   const lines = [];
   const groups = ['Core', 'Tools', 'Config'];
 
-  lines.push(`${C.bold}${C.cyan}Glitch AI — Install Status${C.reset}`);
-  lines.push(`${C.cyan}${'═'.repeat(34)}${C.reset}`);
+  lines.push(`${C.bold}${C.cyan}Glitch AI -- Install Status${C.reset}`);
+  lines.push(`${C.cyan}${'='.repeat(34)}${C.reset}`);
   lines.push('');
 
   for (const g of groups) {
@@ -385,8 +385,8 @@ function render(results) {
     lines.push(` ${C.bold}${g}${C.reset}`);
     for (const r of items) {
       const sym = r.ok ? SYM.ok : SYM.fail;
-      const ver = r.ok ? pad(r.version || 'ok', 12) : pad('—', 12);
-      const path = r.path || '—';
+      const ver = r.ok ? pad(r.version || 'ok', 12) : pad('--', 12);
+      const path = r.path || '--';
       const note = r.note ? `  ${C.dim}${r.note}${C.reset}` : '';
       lines.push(`  ${sym} ${pad(r.name, 14)} ${ver} ${C.gray}(${path})${C.reset}${note}`);
     }
@@ -411,14 +411,14 @@ function render(results) {
   }
 
   lines.push(
-    `${C.bold}Result: ${passed}/${total} components OK — ${verdictColor}${verdict}${C.reset}`
+    `${C.bold}Result: ${passed}/${total} components OK -- ${verdictColor}${verdict}${C.reset}`
   );
 
   if (criticalFailed.length > 0) {
     lines.push('');
     lines.push(`${C.red}Critical missing:${C.reset}`);
     for (const r of criticalFailed) {
-      lines.push(`  ${SYM.fail} ${r.name} — ${r.note || 'required'}`);
+      lines.push(`  ${SYM.fail} ${r.name} -- ${r.note || 'required'}`);
     }
   }
 

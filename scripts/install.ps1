@@ -17,6 +17,10 @@
 .PARAMETER Help
     Show this help message.
 
+.PARAMETER UserRepo
+    GitHub user repo URL for profile sync (e.g. https://github.com/user/repo.git).
+    When provided, skips the interactive sync prompt and uses this repo directly.
+
 .EXAMPLE
     irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex
 
@@ -28,6 +32,9 @@
 
 .EXAMPLE
     irm https://raw.githubusercontent.com/Cothek/glitch-ai/develop/scripts/install.ps1 | iex -Branch develop
+
+.EXAMPLE
+    irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex -UserRepo "https://github.com/Cothek/glitch-user-cothek.git"
 #>
 
 param(
@@ -41,8 +48,48 @@ param(
     [switch]$Help,
 
     [Parameter(Mandatory=$false)]
-    [string]$Branch = "main"
+    [string]$Branch = "main",
+
+    [Parameter(Mandatory=$false)]
+    [string]$UserRepo
 )
+
+# Set up logging - captures all output to a file for diagnosis
+# Log always goes in the install directory (created after clone)
+$script:LogFile = $null
+try {
+    # For fresh installs, create the directory early so logging works
+    if (-not (Test-Path $InstallDir)) {
+        $parentDir = Split-Path $InstallDir -Parent
+        if (-not (Test-Path $parentDir)) {
+            New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+        }
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
+    $script:LogFile = Join-Path $InstallDir "install.log"
+    Start-Transcript -Path $script:LogFile -Append | Out-Null
+    Write-Host "  Logging to: $script:LogFile" -ForegroundColor DarkGray
+} catch {
+    # If transcript fails, try temp as fallback
+    try {
+        $fallbackLog = Join-Path $env:TEMP "glitch-install.log"
+        Start-Transcript -Path $fallbackLog -Append | Out-Null
+        $script:LogFile = $fallbackLog
+        Write-Host "  Logging to: $fallbackLog (install dir not available)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "  (Could not start logging)" -ForegroundColor DarkGray
+    }
+}
+
+# Catch all unhandled errors and log them
+$ErrorActionPreference = "Stop"
+trap {
+    Write-Host "`n  FATAL ERROR: $_" -ForegroundColor Red
+    Write-Host "  Log file: $script:LogFile" -ForegroundColor Yellow
+    Write-Host "  Please share this log file when reporting the issue." -ForegroundColor Yellow
+    try { Stop-Transcript | Out-Null } catch {}
+    return
+}
 
 # Color output helpers
 function Write-Header { param([string]$msg) Write-Host "`n$msg" -ForegroundColor Magenta }
@@ -52,7 +99,7 @@ function Write-Warn   { param([string]$msg) Write-Host "  $msg" -ForegroundColor
 function Write-Error  { param([string]$msg) Write-Host "  $msg" -ForegroundColor Red }
 function Write-Prompt { param([string]$msg) Write-Host "  $msg" -NoNewline -ForegroundColor Cyan }
 
-# ── Spinner helper for long operations ──
+# -- Spinner helper for long operations --
 # Shows a rotating spinner + elapsed seconds while a background job runs.
 # Use $using:varName inside the scriptblock to pass parent variables.
 function Invoke-WithSpinner {
@@ -94,12 +141,13 @@ if ($Help) {
 Glitch AI Installer for Windows
 
 Usage:
-  irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex [-InstallDir <path>] [-NoLaunch] [-Help]
+  irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex [-InstallDir <path>] [-NoLaunch] [-Help] [-UserRepo <url>]
 
 Parameters:
   -InstallDir <path>   Custom install directory (default: $HOME\glitch-ai)
   -NoLaunch            Skip launch prompt after installation
   -Help                Show this help
+  -UserRepo <url>      GitHub user repo URL for profile sync (e.g. https://github.com/user/repo.git)
 
 Prerequisites:
   - Git (auto-downloaded if missing -- portable MinGit ~40 MB)
@@ -113,10 +161,10 @@ Node.js is NOT required - the bootstrap script downloads a portable Node.js bund
 
 # Banner
 Write-Host @"
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                         GLITCH AI INSTALLER (Windows)                        ║
-║                    Personal AI Companion - Persistent Memory                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
++=============================================================================+
+|                         GLITCH AI INSTALLER (Windows)                        |
+|                    Personal AI Companion - Persistent Memory                 |
++=============================================================================+
 "@ -ForegroundColor Magenta
 
 # 1. Check PowerShell version
@@ -125,7 +173,7 @@ $psVersion = $PSVersionTable.PSVersion.Major
 if ($psVersion -lt 5) {
     Write-Error "PowerShell 5.1+ required. Current: $($PSVersionTable.PSVersion)"
     Write-Error "Upgrade: https://github.com/PowerShell/PowerShell/releases"
-    exit 1
+    throw "Installation failed"
 }
 Write-Success "PowerShell $($PSVersionTable.PSVersion) OK"
 
@@ -152,13 +200,39 @@ if (-not $PSBoundParameters.ContainsKey('InstallDir')) {
 }
 Write-Success "Installation directory: $InstallDir"
 
-# 3. Check git — auto-download portable MinGit if missing
+# Move log file to the actual installation directory (if different from default)
+if ($script:LogFile) {
+    $targetLogFile = Join-Path $InstallDir "install.log"
+    if ($script:LogFile -ne $targetLogFile) {
+        try {
+            Stop-Transcript | Out-Null
+        } catch {}
+        try {
+            if (-not (Test-Path $InstallDir)) {
+                $parentDir = Split-Path $InstallDir -Parent
+                if (-not (Test-Path $parentDir)) {
+                    New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+                }
+                New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+            }
+            if (Test-Path $script:LogFile) {
+                Move-Item -Path $script:LogFile -Destination $targetLogFile -Force
+            }
+            $script:LogFile = $targetLogFile
+            Start-Transcript -Path $script:LogFile -Append | Out-Null
+        } catch {
+            # Keep logging to the original location
+        }
+    }
+}
+
+# 3. Check git -- auto-download portable MinGit if missing
 $gitPath = (Get-Command git -ErrorAction SilentlyContinue).Source
 if (-not $gitPath) {
     Write-Warn "Git not found in PATH."
     Write-Step "Downloading MinGit (portable Git for Windows, ~40 MB)..."
     
-    $gitToolsDir = Join-Path $env:LOCALAPPDATA "glitch-mingit"
+    $gitToolsDir = Join-Path $env:TEMP "glitch-mingit"
     $gitBin = Join-Path $gitToolsDir "cmd\git.exe"
     
     if (-not (Test-Path $gitBin)) {
@@ -199,7 +273,7 @@ if (-not $gitPath) {
             Write-Error "Failed to download MinGit: $_"
             Write-Error "Install Git manually from https://git-scm.com/download/win"
             Write-Error "After installing, restart your terminal and re-run the installer."
-            exit 1
+            throw "Installation failed"
         }
     } else {
         Write-Step "MinGit already installed at $gitToolsDir"
@@ -215,56 +289,93 @@ Write-Success "Git found: $gitPath"
 Write-Header "Installation directory: $InstallDir"
 
 if (Test-Path "$InstallDir\.git") {
-    # Existing git repo — offer update
+    # Existing git repo -- offer update
     Write-Warn "Glitch AI already installed at $InstallDir"
     Write-Prompt "Update to latest version? (Y/n): "
     $update = Read-Host
     if ($update -eq '' -or $update -like 'y*') {
         Write-Step "Pulling latest changes..."
         Push-Location $InstallDir
-        $result = git pull --ff-only 2>&1
-        $exitCode = $LASTEXITCODE
-        Pop-Location
-        if ($exitCode -eq 0) {
-            Write-Success "Updated to latest version"
-        } else {
-            Write-Error "Update failed: $result"
+        try {
+            $prevEAP = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
+            $result = git pull --ff-only 2>&1
+            $exitCode = $LASTEXITCODE
+            $ErrorActionPreference = $prevEAP
+            Pop-Location
+            if ($exitCode -eq 0) {
+                Write-Success "Updated to latest version"
+            } else {
+                Write-Error "Update failed: $($result -join "`n")"
+                Write-Warn "You may have local changes. Try: cd $InstallDir && git status"
+                throw "Installation failed"
+            }
+        } catch {
+            $ErrorActionPreference = $prevEAP
+            Pop-Location -ErrorAction SilentlyContinue
+            Write-Error "Update failed: $_"
             Write-Warn "You may have local changes. Try: cd $InstallDir && git status"
-            exit 1
+            throw "Installation failed"
         }
     } else {
         Write-Warn "Skipping update. Using existing installation."
     }
 } elseif (Test-Path $InstallDir) {
-    # Directory exists but not a git repo — ask what to do
-    Write-Warn "Directory '$InstallDir' already exists (not a git repo)."
-    Write-Host ""
-    Write-Host "  [1] Overwrite (delete and re-clone)" -ForegroundColor White
-    Write-Host "  [2] Choose a different directory" -ForegroundColor White
-    Write-Host "  [3] Cancel" -ForegroundColor White
-    Write-Host ""
-    Write-Prompt "  Choose (Enter=3): "
-    $overChoice = Read-Host
-    switch ($overChoice) {
-        '1' {
-            Write-Step "Removing existing directory..."
-            Remove-Item $InstallDir -Recurse -Force
-            Write-Success "Directory cleared."
-            # Now fresh clone below
-        }
-        '2' {
-            $newDir = Read-Host "  Enter new installation path"
-            if (-not [string]::IsNullOrWhiteSpace($newDir)) {
-                $InstallDir = $newDir.Trim()
-                Write-Success "Will install to: $InstallDir"
-            } else {
+    # Check if directory has actual content (not just our log file)
+    $dirHasContent = (Get-ChildItem $InstallDir -Force | Where-Object { $_.Name -ne "install.log" }).Count -gt 0
+    if (-not $dirHasContent) {
+        # Empty or only has our log file - delete so clone can create it fresh
+        Write-Step "Directory exists but is empty. Proceeding with fresh install..."
+        # Stop transcript so install.log isn't locked during delete
+        try { Stop-Transcript | Out-Null } catch {}
+        Remove-Item $InstallDir -Recurse -Force
+        Write-Success "Directory cleared."
+    } else {
+        # Directory exists and has actual content -- ask what to do
+        Write-Warn "Directory '$InstallDir' already exists (not a git repo)."
+        Write-Host ""
+        Write-Host "  [1] Overwrite (delete and re-clone)" -ForegroundColor White
+        Write-Host "  [2] Choose a different directory" -ForegroundColor White
+        Write-Host "  [3] Cancel" -ForegroundColor White
+        Write-Host ""
+        Write-Prompt "  Choose (Enter=3): "
+        $overChoice = Read-Host
+        switch ($overChoice) {
+            '1' {
+                Write-Step "Removing existing directory..."
+                # Stop transcript so install.log isn't locked during delete
+                try { Stop-Transcript | Out-Null } catch {}
+                Remove-Item $InstallDir -Recurse -Force
+                Write-Success "Directory cleared."
+                # Now fresh clone below
+            }
+            '2' {
+                $newDir = Read-Host "  Enter new installation path"
+                if (-not [string]::IsNullOrWhiteSpace($newDir)) {
+                    $InstallDir = $newDir.Trim()
+                    # Restart transcript in new location
+                    try { Stop-Transcript | Out-Null } catch {}
+                    try {
+                        if (-not (Test-Path $InstallDir)) {
+                            New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+                        }
+                        $script:LogFile = Join-Path $InstallDir "install.log"
+                        Start-Transcript -Path $script:LogFile -Append | Out-Null
+                    } catch {
+                        $fallbackLog = Join-Path $env:TEMP "glitch-install.log"
+                        Start-Transcript -Path $fallbackLog -Append | Out-Null
+                        $script:LogFile = $fallbackLog
+                    }
+                    Write-Success "Will install to: $InstallDir"
+                } else {
+                    Write-Warn "Installation cancelled."
+                    exit 0
+                }
+            }
+            default {
                 Write-Warn "Installation cancelled."
                 exit 0
             }
-        }
-        default {
-            Write-Warn "Installation cancelled."
-            exit 0
         }
     }
 }
@@ -275,22 +386,60 @@ if (-not (Test-Path "$InstallDir\.git")) {
     if (-not (Test-Path $parentDir)) {
         New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
     }
-    
+
+    # Track submodule status for end-of-install summary
+    $script:SubmoduleSuccess = @()
+    $script:SubmoduleFailures = @()
+    $script:CloneSucceeded = $false
+
+    # Ensure transcript is active for clone (may have been stopped for overwrite)
+    try {
+        $null = Get-Content $script:LogFile -ErrorAction Stop
+    } catch {
+        $tempLog = Join-Path $env:TEMP "glitch-install.log"
+        Start-Transcript -Path $tempLog -Append | Out-Null
+        $script:LogFile = $tempLog
+        Write-Host "  Logging to: $tempLog (temp)" -ForegroundColor DarkGray
+    }
+
     try {
       Invoke-WithSpinner -Label "Cloning Glitch AI repository" -DoneMessage "Repository" -ScriptBlock {
-        $r = & $using:gitPath clone --recursive https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
+        $r = & $using:gitPath clone https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Clone failed (exit $LASTEXITCODE)`n$r" }
+        $script:CloneSucceeded = $true
       }
       Write-Success "Repository cloned to $InstallDir"
-      if ($Branch -ne "main") {
-          Write-Step "Checking out branch: $Branch..."
-          Push-Location $InstallDir
-          & $gitPath checkout $Branch 2>&1 | Out-Null
-          Pop-Location
-      }
     } catch {
       Write-Error "Clone failed: $_"
       throw "Installation failed"
+    }
+    if ($Branch -ne "main") {
+        Write-Step "Checking out branch: $Branch..."
+        Push-Location $InstallDir
+        & $gitPath checkout $Branch 2>&1 | Out-Null
+        Pop-Location
+    }
+
+    # Initialize submodules individually so one failure doesn't block the others
+    if ($script:CloneSucceeded) {
+        Push-Location $InstallDir
+        try {
+            $initOutput = git submodule init 2>&1
+            if ($LASTEXITCODE -ne 0) {
+                Write-Warn "git submodule init returned non-zero (continuing): $initOutput"
+            }
+        } catch {
+            Write-Warn "git submodule init failed (continuing): $_"
+        }
+
+        # Read submodule list from .gitmodules
+        $rawLines = git config --file .gitmodules --get-regexp path 2>&1
+        $submodules = @()
+        foreach ($line in $rawLines) {
+            if ($line -match 'submodule\..+\.path\s+(.+)') {
+                $submodules += $matches[1].Trim()
+            }
+        }
     }
 }
 
@@ -299,73 +448,182 @@ Write-Header "Running bootstrap (downloads Node.js, OpenCode, Handy, etc.)..."
 $bootstrapPath = "$InstallDir\scripts\bootstrap.ps1"
 if (-not (Test-Path $bootstrapPath)) {
     Write-Error "bootstrap.ps1 not found at $bootstrapPath"
-    exit 1
+    throw "Installation failed"
 }
 
 Push-Location $InstallDir
 Write-Step "Executing bootstrap.ps1..."
-& .\scripts\bootstrap.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\bootstrap.ps1"
 $bootstrapExit = $LASTEXITCODE
 Pop-Location
 
 if ($bootstrapExit -ne 0) {
     Write-Error "Bootstrap failed with exit code $bootstrapExit"
-    exit 1
+    throw "Installation failed"
 }
 Write-Success "Bootstrap completed successfully"
 
 # 5. User profile setup
 Write-Header "User Profile Setup"
-Write-Host "Glitch AI stores your personal memory, preferences, and projects in a separate Git repo."
-Write-Host "This lets you sync your AI companion across machines via GitHub."
-Write-Host ""
-Write-Prompt "Set up user profile from GitHub? (Y/n): "
-$setupProfile = Read-Host
-if ($setupProfile -eq '' -or $setupProfile -like 'y*') {
-    Write-Prompt "GitHub username (your GitHub handle): "
-    $ghUser = Read-Host
-    if ($ghUser) {
-        Write-Prompt "Repository name (default: glitch-user-$ghUser): "
-        $repoName = Read-Host
-        if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
-        
-        $userDir = "$InstallDir\user"
-        if (Test-Path "$userDir\.git") {
-            Write-Warn "User profile already exists at $userDir"
-        } else {
-            Write-Step "Initializing user profile..."
-            if (-not (Test-Path $userDir)) {
-                New-Item -ItemType Directory -Path $userDir -Force | Out-Null
-            }
-            Push-Location $userDir
-            git init | Out-Null
-            # Detect what branch git init created (reflects user's init.defaultBranch setting)
-            $localBranch = git rev-parse --abbrev-ref HEAD
-            git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
-            # Try to detect remote's default branch
-            $remoteHead = git ls-remote --symref origin HEAD 2>$null
-            if ($remoteHead -match 'ref: refs/heads/(\S+)') {
-                $defaultBranch = $matches[1]
-                # Rename local branch to match remote if needed
-                if ($localBranch -ne $defaultBranch) {
-                    git branch -m $defaultBranch 2>&1 | Out-Null
-                }
-                # Pull from remote
-                $pullResult = git pull origin $defaultBranch --allow-unrelated-histories 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Success "User profile pulled from GitHub"
-                    git branch --set-upstream-to="origin/$defaultBranch" $defaultBranch 2>&1 | Out-Null
-                } else {
-                    Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
-                    Write-Host "  Your memory will be saved locally and can be pushed later with: .\scripts\sync-user.ps1 -Push"
-                }
-            } else {
-                Write-Warn "No existing profile on GitHub. Starting fresh."
-                Write-Host "  Your memory will be saved locally and can be pushed later with: .\scripts\sync-user.ps1 -Push"
-            }
-            Pop-Location
+
+$userDir = "$InstallDir\user"
+$userProfileExists = Test-Path "$userDir\main-memory.md"
+
+# First: check if they have an existing GitHub profile to clone
+$ghUser = $null
+$repoName = $null
+$cloneAttempted = $false
+
+if ($UserRepo) {
+    $parsed = $UserRepo -replace 'https?://github\.com/', '' -replace '\.git$', ''
+    $parts = $parsed -split '/'
+    if ($parts.Count -eq 2) {
+        $ghUser = $parts[0]
+        $repoName = $parts[1]
+        $cloneAttempted = $true
+        Write-Host "  Using specified user repo: $ghUser/$repoName" -ForegroundColor Cyan
+    } else {
+        Write-Warn "Could not parse UserRepo URL: $UserRepo"
+    }
+} else {
+    # Always ask about GitHub profile connection
+    Write-Host ""
+    Write-Host "Do you have an existing Glitch user profile on GitHub?" -ForegroundColor White
+    Write-Host "  (If not, you can set this up later inside Glitch.)" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Prompt "Connect existing profile from GitHub? (y/N): "
+    $syncProfile = Read-Host
+    if ($syncProfile -like 'y*') {
+        Write-Prompt "GitHub username: "
+        $ghUser = Read-Host
+        if ($ghUser) {
+            Write-Prompt "Repository name (default: glitch-user-$ghUser): "
+            $repoName = Read-Host
+            if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
+            $cloneAttempted = $true
         }
     }
+}
+
+# Try to clone existing profile if requested
+if ($cloneAttempted -and $ghUser -and $repoName) {
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        Write-Step "Connecting to $ghUser/$repoName..."
+
+        # Clear user dir for clean clone
+        if (Test-Path $userDir) {
+            Remove-Item "$userDir\*" -Recurse -Force -ErrorAction SilentlyContinue
+        }
+        if (-not (Test-Path $userDir)) {
+            New-Item -ItemType Directory -Path $userDir -Force | Out-Null
+        }
+
+        # Clone straight into user dir
+        # GCM should handle auth with a browser popup
+        $cloneOutput = git clone "https://github.com/$ghUser/$repoName.git" "$userDir" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "Profile downloaded from GitHub"
+        } else {
+            # Clone failed - offer PAT as fallback
+            Write-Warn "  Could not access $ghUser/$repoName."
+            Write-Host ""
+            Write-Host "  The repository may be private or require authentication." -ForegroundColor Yellow
+            Write-Host "  Git Credential Manager was installed earlier in this setup." -ForegroundColor Yellow
+            Write-Host "  A browser window should open for you to log into GitHub." -ForegroundColor Yellow
+            Write-Host "  If that didn't work, you can use a Personal Access Token." -ForegroundColor Yellow
+            Write-Host ""
+            Write-Prompt "  Enter GitHub Personal Access Token (or press Enter to skip): "
+            $ghToken = Read-Host
+            if ($ghToken) {
+                # Clean failed clone first
+                Remove-Item "$userDir\*" -Recurse -Force -ErrorAction SilentlyContinue
+                git clone "https://$ghUser`:$ghToken@github.com/$ghUser/$repoName.git" "$userDir" 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "Profile downloaded from GitHub"
+                } else {
+                    Write-Warn "  Still could not connect."
+                    $cloneAttempted = $false
+                }
+            } else {
+                $cloneAttempted = $false
+            }
+        }
+    } catch {
+        Write-Warn "  Profile connection failed: $_"
+        $cloneAttempted = $false
+    } finally {
+        $ErrorActionPreference = $prevEAP
+    }
+}
+
+# If no clone was attempted or it failed, create local starter files
+if (-not $cloneAttempted -or -not (Test-Path "$userDir\main-memory.md")) {
+    if (-not (Test-Path $userDir)) {
+        New-Item -ItemType Directory -Path $userDir -Force | Out-Null
+    }
+
+    $needsStarter = -not (Test-Path "$userDir\main-memory.md")
+    if ($needsStarter) {
+        Write-Step "Creating local user profile..."
+
+        $starterMemory = @"
+---
+type: UserProfile
+title: Main Memory
+description: Your personal profile and preferences
+tags: [user, profile]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+# Main Memory
+## User Profile
+*To be filled in through interaction with Glitch*
+"@
+        Set-Content -LiteralPath "$userDir\main-memory.md" -Value $starterMemory -Encoding UTF8
+
+        $starterSession = @"
+---
+type: SessionMemory
+title: Current Session Memory
+tags: [session, ram]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+# Current Session Memory
+## Session Recap
+*First session with Glitch*
+"@
+        Set-Content -LiteralPath "$userDir\current-session.md" -Value $starterSession -Encoding UTF8
+
+        $starterReminders = @"
+---
+type: ReminderLog
+title: Reminders
+description: Cross-session reminders
+tags: [reminders]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+# Reminders
+"@
+        Set-Content -LiteralPath "$userDir\reminders.md" -Value $starterReminders -Encoding UTF8
+
+        Write-Success "User profile created at $userDir"
+    } else {
+        Write-Success "User profile already exists at $userDir"
+    }
+}
+
+# Show next steps for GitHub sync
+if ($cloneAttempted -and -not (Test-Path "$userDir\.git")) {
+    Write-Host ""
+    Write-Host "  To connect your profile to GitHub later, start Glitch and say:" -ForegroundColor Cyan
+    Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
+    Write-Host ""
+} elseif (-not $cloneAttempted) {
+    Write-Host ""
+    Write-Host "  Profile is local-only. To sync with GitHub later, start Glitch and say:" -ForegroundColor Cyan
+    Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
+    Write-Host ""
 }
 
 # 6. Verify installation
@@ -379,7 +637,7 @@ Pop-Location
 
 if ($checkExit -ne 0) {
     Write-Warn "Some checks did not pass. Review the report above for details."
-    Write-Warn "Items marked with ✗ under 'Core' indicate critical issues."
+    Write-Warn "Items marked with [X] under 'Core' indicate critical issues."
 }
 
 # 7. Launch
@@ -391,7 +649,7 @@ if (-not $NoLaunch) {
         Write-Step "Starting Glitch AI..."
         Push-Location $InstallDir
         # Use Start-Process to launch in a new window (detached)
-        $proc = Start-Process -FilePath "launch-glitch.bat" -WindowStyle Normal -PassThru
+        $proc = Start-Process -FilePath "launch-glitch.bat" -ArgumentList "--mode normal-paid" -WindowStyle Normal -PassThru
         Write-Success "Glitch AI launched (PID: $($proc.Id))"
         Write-Host ""
         Write-Host "  To launch again later, run:" -ForegroundColor Cyan
@@ -401,17 +659,30 @@ if (-not $NoLaunch) {
     }
 }
 
+# Summary of any install issues (shown only if something failed)
+if ($script:SubmoduleFailures.Count -gt 0) {
+    Write-Host ""
+    Write-Host "  WARNING: Some components couldn't be downloaded during install." -ForegroundColor Yellow
+    Write-Host "    Issues logged to: $InstallDir\data\install-issues.md" -ForegroundColor Yellow
+    Write-Host "    Glitch will review and attempt to fix these on first launch." -ForegroundColor Yellow
+    Write-Host "    Manual fix: cd $InstallDir && git submodule update --init --recursive" -ForegroundColor Yellow
+    Write-Host ""
+}
+
 Write-Header "Installation Complete!"
 Write-Host @"
 Glitch AI is installed at: $InstallDir
 
 Next steps:
-  • Launch:        cd $InstallDir && .\launch-glitch.bat
-  • Free mode:     cd $InstallDir && .\launch-glitch.bat (select Free at prompt)
-  • Local mode:    cd $InstallDir && .\launch-glitch.bat (select Local at prompt)
-  • Safe mode:     cd $InstallDir && .\launch-glitch.bat (select Safe at prompt)
-  • Update:        Re-run this installer (it will pull latest)
-  • User sync:     .\scripts\sync-user.ps1 -Push  (after making changes)
+  * Launch:        cd $InstallDir && .\launch-glitch.bat
+  * Free mode:     cd $InstallDir && .\launch-glitch.bat (select Free at prompt)
+  * Local mode:    cd $InstallDir && .\launch-glitch.bat (select Local at prompt)
+  * Safe mode:     cd $InstallDir && .\launch-glitch.bat (select Safe at prompt)
+  * Update:        Re-run this installer (it will pull latest)
+  * User sync:     .\scripts\sync-user.ps1 -Push  (after making changes)
 
 Documentation: https://github.com/Cothek/glitch-ai
 "@ -ForegroundColor Green
+
+# Stop logging
+try { Stop-Transcript | Out-Null } catch {}

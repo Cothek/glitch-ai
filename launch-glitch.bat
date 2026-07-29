@@ -23,11 +23,27 @@ if exist "%~dp0data\node\node.exe" (
   set "PATH=%~dp0data\node;%PATH%"
 )
 
+REM Add bundled MinGit to PATH if present
+if exist "%~dp0data\mingit\cmd\git.exe" (
+  set "PATH=%~dp0data\mingit\cmd;%PATH%"
+)
+
 if exist "%~dp0glitch-head.txt" powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
 echo.
-"%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %*
-if %errorlevel% neq 0 (
+set "LOG_FILE=%~dp0data\launch.log"
+if not exist "%~dp0data" mkdir "%~dp0data"
+echo [%date% %time%] Glitch starting... > "%LOG_FILE%"
+REM Run node script, capture output to temp file for log + exit code
+"%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %* > "%TEMP%\glitch-launch-output.txt" 2>&1
+set "NODE_EXIT=%errorlevel%"
+type "%TEMP%\glitch-launch-output.txt"
+powershell -NoProfile -Command "Get-Content '%TEMP%\glitch-launch-output.txt' | ForEach-Object { $_ -replace '\x1b\[[\d;?]*[a-zA-Z]','' -replace '[^\x20-\x7E\r\n]','' } | Out-File -FilePath '%LOG_FILE%' -Append"
+del "%TEMP%\glitch-launch-output.txt" 2>nul
+if %NODE_EXIT% neq 0 (
+    echo.
+    echo Glitch exited with code %NODE_EXIT%. Log saved to: %LOG_FILE%
     echo.
     echo Press any key to exit...
     pause > nul
 )
+exit /b %NODE_EXIT%

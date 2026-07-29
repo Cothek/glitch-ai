@@ -11,7 +11,7 @@ $HandyDir = "$RootDir\handy-voice\Handy"
 $HandyBin = "$HandyDir\handy.exe"
 $CloudflaredBin = "$RootDir\cloudflared.exe"
 
-# ── Spinner helper for long operations ──
+# -- Spinner helper for long operations --
 # Shows a rotating spinner + elapsed seconds while a background job runs.
 # Use $using:varName inside the scriptblock to pass parent variables.
 function Invoke-WithSpinner {
@@ -53,7 +53,7 @@ $ErrorActionPreference = "Continue"
 # Redirect all script output to a log file too
 Start-Transcript -Path $LogFile -Append | Out-Null
 
-# ── Detect architecture ──
+# -- Detect architecture --
 $isArm = (Get-CimInstance Win32_Processor).Architecture -eq 5
 $archSuffix = if ($isArm) { "arm64" } else { "x64" }
 
@@ -64,7 +64,7 @@ Write-Host ""
 $failures = @()
 $criticalFailures = @()
 
-# ── Step 1: Node.js (portable bundled — always installed) ──
+# -- Step 1: Node.js (portable bundled -- always installed) --
 $BundledNodeDir = "$RootDir\data\node"
 $NodeBin = "$BundledNodeDir\node.exe"
 
@@ -85,10 +85,8 @@ if (-not $needsDownload) {
 if ($needsDownload) {
   Write-Host "  Checking latest LTS version..." -ForegroundColor Yellow
   try {
-    Invoke-WithSpinner -Label "Checking latest Node.js version" -ScriptBlock {
-        $script:json = Invoke-WebRequest -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
-    }
-    $releases = $json | ConvertFrom-Json
+    $response = Invoke-WebRequest -Uri "https://nodejs.org/dist/index.json" -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
+    $releases = $response.Content | ConvertFrom-Json
     $latestLTS = ($releases | Where-Object { $_.lts -ne $false } | Select-Object -First 1)
     $latestVer = if ($latestLTS -and $latestLTS.version) { $latestLTS.version } else { "v22.14.0" }
   } catch {
@@ -108,7 +106,7 @@ if ($needsDownload) {
       $zipPath = Join-Path $zipDir "node-portable.zip"
 
       Invoke-WithSpinner -Label "Downloading Node.js $latestVer" -ScriptBlock {
-        Invoke-WebRequest -Uri $using:zipUrl -OutFile $using:zipPath -UseBasicParsing
+        Invoke-WebRequest -Uri $using:zipUrl -OutFile $using:zipPath -UseBasicParsing -TimeoutSec 120
       }
 
       $extractDir = "$env:TEMP\node-extracted"
@@ -150,17 +148,17 @@ if (Test-Path $NodeBin) {
   Write-Host "  (using system Node.js)" -ForegroundColor DarkGreen
 }
 
-# ── Step 2: Git Submodules ──
+# -- Step 2: Git Submodules --
 Write-Host "[2/5] Initializing git submodules..." -ForegroundColor Cyan
 try {
   Invoke-WithSpinner -Label "Initializing git submodules" -DoneMessage "Submodules" -ScriptBlock {
-    git submodule update --init --recursive 2>&1 | Out-Null
+    git -C "$using:RootDir" submodule update --init --recursive 2>&1 | Out-Null
   }
 } catch {
   Write-Host "  Skipping submodules (not a git repo or git not available)" -ForegroundColor Yellow
 }
 
-# ── Step 3: OpenCode ──
+# -- Step 3: OpenCode --
 $stepOk = $true
 if (-not (Test-Path $OpenCodeBin) -or $Force) {
   Write-Host "[3/5] Installing OpenCode..." -ForegroundColor Cyan
@@ -188,7 +186,7 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
       $tgzPath = "$env:TEMP\opencode.tgz"
       Write-Host "  Downloading opencode $opencodeVersion..." -ForegroundColor Yellow
       Invoke-WithSpinner -Label "Downloading opencode $opencodeVersion" -ScriptBlock {
-        Invoke-WebRequest -Uri $using:tgzUrl -OutFile $using:tgzPath -UseBasicParsing
+        Invoke-WebRequest -Uri $using:tgzUrl -OutFile $using:tgzPath -UseBasicParsing -TimeoutSec 120
       }
 
       Invoke-WithSpinner -Label "Extracting opencode" -ScriptBlock {
@@ -218,7 +216,7 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
   Write-Host "[3/5] OpenCode found" -ForegroundColor DarkGreen
 }
 
-# ── Step 4: Handy ──
+# -- Step 4: Handy --
 $handyVersion = "0.8.3"
 $handyArch = if ($isArm) { "arm64" } else { "x64" }
 $handySize = 105925408
@@ -241,7 +239,7 @@ if ($needsInstall) {
       $setupPath = "$env:TEMP\Handy_setup.exe"
       $extractDir = "$env:TEMP\Handy_tmp"
       Invoke-WithSpinner -Label "Downloading Handy v$handyVersion" -ScriptBlock {
-        Invoke-WebRequest -Uri $using:setupUrl -OutFile $using:setupPath -UseBasicParsing
+        Invoke-WebRequest -Uri $using:setupUrl -OutFile $using:setupPath -UseBasicParsing -TimeoutSec 120
       }
       $7z = Get-Command "7z" -ErrorAction SilentlyContinue
       if ($7z) {
@@ -261,7 +259,7 @@ if ($needsInstall) {
           $extractDir = "$env:TEMP\Handy_exe"
           New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
           Invoke-WithSpinner -Label "Downloading Handy MSI" -ScriptBlock {
-            Invoke-WebRequest -Uri $using:msiUrl -OutFile $using:msiPath -UseBasicParsing
+            Invoke-WebRequest -Uri $using:msiUrl -OutFile $using:msiPath -UseBasicParsing -TimeoutSec 120
           }
           Write-Host "  Extracting via MSI..." -ForegroundColor Yellow
           Start-Process -FilePath "msiexec" -ArgumentList "/a `"$msiPath`" /qn TARGETDIR=`"$extractDir`"" -Wait
@@ -293,7 +291,7 @@ if ($needsInstall) {
   Write-Host "[4/5] Handy found" -ForegroundColor DarkGreen
 }
 
-# ── Step 5: Cloudflare Tunnel (standalone EXE, no admin needed) ──
+# -- Step 5: Cloudflare Tunnel (standalone EXE, no admin needed) --
 if (-not (Test-Path $CloudflaredBin) -or $Force) {
   Write-Host "[5/5] Installing Cloudflare Tunnel..." -ForegroundColor Cyan
   try {
@@ -304,7 +302,7 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
       Write-Host "  Downloading cloudflared.exe..." -ForegroundColor Yellow
       $exeUrl = "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
       Invoke-WithSpinner -Label "Downloading cloudflared" -ScriptBlock {
-        Invoke-WebRequest -Uri $using:exeUrl -OutFile $using:CloudflaredBin -UseBasicParsing
+        Invoke-WebRequest -Uri $using:exeUrl -OutFile $using:CloudflaredBin -UseBasicParsing -TimeoutSec 120
       }
       Write-Host "  cloudflared ready!" -ForegroundColor Green
     }
@@ -317,7 +315,7 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
   Write-Host "[5/5] cloudflared found" -ForegroundColor DarkGreen
 }
 
-# ── Summary ──
+# -- Summary --
 Write-Host ""
 Write-Host "=== Glitch Bootstrap Complete ===" -ForegroundColor Magenta
 

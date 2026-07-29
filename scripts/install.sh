@@ -12,23 +12,44 @@ set -euo pipefail
 # Default values
 INSTALL_DIR="${1:-$HOME/glitch-ai}"
 NO_LAUNCH=false
+USER_REPO=""
+
+# Set up logging - captures all output to a file for diagnosis
+LOG_FILE=""
+setup_logging() {
+    LOG_FILE="$INSTALL_DIR/install.log"
+    mkdir -p "$INSTALL_DIR" 2>/dev/null || {
+        LOG_FILE="/tmp/glitch-install.log"
+    }
+    exec > >(tee -a "$LOG_FILE") 2>&1
+    echo "=== Install started: $(date) ==="
+}
+setup_logging
+
+# Catch errors and show log location
+trap 'echo ""; echo "  FATAL ERROR: Line $LINENO"; echo "  Log file: $LOG_FILE"; echo "  Please share this log file when reporting the issue."; exit 1' ERR
+
+INSTALL_ISSUES=false
 
 # Parse arguments
 for arg in "$@"; do
     case "$arg" in
         --no-launch) NO_LAUNCH=true ;;
+        --user-repo) ;; # handled by next iteration
+        --user-repo=*) USER_REPO="${arg#*=}" ;;
         --help|-h)
             cat <<'EOF'
 Glitch AI Installer for macOS/Linux
 
 Usage:
-  curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch]
-  wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch]
+  curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>]
+  wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>]
 
 Arguments:
-  install_dir    Custom install directory (default: $HOME/glitch-ai)
-  --no-launch    Skip launch prompt after installation
-  --help, -h     Show this help
+  install_dir              Custom install directory (default: $HOME/glitch-ai)
+  --no-launch              Skip launch prompt after installation
+  --user-repo <url>        GitHub user repo URL for profile sync (e.g. https://github.com/user/repo.git)
+  --help, -h               Show this help
 
 Prerequisites:
   - git
@@ -39,8 +60,14 @@ Node.js is NOT required - the launch scripts handle everything.
 EOF
             exit 0
             ;;
-        *) ;; # ignore unknown args (first positional is install_dir)
+        *)
+            # Check if previous arg was --user-repo
+            if [ "${PREV_ARG:-}" = "--user-repo" ]; then
+                USER_REPO="$arg"
+            fi
+            ;;
     esac
+    PREV_ARG="$arg"
 done
 
 # Color codes (ANSI)
@@ -60,10 +87,6 @@ warn()   { printf "  ${YELLOW}%s${NC}\n" "$1"; }
 error()  { printf "  ${RED}%s${NC}\n" "$1" >&2; }
 prompt() { printf "  ${CYAN}%s${NC}" "$1"; }
 
-# ── Spinner helper for long operations ──
-# Shows a rotating spinner + elapsed seconds while running a command.
-# Usage: spinner "Label" command arg1 arg2 ...
-# Exit code: returns the command's exit code (caller should handle errors)
 # ── Spinner helper for long operations ──
 # Shows a rotating spinner + elapsed seconds while running a command.
 # Captures stdout+stderr to a temp file shown on failure.
@@ -294,11 +317,80 @@ if [ ! -d "$INSTALL_DIR/.git" ]; then
     parent_dir="$(dirname "$INSTALL_DIR")"
     mkdir -p "$parent_dir" 2>/dev/null || true
     
-    if spinner "Cloning Glitch AI repository" git clone --recursive https://github.com/Cothek/glitch-ai.git "$INSTALL_DIR"; then
+    # Two-step clone: repo first, submodules individually so one failure doesn't kill install
+    if spinner "Cloning Glitch AI repository" git clone https://github.com/Cothek/glitch-ai.git "$INSTALL_DIR"; then
         success "Repository cloned to $INSTALL_DIR"
     else
         error "Clone failed"
         exit 1
+    fi
+    
+    # Initialize submodules individually - failures are logged, not fatal
+    ISSUE_FILE="$INSTALL_DIR/data/install-issues.md"
+    mkdir -p "$INSTALL_DIR/data"
+    
+    cd "$INSTALL_DIR" || exit 1
+    
+    echo ""
+    step "Initializing submodules..."
+    
+    # Init submodule registry (non-fatal)
+    git submodule init 2>&1 | sed 's/^/    /' || true
+    
+    # Track each submodule's status
+    SUBMODULE_OK=()
+    SUBMODULE_FAILED=()
+    
+    # Read submodule list from .gitmodules (authoritative source)
+    submodules=()
+    while IFS= read -r line; do
+        submodules+=("$line")
+    done < <(git config --file .gitmodules --get-regexp path | awk '{print $2}')
+
+    if [ ${#submodules[@]} -eq 0 ]; then
+        warn "No submodules found in .gitmodules"
+    else
+        for submodule in "${submodules[@]}"; do
+            echo ""
+            step "Updating submodule: $submodule"
+            # Use if/then so set -e doesn't kill the script on a single submodule failure
+            if git submodule update --init "$submodule" > /tmp/glitch-sub-err.tmp 2>&1; then
+                success "  $submodule: OK"
+                SUBMODULE_OK+=("$submodule")
+            else
+                SUBMODULE_EXIT=$?
+                SUBMODULE_OUTPUT=$(cat /tmp/glitch-sub-err.tmp)
+                warn "  $submodule: FAILED"
+                echo "$SUBMODULE_OUTPUT" | sed 's/^/    /'
+                SUBMODULE_FAILED+=("$submodule")
+                INSTALL_ISSUES=true
+
+                # Log to install-issues.md
+                {
+                    echo ""
+                    echo "## Install Issue - $(date '+%Y-%m-%d %H:%M:%S')"
+                    echo "- **Subsystem**: Submodule clone"
+                    echo "- **Component**: $submodule"
+                    echo "- **Error**:"
+                    echo '```'
+                    echo "$SUBMODULE_OUTPUT"
+                    echo '```'
+                    echo "- **Impact**: Some memory/skill files may be missing until resolved"
+                    echo "- **Fix**: Tell Glitch \"check install issues\" or run: cd $INSTALL_DIR && git submodule update --init --recursive"
+                    echo ""
+                } >> "$ISSUE_FILE"
+            fi
+            rm -f /tmp/glitch-sub-err.tmp
+        done
+    fi
+    
+    echo ""
+    if [ "$INSTALL_ISSUES" = false ]; then
+        success "All submodules initialized successfully"
+    else
+        warn "Some submodules failed to clone (see above)"
+        warn "Issues logged to: $ISSUE_FILE"
+        warn "Glitch will attempt to fix these on first launch."
     fi
 fi
 
@@ -381,46 +473,65 @@ DASHEOF
 success "Local user profile created at $USER_DIR"
 
 # Optional: sync with GitHub for cross-machine access
-prompt "Sync this profile with a GitHub repository? (Y/n): "
-read -r setup_profile </dev/tty
-if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
-    prompt "GitHub username (your GitHub handle): "
-    read -r gh_user </dev/tty
-    if [ -n "$gh_user" ]; then
-        prompt "Repository name (default: glitch-user-$gh_user): "
-        read -r repo_name </dev/tty
-        [ -z "$repo_name" ] && repo_name="glitch-user-$gh_user"
+SHOULD_SYNC=false
+GH_USER=""
+REPO_NAME=""
 
-        cd "$USER_DIR"
-        git init >/dev/null
-        git add -A >/dev/null
-        git commit -m "initial user profile" >/dev/null 2>&1 || true
-        local_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
-        git remote add origin "https://github.com/$gh_user/$repo_name.git" 2>/dev/null
-
-        # Try to detect remote's default branch
-        remote_head=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
-        if [ -n "$remote_head" ]; then
-            default_branch="$remote_head"
-            if [ "$local_branch" != "$default_branch" ]; then
-                git branch -m "$default_branch" 2>/dev/null
-            fi
-            if git pull origin "$default_branch" --allow-unrelated-histories 2>/dev/null; then
-                success "User profile synced from GitHub"
-                git branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null
-            else
-                warn "Remote repository not found (or pull failed)."
-                echo "  Local profile ready. Push later:"
-                echo "    cd $USER_DIR && git push -u origin $default_branch"
-            fi
+if [ -n "$USER_REPO" ]; then
+    # Parse URL: https://github.com/user/repo.git or user/repo
+    PARSED=$(echo "$USER_REPO" | sed 's|https\?://github\.com/||' | sed 's|\.git$||')
+    GH_USER=$(echo "$PARSED" | cut -d'/' -f1)
+    REPO_NAME=$(echo "$PARSED" | cut -d'/' -f2)
+    if [ -n "$GH_USER" ] && [ -n "$REPO_NAME" ]; then
+        SHOULD_SYNC=true
+        step "Using specified user repo: $GH_USER/$REPO_NAME"
+    else
+        warn "Could not parse --user-repo URL: $USER_REPO"
+        warn "Expected format: https://github.com/username/repo.git"
+    fi
+else
+    prompt "Sync this profile with a GitHub repository? (Y/n): "
+    read -r setup_profile </dev/tty
+    if [ -z "$setup_profile" ] || [[ "$setup_profile" =~ ^[Yy] ]]; then
+        SHOULD_SYNC=true
+        prompt "GitHub username (your GitHub handle): "
+        read -r GH_USER </dev/tty
+        if [ -n "$GH_USER" ]; then
+            prompt "Repository name (default: glitch-user-$GH_USER): "
+            read -r REPO_NAME </dev/tty
+            [ -z "$REPO_NAME" ] && REPO_NAME="glitch-user-$GH_USER"
         else
-            warn "Remote not found. Profile is local-only."
-            echo "  Push later:"
-            echo "    cd $USER_DIR && git push -u origin $local_branch"
+            SHOULD_SYNC=false
+        fi
+    fi
+fi
+
+if [ "$SHOULD_SYNC" = true ] && [ -n "$GH_USER" ]; then
+    cd "$USER_DIR"
+    git init >/dev/null
+    git add -A >/dev/null
+    git commit -m "initial user profile" >/dev/null 2>&1 || true
+    local_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
+    git remote add origin "https://github.com/$GH_USER/$REPO_NAME.git" 2>/dev/null
+
+    remote_head=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
+    if [ -n "$remote_head" ]; then
+        default_branch="$remote_head"
+        if [ "$local_branch" != "$default_branch" ]; then
+            git branch -m "$default_branch" 2>/dev/null
+        fi
+        if git pull origin "$default_branch" --allow-unrelated-histories 2>/dev/null; then
+            success "User profile synced from GitHub"
+            git branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null
+        else
+            warn "Remote repository not found (or pull failed)."
+            echo "  Local profile ready. Push later:"
+            echo "    cd $USER_DIR && git push -u origin $default_branch"
         fi
     else
-        echo "  No GitHub username entered. Profile stays local-only."
-        echo "  To sync later: cd $USER_DIR && git init && git remote add origin <url> && git push"
+        warn "Remote not found. Profile is local-only."
+        echo "  Push later:"
+        echo "    cd $USER_DIR && git push -u origin $local_branch"
     fi
 else
     echo "  Profile stays local-only (no GitHub sync)."
@@ -534,6 +645,15 @@ if [ "$NO_LAUNCH" = false ]; then
 fi
 
 # Completion
+if [ "$INSTALL_ISSUES" = true ]; then
+    echo ""
+    warn "Some components couldn't be downloaded during install."
+    warn "  Issues logged to: $INSTALL_DIR/data/install-issues.md"
+    warn "  Glitch will review and attempt to fix these on first launch."
+    warn "  Manual fix: cd $INSTALL_DIR && git submodule update --init --recursive"
+    echo ""
+fi
+
 header "Installation Complete!"
 cat <<EOF
 Glitch AI is installed at: $INSTALL_DIR

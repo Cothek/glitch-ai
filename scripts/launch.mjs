@@ -252,7 +252,7 @@ async function checkAndSwitchToMain() {
     return;
   }
 
-  const branch = run(GIT_BIN, ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
+  const branch = run(GIT_BIN, ['symbolic-ref', '--short', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
   if (!branch.success) return;
   const current = branch.stdout.trim();
   if (current === 'main') {
@@ -669,8 +669,9 @@ async function main() {
     if (!globalVer.success) {
       log(DARK_YELLOW, '  npm not available, skipping opencode update check');
     } else {
-      const currentGlobal = run(OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode', ['--version'], { timeout: 10000 });
-      const currentVer = currentGlobal.success ? currentGlobal.stdout : 'unknown';
+      const globalBinName = OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode';
+      const whichResult = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+      const currentVer = whichResult.success ? run(globalBinName, ['--version'], { timeout: 10000 }).stdout : 'unknown';
 
       const npmView = run(NPM_BIN, ['view', 'opencode-ai', 'version'], { timeout: 15000 });
       const latestVer = npmView.success ? npmView.stdout : 'unknown';
@@ -685,7 +686,8 @@ async function main() {
         if (autoSafe) {
           log(CYAN, '  Updating opencode (' + currentVer + ' -> ' + latestVer + ')...');
           run(NPM_BIN, ['install', '-g', 'opencode-ai@latest'], { stdio: 'inherit', timeout: 60000 });
-          const updatedVer = run(OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode', ['--version'], { timeout: 10000 });
+          const whichResult2 = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+          const updatedVer = whichResult2.success ? run(globalBinName, ['--version'], { timeout: 10000 }) : { success: false };
           log(GREEN, '  Done. Version: ' + (updatedVer.success ? updatedVer.stdout : currentVer));
 
           // Sync local binary from updated global install

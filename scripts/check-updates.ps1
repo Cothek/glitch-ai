@@ -100,8 +100,8 @@ function Get-CurrentBranch {
   param([string]$WorkDir)
   Push-Location $WorkDir
   try {
-    $branch = (& "git" "rev-parse" "--abbrev-ref" "HEAD" 2>$null).Trim()
-    if ($branch -eq "HEAD") { $branch = "detached" }
+    $branch = (& "git" "branch" "--show-current" 2>$null).Trim()
+    if ([string]::IsNullOrWhiteSpace($branch)) { $branch = "detached" }
     return $branch
   } catch { return $null }
   finally { Pop-Location }
