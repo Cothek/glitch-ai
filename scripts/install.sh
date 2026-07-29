@@ -14,16 +14,17 @@ INSTALL_DIR="${1:-$HOME/glitch-ai}"
 NO_LAUNCH=false
 USER_REPO=""
 
-# Set up logging
+# Set up logging - captures all output to a file for diagnosis
 LOG_FILE=""
 setup_logging() {
-    local log_dir="${1:-$HOME/glitch-install}"
-    mkdir -p "$log_dir" 2>/dev/null || log_dir="/tmp"
-    LOG_FILE="$log_dir/install.log"
+    LOG_FILE="$INSTALL_DIR/install.log"
+    mkdir -p "$INSTALL_DIR" 2>/dev/null || {
+        LOG_FILE="/tmp/glitch-install.log"
+    }
     exec > >(tee -a "$LOG_FILE") 2>&1
     echo "=== Install started: $(date) ==="
 }
-setup_logging "$HOME/glitch-install"
+setup_logging
 
 # Catch errors and show log location
 trap 'echo ""; echo "  FATAL ERROR: Line $LINENO"; echo "  Log file: $LOG_FILE"; echo "  Please share this log file when reporting the issue."; exit 1' ERR

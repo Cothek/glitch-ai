@@ -49,17 +49,30 @@ param(
 )
 
 # Set up logging - captures all output to a file for diagnosis
+# Log always goes in the install directory (created after clone)
 $script:LogFile = $null
 try {
-    # Determine log location: use InstallDir if it exists, else temp
-    $logDir = if (Test-Path $InstallDir) { $InstallDir } else { "$env:TEMP\glitch-install" }
-    if (-not (Test-Path $logDir)) { New-Item -ItemType Directory -Path $logDir -Force | Out-Null }
-    $script:LogFile = Join-Path $logDir "install.log"
+    # For fresh installs, create the directory early so logging works
+    if (-not (Test-Path $InstallDir)) {
+        $parentDir = Split-Path $InstallDir -Parent
+        if (-not (Test-Path $parentDir)) {
+            New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+        }
+        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+    }
+    $script:LogFile = Join-Path $InstallDir "install.log"
     Start-Transcript -Path $script:LogFile -Append | Out-Null
     Write-Host "  Logging to: $script:LogFile" -ForegroundColor DarkGray
 } catch {
-    # If transcript fails, continue without logging
-    Write-Host "  (Could not start logging: $_)" -ForegroundColor DarkGray
+    # If transcript fails, try temp as fallback
+    try {
+        $fallbackLog = Join-Path $env:TEMP "glitch-install.log"
+        Start-Transcript -Path $fallbackLog -Append | Out-Null
+        $script:LogFile = $fallbackLog
+        Write-Host "  Logging to: $fallbackLog (install dir not available)" -ForegroundColor DarkGray
+    } catch {
+        Write-Host "  (Could not start logging)" -ForegroundColor DarkGray
+    }
 }
 
 # Catch all unhandled errors and log them
