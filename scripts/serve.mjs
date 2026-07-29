@@ -534,8 +534,9 @@ async function main() {
 
   // ---- Auto-update opencode to latest (minor/patch) + sync local binary ----
   try {
-    const globalVer = run(OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode', ['--version'], { timeout: 10000 });
-    const currentGlobal = globalVer.success ? globalVer.stdout : 'unknown';
+    const globalBinName = OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode';
+    const whichResult = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+    const currentGlobal = whichResult.success ? run(globalBinName, ['--version'], { timeout: 10000 }).stdout : 'unknown';
 
     const npmView = run(NPM_BIN, ['view', 'opencode-ai', 'version'], { timeout: 15000 });
     const latestGlobal = npmView.success ? npmView.stdout : 'unknown';
@@ -550,7 +551,8 @@ async function main() {
       if (autoSafe) {
         log(CYAN, `  Updating opencode (${currentGlobal} -> ${latestGlobal})...`);
         run(NPM_BIN, ['install', '-g', 'opencode-ai@latest'], { stdio: 'inherit', timeout: 60000 });
-        const updatedVer = run(OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode', ['--version'], { timeout: 10000 });
+        const whichResult2 = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+        const updatedVer = whichResult2.success ? run(globalBinName, ['--version'], { timeout: 10000 }) : { success: false };
         log(GREEN, `  Done. Version: ${updatedVer.success ? updatedVer.stdout : currentGlobal}`);
       } else {
         log(YELLOW, '  \u26A0 OpenCode major version available: ' + currentGlobal + ' -> ' + latestGlobal);
