@@ -327,6 +327,8 @@ if (Test-Path "$InstallDir\.git") {
     switch ($overChoice) {
         '1' {
             Write-Step "Removing existing directory..."
+            # Stop transcript so install.log isn't locked during delete
+            try { Stop-Transcript | Out-Null } catch {}
             Remove-Item $InstallDir -Recurse -Force
             Write-Success "Directory cleared."
             # Now fresh clone below
@@ -335,6 +337,19 @@ if (Test-Path "$InstallDir\.git") {
             $newDir = Read-Host "  Enter new installation path"
             if (-not [string]::IsNullOrWhiteSpace($newDir)) {
                 $InstallDir = $newDir.Trim()
+                # Restart transcript in new location
+                try { Stop-Transcript | Out-Null } catch {}
+                try {
+                    if (-not (Test-Path $InstallDir)) {
+                        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+                    }
+                    $script:LogFile = Join-Path $InstallDir "install.log"
+                    Start-Transcript -Path $script:LogFile -Append | Out-Null
+                } catch {
+                    $fallbackLog = Join-Path $env:TEMP "glitch-install.log"
+                    Start-Transcript -Path $fallbackLog -Append | Out-Null
+                    $script:LogFile = $fallbackLog
+                }
                 Write-Success "Will install to: $InstallDir"
             } else {
                 Write-Warn "Installation cancelled."
@@ -359,6 +374,16 @@ if (-not (Test-Path "$InstallDir\.git")) {
     $script:SubmoduleSuccess = @()
     $script:SubmoduleFailures = @()
     $script:CloneSucceeded = $false
+
+    # Ensure transcript is active for clone (may have been stopped for overwrite)
+    try {
+        $null = Get-Content $script:LogFile -ErrorAction Stop
+    } catch {
+        $tempLog = Join-Path $env:TEMP "glitch-install.log"
+        Start-Transcript -Path $tempLog -Append | Out-Null
+        $script:LogFile = $tempLog
+        Write-Host "  Logging to: $tempLog (temp)" -ForegroundColor DarkGray
+    }
 
     try {
       Invoke-WithSpinner -Label "Cloning Glitch AI repository" -DoneMessage "Repository" -ScriptBlock {
@@ -471,6 +496,19 @@ if ($gitPath -and $gitToolsDir -like "*$env:TEMP*") {
         } catch {
             Write-Warn "Could not move MinGit to install dir (keeping in temp): $_"
         }
+    }
+}
+
+# Restart transcript in the install directory (stopped if overwrite happened)
+# Condition: log file was deleted (overwrite case) or is still in temp (fresh install)
+if (-not (Test-Path $script:LogFile) -or $script:LogFile -like "$env:TEMP*") {
+    try {
+        $script:LogFile = Join-Path $InstallDir "install.log"
+        Start-Transcript -Path $script:LogFile -Append | Out-Null
+    } catch {
+        $fallbackLog = Join-Path $env:TEMP "glitch-install.log"
+        Start-Transcript -Path $fallbackLog -Append | Out-Null
+        $script:LogFile = $fallbackLog
     }
 }
 
