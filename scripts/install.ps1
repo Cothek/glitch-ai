@@ -684,43 +684,54 @@ if ($UserRepo) {
 if ($ghUser -and $repoName) {
     $prevEAP = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    Push-Location $userDir
     
     try {
-        Write-Step "Downloading profile from $ghUser/$repoName..."
+        Write-Step "Connecting to $ghUser/$repoName..."
         
-        # Try to clone the repo directly into a temp dir, then copy contents
-        $tempCloneDir = Join-Path $env:TEMP "glitch-user-clone"
-        if (Test-Path $tempCloneDir) { Remove-Item $tempCloneDir -Recurse -Force -ErrorAction SilentlyContinue }
-        
-        $cloneResult = git clone "https://github.com/$ghUser/$repoName.git" $tempCloneDir 2>&1 | Out-String
-        if ($LASTEXITCODE -eq 0) {
-            # Clone succeeded - merge with existing user dir
-            Write-Success "Profile downloaded from GitHub"
-            Copy-Item "$tempCloneDir\*" $userDir -Recurse -Force -ErrorAction SilentlyContinue
-            Remove-Item $tempCloneDir -Recurse -Force -ErrorAction SilentlyContinue
-            
-            # Init git in user dir and set up remote
-            if (-not (Test-Path "$userDir\.git")) { git init 2>&1 | Out-Null }
-            $existingRemote = git remote get-url origin 2>$null
-            if (-not $existingRemote) { git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null }
+        # Try to clone the repo directly into user dir (handles auth via GCM)
+        if (-not (Test-Path "$userDir\.git")) {
+            # Fresh clone - clone straight into user dir
+            git clone "https://github.com/$ghUser/$repoName.git" "$userDir" 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "Profile downloaded from GitHub"
+            } else {
+                # Clone failed - maybe private or auth issue
+                Write-Warn "  Could not access $ghUser/$repoName."
+                Write-Host ""
+                Write-Host "  The repository may be private or require authentication." -ForegroundColor Yellow
+                Write-Host "  If you have Git Credential Manager installed, a browser window" -ForegroundColor Yellow
+                Write-Host "  should open for you to log into GitHub." -ForegroundColor Yellow
+                Write-Host ""
+                Write-Prompt "  Enter a GitHub Personal Access Token (or press Enter to skip): "
+                $ghToken = Read-Host
+                if ($ghToken) {
+                    git clone "https://$ghUser`:$ghToken@github.com/$ghUser/$repoName.git" "$userDir" 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Success "Profile downloaded from GitHub"
+                    } else {
+                        Write-Warn "  Still could not connect."
+                        Write-Host "  Your profile is saved locally. Connect later inside Glitch." -ForegroundColor Cyan
+                    }
+                } else {
+                    Write-Host "  No problem. Connect later inside Glitch." -ForegroundColor Cyan
+                }
+            }
         } else {
-            # Clone failed - likely private repo or doesn't exist
-            Write-Warn "  Could not download profile from GitHub."
-            Write-Host ""
-            Write-Host "  Your profile is saved locally at: $userDir" -ForegroundColor Cyan
-            Write-Host "  To connect it to GitHub later, just tell Glitch:" -ForegroundColor Cyan
-            Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
-            Write-Host ""
-            Remove-Item $tempCloneDir -Recurse -Force -ErrorAction SilentlyContinue
+            # User dir already has a git repo - try to pull updates
+            Write-Step "Updating profile from GitHub..."
+            $pullResult = git pull origin main 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "Profile updated from GitHub"
+            } else {
+                Write-Warn "  Could not update from GitHub. Your local profile is unchanged."
+            }
         }
     } catch {
-        Write-Warn "  Profile download failed: $_"
-        Write-Host "  Your profile is saved locally. Connect to GitHub later through Glitch." -ForegroundColor Cyan
+        Write-Warn "  Profile connection failed: $_"
+        Write-Host "  Your profile is saved locally. Connect later through Glitch." -ForegroundColor Cyan
     } finally {
         $ErrorActionPreference = $prevEAP
     }
-    Pop-Location
 } else {
     Write-Host "  Profile stays local-only. To sync with GitHub later:" -ForegroundColor DarkGray
     Write-Host "    Tell Glitch: 'Connect my user profile to GitHub'" -ForegroundColor DarkGray
