@@ -557,26 +557,6 @@ if (Test-Path (Join-Path $gitDir "cmd\git.exe")) {
     }
 }
 
-# Offer to add Git to system PATH
-Write-Host ""
-Write-Prompt "  Add Git to system PATH (so 'git' works in any terminal)? (y/N): "
-$addGitToPath = Read-Host
-if ($addGitToPath -like 'y*') {
-    try {
-        $gitCmdDir = Join-Path $gitDir "cmd"
-        $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
-        if ($userPath -notlike "*$gitCmdDir*") {
-            $newPath = "$gitCmdDir;$userPath"
-            [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
-            Write-Success "Git added to system PATH (log out/in to take effect)"
-        } else {
-            Write-Step "Git already in system PATH"
-        }
-    } catch {
-        Write-Warn "  Could not add Git to PATH: $_"
-    }
-}
-
 # 4. Run bootstrap
 Write-Header "Running bootstrap (downloads Node.js, OpenCode, Handy, etc.)..."
 $bootstrapPath = "$InstallDir\scripts\bootstrap.ps1"
