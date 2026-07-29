@@ -49,7 +49,7 @@ $ErrorActionPreference = "Continue"
 
 function Get-CurrentBranch {
     try {
-        $branch = git rev-parse --abbrev-ref HEAD 2>$null
+        $branch = git branch --show-current 2>$null
         if ($LASTEXITCODE -ne 0) { return "N/A" }
         return $branch
     } catch {

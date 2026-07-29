@@ -69,7 +69,7 @@ function tryReadVersion(filePath, versionFlag = '--version') {
 }
 
 function getGitBranch() {
-  const out = safeExec('git', ['rev-parse', '--abbrev-ref', 'HEAD']);
+  const out = safeExec('git', ['symbolic-ref', '--short', 'HEAD']);
   return out || null;
 }
 
