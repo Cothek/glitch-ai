@@ -326,7 +326,7 @@ if (-not (Test-Path "$InstallDir\.git")) {
     try {
       Invoke-WithSpinner -Label "Cloning Glitch AI repository" -DoneMessage "Repository" -ScriptBlock {
         # Clone WITHOUT --recursive so submodule failures don't kill the install
-        $r = git clone https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
+        $r = & $using:gitPath clone https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Clone failed (exit $LASTEXITCODE)`n$r" }
         $script:CloneSucceeded = $true
       }
