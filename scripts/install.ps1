@@ -93,7 +93,7 @@ function Write-Warn   { param([string]$msg) Write-Host "  $msg" -ForegroundColor
 function Write-Error  { param([string]$msg) Write-Host "  $msg" -ForegroundColor Red }
 function Write-Prompt { param([string]$msg) Write-Host "  $msg" -NoNewline -ForegroundColor Cyan }
 
-# ── Spinner helper for long operations ──
+# -- Spinner helper for long operations --
 # Shows a rotating spinner + elapsed seconds while a background job runs.
 # Use $using:varName inside the scriptblock to pass parent variables.
 function Invoke-WithSpinner {
@@ -155,10 +155,10 @@ Node.js is NOT required - the bootstrap script downloads a portable Node.js bund
 
 # Banner
 Write-Host @"
-╔═══════════════════════════════════════════════════════════════════════════════╗
-║                         GLITCH AI INSTALLER (Windows)                        ║
-║                    Personal AI Companion - Persistent Memory                 ║
-╚══════════════════════════════════════════════════════════════════════════════╝
++=============================================================================+
+|                         GLITCH AI INSTALLER (Windows)                        |
+|                    Personal AI Companion - Persistent Memory                 |
++=============================================================================+
 "@ -ForegroundColor Magenta
 
 # 1. Check PowerShell version
@@ -167,7 +167,7 @@ $psVersion = $PSVersionTable.PSVersion.Major
 if ($psVersion -lt 5) {
     Write-Error "PowerShell 5.1+ required. Current: $($PSVersionTable.PSVersion)"
     Write-Error "Upgrade: https://github.com/PowerShell/PowerShell/releases"
-    return
+    throw "Installation failed"
 }
 Write-Success "PowerShell $($PSVersionTable.PSVersion) OK"
 
@@ -194,7 +194,7 @@ if (-not $PSBoundParameters.ContainsKey('InstallDir')) {
 }
 Write-Success "Installation directory: $InstallDir"
 
-# 3. Check git — auto-download portable MinGit if missing
+# 3. Check git -- auto-download portable MinGit if missing
 $gitPath = (Get-Command git -ErrorAction SilentlyContinue).Source
 if (-not $gitPath) {
     Write-Warn "Git not found in PATH."
@@ -241,7 +241,7 @@ if (-not $gitPath) {
             Write-Error "Failed to download MinGit: $_"
             Write-Error "Install Git manually from https://git-scm.com/download/win"
             Write-Error "After installing, restart your terminal and re-run the installer."
-            return
+            throw "Installation failed"
         }
     } else {
         Write-Step "MinGit already installed at $gitToolsDir"
@@ -257,7 +257,7 @@ Write-Success "Git found: $gitPath"
 Write-Header "Installation directory: $InstallDir"
 
 if (Test-Path "$InstallDir\.git") {
-    # Existing git repo — offer update
+    # Existing git repo -- offer update
     Write-Warn "Glitch AI already installed at $InstallDir"
     Write-Prompt "Update to latest version? (Y/n): "
     $update = Read-Host
@@ -272,13 +272,13 @@ if (Test-Path "$InstallDir\.git") {
         } else {
             Write-Error "Update failed: $result"
             Write-Warn "You may have local changes. Try: cd $InstallDir && git status"
-            return
+            throw "Installation failed"
         }
     } else {
         Write-Warn "Skipping update. Using existing installation."
     }
 } elseif (Test-Path $InstallDir) {
-    # Directory exists but not a git repo — ask what to do
+    # Directory exists but not a git repo -- ask what to do
     Write-Warn "Directory '$InstallDir' already exists (not a git repo)."
     Write-Host ""
     Write-Host "  [1] Overwrite (delete and re-clone)" -ForegroundColor White
@@ -333,7 +333,7 @@ if (-not (Test-Path "$InstallDir\.git")) {
       Write-Success "Repository cloned to $InstallDir"
     } catch {
       Write-Error "Clone failed: $_"
-      return
+      throw "Installation failed"
     }
 
     # Initialize submodules individually so one failure doesn't block the others
@@ -423,7 +423,7 @@ Write-Header "Running bootstrap (downloads Node.js, OpenCode, Handy, etc.)..."
 $bootstrapPath = "$InstallDir\scripts\bootstrap.ps1"
 if (-not (Test-Path $bootstrapPath)) {
     Write-Error "bootstrap.ps1 not found at $bootstrapPath"
-    return
+    throw "Installation failed"
 }
 
 Push-Location $InstallDir
@@ -434,7 +434,7 @@ Pop-Location
 
 if ($bootstrapExit -ne 0) {
     Write-Error "Bootstrap failed with exit code $bootstrapExit"
-    return
+    throw "Installation failed"
 }
 Write-Success "Bootstrap completed successfully"
 
@@ -586,7 +586,7 @@ Pop-Location
 
 if ($checkExit -ne 0) {
     Write-Warn "Some checks did not pass. Review the report above for details."
-    Write-Warn "Items marked with ✗ under 'Core' indicate critical issues."
+    Write-Warn "Items marked with [X] under 'Core' indicate critical issues."
 }
 
 # 7. Launch
@@ -623,12 +623,12 @@ Write-Host @"
 Glitch AI is installed at: $InstallDir
 
 Next steps:
-  • Launch:        cd $InstallDir && .\launch-glitch.bat
-  • Free mode:     cd $InstallDir && .\launch-glitch.bat (select Free at prompt)
-  • Local mode:    cd $InstallDir && .\launch-glitch.bat (select Local at prompt)
-  • Safe mode:     cd $InstallDir && .\launch-glitch.bat (select Safe at prompt)
-  • Update:        Re-run this installer (it will pull latest)
-  • User sync:     .\scripts\sync-user.ps1 -Push  (after making changes)
+  * Launch:        cd $InstallDir && .\launch-glitch.bat
+  * Free mode:     cd $InstallDir && .\launch-glitch.bat (select Free at prompt)
+  * Local mode:    cd $InstallDir && .\launch-glitch.bat (select Local at prompt)
+  * Safe mode:     cd $InstallDir && .\launch-glitch.bat (select Safe at prompt)
+  * Update:        Re-run this installer (it will pull latest)
+  * User sync:     .\scripts\sync-user.ps1 -Push  (after making changes)
 
 Documentation: https://github.com/Cothek/glitch-ai
 "@ -ForegroundColor Green
