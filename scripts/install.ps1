@@ -291,8 +291,11 @@ if (Test-Path "$InstallDir\.git") {
         Write-Step "Pulling latest changes..."
         Push-Location $InstallDir
         try {
+            $prevEAP = $ErrorActionPreference
+            $ErrorActionPreference = "Continue"
             $result = git pull --ff-only 2>&1
             $exitCode = $LASTEXITCODE
+            $ErrorActionPreference = $prevEAP
             Pop-Location
             if ($exitCode -eq 0) {
                 Write-Success "Updated to latest version"
@@ -302,6 +305,7 @@ if (Test-Path "$InstallDir\.git") {
                 throw "Installation failed"
             }
         } catch {
+            $ErrorActionPreference = $prevEAP
             Pop-Location -ErrorAction SilentlyContinue
             Write-Error "Update failed: $_"
             Write-Warn "You may have local changes. Try: cd $InstallDir && git status"
