@@ -315,50 +315,57 @@ if (Test-Path "$InstallDir\.git") {
         Write-Warn "Skipping update. Using existing installation."
     }
 } elseif (Test-Path $InstallDir) {
-    # Directory exists but not a git repo -- ask what to do
-    Write-Warn "Directory '$InstallDir' already exists (not a git repo)."
-    Write-Host ""
-    Write-Host "  [1] Overwrite (delete and re-clone)" -ForegroundColor White
-    Write-Host "  [2] Choose a different directory" -ForegroundColor White
-    Write-Host "  [3] Cancel" -ForegroundColor White
-    Write-Host ""
-    Write-Prompt "  Choose (Enter=3): "
-    $overChoice = Read-Host
-    switch ($overChoice) {
-        '1' {
-            Write-Step "Removing existing directory..."
-            # Stop transcript so install.log isn't locked during delete
-            try { Stop-Transcript | Out-Null } catch {}
-            Remove-Item $InstallDir -Recurse -Force
-            Write-Success "Directory cleared."
-            # Now fresh clone below
-        }
-        '2' {
-            $newDir = Read-Host "  Enter new installation path"
-            if (-not [string]::IsNullOrWhiteSpace($newDir)) {
-                $InstallDir = $newDir.Trim()
-                # Restart transcript in new location
+    # Check if directory has actual content (not just our log file)
+    $dirHasContent = (Get-ChildItem $InstallDir -Force | Where-Object { $_.Name -ne "install.log" }).Count -gt 0
+    if (-not $dirHasContent) {
+        # Empty or only has our log file - treat as fresh install
+        Write-Step "Directory exists but is empty. Proceeding with fresh install..."
+    } else {
+        # Directory exists and has actual content -- ask what to do
+        Write-Warn "Directory '$InstallDir' already exists (not a git repo)."
+        Write-Host ""
+        Write-Host "  [1] Overwrite (delete and re-clone)" -ForegroundColor White
+        Write-Host "  [2] Choose a different directory" -ForegroundColor White
+        Write-Host "  [3] Cancel" -ForegroundColor White
+        Write-Host ""
+        Write-Prompt "  Choose (Enter=3): "
+        $overChoice = Read-Host
+        switch ($overChoice) {
+            '1' {
+                Write-Step "Removing existing directory..."
+                # Stop transcript so install.log isn't locked during delete
                 try { Stop-Transcript | Out-Null } catch {}
-                try {
-                    if (-not (Test-Path $InstallDir)) {
-                        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+                Remove-Item $InstallDir -Recurse -Force
+                Write-Success "Directory cleared."
+                # Now fresh clone below
+            }
+            '2' {
+                $newDir = Read-Host "  Enter new installation path"
+                if (-not [string]::IsNullOrWhiteSpace($newDir)) {
+                    $InstallDir = $newDir.Trim()
+                    # Restart transcript in new location
+                    try { Stop-Transcript | Out-Null } catch {}
+                    try {
+                        if (-not (Test-Path $InstallDir)) {
+                            New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+                        }
+                        $script:LogFile = Join-Path $InstallDir "install.log"
+                        Start-Transcript -Path $script:LogFile -Append | Out-Null
+                    } catch {
+                        $fallbackLog = Join-Path $env:TEMP "glitch-install.log"
+                        Start-Transcript -Path $fallbackLog -Append | Out-Null
+                        $script:LogFile = $fallbackLog
                     }
-                    $script:LogFile = Join-Path $InstallDir "install.log"
-                    Start-Transcript -Path $script:LogFile -Append | Out-Null
-                } catch {
-                    $fallbackLog = Join-Path $env:TEMP "glitch-install.log"
-                    Start-Transcript -Path $fallbackLog -Append | Out-Null
-                    $script:LogFile = $fallbackLog
+                    Write-Success "Will install to: $InstallDir"
+                } else {
+                    Write-Warn "Installation cancelled."
+                    exit 0
                 }
-                Write-Success "Will install to: $InstallDir"
-            } else {
+            }
+            default {
                 Write-Warn "Installation cancelled."
                 exit 0
             }
-        }
-        default {
-            Write-Warn "Installation cancelled."
-            exit 0
         }
     }
 }
