@@ -655,7 +655,7 @@ if ($cloneAttempted -and $ghUser -and $repoName) {
 
         # Clone straight into user dir
         # GCM should handle auth with a browser popup
-        git clone "https://github.com/$ghUser/$repoName.git" "$userDir" 2>&1
+        $cloneOutput = git clone "https://github.com/$ghUser/$repoName.git" "$userDir" 2>&1
         if ($LASTEXITCODE -eq 0) {
             Write-Success "Profile downloaded from GitHub"
         } else {
