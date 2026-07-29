@@ -200,7 +200,7 @@ if (-not $gitPath) {
     Write-Warn "Git not found in PATH."
     Write-Step "Downloading MinGit (portable Git for Windows, ~40 MB)..."
     
-    $gitToolsDir = Join-Path $env:LOCALAPPDATA "glitch-mingit"
+    $gitToolsDir = Join-Path $InstallDir "data\mingit"
     $gitBin = Join-Path $gitToolsDir "cmd\git.exe"
     
     if (-not (Test-Path $gitBin)) {
