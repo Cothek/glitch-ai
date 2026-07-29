@@ -82,7 +82,7 @@ trap {
     Write-Host "  Log file: $script:LogFile" -ForegroundColor Yellow
     Write-Host "  Please share this log file when reporting the issue." -ForegroundColor Yellow
     try { Stop-Transcript | Out-Null } catch {}
-    exit 1
+    return
 }
 
 # Color output helpers
@@ -167,7 +167,7 @@ $psVersion = $PSVersionTable.PSVersion.Major
 if ($psVersion -lt 5) {
     Write-Error "PowerShell 5.1+ required. Current: $($PSVersionTable.PSVersion)"
     Write-Error "Upgrade: https://github.com/PowerShell/PowerShell/releases"
-    exit 1
+    return
 }
 Write-Success "PowerShell $($PSVersionTable.PSVersion) OK"
 
@@ -241,7 +241,7 @@ if (-not $gitPath) {
             Write-Error "Failed to download MinGit: $_"
             Write-Error "Install Git manually from https://git-scm.com/download/win"
             Write-Error "After installing, restart your terminal and re-run the installer."
-            exit 1
+            return
         }
     } else {
         Write-Step "MinGit already installed at $gitToolsDir"
@@ -272,7 +272,7 @@ if (Test-Path "$InstallDir\.git") {
         } else {
             Write-Error "Update failed: $result"
             Write-Warn "You may have local changes. Try: cd $InstallDir && git status"
-            exit 1
+            return
         }
     } else {
         Write-Warn "Skipping update. Using existing installation."
@@ -333,7 +333,7 @@ if (-not (Test-Path "$InstallDir\.git")) {
       Write-Success "Repository cloned to $InstallDir"
     } catch {
       Write-Error "Clone failed: $_"
-      exit 1
+      return
     }
 
     # Initialize submodules individually so one failure doesn't block the others
@@ -423,7 +423,7 @@ Write-Header "Running bootstrap (downloads Node.js, OpenCode, Handy, etc.)..."
 $bootstrapPath = "$InstallDir\scripts\bootstrap.ps1"
 if (-not (Test-Path $bootstrapPath)) {
     Write-Error "bootstrap.ps1 not found at $bootstrapPath"
-    exit 1
+    return
 }
 
 Push-Location $InstallDir
@@ -434,7 +434,7 @@ Pop-Location
 
 if ($bootstrapExit -ne 0) {
     Write-Error "Bootstrap failed with exit code $bootstrapExit"
-    exit 1
+    return
 }
 Write-Success "Bootstrap completed successfully"
 
