@@ -599,8 +599,8 @@ if ($UserRepo) {
     } else {
         Write-Warn "Could not parse UserRepo URL: $UserRepo"
     }
-} elseif (-not $userProfileExists) {
-    # Only ask if no existing local profile
+} else {
+    # Always ask about GitHub profile connection
     Write-Host ""
     Write-Host "Do you have an existing Glitch user profile on GitHub?" -ForegroundColor White
     Write-Host "  (If not, you can set this up later inside Glitch.)" -ForegroundColor DarkGray
@@ -608,13 +608,25 @@ if ($UserRepo) {
     Write-Prompt "Connect existing profile from GitHub? (y/N): "
     $syncProfile = Read-Host
     if ($syncProfile -like 'y*') {
-        Write-Prompt "GitHub username: "
-        $ghUser = Read-Host
-        if ($ghUser) {
-            Write-Prompt "Repository name (default: glitch-user-$ghUser): "
-            $repoName = Read-Host
-            if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
-            $cloneAttempted = $true
+        if ($userProfileExists) {
+            Write-Host ""
+            Write-Warn "  This will REPLACE your existing local profile with the GitHub version."
+            Write-Prompt "  Are you sure? (y/N): "
+            $confirmReplace = Read-Host
+            if ($confirmReplace -notlike 'y*') {
+                Write-Step "Keeping existing local profile."
+                $syncProfile = ""  # Cancel the sync
+            }
+        }
+        if ($syncProfile -like 'y*') {
+            Write-Prompt "GitHub username: "
+            $ghUser = Read-Host
+            if ($ghUser) {
+                Write-Prompt "Repository name (default: glitch-user-$ghUser): "
+                $repoName = Read-Host
+                if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
+                $cloneAttempted = $true
+            }
         }
     }
 }
@@ -626,10 +638,11 @@ if ($cloneAttempted -and $ghUser -and $repoName) {
     try {
         Write-Step "Connecting to $ghUser/$repoName..."
 
-        # If user dir already exists with files, remove them for clean clone
+        # Clear user dir for clean clone (warned user already)
         if (Test-Path $userDir) {
             Remove-Item "$userDir\*" -Recurse -Force -ErrorAction SilentlyContinue
-        } else {
+        }
+        if (-not (Test-Path $userDir)) {
             New-Item -ItemType Directory -Path $userDir -Force | Out-Null
         }
 
