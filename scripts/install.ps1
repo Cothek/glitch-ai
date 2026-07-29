@@ -609,23 +609,29 @@ if ($shouldSync -and $ghUser) {
     }
     
     # Try to detect remote's default branch
-    $remoteHead = (git ls-remote --symref origin HEAD 2>$null) -join "`n"
-    if ($remoteHead -match 'ref: refs/heads/(\S+)') {
-        $defaultBranch = $matches[1]
-        if ($localBranch -ne $defaultBranch) {
-            git branch -m $defaultBranch 2>&1 | Out-Null
-        }
-        $pullResult = git pull origin $defaultBranch --allow-unrelated-histories 2>&1
-        if ($LASTEXITCODE -eq 0) {
-            Write-Success "User profile synced from GitHub"
-            git branch --set-upstream-to="origin/$defaultBranch" $defaultBranch 2>&1 | Out-Null
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $remoteHead = (git ls-remote --symref origin HEAD 2>$null) -join "`n"
+        if ($remoteHead -match 'ref: refs/heads/(\S+)') {
+            $defaultBranch = $matches[1]
+            if ($localBranch -ne $defaultBranch) {
+                git branch -m $defaultBranch 2>&1 | Out-Null
+            }
+            $pullResult = git pull origin $defaultBranch --allow-unrelated-histories 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "User profile synced from GitHub"
+                git branch --set-upstream-to="origin/$defaultBranch" $defaultBranch 2>&1 | Out-Null
+            } else {
+                Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
+                Write-Host "  Push later with: cd $userDir && git push -u origin $defaultBranch"
+            }
         } else {
-            Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
-            Write-Host "  Push later with: cd $userDir && git push -u origin $defaultBranch"
+            Write-Warn "Remote repository not found. Profile is local-only."
+            Write-Host "  Push later with: cd $userDir && git push -u origin $localBranch"
         }
-    } else {
-        Write-Warn "Remote repository not found. Profile is local-only."
-        Write-Host "  Push later with: cd $userDir && git push -u origin $localBranch"
+    } finally {
+        $ErrorActionPreference = $prevEAP
     }
     Pop-Location
 } elseif (-not $UserRepo) {
