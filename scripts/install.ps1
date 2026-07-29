@@ -599,80 +599,26 @@ Write-Header "User Profile Setup"
 $userDir = "$InstallDir\user"
 $userProfileExists = Test-Path "$userDir\main-memory.md"
 
-if (-not $userProfileExists) {
-    Write-Step "Creating local user profile..."
-    if (-not (Test-Path $userDir)) {
-        New-Item -ItemType Directory -Path $userDir -Force | Out-Null
-    }
-    
-    # Create starter files
-    $starterMemory = @"
----
-type: UserProfile
-title: Main Memory
-description: Your personal profile and preferences
-tags: [user, profile]
-timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
----
-
-# Main Memory
-
-## User Profile
-*To be filled in through interaction with Glitch*
-"@
-    Set-Content -LiteralPath "$userDir\main-memory.md" -Value $starterMemory -Encoding UTF8
-
-    $starterSession = @"
----
-type: SessionMemory
-title: Current Session Memory
-tags: [session, ram]
-timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
----
-
-# Current Session Memory
-
-## Session Recap
-*First session with Glitch*
-"@
-    Set-Content -LiteralPath "$userDir\current-session.md" -Value $starterSession -Encoding UTF8
-
-    $starterReminders = @"
----
-type: ReminderLog
-title: Reminders
-description: Cross-session reminders
-tags: [reminders]
-timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
----
-
-# Reminders
-"@
-    Set-Content -LiteralPath "$userDir\reminders.md" -Value $starterReminders -Encoding UTF8
-
-    Write-Success "User profile created at $userDir"
-} else {
-    Write-Success "User profile already exists at $userDir"
-}
-
-# Optional: Sync existing GitHub user profile
+# First: check if they have an existing GitHub profile to clone
 $ghUser = $null
 $repoName = $null
+$cloneAttempted = $false
 
 if ($UserRepo) {
-    # Parse URL: https://github.com/user/repo.git or user/repo
     $parsed = $UserRepo -replace 'https?://github\.com/', '' -replace '\.git$', ''
     $parts = $parsed -split '/'
     if ($parts.Count -eq 2) {
         $ghUser = $parts[0]
         $repoName = $parts[1]
+        $cloneAttempted = $true
         Write-Host "  Using specified user repo: $ghUser/$repoName" -ForegroundColor Cyan
     } else {
         Write-Warn "Could not parse UserRepo URL: $UserRepo"
     }
-} else {
+} elseif (-not $userProfileExists) {
+    # Only ask if no existing local profile
     Write-Host ""
-    Write-Host "Do you have an existing Glitch user profile repo on GitHub?" -ForegroundColor White
+    Write-Host "Do you have an existing Glitch user profile on GitHub?" -ForegroundColor White
     Write-Host "  (If not, you can set this up later inside Glitch.)" -ForegroundColor DarkGray
     Write-Host ""
     Write-Prompt "Connect existing profile from GitHub? (y/N): "
@@ -684,64 +630,129 @@ if ($UserRepo) {
             Write-Prompt "Repository name (default: glitch-user-$ghUser): "
             $repoName = Read-Host
             if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
+            $cloneAttempted = $true
         }
     }
 }
 
-if ($ghUser -and $repoName) {
+# Try to clone existing profile if requested
+if ($cloneAttempted -and $ghUser -and $repoName) {
     $prevEAP = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
-    
     try {
         Write-Step "Connecting to $ghUser/$repoName..."
-        
-        # Try to clone the repo directly into user dir (handles auth via GCM)
-        if (-not (Test-Path "$userDir\.git")) {
-            # Fresh clone - clone straight into user dir
-            git clone "https://github.com/$ghUser/$repoName.git" "$userDir" 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "Profile downloaded from GitHub"
-            } else {
-                # Clone failed - maybe private or auth issue
-                Write-Warn "  Could not access $ghUser/$repoName."
-                Write-Host ""
-                Write-Host "  The repository may be private or require authentication." -ForegroundColor Yellow
-                Write-Host "  If you have Git Credential Manager installed, a browser window" -ForegroundColor Yellow
-                Write-Host "  should open for you to log into GitHub." -ForegroundColor Yellow
-                Write-Host ""
-                Write-Prompt "  Enter a GitHub Personal Access Token (or press Enter to skip): "
-                $ghToken = Read-Host
-                if ($ghToken) {
-                    git clone "https://$ghUser`:$ghToken@github.com/$ghUser/$repoName.git" "$userDir" 2>&1
-                    if ($LASTEXITCODE -eq 0) {
-                        Write-Success "Profile downloaded from GitHub"
-                    } else {
-                        Write-Warn "  Still could not connect."
-                        Write-Host "  Your profile is saved locally. Connect later inside Glitch." -ForegroundColor Cyan
-                    }
-                } else {
-                    Write-Host "  No problem. Connect later inside Glitch." -ForegroundColor Cyan
-                }
-            }
+
+        # If user dir already exists with files, remove them for clean clone
+        if (Test-Path $userDir) {
+            Remove-Item "$userDir\*" -Recurse -Force -ErrorAction SilentlyContinue
         } else {
-            # User dir already has a git repo - try to pull updates
-            Write-Step "Updating profile from GitHub..."
-            $pullResult = git pull origin main 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "Profile updated from GitHub"
+            New-Item -ItemType Directory -Path $userDir -Force | Out-Null
+        }
+
+        # Clone straight into user dir
+        # GCM should handle auth with a browser popup
+        git clone "https://github.com/$ghUser/$repoName.git" "$userDir" 2>&1
+        if ($LASTEXITCODE -eq 0) {
+            Write-Success "Profile downloaded from GitHub"
+        } else {
+            # Clone failed - offer PAT as fallback
+            Write-Warn "  Could not access $ghUser/$repoName."
+            Write-Host ""
+            Write-Host "  The repository may be private or require authentication." -ForegroundColor Yellow
+            Write-Host "  Git Credential Manager was installed earlier in this setup." -ForegroundColor Yellow
+            Write-Host "  A browser window should open for you to log into GitHub." -ForegroundColor Yellow
+            Write-Host "  If that didn't work, you can use a Personal Access Token." -ForegroundColor Yellow
+            Write-Host ""
+            Write-Prompt "  Enter GitHub Personal Access Token (or press Enter to skip): "
+            $ghToken = Read-Host
+            if ($ghToken) {
+                # Clean failed clone first
+                Remove-Item "$userDir\*" -Recurse -Force -ErrorAction SilentlyContinue
+                git clone "https://$ghUser`:$ghToken@github.com/$ghUser/$repoName.git" "$userDir" 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "Profile downloaded from GitHub"
+                } else {
+                    Write-Warn "  Still could not connect."
+                    $cloneAttempted = $false
+                }
             } else {
-                Write-Warn "  Could not update from GitHub. Your local profile is unchanged."
+                $cloneAttempted = $false
             }
         }
     } catch {
         Write-Warn "  Profile connection failed: $_"
-        Write-Host "  Your profile is saved locally. Connect later through Glitch." -ForegroundColor Cyan
+        $cloneAttempted = $false
     } finally {
         $ErrorActionPreference = $prevEAP
     }
-} else {
-    Write-Host "  Profile stays local-only. To sync with GitHub later:" -ForegroundColor DarkGray
-    Write-Host "    Tell Glitch: 'Connect my user profile to GitHub'" -ForegroundColor DarkGray
+}
+
+# If no clone was attempted or it failed, create local starter files
+if (-not $cloneAttempted -or -not (Test-Path "$userDir\main-memory.md")) {
+    if (-not (Test-Path $userDir)) {
+        New-Item -ItemType Directory -Path $userDir -Force | Out-Null
+    }
+
+    $needsStarter = -not (Test-Path "$userDir\main-memory.md")
+    if ($needsStarter) {
+        Write-Step "Creating local user profile..."
+
+        $starterMemory = @"
+---
+type: UserProfile
+title: Main Memory
+description: Your personal profile and preferences
+tags: [user, profile]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+# Main Memory
+## User Profile
+*To be filled in through interaction with Glitch*
+"@
+        Set-Content -LiteralPath "$userDir\main-memory.md" -Value $starterMemory -Encoding UTF8
+
+        $starterSession = @"
+---
+type: SessionMemory
+title: Current Session Memory
+tags: [session, ram]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+# Current Session Memory
+## Session Recap
+*First session with Glitch*
+"@
+        Set-Content -LiteralPath "$userDir\current-session.md" -Value $starterSession -Encoding UTF8
+
+        $starterReminders = @"
+---
+type: ReminderLog
+title: Reminders
+description: Cross-session reminders
+tags: [reminders]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+# Reminders
+"@
+        Set-Content -LiteralPath "$userDir\reminders.md" -Value $starterReminders -Encoding UTF8
+
+        Write-Success "User profile created at $userDir"
+    } else {
+        Write-Success "User profile already exists at $userDir"
+    }
+}
+
+# Show next steps for GitHub sync
+if ($cloneAttempted -and -not (Test-Path "$userDir\.git")) {
+    Write-Host ""
+    Write-Host "  To connect your profile to GitHub later, start Glitch and say:" -ForegroundColor Cyan
+    Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
+    Write-Host ""
+} elseif (-not $cloneAttempted) {
+    Write-Host ""
+    Write-Host "  Profile is local-only. To sync with GitHub later, start Glitch and say:" -ForegroundColor Cyan
+    Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
+    Write-Host ""
 }
 
 # 6. Verify installation
