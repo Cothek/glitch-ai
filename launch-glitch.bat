@@ -25,8 +25,14 @@ if exist "%~dp0data\node\node.exe" (
 
 if exist "%~dp0glitch-head.txt" powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
 echo.
-"%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %*
+set "LOG_FILE=%~dp0data\launch.log"
+REM Create data directory if needed
+if not exist "%~dp0data" mkdir "%~dp0data"
+echo [%date% %time%] Glitch starting... > "%LOG_FILE%"
+"%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %* >> "%LOG_FILE%" 2>&1
 if %errorlevel% neq 0 (
+    echo.
+    echo Glitch exited with an error. Log saved to: %LOG_FILE%
     echo.
     echo Press any key to exit...
     pause > nul
