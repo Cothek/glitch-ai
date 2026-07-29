@@ -608,25 +608,13 @@ if ($UserRepo) {
     Write-Prompt "Connect existing profile from GitHub? (y/N): "
     $syncProfile = Read-Host
     if ($syncProfile -like 'y*') {
-        if ($userProfileExists) {
-            Write-Host ""
-            Write-Warn "  This will REPLACE your existing local profile with the GitHub version."
-            Write-Prompt "  Are you sure? (y/N): "
-            $confirmReplace = Read-Host
-            if ($confirmReplace -notlike 'y*') {
-                Write-Step "Keeping existing local profile."
-                $syncProfile = ""  # Cancel the sync
-            }
-        }
-        if ($syncProfile -like 'y*') {
-            Write-Prompt "GitHub username: "
-            $ghUser = Read-Host
-            if ($ghUser) {
-                Write-Prompt "Repository name (default: glitch-user-$ghUser): "
-                $repoName = Read-Host
-                if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
-                $cloneAttempted = $true
-            }
+        Write-Prompt "GitHub username: "
+        $ghUser = Read-Host
+        if ($ghUser) {
+            Write-Prompt "Repository name (default: glitch-user-$ghUser): "
+            $repoName = Read-Host
+            if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
+            $cloneAttempted = $true
         }
     }
 }
@@ -638,7 +626,7 @@ if ($cloneAttempted -and $ghUser -and $repoName) {
     try {
         Write-Step "Connecting to $ghUser/$repoName..."
 
-        # Clear user dir for clean clone (warned user already)
+        # Clear user dir for clean clone
         if (Test-Path $userDir) {
             Remove-Item "$userDir\*" -Recurse -Force -ErrorAction SilentlyContinue
         }
