@@ -572,7 +572,7 @@ if ($shouldSync -and $ghUser) {
     }
     
     # Try to detect remote's default branch
-    $remoteHead = git ls-remote --symref origin HEAD 2>$null
+    $remoteHead = (git ls-remote --symref origin HEAD 2>$null) -join "`n"
     if ($remoteHead -match 'ref: refs/heads/(\S+)') {
         $defaultBranch = $matches[1]
         if ($localBranch -ne $defaultBranch) {
