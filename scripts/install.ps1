@@ -200,7 +200,7 @@ if (-not $gitPath) {
     Write-Warn "Git not found in PATH."
     Write-Step "Downloading MinGit (portable Git for Windows, ~40 MB)..."
     
-    $gitToolsDir = Join-Path $InstallDir "data\mingit"
+    $gitToolsDir = Join-Path $env:TEMP "glitch-mingit"
     $gitBin = Join-Path $gitToolsDir "cmd\git.exe"
     
     if (-not (Test-Path $gitBin)) {
@@ -414,6 +414,25 @@ if (-not (Test-Path "$InstallDir\.git")) {
         }
         if ($script:SubmoduleFailures.Count -gt 0) {
             Write-Step "Glitch will attempt to fix these on first launch."
+        }
+    }
+}
+
+# Move MinGit from temp to installation directory (if installed to temp)
+if ($gitPath -and $gitToolsDir -like "*$env:TEMP*") {
+    $finalGitDir = Join-Path $InstallDir "data\mingit"
+    if (-not (Test-Path $finalGitDir)) {
+        try {
+            $parentDir = Split-Path $finalGitDir -Parent
+            if (-not (Test-Path $parentDir)) {
+                New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+            }
+            Move-Item -Path $gitToolsDir -Destination $finalGitDir -Force
+            $gitPath = Join-Path $finalGitDir "cmd\git.exe"
+            $env:PATH = "$finalGitDir\cmd;$env:PATH"
+            Write-Step "MinGit moved to $finalGitDir"
+        } catch {
+            Write-Warn "Could not move MinGit to install dir (keeping in temp): $_"
         }
     }
 }
