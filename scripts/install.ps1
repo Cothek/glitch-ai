@@ -598,20 +598,20 @@ if ($UserRepo) {
 if ($shouldSync -and $ghUser) {
     Push-Location $userDir
     # Check if already a git repo
-    if (-not (Test-Path ".git")) {
-        git init | Out-Null
-        $localBranch = git branch --show-current
-        if (-not $localBranch) { $localBranch = "main" }
-        git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
-    } else {
-        $localBranch = git branch --show-current
-        if (-not $localBranch) { $localBranch = "main" }
-    }
-    
-    # Try to detect remote's default branch
     $prevEAP = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
+        if (-not (Test-Path ".git")) {
+            git init | Out-Null
+            $localBranch = git branch --show-current
+            if (-not $localBranch) { $localBranch = "main" }
+            git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
+        } else {
+            $localBranch = git branch --show-current
+            if (-not $localBranch) { $localBranch = "main" }
+        }
+        
+        # Try to detect remote's default branch
         $remoteHead = (git ls-remote --symref origin HEAD 2>$null) -join "`n"
         if ($remoteHead -match 'ref: refs/heads/(\S+)') {
             $defaultBranch = $matches[1]
