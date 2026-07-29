@@ -194,6 +194,32 @@ if (-not $PSBoundParameters.ContainsKey('InstallDir')) {
 }
 Write-Success "Installation directory: $InstallDir"
 
+# Move log file to the actual installation directory (if different from default)
+if ($script:LogFile) {
+    $targetLogFile = Join-Path $InstallDir "install.log"
+    if ($script:LogFile -ne $targetLogFile) {
+        try {
+            Stop-Transcript | Out-Null
+        } catch {}
+        try {
+            if (-not (Test-Path $InstallDir)) {
+                $parentDir = Split-Path $InstallDir -Parent
+                if (-not (Test-Path $parentDir)) {
+                    New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
+                }
+                New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
+            }
+            if (Test-Path $script:LogFile) {
+                Move-Item -Path $script:LogFile -Destination $targetLogFile -Force
+            }
+            $script:LogFile = $targetLogFile
+            Start-Transcript -Path $script:LogFile -Append | Out-Null
+        } catch {
+            # Keep logging to the original location
+        }
+    }
+}
+
 # 3. Check git -- auto-download portable MinGit if missing
 $gitPath = (Get-Command git -ErrorAction SilentlyContinue).Source
 if (-not $gitPath) {
