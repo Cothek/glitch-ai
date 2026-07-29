@@ -635,71 +635,83 @@ if ($UserRepo) {
 
 if ($shouldSync -and $ghUser) {
     Push-Location $userDir
-    # Check if already a git repo
     $prevEAP = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
+        # Initialize git repo if needed
         if (-not (Test-Path ".git")) {
             git init | Out-Null
-            $localBranch = git branch --show-current
-            if (-not $localBranch) { $localBranch = "main" }
-            git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
-        } else {
-            $localBranch = git branch --show-current
-            if (-not $localBranch) { $localBranch = "main" }
         }
         
-        # Try to detect remote's default branch
-        $remoteHead = (git ls-remote --symref origin HEAD 2>$null) -join "`n"
-        if ($remoteHead -match 'ref: refs/heads/(\S+)') {
-            $defaultBranch = $matches[1]
-            if ($localBranch -ne $defaultBranch) {
-                git branch -m $defaultBranch 2>&1 | Out-Null
-            }
-            $pullResult = git pull origin $defaultBranch --allow-unrelated-histories 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "User profile synced from GitHub"
-                git branch --set-upstream-to="origin/$defaultBranch" $defaultBranch 2>&1 | Out-Null
-            } else {
-                Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
-                # Try pushing instead - works for private repos where ls-remote/pull might fail
-                $pushBranch = git branch --show-current
-                if (-not $pushBranch) { $pushBranch = "main" }
-                # Ensure there's at least one commit before push
-                $commitCount = git rev-list --count HEAD 2>$null
-                if (-not $commitCount -or $commitCount -eq 0) {
-                    Write-Step "Creating initial commit..."
-                    git add -A
-                    git commit -m "Initial user profile" 2>&1 | Out-Null
-                }
-                Write-Step "Pushing local profile to GitHub..."
-                $pushResult = git push -u origin $pushBranch 2>&1
-                if ($LASTEXITCODE -eq 0) {
-                    Write-Success "User profile synced to GitHub"
-                } else {
-                    Write-Warn "  Could not push: $($pushResult -join ' ')"
-                    Write-Warn "  Push later with: cd $userDir && git push -u origin $pushBranch"
-                }
-            }
-        } else {
-            Write-Warn "Remote repository not found (or private)."
-            # Try pushing - works for private repos where ls-remote is blocked
-            $pushBranch = git branch --show-current
-            if (-not $pushBranch) { $pushBranch = "main" }
-            # Ensure there's at least one commit before push
-            $commitCount = git rev-list --count HEAD 2>$null
-            if (-not $commitCount -or $commitCount -eq 0) {
-                Write-Step "Creating initial commit..."
-                git add -A
-                git commit -m "Initial user profile" 2>&1 | Out-Null
-            }
-            Write-Step "Pushing local profile to GitHub..."
+        # Get the current branch
+        $pushBranch = git branch --show-current
+        if (-not $pushBranch) { $pushBranch = "main" }
+        
+        # Add and commit any local files
+        $commitCount = git rev-list --count HEAD 2>$null
+        if (-not $commitCount -or $commitCount -eq 0) {
+            Write-Step "Creating initial commit..."
+            git add -A 2>&1 | Out-Null
+            git commit -m "Initial user profile" 2>&1 | Out-Null
+        }
+        
+        # Check if remote is already configured
+        $remoteUrl = git remote get-url origin 2>$null
+        if (-not $remoteUrl) {
+            git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
+        }
+        
+        # Try to fetch and pull first (handles existing repos)
+        Write-Step "Syncing with GitHub..."
+        git fetch origin $pushBranch 2>&1 | Out-Null
+        $fetchExit = $LASTEXITCODE
+        
+        if ($fetchExit -eq 0) {
+            # Remote exists and we have access - pull changes
+            git pull --rebase origin $pushBranch --allow-unrelated-histories 2>&1 | Out-Null
+            # Now push
             $pushResult = git push -u origin $pushBranch 2>&1
             if ($LASTEXITCODE -eq 0) {
-                Write-Success "User profile synced to GitHub"
+                Write-Success "User profile synced from GitHub"
             } else {
-                Write-Warn "  Could not push: $($pushResult -join ' ')"
-                Write-Warn "  Push later with: cd $userDir && git push -u origin $pushBranch"
+                Write-Warn "  Could not push. Try later with: cd $userDir && git push -u origin $pushBranch"
+            }
+        } else {
+            # Fetch failed - could be auth issue, private repo, or repo doesn't exist
+            Write-Warn "  Could not access remote. The repository may be private or require authentication."
+            Write-Host ""
+            Write-Host "  To authenticate with GitHub, create a Personal Access Token (PAT):" -ForegroundColor Cyan
+            Write-Host "    https://github.com/settings/tokens" -ForegroundColor Gray
+            Write-Host ""
+            Write-Prompt "  Enter GitHub token (or press Enter to skip): "
+            $ghToken = Read-Host
+            if ($ghToken) {
+                # Retry with token in URL
+                $authUrl = "https://$ghUser`:$ghToken@github.com/$ghUser/$repoName.git"
+                git remote set-url origin $authUrl 2>&1 | Out-Null
+                
+                # Try fetch again
+                git fetch origin $pushBranch 2>&1 | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                    git pull --rebase origin $pushBranch --allow-unrelated-histories 2>&1 | Out-Null
+                    $pushResult = git push -u origin $pushBranch 2>&1
+                    if ($LASTEXITCODE -eq 0) {
+                        Write-Success "User profile synced from GitHub"
+                    } else {
+                        Write-Warn "  Push still failed: $($pushResult -join ' ')"
+                        Write-Warn "  Push later with: cd $userDir && git push -u origin $pushBranch"
+                    }
+                } else {
+                    Write-Warn "  Could not connect to GitHub with provided token."
+                    Write-Warn "  Push later with: cd $userDir && git push -u origin $pushBranch"
+                }
+                
+                # Reset URL to original (without token)
+                git remote set-url origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
+            } else {
+                Write-Host "  Profile stays local-only. To sync later:" -ForegroundColor DarkGray
+                Write-Host "    cd $userDir && git remote add origin https://github.com/$ghUser/$repoName.git" -ForegroundColor DarkGray
+                Write-Host "    cd $userDir && git push -u origin $pushBranch" -ForegroundColor DarkGray
             }
         }
     } finally {
