@@ -30,7 +30,7 @@ REM Create data directory if needed
 if not exist "%~dp0data" mkdir "%~dp0data"
 echo [%date% %time%] Glitch starting... > "%LOG_FILE%"
 REM Run node script, tee to both console and log, strip ANSI codes from log
-"%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %* 2>&1 | powershell -NoProfile -Command "$input | ForEach-Object { $_ -replace '\x1b\[[0-9;]*m', '' } | Tee-Object -FilePath '%LOG_FILE%'"
+"%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %* 2>&1 | powershell -NoProfile -Command "$input | ForEach-Object { $_ -replace '\x1b\[[\d;?]*[a-zA-Z]','' -replace '[^\x20-\x7E\r\n]','' } | Tee-Object -FilePath '%LOG_FILE%'"
 if %errorlevel% neq 0 (
     echo.
     echo Glitch exited with an error. Log saved to: %LOG_FILE%
