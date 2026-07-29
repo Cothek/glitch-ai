@@ -271,7 +271,7 @@ if (Test-Path "$InstallDir\.git") {
             if ($exitCode -eq 0) {
                 Write-Success "Updated to latest version"
             } else {
-                Write-Error "Update failed: $result"
+                Write-Error "Update failed: $($result -join "`n")"
                 Write-Warn "You may have local changes. Try: cd $InstallDir && git status"
                 throw "Installation failed"
             }
