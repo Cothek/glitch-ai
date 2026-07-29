@@ -587,7 +587,7 @@ if (-not (Test-Path $bootstrapPath)) {
 
 Push-Location $InstallDir
 Write-Step "Executing bootstrap.ps1..."
-& .\scripts\bootstrap.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File ".\scripts\bootstrap.ps1"
 $bootstrapExit = $LASTEXITCODE
 Pop-Location
 
