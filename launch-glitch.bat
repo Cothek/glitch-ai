@@ -23,6 +23,11 @@ if exist "%~dp0data\node\node.exe" (
   set "PATH=%~dp0data\node;%PATH%"
 )
 
+REM Add bundled MinGit to PATH if present
+if exist "%~dp0data\mingit\cmd\git.exe" (
+  set "PATH=%~dp0data\mingit\cmd;%PATH%"
+)
+
 if exist "%~dp0glitch-head.txt" powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
 echo.
 set "LOG_FILE=%~dp0data\launch.log"

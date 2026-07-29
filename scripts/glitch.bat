@@ -8,6 +8,10 @@ if exist "%~dp0..\data\node\node.exe" (
   set "PATH=%~dp0..\data\node;%PATH%"
 )
 echo [%date% %time%] glitch.bat %* >> "%LOG_FILE%" 2>&1
+REM Add bundled MinGit to PATH if present
+if exist "%~dp0..\data\mingit\cmd\git.exe" (
+  set "PATH=%~dp0..\data\mingit\cmd;%PATH%"
+)
 REM Run node via PowerShell for live console output + exit code capture
 powershell -NoProfile -Command "& { '%NODE_CMD%' '%~dp0scripts\glitch.mjs' %* 2>&1 | Tee-Object -FilePath '%TEMP%\glitch-raw-launch.log'; exit $LASTEXITCODE }"
 set "NODE_EXIT=%errorlevel%"
