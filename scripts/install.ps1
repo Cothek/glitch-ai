@@ -25,6 +25,9 @@
 
 .EXAMPLE
     irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex -NoLaunch
+
+.EXAMPLE
+    irm https://raw.githubusercontent.com/Cothek/glitch-ai/develop/scripts/install.ps1 | iex -Branch develop
 #>
 
 param(
@@ -35,7 +38,10 @@ param(
     [switch]$NoLaunch,
 
     [Parameter(Mandatory=$false)]
-    [switch]$Help
+    [switch]$Help,
+
+    [Parameter(Mandatory=$false)]
+    [string]$Branch = "main"
 )
 
 # Color output helpers
@@ -272,13 +278,19 @@ if (-not (Test-Path "$InstallDir\.git")) {
     
     try {
       Invoke-WithSpinner -Label "Cloning Glitch AI repository" -DoneMessage "Repository" -ScriptBlock {
-        $r = git clone --recursive https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
+        $r = & $using:gitPath clone --recursive https://github.com/Cothek/glitch-ai.git "$using:InstallDir" 2>&1
         if ($LASTEXITCODE -ne 0) { throw "Clone failed (exit $LASTEXITCODE)`n$r" }
       }
       Write-Success "Repository cloned to $InstallDir"
+      if ($Branch -ne "main") {
+          Write-Step "Checking out branch: $Branch..."
+          Push-Location $InstallDir
+          & $gitPath checkout $Branch 2>&1 | Out-Null
+          Pop-Location
+      }
     } catch {
       Write-Error "Clone failed: $_"
-      exit 1
+      throw "Installation failed"
     }
 }
 
