@@ -544,10 +544,12 @@ if ($shouldSync -and $ghUser) {
     # Check if already a git repo
     if (-not (Test-Path ".git")) {
         git init | Out-Null
-        $localBranch = git rev-parse --abbrev-ref HEAD
+        $localBranch = git branch --show-current
+        if (-not $localBranch) { $localBranch = "main" }
         git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
     } else {
-        $localBranch = git rev-parse --abbrev-ref HEAD
+        $localBranch = git branch --show-current
+        if (-not $localBranch) { $localBranch = "main" }
     }
     
     # Try to detect remote's default branch
