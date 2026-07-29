@@ -512,6 +512,60 @@ if (-not (Test-Path $script:LogFile) -or $script:LogFile -like "$env:TEMP*") {
     }
 }
 
+# Install Git Credential Manager for browser-based GitHub login
+$gitDir = Join-Path $InstallDir "data\mingit"
+if (Test-Path (Join-Path $gitDir "cmd\git.exe")) {
+    Write-Step "Setting up Git Credential Manager (browser-based GitHub login)..."
+    try {
+        # Resolve the latest GCM release asset URL
+        $gcmRelease = Invoke-RestMethod "https://api.github.com/repos/git-ecosystem/git-credential-manager/releases/latest" -UseBasicParsing -TimeoutSec 10
+        $gcmAsset = $gcmRelease.assets | Where-Object { $_.name -match "gcm-win-x64.*\.zip$" -and $_.name -notmatch "symbols" } | Select-Object -First 1
+        if (-not $gcmAsset) { throw "No GCM asset found in latest release" }
+        $gcmUrl = $gcmAsset.browser_download_url
+        
+        $gcmZip = Join-Path $env:TEMP "gcm.zip"
+        $gcmDir = Join-Path $gitDir "gcm"
+        
+        Invoke-WebRequest -Uri $gcmUrl -OutFile $gcmZip -UseBasicParsing -TimeoutSec 30
+        if (-not (Test-Path $gcmDir)) {
+            New-Item -ItemType Directory -Path $gcmDir -Force | Out-Null
+        }
+        Expand-Archive -Path $gcmZip -DestinationPath $gcmDir -Force
+        Remove-Item $gcmZip -Force -ErrorAction SilentlyContinue
+        
+        # Add GCM to PATH and register as credential helper
+        $env:PATH = "$gcmDir;$env:PATH"
+        & (Join-Path $gitDir "cmd\git.exe") config --global credential.helper "manager" 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { throw "git config --global credential.helper failed with exit $LASTEXITCODE" }
+        
+        Write-Success "Git Credential Manager installed"
+        Write-Host "  First git operation requiring auth will open a browser window." -ForegroundColor DarkGray
+    } catch {
+        Write-Warn "  Could not install Git Credential Manager: $_"
+        Write-Warn "  You can authenticate with a PAT instead when prompted."
+    }
+}
+
+# Offer to add Git to system PATH
+Write-Host ""
+Write-Prompt "  Add Git to system PATH (so 'git' works in any terminal)? (y/N): "
+$addGitToPath = Read-Host
+if ($addGitToPath -like 'y*') {
+    try {
+        $gitCmdDir = Join-Path $gitDir "cmd"
+        $userPath = [Environment]::GetEnvironmentVariable("PATH", "User")
+        if ($userPath -notlike "*$gitCmdDir*") {
+            $newPath = "$gitCmdDir;$userPath"
+            [Environment]::SetEnvironmentVariable("PATH", $newPath, "User")
+            Write-Success "Git added to system PATH (log out/in to take effect)"
+        } else {
+            Write-Step "Git already in system PATH"
+        }
+    } catch {
+        Write-Warn "  Could not add Git to PATH: $_"
+    }
+}
+
 # 4. Run bootstrap
 Write-Header "Running bootstrap (downloads Node.js, OpenCode, Handy, etc.)..."
 $bootstrapPath = "$InstallDir\scripts\bootstrap.ps1"
