@@ -648,8 +648,7 @@ timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
     Write-Success "User profile already exists at $userDir"
 }
 
-# Optional: Sync with GitHub for cross-machine access
-$shouldSync = $false
+# Optional: Sync existing GitHub user profile
 $ghUser = $null
 $repoName = $null
 
@@ -660,121 +659,71 @@ if ($UserRepo) {
     if ($parts.Count -eq 2) {
         $ghUser = $parts[0]
         $repoName = $parts[1]
-        $shouldSync = $true
         Write-Host "  Using specified user repo: $ghUser/$repoName" -ForegroundColor Cyan
     } else {
         Write-Warn "Could not parse UserRepo URL: $UserRepo"
-        Write-Warn "Expected format: https://github.com/username/repo.git"
     }
 } else {
     Write-Host ""
-    Write-Host "Glitch AI stores your personal memory in the user/ directory." -ForegroundColor White
-    Write-Host "You can optionally sync it to GitHub for cross-machine access." -ForegroundColor White
+    Write-Host "Do you have an existing Glitch user profile repo on GitHub?" -ForegroundColor White
+    Write-Host "  (If not, you can set this up later inside Glitch.)" -ForegroundColor DarkGray
     Write-Host ""
-    Write-Prompt "Sync user profile to GitHub? (y/N): "
+    Write-Prompt "Connect existing profile from GitHub? (y/N): "
     $syncProfile = Read-Host
     if ($syncProfile -like 'y*') {
-        $shouldSync = $true
         Write-Prompt "GitHub username: "
         $ghUser = Read-Host
         if ($ghUser) {
             Write-Prompt "Repository name (default: glitch-user-$ghUser): "
             $repoName = Read-Host
             if (-not $repoName) { $repoName = "glitch-user-$ghUser" }
-        } else {
-            $shouldSync = $false
         }
     }
 }
 
-if ($shouldSync -and $ghUser) {
-    Push-Location $userDir
+if ($ghUser -and $repoName) {
     $prevEAP = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
+    Push-Location $userDir
+    
     try {
-        # Initialize git repo if needed
-        if (-not (Test-Path ".git")) {
-            git init | Out-Null
-        }
+        Write-Step "Downloading profile from $ghUser/$repoName..."
         
-        # Get the current branch
-        $pushBranch = git branch --show-current
-        if (-not $pushBranch) { $pushBranch = "main" }
+        # Try to clone the repo directly into a temp dir, then copy contents
+        $tempCloneDir = Join-Path $env:TEMP "glitch-user-clone"
+        if (Test-Path $tempCloneDir) { Remove-Item $tempCloneDir -Recurse -Force -ErrorAction SilentlyContinue }
         
-        # Add and commit any local files
-        $commitCount = git rev-list --count HEAD 2>$null
-        if (-not $commitCount -or $commitCount -eq 0) {
-            Write-Step "Creating initial commit..."
-            git add -A 2>&1 | Out-Null
-            git commit -m "Initial user profile" 2>&1 | Out-Null
-        }
-        
-        # Check if remote is already configured
-        $remoteUrl = git remote get-url origin 2>$null
-        if (-not $remoteUrl) {
-            git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
-        }
-        
-        # Try to fetch and pull first (handles existing repos)
-        Write-Step "Syncing with GitHub..."
-        git fetch origin $pushBranch 2>&1 | Out-Null
-        $fetchExit = $LASTEXITCODE
-        
-        if ($fetchExit -eq 0) {
-            # Remote exists and we have access - pull changes
-            git pull --rebase origin $pushBranch --allow-unrelated-histories 2>&1 | Out-Null
-            # Now push
-            $pushResult = git push -u origin $pushBranch 2>&1
-            if ($LASTEXITCODE -eq 0) {
-                Write-Success "User profile synced from GitHub"
-            } else {
-                Write-Warn "  Could not push. Try later with: cd $userDir && git push -u origin $pushBranch"
-            }
+        $cloneResult = git clone "https://github.com/$ghUser/$repoName.git" $tempCloneDir 2>&1 | Out-String
+        if ($LASTEXITCODE -eq 0) {
+            # Clone succeeded - merge with existing user dir
+            Write-Success "Profile downloaded from GitHub"
+            Copy-Item "$tempCloneDir\*" $userDir -Recurse -Force -ErrorAction SilentlyContinue
+            Remove-Item $tempCloneDir -Recurse -Force -ErrorAction SilentlyContinue
+            
+            # Init git in user dir and set up remote
+            if (-not (Test-Path "$userDir\.git")) { git init 2>&1 | Out-Null }
+            $existingRemote = git remote get-url origin 2>$null
+            if (-not $existingRemote) { git remote add origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null }
         } else {
-            # Fetch failed - could be auth issue, private repo, or repo doesn't exist
-            Write-Warn "  Could not access remote. The repository may be private or require authentication."
+            # Clone failed - likely private repo or doesn't exist
+            Write-Warn "  Could not download profile from GitHub."
             Write-Host ""
-            Write-Host "  To authenticate with GitHub, create a Personal Access Token (PAT):" -ForegroundColor Cyan
-            Write-Host "    https://github.com/settings/tokens" -ForegroundColor Gray
+            Write-Host "  Your profile is saved locally at: $userDir" -ForegroundColor Cyan
+            Write-Host "  To connect it to GitHub later, just tell Glitch:" -ForegroundColor Cyan
+            Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
             Write-Host ""
-            Write-Prompt "  Enter GitHub token (or press Enter to skip): "
-            $ghToken = Read-Host
-            if ($ghToken) {
-                # Retry with token in URL
-                $authUrl = "https://$ghUser`:$ghToken@github.com/$ghUser/$repoName.git"
-                git remote set-url origin $authUrl 2>&1 | Out-Null
-                
-                # Try fetch again
-                git fetch origin $pushBranch 2>&1 | Out-Null
-                if ($LASTEXITCODE -eq 0) {
-                    git pull --rebase origin $pushBranch --allow-unrelated-histories 2>&1 | Out-Null
-                    $pushResult = git push -u origin $pushBranch 2>&1
-                    if ($LASTEXITCODE -eq 0) {
-                        Write-Success "User profile synced from GitHub"
-                    } else {
-                        Write-Warn "  Push still failed: $($pushResult -join ' ')"
-                        Write-Warn "  Push later with: cd $userDir && git push -u origin $pushBranch"
-                    }
-                } else {
-                    Write-Warn "  Could not connect to GitHub with provided token."
-                    Write-Warn "  Push later with: cd $userDir && git push -u origin $pushBranch"
-                }
-                
-                # Reset URL to original (without token)
-                git remote set-url origin "https://github.com/$ghUser/$repoName.git" 2>&1 | Out-Null
-            } else {
-                Write-Host "  Profile stays local-only. To sync later:" -ForegroundColor DarkGray
-                Write-Host "    cd $userDir && git remote add origin https://github.com/$ghUser/$repoName.git" -ForegroundColor DarkGray
-                Write-Host "    cd $userDir && git push -u origin $pushBranch" -ForegroundColor DarkGray
-            }
+            Remove-Item $tempCloneDir -Recurse -Force -ErrorAction SilentlyContinue
         }
+    } catch {
+        Write-Warn "  Profile download failed: $_"
+        Write-Host "  Your profile is saved locally. Connect to GitHub later through Glitch." -ForegroundColor Cyan
     } finally {
         $ErrorActionPreference = $prevEAP
     }
     Pop-Location
-} elseif (-not $UserRepo) {
-    Write-Host "  Profile stays local-only. To sync later:" -ForegroundColor DarkGray
-    Write-Host "    cd $userDir && git init && git remote add origin <url> && git push" -ForegroundColor DarkGray
+} else {
+    Write-Host "  Profile stays local-only. To sync with GitHub later:" -ForegroundColor DarkGray
+    Write-Host "    Tell Glitch: 'Connect my user profile to GitHub'" -ForegroundColor DarkGray
 }
 
 # 6. Verify installation
