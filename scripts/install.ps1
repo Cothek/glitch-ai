@@ -662,11 +662,45 @@ if ($shouldSync -and $ghUser) {
                 git branch --set-upstream-to="origin/$defaultBranch" $defaultBranch 2>&1 | Out-Null
             } else {
                 Write-Warn "No existing profile on GitHub (or pull failed). Starting fresh."
-                Write-Host "  Push later with: cd $userDir && git push -u origin $defaultBranch"
+                # Try pushing instead - works for private repos where ls-remote/pull might fail
+                $pushBranch = git branch --show-current
+                if (-not $pushBranch) { $pushBranch = "main" }
+                # Ensure there's at least one commit before push
+                $commitCount = git rev-list --count HEAD 2>$null
+                if (-not $commitCount -or $commitCount -eq 0) {
+                    Write-Step "Creating initial commit..."
+                    git add -A
+                    git commit -m "Initial user profile" 2>&1 | Out-Null
+                }
+                Write-Step "Pushing local profile to GitHub..."
+                $pushResult = git push -u origin $pushBranch 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "User profile synced to GitHub"
+                } else {
+                    Write-Warn "  Could not push: $($pushResult -join ' ')"
+                    Write-Warn "  Push later with: cd $userDir && git push -u origin $pushBranch"
+                }
             }
         } else {
-            Write-Warn "Remote repository not found. Profile is local-only."
-            Write-Host "  Push later with: cd $userDir && git push -u origin $localBranch"
+            Write-Warn "Remote repository not found (or private)."
+            # Try pushing - works for private repos where ls-remote is blocked
+            $pushBranch = git branch --show-current
+            if (-not $pushBranch) { $pushBranch = "main" }
+            # Ensure there's at least one commit before push
+            $commitCount = git rev-list --count HEAD 2>$null
+            if (-not $commitCount -or $commitCount -eq 0) {
+                Write-Step "Creating initial commit..."
+                git add -A
+                git commit -m "Initial user profile" 2>&1 | Out-Null
+            }
+            Write-Step "Pushing local profile to GitHub..."
+            $pushResult = git push -u origin $pushBranch 2>&1
+            if ($LASTEXITCODE -eq 0) {
+                Write-Success "User profile synced to GitHub"
+            } else {
+                Write-Warn "  Could not push: $($pushResult -join ' ')"
+                Write-Warn "  Push later with: cd $userDir && git push -u origin $pushBranch"
+            }
         }
     } finally {
         $ErrorActionPreference = $prevEAP
