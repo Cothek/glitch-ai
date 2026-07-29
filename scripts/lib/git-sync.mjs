@@ -90,11 +90,16 @@ const C = {
  * @returns {{ branch: string|null, isDetached: boolean }}
  */
 function getCurrentBranch(cwd) {
-  const r = run('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd, timeout: 5000 });
-  if (!r.success) return { branch: null, isDetached: false };
-  const b = r.stdout.trim();
-  if (b === 'HEAD') return { branch: null, isDetached: true };
-  return { branch: b, isDetached: false };
+  const r = run('git', ['symbolic-ref', '--short', 'HEAD'], { cwd, timeout: 5000 });
+  if (r.success) {
+    const b = r.stdout.trim();
+    return { branch: b, isDetached: false };
+  }
+  const headCheck = run('git', ['rev-parse', '--verify', 'HEAD'], { cwd, timeout: 5000 });
+  if (headCheck.success) {
+    return { branch: null, isDetached: true };
+  }
+  return { branch: null, isDetached: false };
 }
 
 /**
