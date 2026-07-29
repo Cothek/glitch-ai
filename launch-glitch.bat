@@ -33,12 +33,12 @@ echo.
 set "LOG_FILE=%~dp0data\launch.log"
 if not exist "%~dp0data" mkdir "%~dp0data"
 echo [%date% %time%] Glitch starting... > "%LOG_FILE%"
-REM Run node via PowerShell for live console output + exit code capture
-powershell -NoProfile -Command "& { '%NODE_CMD%' '%~dp0scripts\launch-unified.mjs' %* 2>&1 | Tee-Object -FilePath '%TEMP%\glitch-raw-launch.log'; exit $LASTEXITCODE }"
+REM Run node script, capture output to temp file for log + exit code
+"%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %* > "%TEMP%\glitch-launch-output.txt" 2>&1
 set "NODE_EXIT=%errorlevel%"
-REM Clean raw log: strip ANSI + non-ASCII, append to final log
-powershell -NoProfile -Command "Get-Content '%TEMP%\glitch-raw-launch.log' | ForEach-Object { $_ -replace '\x1b\[[\d;?]*[a-zA-Z]','' -replace '[^\x20-\x7E\r\n]','' } | Out-File -FilePath '%LOG_FILE%' -Append"
-del "%TEMP%\glitch-raw-launch.log" 2>nul
+type "%TEMP%\glitch-launch-output.txt"
+powershell -NoProfile -Command "Get-Content '%TEMP%\glitch-launch-output.txt' | ForEach-Object { $_ -replace '\x1b\[[\d;?]*[a-zA-Z]','' -replace '[^\x20-\x7E\r\n]','' } | Out-File -FilePath '%LOG_FILE%' -Append"
+del "%TEMP%\glitch-launch-output.txt" 2>nul
 if %NODE_EXIT% neq 0 (
     echo.
     echo Glitch exited with code %NODE_EXIT%. Log saved to: %LOG_FILE%
