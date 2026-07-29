@@ -264,13 +264,20 @@ if (Test-Path "$InstallDir\.git") {
     if ($update -eq '' -or $update -like 'y*') {
         Write-Step "Pulling latest changes..."
         Push-Location $InstallDir
-        $result = git pull --ff-only 2>&1
-        $exitCode = $LASTEXITCODE
-        Pop-Location
-        if ($exitCode -eq 0) {
-            Write-Success "Updated to latest version"
-        } else {
-            Write-Error "Update failed: $result"
+        try {
+            $result = git pull --ff-only 2>&1
+            $exitCode = $LASTEXITCODE
+            Pop-Location
+            if ($exitCode -eq 0) {
+                Write-Success "Updated to latest version"
+            } else {
+                Write-Error "Update failed: $result"
+                Write-Warn "You may have local changes. Try: cd $InstallDir && git status"
+                throw "Installation failed"
+            }
+        } catch {
+            Pop-Location -ErrorAction SilentlyContinue
+            Write-Error "Update failed: $_"
             Write-Warn "You may have local changes. Try: cd $InstallDir && git status"
             throw "Installation failed"
         }
