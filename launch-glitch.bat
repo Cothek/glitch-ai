@@ -42,3 +42,4 @@ if %NODE_EXIT% neq 0 (
     echo Press any key to exit...
     pause > nul
 )
+exit /b %NODE_EXIT%
