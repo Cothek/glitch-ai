@@ -90,7 +90,7 @@ function askQuestion(query) {
  * Run the dependency update check and prompt for updates if available
  * @param {Object} options
  * @param {boolean} options.skipIfNoPowerShell - If true, skip silently on non-Windows
- * @returns {Promise<{checked: boolean, updatesApplied: boolean}>}
+ * @returns {Promise<{checked: boolean, updatesApplied: boolean, skipped: boolean}>}
  */
 export async function checkAndPromptUpdates(options = {}) {
   const { skipIfNoPowerShell = true } = options;
@@ -99,12 +99,12 @@ export async function checkAndPromptUpdates(options = {}) {
     if (!skipIfNoPowerShell) {
       log(DARK_GRAY, '  Dependency update check skipped (Windows-only PS1 scripts)');
     }
-    return { checked: false, updatesApplied: false };
+    return { checked: false, updatesApplied: false, skipped: false };
   }
 
   if (!existsSync(CheckUpdatesScript)) {
     log(DARK_YELLOW, '  check-updates.ps1 not found, skipping update check');
-    return { checked: false, updatesApplied: false };
+    return { checked: false, updatesApplied: false, skipped: false };
   }
 
   log(CYAN, '  Checking dependency updates...');
@@ -116,19 +116,19 @@ export async function checkAndPromptUpdates(options = {}) {
     // Read results
     if (!existsSync(StatusFile)) {
       log(DARK_YELLOW, '  Update status file not found');
-      return { checked: true, updatesApplied: false };
+      return { checked: true, updatesApplied: false, skipped: false };
     }
 
     const status = readJson(StatusFile);
     if (!status || status.updates_available === 0) {
       log(DARK_GREEN, '  All dependencies up-to-date');
-      return { checked: true, updatesApplied: false };
+      return { checked: true, updatesApplied: false, skipped: false };
     }
 
     const updateItems = (status.items || []).filter(i => i.update_available);
     if (updateItems.length === 0) {
       log(DARK_GREEN, '  All dependencies up-to-date');
-      return { checked: true, updatesApplied: false };
+      return { checked: true, updatesApplied: false, skipped: false };
     }
 
     // Display available updates
@@ -147,7 +147,7 @@ export async function checkAndPromptUpdates(options = {}) {
 
     if (selection.trim().toLowerCase() === 's') {
       log(DARK_YELLOW, '  Skipping updates.');
-      return { checked: true, updatesApplied: false };
+      return { checked: true, updatesApplied: false, skipped: true };
     }
 
     const selectedNames = [];
@@ -170,11 +170,11 @@ export async function checkAndPromptUpdates(options = {}) {
       pwsh(['-File', CheckUpdatesScript, '-Update'], { stdio: 'inherit', timeout: 120000 });
     }
     log(GREEN, '  Updates complete.');
-    return { checked: true, updatesApplied: true };
+    return { checked: true, updatesApplied: true, skipped: false };
 
   } catch (e) {
     log(DARK_YELLOW, `  Update check skipped (non-critical): ${e.message || e}`);
-    return { checked: false, updatesApplied: false };
+    return { checked: false, updatesApplied: false, skipped: false };
   }
 }
 

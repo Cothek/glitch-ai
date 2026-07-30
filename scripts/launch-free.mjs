@@ -922,61 +922,65 @@ async function main() {
 
   // ---- Check dependency updates (shared module) ----
   const { checkAndPromptUpdates } = await import('./check-updates.mjs');
-  await checkAndPromptUpdates({ skipIfNoPowerShell: !POWERSHELL });
+  const depResult = await checkAndPromptUpdates({ skipIfNoPowerShell: !POWERSHELL });
 
   // ---- Sync user memory data from private repo (handled by checkUserRepoUpdates above) ----
 
 // ---- Auto-update opencode to latest (minor/patch) + sync local binary ----
   // Uses global npm install, then syncs local binary from global install
-  try {
-    const globalVer = run(NPM_BIN === 'npm.cmd' ? 'npm.cmd' : 'npm', ['--version'], { timeout: 5000 });
-    if (!globalVer.success) {
-      log(DARK_YELLOW, '  npm not available, skipping opencode update check');
-    } else {
-      const globalBinName = OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode';
-      const whichResult = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
-      const currentGlobal = whichResult.success ? run(globalBinName, ['--version'], { timeout: 10000 }) : { success: false };
-      const currentVer = currentGlobal.success ? currentGlobal.stdout : 'unknown';
+  if (!depResult.skipped) {
+    try {
+      const globalVer = run(NPM_BIN === 'npm.cmd' ? 'npm.cmd' : 'npm', ['--version'], { timeout: 5000 });
+      if (!globalVer.success) {
+        log(DARK_YELLOW, '  npm not available, skipping opencode update check');
+      } else {
+        const globalBinName = OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode';
+        const whichResult = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+        const currentGlobal = whichResult.success ? run(globalBinName, ['--version'], { timeout: 10000 }) : { success: false };
+        const currentVer = currentGlobal.success ? currentGlobal.stdout : 'unknown';
 
-      const npmView = run(NPM_BIN, ['view', 'opencode-ai', 'version'], { timeout: 15000 });
-      const latestVer = npmView.success ? npmView.stdout : 'unknown';
+        const npmView = run(NPM_BIN, ['view', 'opencode-ai', 'version'], { timeout: 15000 });
+        const latestVer = npmView.success ? npmView.stdout : 'unknown';
 
-      const needsUpdate = currentVer !== 'unknown' && latestVer !== 'unknown' && currentVer !== latestVer;
+        const needsUpdate = currentVer !== 'unknown' && latestVer !== 'unknown' && currentVer !== latestVer;
 
-      if (needsUpdate) {
-        const cvParts = currentVer.split('.');
-        const lvParts = latestVer.split('.');
-        const autoSafe = cvParts[0] === lvParts[0];
+        if (needsUpdate) {
+          const cvParts = currentVer.split('.');
+          const lvParts = latestVer.split('.');
+          const autoSafe = cvParts[0] === lvParts[0];
 
-        if (autoSafe) {
-          log(CYAN, '  Updating opencode (' + currentVer + ' -> ' + latestVer + ')...');
-          run(NPM_BIN, ['install', '-g', 'opencode-ai@latest'], { stdio: 'inherit', timeout: 60000 });
-          const whichResult2 = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
-          const updatedVer = whichResult2.success ? run(globalBinName, ['--version'], { timeout: 10000 }) : { success: false };
-          log(GREEN, '  Done. Version: ' + (updatedVer.success ? updatedVer.stdout : currentVer));
+          if (autoSafe) {
+            log(CYAN, '  Updating opencode (' + currentVer + ' -> ' + latestVer + ')...');
+            run(NPM_BIN, ['install', '-g', 'opencode-ai@latest'], { stdio: 'inherit', timeout: 60000 });
+            const whichResult2 = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+            const updatedVer = whichResult2.success ? run(globalBinName, ['--version'], { timeout: 10000 }) : { success: false };
+            log(GREEN, '  Done. Version: ' + (updatedVer.success ? updatedVer.stdout : currentVer));
 
-          // Sync local binary from updated global install
-          const npmRoot = run(NPM_BIN, ['root', '-g'], { timeout: 10000 });
-          if (npmRoot.success) {
-            const globalBin = join(npmRoot.stdout.trim(), 'opencode-ai', 'bin', OPENCODE_BIN_NAME);
-            if (existsSync(globalBin) && existsSync(OpenCodeBin)) {
-              const globalVersion = run(globalBin, ['--version'], { timeout: 5000 });
-              const localVersion = run(OpenCodeBin, ['--version'], { timeout: 5000 });
-              if (globalVersion.success && localVersion.success && localVersion.stdout.trim() !== globalVersion.stdout.trim()) {
-                log(CYAN, '  Syncing local opencode binary (' + localVersion.stdout.trim() + ' -> ' + globalVersion.stdout.trim() + ')...');
-                copyFileSync(globalBin, OpenCodeBin);
-                log(GREEN, '  Done.');
+            // Sync local binary from updated global install
+            const npmRoot = run(NPM_BIN, ['root', '-g'], { timeout: 10000 });
+            if (npmRoot.success) {
+              const globalBin = join(npmRoot.stdout.trim(), 'opencode-ai', 'bin', OPENCODE_BIN_NAME);
+              if (existsSync(globalBin) && existsSync(OpenCodeBin)) {
+                const globalVersion = run(globalBin, ['--version'], { timeout: 5000 });
+                const localVersion = run(OpenCodeBin, ['--version'], { timeout: 5000 });
+                if (globalVersion.success && localVersion.success && localVersion.stdout.trim() !== globalVersion.stdout.trim()) {
+                  log(CYAN, '  Syncing local opencode binary (' + localVersion.stdout.trim() + ' -> ' + globalVersion.stdout.trim() + ')...');
+                  copyFileSync(globalBin, OpenCodeBin);
+                  log(GREEN, '  Done.');
+                }
               }
             }
+          } else {
+            log(YELLOW, '  \u26A0 OpenCode major version available: ' + currentVer + ' -> ' + latestVer);
+            log(YELLOW, '  Run: npm install -g opencode-ai@latest');
           }
-        } else {
-          log(YELLOW, '  \u26A0 OpenCode major version available: ' + currentVer + ' -> ' + latestVer);
-          log(YELLOW, '  Run: npm install -g opencode-ai@latest');
         }
       }
+    } catch (e) {
+      log(YELLOW, '  WARNING: Binary sync failed: ' + (e.message || e));
     }
-  } catch (e) {
-    log(YELLOW, '  WARNING: Binary sync failed: ' + (e.message || e));
+  } else {
+    log(DARK_YELLOW, '  OpenCode binary update skipped (user skipped updates)');
   }
 
   // ---- Root directory audit (print warning if untracked artifacts found) ----
