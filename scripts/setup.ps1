@@ -17,12 +17,14 @@ Write-Host ""
 # ---- Self-heal: initialize git submodule if needed ----
 if (-not (Test-Path $TemplateDir)) {
   Write-Host "  Initializing engine submodule..." -ForegroundColor Cyan
-  try {
-    git submodule update --init --recursive 2>&1 | Out-Null
-  } catch {
-    Write-Host "  ERROR: Could not initialize submodule." -ForegroundColor Red
-    Write-Host "  Run: git submodule update --init --recursive" -ForegroundColor Yellow
-    exit 1
+  $subOutput = git submodule update --init --recursive 2>&1
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "  Submodule initialized" -ForegroundColor Green
+  } else {
+    # Show the actual error so users can diagnose (network, auth, missing repo, etc.)
+    Write-Host "  WARNING: Could not initialize submodule (continuing)" -ForegroundColor Yellow
+    $subOutput | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkYellow }
+    Write-Host "  Run manually: git submodule update --init --recursive" -ForegroundColor Yellow
   }
 }
 

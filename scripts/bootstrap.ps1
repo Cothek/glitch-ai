@@ -150,12 +150,24 @@ if (Test-Path $NodeBin) {
 
 # -- Step 2: Git Submodules --
 Write-Host "[2/5] Initializing git submodules..." -ForegroundColor Cyan
-try {
-  Invoke-WithSpinner -Label "Initializing git submodules" -DoneMessage "Submodules" -ScriptBlock {
-    git -C "$using:RootDir" submodule update --init --recursive 2>&1 | Out-Null
+
+# Distinguish "not a git repo" (expected, skip silently) from real failures (warn loudly).
+# A fresh clone of the repo as a zip (no .git/) lands here -- that's normal, not an error.
+$isGitRepo = Test-Path (Join-Path $RootDir ".git")
+if (-not $isGitRepo) {
+  Write-Host "  Skipping submodules (not a git repo -- this is normal for zip downloads)" -ForegroundColor DarkGray
+} else {
+  $subOutput = git -C "$RootDir" submodule update --init --recursive 2>&1
+  if ($LASTEXITCODE -eq 0) {
+    Write-Host "  Submodules initialized" -ForegroundColor Green
+  } else {
+    # Real failure: network error, auth failure, missing submodule, etc.
+    # Log the actual error so users can diagnose, but DO NOT abort bootstrap.
+    Write-Host "  WARNING: Submodule update failed (continuing anyway)" -ForegroundColor Yellow
+    $subOutput | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkYellow }
+    Write-Host "  Recovery: cd `"$RootDir`" && git submodule update --init --recursive" -ForegroundColor Yellow
+    $failures += "Step 2: Git Submodules -- submodule update failed (see output above)"
   }
-} catch {
-  Write-Host "  Skipping submodules (not a git repo or git not available)" -ForegroundColor Yellow
 }
 
 # -- Step 3: OpenCode --
