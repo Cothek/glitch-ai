@@ -31,7 +31,7 @@
     irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex -NoLaunch
 
 .EXAMPLE
-    irm https://raw.githubusercontent.com/Cothek/glitch-ai/develop/scripts/install.ps1 | iex -Branch develop
+    irm https://raw.githubusercontent.com/Cothek/glitch-ai/develop/scripts/install.ps1 -OutFile "$env:TEMP\glitch-install.ps1"; powershell -ExecutionPolicy Bypass -File "$env:TEMP\glitch-install.ps1" -Branch develop
 
 .EXAMPLE
     irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex -UserRepo "https://github.com/Cothek/glitch-user-cothek.git"
