@@ -846,7 +846,8 @@ async function main() {
   // ---- Generate runtime config from template ----
   log(CYAN, '  Generating free mode config...');
 
-  const templateText = readFileSync(TemplatePath, 'utf-8');
+  let templateText = readFileSync(TemplatePath, 'utf-8');
+  if (templateText.charCodeAt(0) === 0xFEFF) templateText = templateText.slice(1);
 
   const engineInstructions = [
     '.opencode/instructions/shared-agent-rules.md',
