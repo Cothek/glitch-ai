@@ -34,12 +34,19 @@ Before testing, establish:
 - [ ] Source code location (if available — enables deeper analysis)
 - [ ] Auth credentials (if authorized testing)
 - [ ] Scope boundaries (what's in/out of scope)
-- [ ] Any installed security tools:
-  - `snyk` — dependency vulnerability scanning (global npm)
-  - `nuclei` — automated vulnerability scanning (`tools/security/nuclei.exe`)
-  - `trufflehog` — secret scanning (`tools/security/trufflehog.exe`)
 
-### 0.3 Create Working Directory
+### 0.3 Ensure Security Tools Are Installed
+Security tools (nuclei, trufflehog, snyk) are on-demand only — NOT pre-installed at startup.
+Run the following to install them if missing:
+
+```bash
+node scripts/ensure-tools.mjs --manifest config/tools-security.json
+```
+
+If the manifest is not found at config/tools-security.json, the tools may already be installed
+from a previous session. Check for each binary directly.
+
+### 0.4 Create Working Directory
 ```
 mkdir -p reports/security/YYYY-MM-DD-targetname/
 ```

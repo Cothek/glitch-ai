@@ -206,6 +206,8 @@ When the same tool gets created in 3+ different dev loops, that's a Forge trigge
 
 **Goal**: Catch security vulnerabilities, secrets, and dependency risks before the app runs.
 
+> **Note**: Security tools (nuclei, trufflehog) are on-demand only. Run `node scripts/ensure-tools.mjs --manifest config/tools-security.json` to install them. If not installed, skip the automated tool steps and proceed with manual code review.
+
 **Tool locations**:
 - **snyk**: global npm install (`snyk test`)
 - **nuclei**: `tools/security/nuclei.exe` (dynamic scanning — used in Interact phase below)
