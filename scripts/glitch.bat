@@ -12,14 +12,11 @@ REM Add bundled MinGit to PATH if present
 if exist "%~dp0..\data\mingit\cmd\git.exe" (
   set "PATH=%~dp0..\data\mingit\cmd;%PATH%"
 )
-REM Run node script, capture output to temp file for log + exit code
-"%NODE_CMD%" "%~dp0scripts\glitch.mjs" %* > "%TEMP%\glitch-launch-output.txt" 2>&1
+REM Run node script with live output
+"%NODE_CMD%" "%~dp0scripts\glitch.mjs" %*
 set "NODE_EXIT=%errorlevel%"
-type "%TEMP%\glitch-launch-output.txt"
-powershell -NoProfile -Command "Get-Content '%TEMP%\glitch-launch-output.txt' | ForEach-Object { $_ -replace '\x1b\[[\d;?]*[a-zA-Z]','' -replace '[^\x20-\x7E\r\n]','' } | Out-File -FilePath '%LOG_FILE%' -Append"
-del "%TEMP%\glitch-launch-output.txt" 2>nul
 if %NODE_EXIT% neq 0 (
-    echo Glitch exited with code %NODE_EXIT%. Log: %LOG_FILE%
+    echo Glitch exited with code %NODE_EXIT%.
     pause
 )
 exit /b %NODE_EXIT%

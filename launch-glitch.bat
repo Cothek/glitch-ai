@@ -33,15 +33,12 @@ echo.
 set "LOG_FILE=%~dp0data\launch.log"
 if not exist "%~dp0data" mkdir "%~dp0data"
 echo [%date% %time%] Glitch starting... > "%LOG_FILE%"
-REM Run node script, capture output to temp file for log + exit code
-"%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %* > "%TEMP%\glitch-launch-output.txt" 2>&1
+REM Run node script with live output
+"%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %*
 set "NODE_EXIT=%errorlevel%"
-type "%TEMP%\glitch-launch-output.txt"
-powershell -NoProfile -Command "Get-Content '%TEMP%\glitch-launch-output.txt' | ForEach-Object { $_ -replace '\x1b\[[\d;?]*[a-zA-Z]','' -replace '[^\x20-\x7E\r\n]','' } | Out-File -FilePath '%LOG_FILE%' -Append"
-del "%TEMP%\glitch-launch-output.txt" 2>nul
 if %NODE_EXIT% neq 0 (
     echo.
-    echo Glitch exited with code %NODE_EXIT%. Log saved to: %LOG_FILE%
+    echo Glitch exited with code %NODE_EXIT%.
     echo.
     echo Press any key to exit...
     pause > nul
