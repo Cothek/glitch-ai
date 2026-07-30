@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, statSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync, spawn } from 'child_process';
@@ -93,6 +93,49 @@ function saveMode(mode) {
   writeJson(PrefFile, { last_mode: mode, saved_at: new Date().toISOString() });
 }
 
+function getSavedProjectDir() {
+  const pref = readJson(PrefFile);
+  if (pref && pref.project_dir && typeof pref.project_dir === 'string') {
+    return pref.project_dir;
+  }
+  return null;
+}
+
+function saveProjectDir(projectDir) {
+  const pref = readJson(PrefFile) || {};
+  pref.project_dir = projectDir;
+  pref.saved_at = new Date().toISOString();
+  writeJson(PrefFile, pref);
+}
+
+async function promptForProjectDir() {
+  while (true) {
+    const answer = await askQuestion(' Enter your project folder path (e.g., D:\\my-project)\n Type \'q\' to cancel and switch to Normal Mode: ');
+    const trimmed = answer.trim();
+    if (!trimmed) {
+      log(RED, '  Project folder is required for Web Mode.');
+      continue;
+    }
+    if (trimmed === 'q' || trimmed === 'cancel' || trimmed === 'back') {
+      log(YELLOW, '  Cancelled. Switching to Normal Mode.');
+      return null;
+    }
+    const resolved = resolve(trimmed);
+    let stat;
+    try {
+      stat = statSync(resolved);
+    } catch {
+      log(RED, `  Path not found: ${resolved}`);
+      continue;
+    }
+    if (!stat.isDirectory()) {
+      log(RED, `  Path must be a directory, not a file: ${resolved}`);
+      continue;
+    }
+    return resolved;
+  }
+}
+
 const DELIVERIES = [
   { id: 'normal', name: 'Normal Mode', desc: 'terminal interface' },
   { id: 'web', name: 'Web Mode', desc: 'web server' },
@@ -183,7 +226,7 @@ async function showModelMenu(savedModelId) {
   return selection.trim();
 }
 
-function runScript(scriptName, extraArgs = []) {
+function runScript(scriptName, extraArgs = [], extraEnv = {}) {
   const scriptPath = join(SCRIPT_DIR, scriptName);
   if (!existsSync(scriptPath)) {
     log(RED, `  ERROR: Script not found: ${scriptPath}`);
@@ -198,7 +241,8 @@ function runScript(scriptName, extraArgs = []) {
     execFileSync('node', [scriptPath, ...extraArgs], {
       cwd: ROOT_DIR,
       stdio: 'inherit',
-      timeout: 0
+      timeout: 0,
+      env: { ...process.env, ...extraEnv }
     });
     return { success: true, status: 0 };
   } catch (e) {
@@ -279,8 +323,11 @@ async function main() {
 
   if (args.includes('--reset')) {
     if (existsSync(PrefFile)) {
-      writeJson(PrefFile, { last_mode: null, saved_at: new Date().toISOString() });
-      log(GREEN, '  Saved preference cleared.');
+      const pref = readJson(PrefFile) || {};
+      pref.last_mode = null;
+      pref.saved_at = new Date().toISOString();
+      writeJson(PrefFile, pref);
+      log(GREEN, '  Saved mode preference cleared (project folder preserved).');
     }
   }
 
@@ -349,11 +396,40 @@ async function main() {
     process.exit(1);
   }
 
+  let deliveryId = modeId.split('-')[0];
+
+  // ---- Web mode requires a project directory (OpenCode web UI is sandboxed to C:\Users\<username>) ----
+  let projectDir = null;
+  if (deliveryId === 'web') {
+    const saved = getSavedProjectDir();
+    if (saved && existsSync(saved)) {
+      projectDir = saved;
+      log(CYAN, ` Project folder: ${projectDir}`);
+    } else {
+      if (saved && !existsSync(saved)) {
+        log(YELLOW, `  Saved project folder no longer exists: ${saved}`);
+      }
+      log(YELLOW, '  Web Mode requires a project folder outside C:\\Users\\<username>.');
+      projectDir = await promptForProjectDir();
+      if (!projectDir) {
+        // User cancelled — fall back to Normal Mode
+        log(YELLOW, '  Web Mode cancelled. Switching to Normal Mode.');
+        modeId = `normal-${modeId.split('-')[1]}`;
+        deliveryId = 'normal';
+      } else {
+        saveProjectDir(projectDir);
+        log(GREEN, `  Saved project folder: ${projectDir}`);
+      }
+    }
+    log('');
+  }
+
   saveMode(modeId);
   log(GREEN, ` Launching ${getModeLabel(modeId)}...`);
   log('');
 
-  const result = runScript(config.script, config.args);
+  const extraEnv = projectDir ? { GLITCH_PROJECT_DIR: projectDir } : {};
+  const result = runScript(config.script, config.args, extraEnv);
   if (!result.success) {
     process.exit(result.error?.status || 1);
   }
