@@ -424,7 +424,7 @@ if (-not (Test-Path "$InstallDir\.git")) {
     if ($script:CloneSucceeded) {
         Push-Location $InstallDir
         try {
-            $initOutput = git submodule init 2>&1
+            $initOutput = & $gitPath submodule init 2>&1
             if ($LASTEXITCODE -ne 0) {
                 Write-Warn "git submodule init returned non-zero (continuing): $initOutput"
             }
@@ -438,6 +438,59 @@ if (-not (Test-Path "$InstallDir\.git")) {
         foreach ($line in $rawLines) {
             if ($line -match 'submodule\..+\.path\s+(.+)') {
                 $submodules += $matches[1].Trim()
+            }
+        }
+
+        # Initialize each submodule individually so one failure doesn't block the others
+        if ($submodules.Count -eq 0) {
+            Write-Warn "No submodules found in .gitmodules"
+        } else {
+            $issueFile = Join-Path $InstallDir "data\install-issues.md"
+            $issueDir = Split-Path -Parent $issueFile
+            if (-not (Test-Path $issueDir)) {
+                New-Item -ItemType Directory -Path $issueDir -Force | Out-Null
+            }
+
+            foreach ($submodule in $submodules) {
+                Write-Step "Updating submodule: $submodule"
+                $subOutput = & $gitPath submodule update --init $submodule 2>&1
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Success "  ${submodule}: OK"
+                    $script:SubmoduleSuccess += $submodule
+                } else {
+                    Write-Warn "  ${submodule}: FAILED"
+                    $subOutput | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkYellow }
+                    $script:SubmoduleFailures += $submodule
+
+                    # Log to install-issues.md (same format as install.sh, parseable by check-install-issues.mjs)
+                    # NOTE: Use AppendAllText with UTF8Encoding($false) to write UTF-8 WITHOUT BOM.
+                    # Out-File -Encoding utf8 on PowerShell 5.1 writes a BOM (EF BB BF), which breaks
+                    # check-install-issues.mjs (it reads with readFileSync('utf8') and anchors ^## with /m).
+                    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+                    $issueContent = @"
+
+## Install Issue - $timestamp
+- **Subsystem**: Submodule clone
+- **Component**: $submodule
+- **Error**:
+````
+$subOutput
+````
+- **Impact**: Some memory/skill files may be missing until resolved
+- **Fix**: Tell Glitch "check install issues" or run: cd $InstallDir && git submodule update --init --recursive
+
+"@
+                    [System.IO.File]::AppendAllText($issueFile, $issueContent, [System.Text.UTF8Encoding]::new($false))
+                }
+            }
+
+            Write-Host ""
+            if ($script:SubmoduleFailures.Count -eq 0) {
+                Write-Success "All submodules initialized successfully"
+            } else {
+                Write-Warn "Some submodules failed to clone (see above)"
+                Write-Warn "Issues logged to: $issueFile"
+                Write-Warn "Glitch will attempt to fix these on first launch."
             }
         }
     }
