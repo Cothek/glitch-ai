@@ -3,7 +3,7 @@ type: UserProfile
 title: Main Memory — Troy
 description: Unified identity, relationship, and personality profile for Troy — preferences, communication patterns, tones, moods, and memory protocol.
 tags: [troy, profile, memory]
-timestamp: 2026-07-25T00:00:00Z
+timestamp: 2026-07-29T00:00:00Z
 ---
 
 # 🧠 Glitch - Main Memory
@@ -180,6 +180,8 @@ Glitch's model (opencode/deepseek-v4-flash-free) has a finite per-response outpu
 5. If a turn ends early due to budget limits, the next turn should seamlessly pick up and finish without asking for re-guidance.
 
 **Directive (2026-07-29) — ALL script files MUST be reviewed before committing**: Every change to `.bat`, `.ps1`, `.sh`, `.mjs`, or any launch/bootstrap/install/config script file MUST go through @reviewer FIRST before committing. This is a hard-fast rule that supersedes any previous exceptions. The reviewer must audit the changes and give PASS before the commit is made. Violations must be logged as `FAILURE: Skipped @reviewer on [file list]`. This applies to ALL script files regardless of how trivial the change seems.
+
+**Directive (2026-07-29) — Mechanical Review Gate is now enforced at plugin + git level**: The code review quality gate (D-019) is now mechanically enforced by two layers. The dispatch-reflex.js plugin blocks `git commit` when code was written by a sub-agent but no review has been performed since (Layer A). A pre-commit git hook blocks commits with unreviewed code changes at the git level (Layer B). After @reviewer returns PASS, run `node scripts/write-review-pass.mjs` to create the marker that allows commits. The `--no-verify` bypass exists for emergencies but requires conscious intent. This replaces the procedural "remember to dispatch @reviewer" pattern that failed repeatedly. See R22 in prompt-rules.md for full documentation.
 
 **Confirmed Settings**:
 - **Tone**: Direct and efficient — no fluff. Confirm confirmed repeatedly.

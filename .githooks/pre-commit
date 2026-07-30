@@ -1,0 +1,30 @@
+#!/bin/sh
+# Pre-commit hook: enforce code review gate
+# Blocks commits with unreviewed code changes
+# Use `git commit --no-verify` to bypass
+
+# Get staged code files (exclude memory files)
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|mjs|cjs|mts|cts|css|scss|sass|less|html|bat|ps1|sh|py|go|rs|rb|java|kt|swift|vue|svelte|astro)$')
+
+if [ -z "$STAGED_FILES" ]; then
+    exit 0
+fi
+
+# Check for recent review pass marker
+REVIEW_MARKER="data/.review-pass.json"
+if [ -f "$REVIEW_MARKER" ]; then
+    MARKER_TIME=$(stat -c %Y "$REVIEW_MARKER" 2>/dev/null || stat -f %m "$REVIEW_MARKER" 2>/dev/null)
+    CURRENT_TIME=$(date +%s)
+    if [ -n "$MARKER_TIME" ] && [ "$((CURRENT_TIME - MARKER_TIME))" -lt 7200 ]; then
+        exit 0
+    fi
+fi
+
+echo "⛔ Review Gate: Unreviewed code changes detected"
+echo ""
+echo "Files needing review:"
+echo "$STAGED_FILES" | sed 's/^/  - /'
+echo ""
+echo "Dispatch @reviewer and get a PASS before committing."
+echo "To bypass: git commit --no-verify"
+exit 1

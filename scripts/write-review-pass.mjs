@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
-import { writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { writeFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
 import { resolve, join, dirname } from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -111,8 +111,13 @@ function writeMarker(marker) {
 }
 
 function resetMarker() {
-  ensureDataDir();
-  writeFileSync(MARKER_PATH, '', 'utf8');
+  try {
+    if (existsSync(MARKER_PATH)) {
+      unlinkSync(MARKER_PATH);
+    }
+  } catch (err) {
+    console.error(`Failed to reset marker: ${err.message}`);
+  }
 }
 
 function main() {

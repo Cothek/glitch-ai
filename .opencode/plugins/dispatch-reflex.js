@@ -1,10 +1,23 @@
 export const DispatchReflexPlugin = async ({ directory, client }) => {
   const lastTaskTime = new Map();
+  let pendingReview = false;
+  let lastCodeTaskTime = 0;
+  let lastReviewTaskTime = 0;
+
+  const CODE_WRITING_AGENTS = new Set([
+    'coder', 'coder-paid', 'ui-designer', 'ui-designer-paid',
+    'testing', 'testing-paid', 'pentester', 'pentester-paid'
+  ]);
+
+  const REVIEW_AGENTS = new Set([
+    'reviewer', 'reviewer-paid'
+  ]);
 
   const CODE_EXTENSIONS = new Set([
     '.ts', '.tsx', '.js', '.jsx', '.py', '.go', '.rs', '.rb', '.java',
     '.kt', '.swift', '.css', '.scss', '.sass', '.less', '.html', '.vue',
-    '.svelte', '.astro', '.mjs', '.cjs', '.mts', '.cts'
+    '.svelte', '.astro', '.mjs', '.cjs', '.mts', '.cts',
+    '.bat', '.ps1', '.sh'
   ]);
 
   const MEMORY_PATHS = [
@@ -88,6 +101,16 @@ export const DispatchReflexPlugin = async ({ directory, client }) => {
       if (input.tool === 'task') {
         const agentName = getAgentName(input);
         lastTaskTime.set(agentName, Date.now());
+
+        if (CODE_WRITING_AGENTS.has(agentName)) {
+          pendingReview = true;
+          lastCodeTaskTime = Date.now();
+        }
+
+        if (REVIEW_AGENTS.has(agentName)) {
+          pendingReview = false;
+          lastReviewTaskTime = Date.now();
+        }
       }
     },
 
@@ -123,6 +146,8 @@ export const DispatchReflexPlugin = async ({ directory, client }) => {
         const command = input.command || '';
         if (!command) return;
 
+        const normalizedCmd = command.trim().toLowerCase();
+
         if (shouldBlockBashCommand(command)) {
           const lastTask = lastTaskTime.get(agentName) || 0;
           const timeSinceTask = Date.now() - lastTask;
@@ -137,6 +162,22 @@ export const DispatchReflexPlugin = async ({ directory, client }) => {
               `Command: ${command}\n` +
               `You MUST dispatch to the appropriate sub-agent (task() with subagent_type: "general" for bash) before running destructive commands.\n` +
               `Exempt: read-only commands (git status, ls, cat, grep, etc.), git operations (git add, commit, push, pull).`
+            );
+          }
+        }
+
+        // Review gate: block git commit when review is pending
+        if (normalizedCmd.startsWith('git commit')) {
+          // Allow explicit bypass with --no-verify
+          if (normalizedCmd.includes('--no-verify')) {
+            return; // Skip review gate for --no-verify commits
+          }
+          if (pendingReview && lastCodeTaskTime > lastReviewTaskTime) {
+            throw new Error(
+              `⛔ Review Gate: Code was written by a sub-agent but no review has been performed since.\n` +
+              `Dispatch @reviewer first and get a PASS before committing.\n` +
+              `Reviewer agents: @reviewer (free), @reviewer-paid (paid fallback)\n` +
+              `To bypass: git commit --no-verify (only if you understand the risk)`
             );
           }
         }
