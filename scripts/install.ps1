@@ -416,7 +416,10 @@ if (-not (Test-Path "$InstallDir\.git")) {
     if ($Branch -ne "main") {
         Write-Step "Checking out branch: $Branch..."
         Push-Location $InstallDir
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
         & $gitPath checkout $Branch 2>$null
+        $ErrorActionPreference = $prevEAP
         Pop-Location
     }
 
