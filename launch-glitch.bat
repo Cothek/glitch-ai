@@ -37,6 +37,7 @@ REM Run node script with live output
 "%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %*
 set "NODE_EXIT=%errorlevel%"
 if %NODE_EXIT% neq 0 (
+    echo [%date% %time%] Glitch exited with code %NODE_EXIT% >> "%LOG_FILE%"
     echo.
     echo Glitch exited with code %NODE_EXIT%.
     echo.
