@@ -416,7 +416,7 @@ if (-not (Test-Path "$InstallDir\.git")) {
     if ($Branch -ne "main") {
         Write-Step "Checking out branch: $Branch..."
         Push-Location $InstallDir
-        & $gitPath checkout $Branch 2>&1 | Out-Null
+        & $gitPath checkout $Branch 2>$null
         Pop-Location
     }
 
