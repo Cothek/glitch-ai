@@ -200,7 +200,7 @@ function runScript(scriptName, extraArgs = []) {
       stdio: 'inherit',
       timeout: 0
     });
-    return { success: true };
+    return { success: true, status: 0 };
   } catch (e) {
     if (e.status !== null) {
       log(RED, `  Script exited with code ${e.status}`);
@@ -353,7 +353,10 @@ async function main() {
   log(GREEN, ` Launching ${getModeLabel(modeId)}...`);
   log('');
 
-  runScript(config.script, config.args);
+  const result = runScript(config.script, config.args);
+  if (!result.success) {
+    process.exit(result.error?.status || 1);
+  }
 }
 
 main().catch(e => {
