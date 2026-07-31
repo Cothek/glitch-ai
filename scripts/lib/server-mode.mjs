@@ -454,13 +454,13 @@ export async function launchServer(options = {}) {
 
   // ---- Display URLs ----
   log('');
-  log(MAGENTA, ' ┌─────────────────────────────────────────────────────────┐');
+  log(MAGENTA, ' ┌────────────────────────────────────────────────────────┐');
   log(MAGENTA, ' │ Glitch Web Server Ready                                │');
-  log(MAGENTA, ' ├─────────────────────────────────────────────────────────┤');
+  log(MAGENTA, ' ├────────────────────────────────────────────────────────┤');
   log(WHITE,   ' │ Credentials:                                           │');
   log(WHITE,   ` │   Username: opencode                                   │`);
   log(WHITE,   ` │   Password: ${pw.padEnd(42)} │`);
-  log(MAGENTA, ' └─────────────────────────────────────────────────────────┘');
+  log(MAGENTA, ' └────────────────────────────────────────────────────────┘');
   log('');
   log(CYAN, '  Web URLs:');
   if (cloudflareDomain) {
