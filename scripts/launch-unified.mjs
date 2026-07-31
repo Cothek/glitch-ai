@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, statSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, statSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync, spawn } from 'child_process';
@@ -259,6 +259,23 @@ async function main() {
   // ---- Check for repo updates before anything else ----
   const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
   handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
+
+  const restartFlagPath = join(ROOT_DIR, 'data', '.restart-timestamp');
+  // Clean up restart flag after successful launch (5 second delay to ensure we're past the critical startup phase)
+  const cleanupTimer = setTimeout(() => {
+    try {
+      if (existsSync(restartFlagPath)) {
+        unlinkSync(restartFlagPath);
+      }
+    } catch {
+      // Best-effort cleanup
+    }
+  }, 5000);
+
+  // Clear timer if process exits before timer fires
+  process.on('exit', () => {
+    clearTimeout(cleanupTimer);
+  });
 
   // ---- Check for install issues (submodule failures, etc.) ----
   const issuesFile = join(ROOT_DIR, 'data', 'install-issues.md');

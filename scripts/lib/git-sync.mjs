@@ -19,7 +19,7 @@
 
 import { execFileSync } from 'child_process';
 import { createInterface } from 'readline';
-import { existsSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 
 // ===== Cross-platform helpers =====
@@ -256,10 +256,15 @@ function discardChanges(cwd) {
 function computeRestartInfo(cwd) {
   const changed = getChangedFiles(cwd);
   if (changed === null) {
-    return { restartNeeded: true, changedStartupFiles: [] };
+    // JSDoc: treat null as 'unknown' and default to restartNeeded: true (safer to restart than to skip)
+    return { restartNeeded: true, changedStartupFiles: [], reason: 'unable to determine changes' };
   }
   const startupFiles = changed.filter(isStartupCritical);
-  return { restartNeeded: startupFiles.length > 0, changedStartupFiles: startupFiles };
+  return {
+    restartNeeded: startupFiles.length > 0,
+    changedStartupFiles: startupFiles,
+    reason: startupFiles.length > 0 ? 'startup files changed' : 'no startup files changed'
+  };
 }
 
 /**
@@ -301,6 +306,33 @@ export function handleRestartOnUpdate(spawnFn, syncResult, cwd) {
     process.exit(1);
   }
 
+  const restartFlagPath = join(cwd, 'data', '.restart-timestamp');
+  if (existsSync(restartFlagPath)) {
+    try {
+      const lastRestart = parseInt(readFileSync(restartFlagPath, 'utf8').trim(), 10);
+      const now = Date.now();
+      if (now - lastRestart < 15000) {
+        // Less than 15 seconds since last restart - skip to prevent loop
+        // Log warning so user knows startup-critical files were updated but not applied
+        log(C.DARK_YELLOW, '  Recent restart detected (<15s) — skipping restart to prevent loop');
+        log(C.DARK_YELLOW, '  If startup-critical files were updated, manually restart Glitch to apply them');
+        return;
+      }
+    } catch {
+      // Corrupt flag — ignore and proceed
+    }
+  }
+
+  try {
+    const dataDir = join(cwd, 'data');
+    if (!existsSync(dataDir)) {
+      mkdirSync(dataDir, { recursive: true });
+    }
+    writeFileSync(restartFlagPath, Date.now().toString());
+  } catch {
+    // Can't write flag — proceed with restart anyway
+  }
+
   log(C.CYAN, '');
   log(C.CYAN, '  Startup scripts updated. Restarting to apply changes...');
   if (syncResult.changedStartupFiles && syncResult.changedStartupFiles.length > 0) {
@@ -314,19 +346,32 @@ export function handleRestartOnUpdate(spawnFn, syncResult, cwd) {
   }
   log('');
 
-  // Process.argv[1] is the script path. Guard for edge cases (eval, stdin mode).
   if (!process.argv[1]) {
     log(C.RED, '  Cannot restart: no script path (process.argv[1] is empty)');
     process.exit(1);
   }
 
-  const child = spawnFn(process.execPath, [process.argv[1], ...process.argv.slice(2)], {
+  const childArgs = [process.argv[1], ...process.argv.slice(2)];
+
+  const prefPath = join(cwd, 'user', 'launch-preference.json');
+  if (existsSync(prefPath)) {
+    try {
+      const pref = JSON.parse(readFileSync(prefPath, 'utf8'));
+      if (pref.last_mode && !childArgs.includes('--mode')) {
+        childArgs.push('--mode', pref.last_mode);
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  const child = spawnFn(process.execPath, childArgs, {
     cwd,
     stdio: 'inherit',
-    detached: true,   // Detach so child survives parent exit on Unix (SIGHUP isolation)
+    detached: true,
   });
 
-  child.unref(); // Let parent exit independently — don't wait for child
+  child.unref();
 
   child.on('error', (err) => {
     log(C.RED, '  Restart failed: ' + err.message);
@@ -339,7 +384,6 @@ export function handleRestartOnUpdate(spawnFn, syncResult, cwd) {
     }
   });
 
-  // Exit immediately. The child is detached and runs independently.
   process.exit(0);
 }
 
