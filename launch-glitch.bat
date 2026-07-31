@@ -33,6 +33,7 @@ echo.
 set "LOG_FILE=%~dp0data\launch.log"
 if not exist "%~dp0data" mkdir "%~dp0data"
 echo [%date% %time%] Glitch starting... > "%LOG_FILE%"
+echo [%date% %time%] Args: %* >> "%LOG_FILE%"
 REM Run node script with live output
 "%NODE_CMD%" "%~dp0scripts\launch-unified.mjs" %*
 set "NODE_EXIT=%errorlevel%"
