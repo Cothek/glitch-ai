@@ -455,18 +455,18 @@ export async function launchServer(options = {}) {
   // ---- Display URLs ----
   log('');
   log(MAGENTA, ' ┌─────────────────────────────────────────────────────────┐');
-  log(MAGENTA, ' │  Glitch Web Server Ready                                │');
+  log(MAGENTA, ' │ Glitch Web Server Ready                                │');
   log(MAGENTA, ' ├─────────────────────────────────────────────────────────┤');
-  log(WHITE,   ' │  Credentials:                                           │');
-  log(WHITE,   ` │    Username: opencode                                   │`);
-  log(WHITE,   ` │    Password: ${pw.padEnd(42)} │`);
-  log(MAGENTA, ' ├─────────────────────────────────────────────────────────┤');
-  log(WHITE,   ' │  URLs:                                                  │');
-  if (cloudflareDomain) {
-    log(GREEN, ` │    Tunnel: https://${cloudflareDomain}/${dirSlug}/?auth_token=${authToken}`.padEnd(45) + '│');
-  }
-  log(GREEN,   ` │    Local:  http://localhost:${TARGET_PORT}`.padEnd(45) + '│');
+  log(WHITE,   ' │ Credentials:                                           │');
+  log(WHITE,   ` │   Username: opencode                                   │`);
+  log(WHITE,   ` │   Password: ${pw.padEnd(42)} │`);
   log(MAGENTA, ' └─────────────────────────────────────────────────────────┘');
+  log('');
+  log(CYAN, '  Web URLs:');
+  if (cloudflareDomain) {
+    log(GREEN, `    Tunnel: https://${cloudflareDomain}/${dirSlug}/?auth_token=${authToken}`);
+  }
+  log(GREEN,   `    Local:  http://localhost:${TARGET_PORT}`);
   log('');
   // Show enabled plugin URLs
   const { listPlugins } = await import('./plugin-manager.mjs');
