@@ -466,7 +466,7 @@ export async function launchServer(options = {}) {
   if (cloudflareDomain) {
     log(GREEN, `    Tunnel: https://${cloudflareDomain}/${dirSlug}/?auth_token=${authToken}`);
   }
-  log(GREEN,   `    Local:  http://localhost:${TARGET_PORT}`);
+  log(GREEN,   `    Local:  http://localhost:${TARGET_PORT}/${dirSlug}/`);
   log('');
   // Show enabled plugin URLs
   const { listPlugins } = await import('./plugin-manager.mjs');
