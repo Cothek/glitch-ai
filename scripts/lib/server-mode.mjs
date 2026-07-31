@@ -454,12 +454,20 @@ export async function launchServer(options = {}) {
 
   // ---- Display URLs ----
   log('');
-  log(YELLOW, `  Server password: ${pw}`);
-  log(YELLOW, '  Username: opencode');
+  log(MAGENTA, ' ┌─────────────────────────────────────────────────────────┐');
+  log(MAGENTA, ' │  Glitch Web Server Ready                                │');
+  log(MAGENTA, ' ├─────────────────────────────────────────────────────────┤');
+  log(WHITE,   ' │  Credentials:                                           │');
+  log(WHITE,   ` │    Username: opencode                                   │`);
+  log(WHITE,   ` │    Password: ${pw.padEnd(42)} │`);
+  log(MAGENTA, ' ├─────────────────────────────────────────────────────────┤');
+  log(WHITE,   ' │  URLs:                                                  │');
   if (cloudflareDomain) {
-    log(GREEN, `  Web access URL: https://${cloudflareDomain}/${dirSlug}/?auth_token=${authToken}`);
+    log(GREEN, ` │    Tunnel: https://${cloudflareDomain}/${dirSlug}/?auth_token=${authToken}`.padEnd(45) + '│');
   }
-  log(GREEN, `  Local URL: http://localhost:${TARGET_PORT}`);
+  log(GREEN,   ` │    Local:  http://localhost:${TARGET_PORT}`.padEnd(45) + '│');
+  log(MAGENTA, ' └─────────────────────────────────────────────────────────┘');
+  log('');
   // Show enabled plugin URLs
   const { listPlugins } = await import('./plugin-manager.mjs');
   const allPlugins = listPlugins();

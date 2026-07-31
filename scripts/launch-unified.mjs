@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, statSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, appendFileSync, mkdirSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync, execSync, spawn } from 'child_process';
@@ -11,6 +11,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SCRIPT_DIR = __dirname;
 const ROOT_DIR = resolve(SCRIPT_DIR, '..');
+
+const LOG_FILE = join(ROOT_DIR, 'data', 'launch.log');
+
+function logToFile(message) {
+  try {
+    mkdirSync(dirname(LOG_FILE), { recursive: true });
+    const timestamp = new Date().toISOString();
+    appendFileSync(LOG_FILE, `[${timestamp}] ${message}\n`, 'utf-8');
+  } catch (e) {
+    // Silently fail if log file can't be written
+  }
+}
 
 const PrefFile = join(ROOT_DIR, 'user', 'launch-preference.json');
 
@@ -91,49 +103,6 @@ function getSavedMode() {
 
 function saveMode(mode) {
   writeJson(PrefFile, { last_mode: mode, saved_at: new Date().toISOString() });
-}
-
-function getSavedProjectDir() {
-  const pref = readJson(PrefFile);
-  if (pref && pref.project_dir && typeof pref.project_dir === 'string') {
-    return pref.project_dir;
-  }
-  return null;
-}
-
-function saveProjectDir(projectDir) {
-  const pref = readJson(PrefFile) || {};
-  pref.project_dir = projectDir;
-  pref.saved_at = new Date().toISOString();
-  writeJson(PrefFile, pref);
-}
-
-async function promptForProjectDir() {
-  while (true) {
-    const answer = await askQuestion(` Project folder for initial session [default: ${ROOT_DIR}]:\n Type 'q' to cancel and switch to Normal Mode: `);
-    const trimmed = answer.trim();
-    if (!trimmed) {
-      // Empty input — use ROOT_DIR (Glitch install folder) as default
-      return ROOT_DIR;
-    }
-    if (trimmed === 'q' || trimmed === 'cancel' || trimmed === 'back') {
-      log(YELLOW, '  Cancelled. Switching to Normal Mode.');
-      return null;
-    }
-    const resolved = resolve(trimmed);
-    let stat;
-    try {
-      stat = statSync(resolved);
-    } catch {
-      log(RED, `  Path not found: ${resolved}`);
-      continue;
-    }
-    if (!stat.isDirectory()) {
-      log(RED, `  Path must be a directory, not a file: ${resolved}`);
-      continue;
-    }
-    return resolved;
-  }
 }
 
 const DELIVERIES = [
@@ -226,7 +195,7 @@ async function showModelMenu(savedModelId) {
   return selection.trim();
 }
 
-function runScript(scriptName, extraArgs = [], extraEnv = {}) {
+function runScript(scriptName, extraArgs = []) {
   const scriptPath = join(SCRIPT_DIR, scriptName);
   if (!existsSync(scriptPath)) {
     log(RED, `  ERROR: Script not found: ${scriptPath}`);
@@ -242,14 +211,16 @@ function runScript(scriptName, extraArgs = [], extraEnv = {}) {
       cwd: ROOT_DIR,
       stdio: 'inherit',
       timeout: 0,
-      env: { ...process.env, ...extraEnv }
+      env: process.env
     });
     return { success: true, status: 0 };
   } catch (e) {
     if (e.status !== null) {
       log(RED, `  Script exited with code ${e.status}`);
+      logToFile(`Script exited with code ${e.status}`);
     } else {
       log(RED, `  Script error: ${e.message || e}`);
+      logToFile(`ERROR: ${e.message || e}`);
     }
     return { success: false, error: e };
   }
@@ -351,11 +322,8 @@ async function main() {
 
   if (args.includes('--reset')) {
     if (existsSync(PrefFile)) {
-      const pref = readJson(PrefFile) || {};
-      pref.last_mode = null;
-      pref.saved_at = new Date().toISOString();
-      writeJson(PrefFile, pref);
-      log(GREEN, '  Saved mode preference cleared (project folder preserved).');
+      unlinkSync(PrefFile);
+      log(GREEN, '  Saved mode preference cleared.');
     }
   }
 
@@ -389,6 +357,7 @@ async function main() {
         deliveryId = DELIVERIES[num - 1].id;
       } else {
         log(RED, ' Invalid Glitch mode selection. Exiting.');
+        logToFile('ERROR: Invalid Glitch mode selection');
         process.exit(1);
       }
     }
@@ -405,6 +374,7 @@ async function main() {
         modelId = MODELS[num - 1].id;
       } else {
         log(RED, ' Invalid model selection. Exiting.');
+        logToFile('ERROR: Invalid model selection');
         process.exit(1);
       }
     }
@@ -414,51 +384,25 @@ async function main() {
 
   if (!modeId) {
     log(RED, ' No mode selected. Exiting.');
+    logToFile('ERROR: No mode selected');
     process.exit(1);
   }
 
   const config = SCRIPT_MAP[modeId];
   if (!config) {
     log(RED, ` Unknown mode: ${modeId}`);
+    logToFile(`ERROR: Unknown mode: ${modeId}`);
     log(YELLOW, ' Valid format: <glitch-mode>-<tier> (e.g. normal-paid, web-free)');
     process.exit(1);
   }
 
-  let deliveryId = modeId.split('-')[0];
-
-  // ---- Web mode requires a project directory (OpenCode web UI is sandboxed to C:\Users\<username>) ----
-  let projectDir = null;
-  if (deliveryId === 'web') {
-    const saved = getSavedProjectDir();
-    if (saved && existsSync(saved)) {
-      projectDir = saved;
-      log(CYAN, ` Project folder: ${projectDir}`);
-    } else {
-      if (saved && !existsSync(saved)) {
-        log(YELLOW, `  Saved project folder no longer exists: ${saved}`);
-      }
-      log(YELLOW, '  Web Mode sets the initial project folder for the session URL.');
-      log(YELLOW, '  The "Add Project" dialog in the web UI is limited to C:\\Users\\<username> (OpenCode limitation).');
-      projectDir = await promptForProjectDir();
-      if (!projectDir) {
-        // User cancelled — fall back to Normal Mode
-        log(YELLOW, '  Web Mode cancelled. Switching to Normal Mode.');
-        modeId = `normal-${modeId.split('-')[1]}`;
-        deliveryId = 'normal';
-      } else {
-        saveProjectDir(projectDir);
-        log(GREEN, `  Saved project folder: ${projectDir}`);
-      }
-    }
-    log('');
-  }
-
   saveMode(modeId);
+  logToFile(`Mode selected: ${modeId}`);
   log(GREEN, ` Launching ${getModeLabel(modeId)}...`);
+  logToFile(`Launching ${getModeLabel(modeId)}`);
   log('');
 
-  const extraEnv = projectDir ? { GLITCH_PROJECT_DIR: projectDir } : {};
-  const result = runScript(config.script, config.args, extraEnv);
+  const result = runScript(config.script, config.args);
   if (!result.success) {
     process.exit(result.error?.status || 1);
   }
@@ -466,5 +410,6 @@ async function main() {
 
 main().catch(e => {
   log(RED, ` Fatal error: ${e.message || e}`);
+  logToFile(`ERROR: ${e.message || e}`);
   process.exit(1);
 });
