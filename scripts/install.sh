@@ -631,8 +631,27 @@ if [ "$NO_LAUNCH" = false ]; then
     if [ -z "$launch" ] || [[ "$launch" =~ ^[Yy] ]]; then
         step "Starting Glitch AI..."
         cd "$INSTALL_DIR"
-        # Launch in background, detached
-        nohup ./launch-glitch.sh > glitch.log 2>&1 &
+        echo ""
+        echo "Select launch mode:"
+        echo "  1) Normal (paid) - Recommended for most users"
+        echo "  2) Free - Emergency fallback when paid quota is exhausted"
+        echo "  3) Local - Use local LM Studio models"
+        echo "  4) Safe - Minimal config for troubleshooting"
+        echo ""
+        prompt "Enter choice [1-4, Enter for Normal (paid)]: "
+        MODE_FLAG=""
+        while true; do
+            read -r mode_choice </dev/tty
+            case "$mode_choice" in
+                1|"") MODE_FLAG="--mode normal-paid"; break ;;
+                2) MODE_FLAG="--mode normal-free"; break ;;
+                3) MODE_FLAG="--mode normal-local"; break ;;
+                4) MODE_FLAG="--mode normal-safe"; break ;;
+                *) echo "Invalid choice. Please enter 1, 2, 3, or 4 (or Enter for default)." ;;
+            esac
+        done
+        step "Launching in $(echo "$MODE_FLAG" | sed 's/--mode //') mode..."
+        nohup ./launch-glitch.sh "$MODE_FLAG" > glitch.log 2>&1 &
         PID=$!
         success "Glitch AI launched (PID: $PID)"
         echo ""

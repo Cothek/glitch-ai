@@ -705,7 +705,7 @@ if (-not $NoLaunch) {
         Write-Step "Starting Glitch AI..."
         Push-Location $InstallDir
         # Use Start-Process to launch in a new window (detached)
-        $proc = Start-Process -FilePath "launch-glitch.bat" -ArgumentList "--mode normal-paid" -WindowStyle Normal -PassThru
+        $proc = Start-Process -FilePath "launch-glitch.bat" -WindowStyle Normal -PassThru
         Write-Success "Glitch AI launched (PID: $($proc.Id))"
         Write-Host ""
         Write-Host "  To launch again later, run:" -ForegroundColor Cyan
