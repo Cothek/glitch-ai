@@ -40,7 +40,6 @@ data/skills-lock.json
 data/screenshots/
 
 # Dynamically saved chat images (saved by save-images.js plugin)
-/screenshots/
 data/bootstrap.log
 data/backups/
 glitch-memorycore/data/known-models.json

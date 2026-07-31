@@ -7,17 +7,17 @@
 //
 // Solution: This plugin hooks the server-side `chat.message` event, which fires
 // when a user message is received. It finds FilePart entries with image data
-// URIs, extracts the base64 data, saves them to screenshots/ as files, and
+// URIs, extracts the base64 data, saves them to data/screenshots/ as files, and
 // updates a manifest.json with the latest image path.
 //
-// Usage: After the user pastes an image, check for screenshots/NEW_IMAGE_FLAG
+// Usage: After the user pastes an image, check for data/screenshots/NEW_IMAGE_FLAG
 // (which contains the absolute path of the latest saved image). If it exists,
 // read it and dispatch to @vision with that path. Then delete NEW_IMAGE_FLAG to
 // prevent re-processing.
 //
 // This plugin writes TWO files for every image:
-//   screenshots/manifest.json   — canonical record (absolute path, metadata)
-//   screenshots/NEW_IMAGE_FLAG  — trigger flag (absolute path only, deleted after dispatch)
+//   data/screenshots/manifest.json   — canonical record (absolute path, metadata)
+//   data/screenshots/NEW_IMAGE_FLAG  — trigger flag (absolute path only, deleted after dispatch)
 //
 // Install: Add to .opencode/opencode.json:
 //   "plugin": [".opencode/plugins/graphify.js", ".opencode/plugins/save-images.js"]
@@ -27,7 +27,7 @@ import { join } from "path";
 import { logVisionDetection } from "../../scripts/lib/vision-logger.mjs";
 
 export const SaveImagesPlugin = async ({ directory }) => {
-  const screenshotsDir = join(directory, "screenshots");
+  const screenshotsDir = join(directory, "data", "screenshots");
   let imageCounter = 0;
 
   // Ensure screenshots directory exists
@@ -84,7 +84,7 @@ export const SaveImagesPlugin = async ({ directory }) => {
             // as history so Glitch can reference any recent image
             const manifest = {
               latest: {
-                relative: `screenshots/${filename}`,
+                relative: `data/screenshots/${filename}`,
                 absolute: filepath,
                 timestamp,
                 iso: now,
@@ -109,7 +109,7 @@ export const SaveImagesPlugin = async ({ directory }) => {
             logVisionDetection(filepath);
 
             console.log(
-              `[save-images] Saved: screenshots/${filename} (${(buffer.length / 1024).toFixed(1)} KB, ${part.mime})`
+              `[save-images] Saved: data/screenshots/${filename} (${(buffer.length / 1024).toFixed(1)} KB, ${part.mime})`
             );
           } catch (err) {
             console.error(`[save-images] Error saving image: ${err.message}`);

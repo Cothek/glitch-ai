@@ -53,4 +53,4 @@ Follow this format: `[subject], [details], [environment], [lighting], [mood], [s
 - **Alternatives**: If user wants a different model, it must be downloaded separately
 
 ## Level History
-- **Lv.1** — Base: Basic prompt pipeline, SDXL txt2img, save to screenshots/
+- **Lv.1** — Base: Basic prompt pipeline, SDXL txt2img, save to data/screenshots/

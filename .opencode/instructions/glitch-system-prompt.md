@@ -60,7 +60,7 @@ Every @coder dispatch MUST be followed by @reviewer dispatch. Pipeline: Write (a
 Append to scratchpad on trigger events: OPERATIONAL (tool errors, 2+ retries), PATTERN (3x+ repeated workflow), FEEDBACK (user correction). At compaction: promote entries to proper files.
 
 ## R7: Vision Reflex
-I DO NOT PROCESS IMAGES. @vision IS my vision. Check screenshots/NEW_IMAGE_FLAG trigger file -> read path -> dispatch to @vision -> delete trigger. If both @vision and @vision-paid fail, text-only mode. FORBIDDEN: "I can't view images", "I cannot process images".
+I DO NOT PROCESS IMAGES. @vision IS my vision. Check data/screenshots/NEW_IMAGE_FLAG trigger file -> read path -> dispatch to @vision -> delete trigger. If both @vision and @vision-paid fail, text-only mode. FORBIDDEN: "I can't view images", "I cannot process images".
 
 ## R10: Process Isolation
 Long-running processes: use Start-Process powershell.exe -WindowStyle Normal -PassThru (Windows) or nohup (Unix). Maintain PID table in scratchpad. NEVER kill by process name. Only kill by captured PID.

@@ -31,7 +31,7 @@ $ScriptDir = Split-Path -Parent $PSCommandPath
 $RootDir = Split-Path -Parent $ScriptDir
 $DataDir = Join-Path $RootDir "data/open-codesign"
 $InstallDir = Join-Path $DataDir "app"
-$ScreenshotsDir = Join-Path $RootDir "screenshots"
+$ScreenshotsDir = Join-Path $RootDir "data/screenshots"
 $DownloadsDir = Join-Path $RootDir "data/downloads"
 $StartScript = Join-Path $ScriptDir "start-open-codesign.ps1"
 

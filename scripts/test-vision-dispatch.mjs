@@ -59,7 +59,7 @@ async function main() {
 
   // --- Scenario 1: Flag detection (DETECTED entry written) ---
   console.log('Scenario 1: Flag detection (DETECTED entry)');
-  const testImagePath = path.join(PROJECT_ROOT, 'screenshots', 'test-vision-dispatch.png');
+  const testImagePath = path.join(PROJECT_ROOT, 'data', 'screenshots', 'test-vision-dispatch.png');
   await logVisionDetection(testImagePath);
   assert(true, 'logVisionDetection did not throw');
 
