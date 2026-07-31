@@ -110,11 +110,11 @@ function saveProjectDir(projectDir) {
 
 async function promptForProjectDir() {
   while (true) {
-    const answer = await askQuestion(' Enter your project folder path (e.g., D:\\my-project)\n Type \'q\' to cancel and switch to Normal Mode: ');
+    const answer = await askQuestion(` Project folder for initial session [default: ${ROOT_DIR}]:\n Type 'q' to cancel and switch to Normal Mode: `);
     const trimmed = answer.trim();
     if (!trimmed) {
-      log(RED, '  Project folder is required for Web Mode.');
-      continue;
+      // Empty input — use ROOT_DIR (Glitch install folder) as default
+      return ROOT_DIR;
     }
     if (trimmed === 'q' || trimmed === 'cancel' || trimmed === 'back') {
       log(YELLOW, '  Cancelled. Switching to Normal Mode.');
@@ -437,7 +437,8 @@ async function main() {
       if (saved && !existsSync(saved)) {
         log(YELLOW, `  Saved project folder no longer exists: ${saved}`);
       }
-      log(YELLOW, '  Web Mode requires a project folder outside C:\\Users\\<username>.');
+      log(YELLOW, '  Web Mode sets the initial project folder for the session URL.');
+      log(YELLOW, '  The "Add Project" dialog in the web UI is limited to C:\\Users\\<username> (OpenCode limitation).');
       projectDir = await promptForProjectDir();
       if (!projectDir) {
         // User cancelled — fall back to Normal Mode
