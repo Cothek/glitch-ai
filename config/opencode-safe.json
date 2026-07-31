@@ -6,7 +6,8 @@
                    ".opencode/plugins/compaction.js",
                    ".opencode/plugins/verify-claim.js",
                    ".opencode/plugins/recall.js",
-                   ".opencode/plugins/stuck-detector.js"
+                   ".opencode/plugins/stuck-detector.js",
+                   ".opencode/plugins/mulahazah.js"
                ],
     "agent":  {
                   "glitch":  {

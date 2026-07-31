@@ -6,7 +6,8 @@
     ".opencode/plugins/compaction.js",
     ".opencode/plugins/verify-claim.js",
     ".opencode/plugins/recall.js",
-    ".opencode/plugins/stuck-detector.js"
+    ".opencode/plugins/stuck-detector.js",
+    ".opencode/plugins/mulahazah.js"
   ],
   "instructions": [
     ".opencode/instructions/shared-agent-rules.md",
@@ -173,7 +174,7 @@
       "description": "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
       "permission": {
         "read": "allow",
-        "bash": "deny",
+        "bash": { "allow": ["node scripts/cleanup-screenshots.mjs*"], "deny": [] },
         "glob": "allow",
         "grep": "deny",
         "edit": "deny",
@@ -190,7 +191,7 @@
       "description": "Alternative image and visual content analysis agent. Fallback when @vision fails with model-level errors (NVIDIA DEGRADED function, quota exhaustion, model not found). Uses a different underlying model than @vision.",
       "permission": {
         "read": "allow",
-        "bash": "deny",
+        "bash": { "allow": ["node scripts/cleanup-screenshots.mjs*"], "deny": [] },
         "glob": "allow",
         "grep": "deny",
         "edit": "deny",
@@ -402,7 +403,7 @@
       "permission": {
         "read": "allow",
         "edit": "deny",
-        "bash": "deny",
+        "bash": { "allow": ["node scripts/cleanup-screenshots.mjs*"], "deny": [] },
         "glob": "deny",
         "grep": "deny",
         "list": "allow",
