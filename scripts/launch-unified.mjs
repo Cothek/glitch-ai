@@ -3,7 +3,7 @@
 import { readFileSync, existsSync, statSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { execFileSync, spawn } from 'child_process';
+import { execFileSync, execSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { checkRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
 
@@ -310,11 +310,22 @@ async function main() {
   const userMainMem = join(userDir, 'main-memory.md');
 
   if (existsSync(userMainMem) && !existsSync(userGitDir)) {
-    // User profile exists but is not a git repo - offer to set up sync
-    log(YELLOW, '  User profile is local-only (not synced to GitHub).');
-    log(YELLOW, '  To enable cross-machine sync, run:');
-    log(DARK_GRAY, '    cd user && git init && git remote add origin <your-repo-url> && git push');
-    log('');
+    // user/ has no own .git — check if it's tracked by the parent repo
+    let trackedByParent = false;
+    try {
+      const output = execSync('git ls-files user', { cwd: ROOT_DIR, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      trackedByParent = output.trim().length > 0;
+    } catch {
+      trackedByParent = false;
+    }
+
+    if (!trackedByParent) {
+      // User profile exists but is not a git repo - offer to set up sync
+      log(YELLOW, '  User profile is local-only (not synced to GitHub).');
+      log(YELLOW, '  To enable cross-machine sync, run:');
+      log(DARK_GRAY, '    cd user && git init && git remote add origin <your-repo-url> && git push');
+      log('');
+    }
   }
 
   const args = process.argv.slice(2);
