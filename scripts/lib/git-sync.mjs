@@ -171,6 +171,11 @@ function switchToMain(cwd, currentBranch) {
     log(C.YELLOW, '  Local changes detected, stashing...');
     run('git', ['stash', 'push', '-m', `glitch-auto-stash: ${currentBranch}`], { cwd, timeout: 15000 });
   }
+  const mainExists = run('git', ['rev-parse', '--verify', 'main'], { cwd, timeout: 5000 });
+  if (!mainExists.success) {
+    run('git', ['remote', 'set-branches', 'origin', '*'], { cwd, timeout: 10000 });
+    run('git', ['fetch', 'origin', 'main'], { cwd, timeout: 30000 });
+  }
   const r = run('git', ['checkout', 'main'], { cwd, timeout: 30000 });
   return r.success;
 }

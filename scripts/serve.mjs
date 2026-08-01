@@ -111,6 +111,10 @@ function askQuestion(query) {
 
 // ---- Branch check: warn if not on main and offer to switch ----
 async function checkAndSwitchToMain() {
+  if (process.env.GLITCH_BRANCH_OK !== undefined && process.env.GLITCH_BRANCH_OK !== '') {
+    return;
+  }
+
   // Skip branch check on restart (seamless restart, no user input)
   if (process.argv.includes('--restart')) {
     log(DARK_GREEN, '  Restart mode -- skipping branch check');
@@ -170,6 +174,13 @@ async function checkAndSwitchToMain() {
         log('');
         return;
       }
+    }
+
+    const mainExists = run(GIT_BIN, ['rev-parse', '--verify', 'main'], { cwd: ROOT_DIR, timeout: 5000 });
+    if (!mainExists.success) {
+      log(DARK_YELLOW, '  main branch not found locally, fetching...');
+      run(GIT_BIN, ['remote', 'set-branches', 'origin', '*'], { cwd: ROOT_DIR, timeout: 10000 });
+      run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
     }
 
     const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 30000 });

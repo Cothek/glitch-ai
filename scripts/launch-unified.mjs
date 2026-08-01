@@ -32,7 +32,9 @@ const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
 const YELLOW = '\x1b[33m';
 const DARK_GREEN = '\x1b[32;2m';
+const DARK_YELLOW = '\x1b[33;2m';
 const DARK_GRAY = '\x1b[90m';
+const WHITE = '\x1b[37m';
 const RESET = '\x1b[0m';
 
 function log(color, msg) {
@@ -51,6 +53,98 @@ function askQuestion(query) {
       resolve(answer);
     });
   });
+}
+
+function runGit(cmd, args, opts = {}) {
+  try {
+    const out = execFileSync(cmd, args, {
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024,
+      ...opts,
+    });
+    return { success: true, stdout: (out || '').toString().trim(), status: 0 };
+  } catch (e) {
+    return {
+      success: false,
+      stdout: ((e.stdout || '')).toString().trim(),
+      stderr: ((e.stderr || '')).toString().trim(),
+      error: e.message || String(e),
+      status: e.status,
+    };
+  }
+}
+
+async function checkBranchBeforeLaunch() {
+  if (process.env.GLITCH_BRANCH_OK !== undefined && process.env.GLITCH_BRANCH_OK !== '') {
+    return;
+  }
+
+  const branch = runGit('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
+  if (!branch.success) return;
+  const current = branch.stdout.trim();
+  if (current === 'main') return;
+
+  log(YELLOW, '');
+  log(YELLOW, `  !! Currently on branch '${current}', not 'main'`);
+  log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
+  log(WHITE, '  [Y/n] Switch to main now (recommended)');
+  const choice = await askQuestion('  > ');
+  const raw = (choice ?? '').trim().toLowerCase();
+
+  if (raw === 'n' || raw === 'no') {
+    process.env.GLITCH_BRANCH_OK = '1';
+    log(DARK_YELLOW, '  Continuing on current branch (may have unstable config)');
+    log('');
+    return;
+  }
+
+  log(CYAN, '  Switching to main...');
+
+  const mainExists = runGit('git', ['rev-parse', '--verify', 'main'], { cwd: ROOT_DIR, timeout: 5000 });
+  if (!mainExists.success) {
+    log(DARK_GRAY, '  main branch not found locally, fetching...');
+    runGit('git', ['remote', 'set-branches', 'origin', '*'], { cwd: ROOT_DIR, timeout: 10000 });
+    runGit('git', ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
+  }
+
+  const status = runGit('git', ['status', '--porcelain'], { cwd: ROOT_DIR, timeout: 5000 });
+  const isDirty = status.success && status.stdout.trim().length > 0;
+  if (isDirty) {
+    log(YELLOW, '  Local changes detected, stashing before switch...');
+    const stashMsg = `glitch-auto-stash: ${current}`;
+    const stash = runGit('git', ['stash', 'push', '-m', stashMsg], { cwd: ROOT_DIR, timeout: 15000 });
+    if (!stash.success) {
+      log(RED, `  Failed to stash: ${stash.stderr || stash.error}`);
+      log(YELLOW, '  Continuing on current branch...');
+      log('');
+      process.env.GLITCH_BRANCH_OK = '1';
+      return;
+    }
+  }
+
+  const checkout = runGit('git', ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
+  if (!checkout.success) {
+    log(RED, `  Failed to switch: ${checkout.stderr || checkout.error}`);
+    log(YELLOW, '  Continuing on current branch...');
+    log('');
+    process.env.GLITCH_BRANCH_OK = '1';
+    return;
+  }
+
+  log(GREEN, '  Switched to main. Re-launching from main...');
+  log('');
+
+  const child = spawn(process.execPath, [process.argv[1], ...process.argv.slice(2)], {
+    cwd: ROOT_DIR,
+    stdio: 'inherit',
+    detached: true,
+    env: { ...process.env, GLITCH_BRANCH_OK: '0' },
+  });
+  child.unref();
+  child.on('error', (err) => {
+    log(RED, `  Re-launch failed: ${err.message}`);
+  });
+  process.exit(0);
 }
 
 function readJson(path) {
@@ -227,8 +321,12 @@ function runScript(scriptName, extraArgs = []) {
 }
 
 async function main() {
+  // ---- Branch check: FIRST thing, before repo updates ----
+  await checkBranchBeforeLaunch();
+
   // ---- Check for repo updates before anything else ----
-  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
+  const branchOkSet = process.env.GLITCH_BRANCH_OK !== undefined && process.env.GLITCH_BRANCH_OK !== '';
+  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: !branchOkSet });
   handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
 
   const restartFlagPath = join(ROOT_DIR, 'data', '.restart-timestamp');

@@ -248,6 +248,10 @@ function askQuestion(query) {
 
 // ---- Branch check: warn if not on main and offer to switch ----
 async function checkAndSwitchToMain() {
+  if (process.env.GLITCH_BRANCH_OK !== undefined && process.env.GLITCH_BRANCH_OK !== '') {
+    return;
+  }
+
   const branch = run(GIT_BIN, ['symbolic-ref', '--short', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
   if (!branch.success) return;
   const current = branch.stdout.trim();
@@ -297,6 +301,13 @@ async function checkAndSwitchToMain() {
       log(YELLOW, '  Or run: git stash push -m "wip" && node scripts/launch-local.mjs');
       log('');
       return;
+    }
+
+    const mainExists = run(GIT_BIN, ['rev-parse', '--verify', 'main'], { cwd: ROOT_DIR, timeout: 5000 });
+    if (!mainExists.success) {
+      log(DARK_GRAY, '  main branch not found locally, fetching...');
+      run(GIT_BIN, ['remote', 'set-branches', 'origin', '*'], { cwd: ROOT_DIR, timeout: 10000 });
+      run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
     }
 
     const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
