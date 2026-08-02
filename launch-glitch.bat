@@ -1,6 +1,19 @@
 @echo off
 title Glitch AI - Unified Launcher
 
+REM ---- Tooling PATH prep (must run BEFORE branch pre-check so git/node are visible) ----
+REM Prefer bundled Node.js; fall back to system node
+set "NODE_CMD=node"
+if exist "%~dp0data\node\node.exe" (
+  set "NODE_CMD=%~dp0data\node\node.exe"
+  set "PATH=%~dp0data\node;%PATH%"
+)
+
+REM Add bundled MinGit to PATH if present
+if exist "%~dp0data\mingit\cmd\git.exe" (
+  set "PATH=%~dp0data\mingit\cmd;%PATH%"
+)
+
 REM ---- Branch pre-check: escape hatch to switch to main BEFORE anything else ----
 setlocal EnableDelayedExpansion
 set "GLITCH_REPO_DIR=%~dp0"
@@ -71,17 +84,15 @@ if not exist "%~dp0data\node\node.exe" (
     )
 )
 
-REM Prefer bundled Node.js; fall back to system node
-set "NODE_CMD=node"
+REM Re-evaluate NODE_CMD and PATH after bootstrap
 if exist "%~dp0data\node\node.exe" (
-  set "NODE_CMD=%~dp0data\node\node.exe"
-  set "PATH=%~dp0data\node;%PATH%"
+    set "NODE_CMD=%~dp0data\node\node.exe"
+    set "PATH=%~dp0data\node;%PATH%"
 )
 
-REM Add bundled MinGit to PATH if present
-if exist "%~dp0data\mingit\cmd\git.exe" (
-  set "PATH=%~dp0data\mingit\cmd;%PATH%"
-)
+REM Prefer bundled Node.js; fall back to system node
+REM (NODE_CMD and PATH were set at the top of this file, before the branch pre-check,
+REM  so the branch check could see git/node. Do not re-set here.)
 
 if exist "%~dp0glitch-head.txt" powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
 echo.

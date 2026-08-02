@@ -68,7 +68,7 @@ $criticalFailures = @()
 $BundledNodeDir = "$RootDir\data\node"
 $NodeBin = "$BundledNodeDir\node.exe"
 
-Write-Host "[1/5] Installing bundled Node.js..." -ForegroundColor Cyan
+Write-Host "[1/6] Installing bundled Node.js..." -ForegroundColor Cyan
 
 $needsDownload = (-not (Test-Path $NodeBin)) -or $Force
 $currentBundledVer = ""
@@ -148,8 +148,107 @@ if (Test-Path $NodeBin) {
   Write-Host "  (using system Node.js)" -ForegroundColor DarkGreen
 }
 
-# -- Step 2: Git Submodules --
-Write-Host "[2/5] Initializing git submodules..." -ForegroundColor Cyan
+# -- Step 2: MinGit (portable Git) --
+# Required by the launcher's branch pre-check and by git-sync.mjs. On a fresh clone
+# there is no system git and no bundled mingit, so we download MinGit into data\mingit\
+# (the same folder launch-glitch.bat adds to PATH). If git is already available
+# (system install or previously bootstrapped), we skip the download.
+$gitToolsDir = Join-Path $RootDir "data\mingit"
+$gitBin = Join-Path $gitToolsDir "cmd\git.exe"
+$existingGit = (Get-Command git -ErrorAction SilentlyContinue).Source
+
+if ($existingGit) {
+  Write-Host "[2/6] MinGit -- git found: $existingGit" -ForegroundColor DarkGreen
+} elseif (Test-Path $gitBin) {
+  Write-Host "[2/6] MinGit -- bundled git found at $gitBin" -ForegroundColor DarkGreen
+  $env:PATH = "$gitToolsDir\cmd;$env:PATH"
+} else {
+  Write-Host "[2/6] Installing MinGit (portable Git)..." -ForegroundColor Cyan
+  try {
+    # Try GitHub API for the latest MinGit release, with retries on transient failures.
+    # A GitHub outage should not kill the whole bootstrap -- Node/OpenCode/Handy still install.
+    $downloadUrl = $null
+    $maxAttempts = 3
+    $attempt = 0
+    $lastErr = ""
+    while ($attempt -lt $maxAttempts -and -not $downloadUrl) {
+      $attempt++
+      try {
+        $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+        $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -TimeoutSec 10
+        $minGitAsset = $release.assets | Where-Object { $_.name -like "MinGit-*-64-bit.zip" } | Select-Object -First 1
+        if ($minGitAsset) {
+          $downloadUrl = $minGitAsset.browser_download_url
+          Write-Host "  Found: $($minGitAsset.name)" -ForegroundColor Yellow
+        } else {
+          throw "No MinGit asset found in latest release"
+        }
+      } catch {
+        $lastErr = $_.Exception.Message
+        if ($attempt -lt $maxAttempts) {
+          Write-Host "  MinGit API lookup failed (attempt $attempt/$maxAttempts): $lastErr -- retrying in 3s" -ForegroundColor Yellow
+          Start-Sleep -Seconds 3
+        }
+      }
+    }
+    if (-not $downloadUrl) {
+      # Fallback to a known-good version
+      $downloadUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.2/MinGit-2.47.0.2-64-bit.zip"
+      Write-Host "  Using fixed MinGit 2.47.0.2 (API failed after $maxAttempts attempts: $lastErr)" -ForegroundColor Yellow
+    }
+
+    $zipDir = Join-Path $RootDir "data\downloads"
+    if (-not (Test-Path $zipDir)) { New-Item -ItemType Directory -Path $zipDir -Force | Out-Null }
+    $zipPath = Join-Path $zipDir "mingit.zip"
+
+    # Retry the actual download too -- GitHub release CDN can be flaky
+    $downloaded = $false
+    $dlAttempt = 0
+    $dlLastErr = ""
+    while ($dlAttempt -lt $maxAttempts -and -not $downloaded) {
+      $dlAttempt++
+      try {
+        Invoke-WithSpinner -Label "Downloading MinGit (~40MB, attempt $dlAttempt/$maxAttempts)" -ScriptBlock {
+          Invoke-WebRequest -Uri $using:downloadUrl -OutFile $using:zipPath -UseBasicParsing -TimeoutSec 120
+        }
+        $downloaded = $true
+      } catch {
+        $dlLastErr = $_.Exception.Message
+        if ($dlAttempt -lt $maxAttempts) {
+          Write-Host "  MinGit download failed (attempt $dlAttempt/$maxAttempts): $dlLastErr -- retrying in 3s" -ForegroundColor Yellow
+          Start-Sleep -Seconds 3
+        }
+      }
+    }
+    if (-not $downloaded) {
+      throw "MinGit download failed after $maxAttempts attempts: $dlLastErr"
+    }
+
+    if (Test-Path $gitToolsDir) { Remove-Item $gitToolsDir -Recurse -Force -ErrorAction SilentlyContinue }
+    New-Item -ItemType Directory -Path $gitToolsDir -Force | Out-Null
+    Invoke-WithSpinner -Label "Extracting MinGit" -ScriptBlock {
+      Expand-Archive -Path $using:zipPath -DestinationPath $using:gitToolsDir -Force
+    }
+    Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
+
+    if (-not (Test-Path $gitBin)) {
+      throw "MinGit binary not found after extraction at $gitBin"
+    }
+    # Add to PATH so the next step (submodules) can use git in-process
+    $env:PATH = "$gitToolsDir\cmd;$env:PATH"
+    Write-Host "  MinGit installed to $gitToolsDir" -ForegroundColor Green
+  } catch {
+    Write-Host "  ERROR installing MinGit: $_" -ForegroundColor Red
+    Write-Host "  Git is required for the launcher's branch check and submodule init." -ForegroundColor Yellow
+    Write-Host "  Install Git manually from https://git-scm.com/download/win" -ForegroundColor Yellow
+    # Non-critical: bootstrap continues to Node/OpenCode/Handy. The submodule step
+    # already guards on $gitAvailable and skips gracefully when git is missing.
+    $failures += "MinGit download failed (GitHub unreachable). Git will not be available. You can install git manually and re-run bootstrap. Launcher branch check will be skipped."
+  }
+}
+
+# -- Step 3: Git Submodules --
+Write-Host "[3/6] Initializing git submodules..." -ForegroundColor Cyan
 
 # Distinguish "not a git repo" (expected, skip silently) from real failures (warn loudly).
 # A fresh clone of the repo as a zip (no .git/) lands here -- that's normal, not an error.
@@ -157,23 +256,34 @@ $isGitRepo = Test-Path (Join-Path $RootDir ".git")
 if (-not $isGitRepo) {
   Write-Host "  Skipping submodules (not a git repo -- this is normal for zip downloads)" -ForegroundColor DarkGray
 } else {
-  $subOutput = git -C "$RootDir" submodule update --init --recursive 2>&1
-  if ($LASTEXITCODE -eq 0) {
-    Write-Host "  Submodules initialized" -ForegroundColor Green
-  } else {
-    # Real failure: network error, auth failure, missing submodule, etc.
-    # Log the actual error so users can diagnose, but DO NOT abort bootstrap.
-    Write-Host "  WARNING: Submodule update failed (continuing anyway)" -ForegroundColor Yellow
-    $subOutput | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkYellow }
+  # FIX: previously this ran `git ...` unconditionally. When git was missing the
+  # command never executed and $LASTEXITCODE retained its prior value (0 from the
+  # earlier node check), so the script printed "Submodules initialized" even on
+  # total failure. Guard on git availability first.
+  $gitAvailable = Get-Command git -ErrorAction SilentlyContinue
+  if (-not $gitAvailable) {
+    Write-Host "  WARNING: git not available -- cannot init submodules" -ForegroundColor Yellow
     Write-Host "  Recovery: cd `"$RootDir`" && git submodule update --init --recursive" -ForegroundColor Yellow
-    $failures += "Step 2: Git Submodules -- submodule update failed (see output above)"
+    $failures += "Step 3: Git Submodules -- git not available (see MinGit step above)"
+  } else {
+    $subOutput = git -C "$RootDir" submodule update --init --recursive 2>&1
+    if ($LASTEXITCODE -eq 0) {
+      Write-Host "  Submodules initialized" -ForegroundColor Green
+    } else {
+      # Real failure: network error, auth failure, missing submodule, etc.
+      # Log the actual error so users can diagnose, but DO NOT abort bootstrap.
+      Write-Host "  WARNING: Submodule update failed (continuing anyway)" -ForegroundColor Yellow
+      $subOutput | ForEach-Object { Write-Host "    $_" -ForegroundColor DarkYellow }
+      Write-Host "  Recovery: cd `"$RootDir`" && git submodule update --init --recursive" -ForegroundColor Yellow
+      $failures += "Step 3: Git Submodules -- submodule update failed (see output above)"
+    }
   }
 }
 
-# -- Step 3: OpenCode --
+# -- Step 4: OpenCode --
 $stepOk = $true
 if (-not (Test-Path $OpenCodeBin) -or $Force) {
-  Write-Host "[3/5] Installing OpenCode..." -ForegroundColor Cyan
+  Write-Host "[4/6] Installing OpenCode..." -ForegroundColor Cyan
   try {
     $systemOpenCode = "C:\Program Files\nodejs\node_modules\opencode-ai\bin\opencode.exe"
     if (Test-Path $systemOpenCode) {
@@ -222,13 +332,13 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
   } catch {
     Write-Host "  ERROR installing OpenCode: $_" -ForegroundColor Red
     $stepOk = $false
-    $criticalFailures += "Step 3: OpenCode -- $_"
+    $criticalFailures += "Step 4: OpenCode -- $_"
   }
 } else {
-  Write-Host "[3/5] OpenCode found" -ForegroundColor DarkGreen
+  Write-Host "[4/6] OpenCode found" -ForegroundColor DarkGreen
 }
 
-# -- Step 4: Handy --
+# -- Step 5: Handy --
 $handyVersion = "0.8.3"
 $handyArch = if ($isArm) { "arm64" } else { "x64" }
 $handySize = 105925408
@@ -238,7 +348,7 @@ if (Test-Path $HandyBin) {
   if ($actualSize -ne $handySize) { $needsInstall = $true }
 } else { $needsInstall = $true }
 if ($needsInstall) {
-  Write-Host "[4/5] Installing Handy..." -ForegroundColor Cyan
+  Write-Host "[5/6] Installing Handy..." -ForegroundColor Cyan
   try {
     $systemHandy = "$env:LOCALAPPDATA\Handy\handy.exe"
     if (Test-Path $systemHandy) {
@@ -297,15 +407,15 @@ if ($needsInstall) {
     }
   } catch {
     Write-Host "  ERROR installing Handy: $_" -ForegroundColor Red
-    $failures += "Step 4: Handy -- $_"
+    $failures += "Step 5: Handy -- $_"
   }
 } else {
-  Write-Host "[4/5] Handy found" -ForegroundColor DarkGreen
+  Write-Host "[5/6] Handy found" -ForegroundColor DarkGreen
 }
 
-# -- Step 5: Cloudflare Tunnel (standalone EXE, no admin needed) --
+# -- Step 6: Cloudflare Tunnel (standalone EXE, no admin needed) --
 if (-not (Test-Path $CloudflaredBin) -or $Force) {
-  Write-Host "[5/5] Installing Cloudflare Tunnel..." -ForegroundColor Cyan
+  Write-Host "[6/6] Installing Cloudflare Tunnel..." -ForegroundColor Cyan
   try {
     if ($isArm) {
       Write-Host "  ARM64: Download cloudflared manually:" -ForegroundColor Yellow
@@ -321,10 +431,10 @@ if (-not (Test-Path $CloudflaredBin) -or $Force) {
   } catch {
     Write-Host "  ERROR installing cloudflared: $_" -ForegroundColor Red
     Write-Host "  This is optional -- tunnel mode won't be available but local mode works fine." -ForegroundColor Yellow
-    $failures += "Step 5: Cloudflare Tunnel -- $_"
+    $failures += "Step 6: Cloudflare Tunnel -- $_"
   }
 } else {
-  Write-Host "[5/5] cloudflared found" -ForegroundColor DarkGreen
+  Write-Host "[6/6] cloudflared found" -ForegroundColor DarkGreen
 }
 
 # -- Summary --

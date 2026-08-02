@@ -232,7 +232,7 @@ if (-not $gitPath) {
     Write-Warn "Git not found in PATH."
     Write-Step "Downloading MinGit (portable Git for Windows, ~40 MB)..."
     
-    $gitToolsDir = Join-Path $env:TEMP "glitch-mingit"
+    $gitToolsDir = Join-Path $InstallDir "data\mingit"
     $gitBin = Join-Path $gitToolsDir "cmd\git.exe"
     
     if (-not (Test-Path $gitBin)) {
@@ -253,7 +253,9 @@ if (-not $gitPath) {
             Write-Step "  Using fixed MinGit 2.47.0.2 (API failed: $($_.Exception.Message))"
         }
         
-        $tempZip = Join-Path $env:TEMP "mingit.zip"
+        $downloadsDir = Join-Path $InstallDir "data\downloads"
+        New-Item -ItemType Directory -Force -Path $downloadsDir | Out-Null
+        $tempZip = Join-Path $downloadsDir "mingit.zip"
         try {
             Invoke-WithSpinner -Label "Downloading MinGit (40MB)" -DoneMessage "MinGit" -ScriptBlock {
               Invoke-WebRequest -Uri $using:downloadUrl -OutFile $using:tempZip -UseBasicParsing -TimeoutSec 120
