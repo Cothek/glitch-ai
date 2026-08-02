@@ -290,15 +290,27 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
       Write-Host "  Found system install, copying..." -ForegroundColor Yellow
       Copy-Item $systemOpenCode $OpenCodeBin -Force
     } else {
-      # Determine version from npm
-      $opencodeVersion = "1.17.19"  # fallback
+      # Determine version: try npm CLI first, then registry REST API, then last-resort constant
+      $opencodeVersion = "1.18.11"  # last-resort fallback if npm AND registry both unreachable
+      $npmOk = $false
       try {
         $npmVer = npm view opencode-ai version 2>$null
         if ($npmVer) {
           $opencodeVersion = $npmVer.Trim()
+          $npmOk = $true
         }
       } catch {
-        # npm not available or failed, use fallback
+        # npm not available or failed, will try registry next
+      }
+      if (-not $npmOk) {
+        # npm query failed or returned nothing; fall back to the npm registry REST API
+        # (works without npm installed and without execution policy issues)
+        try {
+          $regInfo = Invoke-RestMethod -Uri "https://registry.npmjs.org/opencode-ai/latest" -UseBasicParsing -TimeoutSec 15
+          if ($regInfo.version) { $opencodeVersion = [string]$regInfo.version }
+        } catch {
+          # registry unreachable too; keep last-resort constant
+        }
       }
 
       # Download platform-specific binary from npm registry

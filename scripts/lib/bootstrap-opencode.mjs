@@ -216,7 +216,7 @@ export async function bootstrapOpenCode(rootDir) {
   log(CYAN, `  Detecting latest OpenCode version...`);
   let version = await fetchLatestOpenCodeVersion();
   if (!version) {
-    version = '1.17.19';
+    version = '1.18.11';
     log(DARK_GRAY, `  Could not query npm registry, using fallback version ${version}`);
   } else {
     log(DARK_GRAY, `  Latest version: ${version}`);
