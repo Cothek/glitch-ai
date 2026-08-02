@@ -370,6 +370,24 @@ export function handleRestartOnUpdate(spawnFn, syncResult, cwd) {
     }
   }
 
+  if (isWin) {
+    // Windows: blocking re-exec keeps the SAME console window (detached spawn
+    // would flash a new window and the bat would close the old one).
+    try {
+      execFileSync(process.execPath, childArgs, {
+        cwd,
+        stdio: 'inherit',
+        timeout: 0,
+      });
+      process.exit(0);
+    } catch (e) {
+      const code = e.status ?? 1;
+      log(C.RED, `  Restarted process exited with code ${code} — check logs for errors`);
+      process.exit(code);
+    }
+  }
+
+  // Unix: detached spawn survives parent exit (SIGHUP isolation)
   const child = spawnFn(process.execPath, childArgs, {
     cwd,
     stdio: 'inherit',

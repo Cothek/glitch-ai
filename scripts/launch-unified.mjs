@@ -131,20 +131,13 @@ async function checkBranchBeforeLaunch() {
     return;
   }
 
-  log(GREEN, '  Switched to main. Re-launching from main...');
+  log(GREEN, '  Switched to main.');
+  // Continue in the SAME process — no detached spawn, no exit.
+  // The launcher reads config templates from disk fresh, so it picks up
+  // main's templates naturally. GLITCH_BRANCH_OK prevents re-prompting.
+  process.env.GLITCH_BRANCH_OK = '1';
   log('');
-
-  const child = spawn(process.execPath, [process.argv[1], ...process.argv.slice(2)], {
-    cwd: ROOT_DIR,
-    stdio: 'inherit',
-    detached: true,
-    env: { ...process.env, GLITCH_BRANCH_OK: '0' },
-  });
-  child.unref();
-  child.on('error', (err) => {
-    log(RED, `  Re-launch failed: ${err.message}`);
-  });
-  process.exit(0);
+  return;
 }
 
 function readJson(path) {
