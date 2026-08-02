@@ -39,7 +39,8 @@ param(
   .\scripts\sync-user.ps1 -Push -Pull  # full round-trip sync
 #>
 
-$RootDir = "E:\Glitch AI\glitch-ai"
+$ScriptDir = Split-Path -Parent $PSCommandPath
+$RootDir = Split-Path -Parent $ScriptDir
 $UserDir = Join-Path $RootDir "user"
 
 function Write-Color {
