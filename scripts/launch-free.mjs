@@ -53,6 +53,7 @@ const WHITE = '\x1b[37m';
 const RESET = '\x1b[0m';
 
 const UpdateLogPath = join(ROOT_DIR, 'data', 'opencode-update.log');
+const LaunchLogPath = join(ROOT_DIR, 'data', 'launch.log');
 
 function logUpdate(msg) {
   try {
@@ -60,6 +61,16 @@ function logUpdate(msg) {
     const ts = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')} ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
     appendFileSync(UpdateLogPath, `[${ts}] ${msg}\n`, 'utf-8');
   } catch {}
+}
+
+function logToFile(message) {
+  try {
+    mkdirSync(dirname(LaunchLogPath), { recursive: true });
+    const timestamp = new Date().toISOString();
+    appendFileSync(LaunchLogPath, `[${timestamp}] ${message}\n`, 'utf-8');
+  } catch (e) {
+    // Silently fail if log file can't be written
+  }
 }
 
 // ---- Prepend bundled Node to PATH if available ----
@@ -740,6 +751,7 @@ async function main() {
   log(GREEN, ` Glitch Free Mode`);
   log(CYAN, ` Primary: ${primaryModel} (${primaryName})`);
   log(CYAN, ` Vision:  ${visionModel} (${visionName})`);
+  logToFile(`Models selected -- primary: ${primaryModel} (${primaryName}), vision: ${visionModel} (${visionName})`);
   log('');
 
   // ---- Backup previous config (timestamped, never overwritten) ----
@@ -901,9 +913,11 @@ async function main() {
   try {
     JSON.parse(finalJson);
     log(DARK_GREEN, `  Config written (${allInstructions.length} instruction files)`);
+    logToFile(`Config written successfully (${allInstructions.length} instruction files)`);
   } catch (e) {
     log(RED, `  ERROR: Generated config is invalid JSON!`);
     log(RED, `  ${e.message}`);
+    logToFile(`ERROR: Generated config is invalid JSON -- ${e.message}`);
     process.exit(1);
   }
 
@@ -1096,6 +1110,7 @@ async function main() {
   // ---- Display model info ----
   log('');
   log(CYAN, ' Starting OpenCode in free mode...');
+  logToFile(`Launching OpenCode (free mode) -- primary: ${primaryModel}, vision: ${visionModel}`);
   log(GREEN, ` Primary: ${primaryModel} (${primaryName})`);
   if (primaryModel !== visionModel) {
     log(GREEN, ` Vision:  ${visionModel} (${visionName})`);
@@ -1157,11 +1172,15 @@ async function main() {
     // TUI mode
     try {
       const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
-      if (!result.success && result.status !== null) {
+      if (!result.success && result.status !== null && result.status !== 0) {
         log(RED, ` OpenCode exited with error (code ${result.status})`);
+        logToFile(`OpenCode exited with error (code ${result.status})`);
+        process.exit(result.status);
       }
     } catch (e) {
       log(RED, ` OpenCode exited with error: ${e.message || e}`);
+      logToFile(`OpenCode exited with error: ${e.message || e}`);
+      process.exit(1);
     }
 
     // ---- Restore paid agent files ----
@@ -1174,5 +1193,6 @@ async function main() {
 
 main().catch(e => {
   log(RED, `  Fatal error: ${e.message || e}`);
+  logToFile(`FATAL: ${e.message || e}`);
   process.exit(1);
 });

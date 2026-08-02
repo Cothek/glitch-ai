@@ -392,6 +392,10 @@ async function main() {
   } catch (err) {
     if (err.status === null) {
       console.error(`  OpenCode exited with error: ${err.message}`);
+      process.exit(1);
+    } else if (err.status !== 0) {
+      console.error(`  OpenCode exited with error (code ${err.status})`);
+      process.exit(err.status);
     }
   }
 

@@ -107,7 +107,7 @@
                                   "description":  "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
                                   "permission":  {
                                                      "read":  "allow",
-                                                     "bash":  { "allow": ["node scripts/cleanup-screenshots.mjs*"], "deny": [] },
+                                                      "bash":  "deny",
                                                      "glob":  "allow",
                                                      "grep":  "deny",
                                                      "edit":  "deny",
@@ -124,7 +124,7 @@
                                 "description": "Alternative image and visual content analysis agent. Fallback when @vision fails with model-level errors (NVIDIA DEGRADED function, quota exhaustion, model not found). Uses a different underlying model than @vision.",
                                 "permission": {
                                   "read": "allow",
-                                  "bash": { "allow": ["node scripts/cleanup-screenshots.mjs*"], "deny": [] },
+                                   "bash": "deny",
                                   "glob": "allow",
                                   "grep": "deny",
                                   "edit": "deny",

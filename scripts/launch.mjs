@@ -823,11 +823,13 @@ async function main() {
 
       try {
         const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
-        if (!result.success && result.status !== null) {
+        if (!result.success && result.status !== null && result.status !== 0) {
           log(RED, `  OpenCode exited with error (code ${result.status})`);
+          process.exit(result.status);
         }
       } catch (e) {
         log(RED, `  OpenCode exited with error: ${e.message || e}`);
+        process.exit(1);
       }
 
       console.log('');

@@ -19,10 +19,7 @@ description: >-
 permission:
   read: allow
   edit: deny
-  bash:
-    allow:
-      - "node scripts/cleanup-screenshots.mjs*"
-    deny: []
+  bash: deny
   glob: allow
   grep: deny
   list: allow
