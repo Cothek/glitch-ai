@@ -563,12 +563,57 @@ if ($UserRepo) {
     }
 }
 
+# Auto-detect the primary branch and let the user pick if multiple branches exist
+function Select-UserRepoBranch {
+    param([string]$RepoUrl)
+    $primary = $null
+    $branches = @()
+    try {
+        $symrefOut = & git ls-remote --symref $RepoUrl HEAD 2>&1
+        foreach ($line in $symrefOut) {
+            if ($line -match '^ref:\s+refs/heads/(.+?)\s+HEAD') {
+                $primary = $matches[1].Trim()
+                break
+            }
+        }
+        $headsOut = & git ls-remote --heads $RepoUrl 2>&1
+        foreach ($line in $headsOut) {
+            if ($line -match 'refs/heads/(.+)$') {
+                $branches += $matches[1].Trim()
+            }
+        }
+        $branches = $branches | Sort-Object -Unique
+    } catch { }
+    if (-not $primary) { return "main" }
+    if ($branches.Count -le 1) { return $primary }
+
+    Write-Host ""
+    Write-Warn "Remote repo has multiple branches:"
+    for ($i = 0; $i -lt $branches.Count; $i++) {
+        $marker = if ($branches[$i] -eq $primary) { " (primary)" } else { "" }
+        Write-Host "    [$($i+1)] $($branches[$i])$marker" -ForegroundColor White
+    }
+    Write-Prompt "  Which branch to use? (Enter=$primary): "
+    $choice = Read-Host
+    if ($choice -match '^\d+$') {
+        $idx = [int]$choice - 1
+        if ($idx -ge 0 -and $idx -lt $branches.Count) {
+            return $branches[$idx]
+        }
+        Write-Warn "Invalid choice, using primary: $primary"
+    }
+    return $primary
+}
+
 # Try to clone existing profile if requested
 if ($cloneAttempted -and $ghUser -and $repoName) {
     $prevEAP = $ErrorActionPreference
     $ErrorActionPreference = "Continue"
     try {
         Write-Step "Connecting to $ghUser/$repoName..."
+
+        $repoUrl = "https://github.com/$ghUser/$repoName.git"
+        $useBranch = Select-UserRepoBranch -RepoUrl $repoUrl
 
         # Clear user dir for clean clone
         if (Test-Path $userDir) {
@@ -580,9 +625,9 @@ if ($cloneAttempted -and $ghUser -and $repoName) {
 
         # Clone straight into user dir
         # GCM should handle auth with a browser popup
-        $cloneOutput = git clone "https://github.com/$ghUser/$repoName.git" "$userDir" 2>&1
+        $cloneOutput = git clone -b $useBranch $repoUrl "$userDir" 2>&1
         if ($LASTEXITCODE -eq 0) {
-            Write-Success "Profile downloaded from GitHub"
+            Write-Success "Profile downloaded from GitHub (branch: $useBranch)"
         } else {
             # Clone failed - offer PAT as fallback
             Write-Warn "  Could not access $ghUser/$repoName."
@@ -597,9 +642,9 @@ if ($cloneAttempted -and $ghUser -and $repoName) {
             if ($ghToken) {
                 # Clean failed clone first
                 Remove-Item "$userDir\*" -Recurse -Force -ErrorAction SilentlyContinue
-                git clone "https://$ghUser`:$ghToken@github.com/$ghUser/$repoName.git" "$userDir" 2>&1
+                git clone -b $useBranch "https://$ghUser`:$ghToken@github.com/$ghUser/$repoName.git" "$userDir" 2>&1
                 if ($LASTEXITCODE -eq 0) {
-                    Write-Success "Profile downloaded from GitHub"
+                    Write-Success "Profile downloaded from GitHub (branch: $useBranch)"
                 } else {
                     Write-Warn "  Still could not connect."
                     $cloneAttempted = $false
@@ -665,6 +710,40 @@ timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
 "@
         Set-Content -LiteralPath "$userDir\reminders.md" -Value $starterReminders -Encoding UTF8
 
+        # Initialize git on main branch (never master) so the profile is ready for sync
+        Push-Location $userDir
+        try {
+            $gitVersion = (& git --version 2>&1)
+            $canInitB = $false
+            if ($gitVersion -match 'version (\d+)\.(\d+)') {
+                $verMajor = [int]$matches[1]
+                $verMinor = [int]$matches[2]
+                $canInitB = ($verMajor -gt 2) -or ($verMajor -eq 2 -and $verMinor -ge 28)
+            }
+            $initErr = $null
+            if ($canInitB) {
+                $initErr = (& git init -b main 2>&1)
+                if ($LASTEXITCODE -ne 0) { throw "git init -b main failed: $initErr" }
+            } else {
+                $initErr = (& git init 2>&1)
+                if ($LASTEXITCODE -ne 0) { throw "git init failed: $initErr" }
+                $currentRef = (& git symbolic-ref HEAD 2>&1)
+                if ($currentRef -match 'refs/heads/main') {
+                    # already on main — nothing to do
+                } else {
+                    $renameErr = (& git branch -m main 2>&1)
+                    if ($LASTEXITCODE -ne 0) {
+                        Write-Warn "Could not rename branch to main: $renameErr (continuing)"
+                    }
+                }
+            }
+            Write-Success "Git repo initialized on main branch"
+        } catch {
+            Write-Warn "Could not initialize git in user dir: $_"
+        } finally {
+            Pop-Location
+        }
+
         Write-Success "User profile created at $userDir"
     } else {
         Write-Success "User profile already exists at $userDir"
@@ -677,9 +756,17 @@ if ($cloneAttempted -and -not (Test-Path "$userDir\.git")) {
     Write-Host "  To connect your profile to GitHub later, start Glitch and say:" -ForegroundColor Cyan
     Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
     Write-Host ""
+} elseif ($cloneAttempted) {
+    # Clone was attempted but failed -- local starter files were created with git init on main
+    Write-Host ""
+    Write-Host "  Could not reach GitHub. Local profile created (git repo on main branch)." -ForegroundColor Cyan
+    Write-Host "  To retry the GitHub connection later, start Glitch and say:" -ForegroundColor Cyan
+    Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
+    Write-Host ""
 } elseif (-not $cloneAttempted) {
     Write-Host ""
-    Write-Host "  Profile is local-only. To sync with GitHub later, start Glitch and say:" -ForegroundColor Cyan
+    Write-Host "  Profile is local-only (git repo initialized on main branch)." -ForegroundColor Cyan
+    Write-Host "  To sync with GitHub later, start Glitch and say:" -ForegroundColor Cyan
     Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
     Write-Host ""
 }

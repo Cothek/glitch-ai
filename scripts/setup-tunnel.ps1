@@ -23,6 +23,7 @@ if (-not (Test-Path $Cloudflared)) {
 if ($Auto) {
   trap { Write-Error $_; exit 1 }
   $ErrorActionPreference = "Stop"
+  $PSNativeCommandUseErrorActionPreference = $false
 
   Write-Host ""
   Write-Host "Glitch AI - Auto Tunnel Setup" -ForegroundColor Magenta
@@ -39,6 +40,7 @@ if ($Auto) {
   Write-Host ""
 
   # Check if tunnel already exists (re-run safe)
+  $ErrorActionPreference = "SilentlyContinue"
   $existingTunnels = & $Cloudflared tunnel list --output json 2>$null | ConvertFrom-Json
   $existingUuid = $null
   if ($existingTunnels -is [array]) {
@@ -88,6 +90,7 @@ if ($Auto) {
   Write-Host "  DNS route set" -ForegroundColor Green
 
   # Ensure data directory exists
+  $ErrorActionPreference = "Stop"
   if (-not (Test-Path $DataDir)) { New-Item -ItemType Directory -Force -Path $DataDir | Out-Null }
 
   # Write domain file (so server-mode.mjs can read it)

@@ -508,20 +508,52 @@ fi
 
 if [ "$SHOULD_SYNC" = true ] && [ -n "$GH_USER" ]; then
     cd "$USER_DIR"
-    git init >/dev/null
+    # Force main branch for new user dirs (never master).
+    # git >= 2.28 supports `git init -b <name>`; older git falls back to init + rename.
+    if git init -b main >/dev/null 2>&1; then
+        :
+    else
+        git init >/dev/null
+        git symbolic-ref HEAD refs/heads/main 2>/dev/null || git branch -m main 2>/dev/null || true
+    fi
     git add -A >/dev/null
     git commit -m "initial user profile" >/dev/null 2>&1 || true
     local_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
     git remote add origin "https://github.com/$GH_USER/$REPO_NAME.git" 2>/dev/null
 
+    # Auto-detect the primary (default) branch of the remote
     remote_head=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
     if [ -n "$remote_head" ]; then
         default_branch="$remote_head"
+        # List all remote branches; if more than one, prompt the user to pick
+        branch_list=$(git ls-remote --heads origin 2>/dev/null | sed 's|.*refs/heads/||' | sort -u)
+        branch_count=$(printf '%s\n' "$branch_list" | grep -c . 2>/dev/null || echo "0")
+        if [ "$branch_count" -gt 1 ]; then
+            echo ""
+            warn "Remote repo has multiple branches:"
+            i=1
+            while IFS= read -r b; do
+                marker=""
+                [ "$b" = "$default_branch" ] && marker=" (primary)"
+                echo "    [$i] $b$marker"
+                i=$((i+1))
+            done <<< "$branch_list"
+            prompt "Which branch to use? (Enter=$default_branch): "
+            read -r branch_choice </dev/tty
+            if [ -n "$branch_choice" ]; then
+                chosen=$(echo "$branch_list" | sed -n "${branch_choice}p" 2>/dev/null)
+                if [ -n "$chosen" ]; then
+                    default_branch="$chosen"
+                else
+                    warn "Invalid choice, using primary: $default_branch"
+                fi
+            fi
+        fi
         if [ "$local_branch" != "$default_branch" ]; then
             git branch -m "$default_branch" 2>/dev/null
         fi
         if git pull origin "$default_branch" --allow-unrelated-histories 2>/dev/null; then
-            success "User profile synced from GitHub"
+            success "User profile synced from GitHub (branch: $default_branch)"
             git branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null
         else
             warn "Remote repository not found (or pull failed)."
@@ -535,7 +567,7 @@ if [ "$SHOULD_SYNC" = true ] && [ -n "$GH_USER" ]; then
     fi
 else
     echo "  Profile stays local-only (no GitHub sync)."
-    echo "  To sync later: cd $USER_DIR && git init && git remote add origin <url> && git push"
+    echo "  To sync later: cd $USER_DIR && git init -b main && git remote add origin <url> && git push"
 fi
 
 # 6. Verify installation
