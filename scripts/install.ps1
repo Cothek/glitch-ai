@@ -284,6 +284,33 @@ if (-not $gitPath) {
     # Add MinGit to PATH for current session
     $env:PATH = "$gitToolsDir\cmd;$env:PATH"
     $gitPath = $gitBin
+
+    # Offer to persist MinGit to the User PATH so git works in any terminal.
+    # Bundled MinGit is only on the current session's $env:PATH; without this,
+    # a fresh PowerShell window won't recognize `git`.
+    Write-Host "  MinGit is installed but not on your system PATH." -ForegroundColor Yellow
+    Write-Host "  git will only work inside Glitch's launcher unless we add it." -ForegroundColor Yellow
+    Write-Prompt "  Add MinGit to your Windows user PATH so git works in any terminal? (Y/n): "
+    $persistAnswer = Read-Host
+    if ($persistAnswer -eq '' -or $persistAnswer -like 'y*') {
+        try {
+            $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+            $newUserPath = if ([string]::IsNullOrEmpty($userPath)) {
+                "$gitToolsDir\cmd"
+            } else {
+                "$gitToolsDir\cmd;$userPath"
+            }
+            [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
+            Write-Success "  MinGit added to your user PATH. New terminals will recognize git."
+            Write-Host "  Note: existing/open terminals need to be restarted to pick up the new PATH." -ForegroundColor DarkGray
+        } catch {
+            Write-Warn "  Could not update PATH automatically: $_"
+            Write-Host "  You can add it manually later with:" -ForegroundColor Yellow
+            Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$gitToolsDir\cmd;' + [Environment]::GetEnvironmentVariable('Path','User'), 'User')" -ForegroundColor Gray
+        }
+    } else {
+        Write-Step "  Skipped. You can add MinGit to your PATH later if needed."
+    }
 }
 Write-Success "Git found: $gitPath"
 
