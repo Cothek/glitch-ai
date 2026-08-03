@@ -2,9 +2,26 @@
 //
 // Observes every tool.execute.after event. Tracks tool call counts and session
 // duration. When thresholds are met (or a trigger phrase is detected in args),
-// writes a signal flag at data/MEMORY_TRIGGER_FLAG. The model reads this flag
-// at response start, dispatches @memory to record observations, then deletes
-// the flag.
+// writes a signal flag at data/MEMORY_TRIGGER_FLAG.
+//
+// CONSUMPTION (PM-022 fix): The plugin hooks `experimental.chat.messages.transform`,
+// which fires AFTER messages are read from the DB and BEFORE they are sent to
+// the LLM. If the trigger flag exists, its contents are appended as a text part
+// to the LAST message's parts — so the model is forced to see the directive and
+// dispatch @memory. This converts the previously-behavioral consumption step
+// into a mechanical one. The model still deletes the flag after dispatching
+// @memory (the plugin does NOT delete it — that keeps the protocol intact so
+// @memory actually gets dispatched).
+//
+// Why this hook and not `chat.message`: `chat.message` fires inside
+// createUserMessage AFTER parts are built but BEFORE they are saved to the DB.
+// Pushing into output.parts there only publishes a PartUpdated event — it does
+// NOT write to the DB. Model messages are constructed from DB rows via
+// hydrate() → PartTable, so parts not in the DB never reach the LLM. The
+// pushed part also lacks required fields (id, sessionID, messageID) and would
+// fail schema validation. `experimental.chat.messages.transform` is the
+// correct injection point — it fires after DB read, before LLM, and mutations
+// to output.messages DO reach the model.
 //
 // State persistence:
 //   data/mulahazah/state.json       — counter, last trigger time, session start
@@ -14,8 +31,8 @@
 //   data/MEMORY_TRIGGER_FLAG        — short text summary, deleted after dispatch
 //
 // Thresholds (hardcoded):
-//   50 tool calls OR 15 minutes elapsed → fire trigger
-//   2 minute cooldown between triggers
+//   25 tool calls OR 10 minutes elapsed → fire trigger
+//   1 minute cooldown between triggers
 //   24 hour stale reset on session start
 //
 // Trigger phrases (case-insensitive scan of input.args):
@@ -28,11 +45,13 @@
 
 import { promises as fs } from "fs";
 import { join } from "path";
+import { randomUUID } from "crypto";
 
-const TOOL_CALL_THRESHOLD = 50;
-const TIME_THRESHOLD_MS = 15 * 60 * 1000;       // 15 minutes
-const COOLDOWN_MS = 2 * 60 * 1000;              // 2 minutes
+const TOOL_CALL_THRESHOLD = 25;
+const TIME_THRESHOLD_MS = 10 * 60 * 1000;       // 10 minutes
+const COOLDOWN_MS = 60 * 1000;                  // 1 minute
 const STALE_RESET_MS = 24 * 60 * 60 * 1000;     // 24 hours
+// Lowered from 50/15min/2min (2026-08-03) — PM-022 fix to make @memory dispatch more responsive.
 
 const TRIGGER_PHRASES = [
   "remember that",
@@ -214,6 +233,63 @@ export const MulahazahPlugin = async ({ directory }) => {
   }
 
   return {
+    /**
+     * Fires AFTER messages are read from the DB and BEFORE they are sent to
+     * the LLM. If a memory trigger flag is pending, append its contents as a
+     * text part to the LAST message's parts so the model MUST see the
+     * directive. This is the PM-022 fix — converts the previously-behavioral
+     * consumption step into a mechanical one. The model still deletes the
+     * flag after dispatching @memory (the plugin does NOT delete it).
+     *
+     * Appending to the last message's parts is cleaner than injecting a
+     * synthetic message — the model sees the directive without a confusing
+     * fake user turn.
+     */
+    "experimental.chat.messages.transform": async (input, output) => {
+      try {
+        if (process.env.MULAHAZAH_DEBUG) {
+          console.log(`[mulahazah] transform fired, ${output.messages?.length ?? 0} messages`);
+        }
+
+        const flagContent = await fs.readFile(triggerFlag, "utf8");
+        if (!flagContent || !flagContent.trim()) return;
+
+        // Guard: messages array must exist and be non-empty
+        if (!Array.isArray(output.messages) || output.messages.length === 0) return;
+
+        const lastMessage = output.messages[output.messages.length - 1];
+        if (!lastMessage || !Array.isArray(lastMessage.parts)) return;
+
+        const directive =
+          `[MEMORY TRIGGER PENDING] data/MEMORY_TRIGGER_FLAG exists:\n` +
+          `---\n${flagContent.trim()}\n---\n` +
+          `DISPATCH @memory NOW to record session observations, then delete the flag file.`;
+
+        // Guard: lastMessage.info may be undefined. If so, generate IDs so the
+        // pushed part still satisfies the TextPart schema (id, sessionID,
+        // messageID, type, text). Without these fields the part fails schema
+        // validation and never reaches the LLM.
+        const sessionID = lastMessage.info?.sessionID ?? `ses_${randomUUID()}`;
+        const messageID = lastMessage.info?.id ?? `msg_${randomUUID()}`;
+
+        lastMessage.parts.push({
+          id: `prt_${randomUUID()}`,
+          sessionID,
+          messageID,
+          type: "text",
+          text: directive,
+          synthetic: true,
+        });
+
+        console.log("[mulahazah] injected memory trigger directive into last message parts");
+      } catch (err) {
+        // ENOENT = no flag pending — normal case, no log noise
+        if (err.code !== "ENOENT") {
+          console.error(`[mulahazah] experimental.chat.messages.transform hook failed: ${err.message}`);
+        }
+      }
+    },
+
     "tool.execute.after": async (input, output) => {
       const tool = input.tool || "unknown";
       const sessionID = input.sessionID || "unknown";
