@@ -99,6 +99,25 @@ function Write-Warn   { param([string]$msg) Write-Host "  $msg" -ForegroundColor
 function Write-Error  { param([string]$msg) Write-Host "  $msg" -ForegroundColor Red }
 function Write-Prompt { param([string]$msg) Write-Host "  $msg" -NoNewline -ForegroundColor Cyan }
 
+# Check whether git.exe is reachable via the PERSISTED (global) PATH.
+# This is the source of truth for whether git will be available in FUTURE
+# terminals. The session $env:PATH is NOT authoritative because launch scripts
+# (launch-glitch.bat, glitch.bat) prepend bundled MinGit at every launch
+# without persisting it -- so a session-only git would still leave fresh
+# terminals broken.
+function Test-GitInPersistedPath {
+    foreach ($scope in @('User', 'Machine')) {
+        $pathValue = [Environment]::GetEnvironmentVariable('Path', $scope)
+        if ([string]::IsNullOrEmpty($pathValue)) { continue }
+        foreach ($entry in $pathValue.Split(';')) {
+            $trimmed = $entry.Trim().Trim('"').TrimEnd('\')
+            if ([string]::IsNullOrEmpty($trimmed)) { continue }
+            if (Test-Path (Join-Path $trimmed 'git.exe')) { return $true }
+        }
+    }
+    return $false
+}
+
 # -- Spinner helper for long operations --
 # Shows a rotating spinner + elapsed seconds while a background job runs.
 # Use $using:varName inside the scriptblock to pass parent variables.
@@ -228,91 +247,113 @@ if ($script:LogFile) {
 
 # 3. Check git -- auto-download portable MinGit if missing
 $gitPath = (Get-Command git -ErrorAction SilentlyContinue).Source
-if (-not $gitPath) {
-    Write-Warn "Git not found in PATH."
-    Write-Step "Downloading MinGit (portable Git for Windows, ~40 MB)..."
-    
-    $gitToolsDir = Join-Path $InstallDir "data\mingit"
-    $gitBin = Join-Path $gitToolsDir "cmd\git.exe"
-    
-    if (-not (Test-Path $gitBin)) {
-        # Try to get latest release URL from GitHub API
-        try {
-            $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
-            $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -TimeoutSec 10
-            $minGitAsset = $release.assets | Where-Object { $_.name -like "MinGit-*-64-bit.zip" } | Select-Object -First 1
-            if ($minGitAsset) {
-                $downloadUrl = $minGitAsset.browser_download_url
-                Write-Step "  Found: $($minGitAsset.name)"
-            } else {
-                throw "No MinGit asset found in latest release"
+
+if (Test-GitInPersistedPath) {
+    # Git already on the global (persisted) PATH -- nothing to do, don't ask.
+    if (-not $gitPath) {
+        # Session doesn't see it yet (PATH changed after this terminal opened).
+        # Resolve the actual git.exe from the persisted PATH for the success message.
+        foreach ($scope in @('User', 'Machine')) {
+            $pathValue = [Environment]::GetEnvironmentVariable('Path', $scope)
+            if ([string]::IsNullOrEmpty($pathValue)) { continue }
+            foreach ($entry in $pathValue.Split(';')) {
+                $trimmed = $entry.Trim().Trim('"').TrimEnd('\')
+                if ([string]::IsNullOrEmpty($trimmed)) { continue }
+                $candidate = Join-Path $trimmed 'git.exe'
+                if (Test-Path $candidate) {
+                    $gitPath = $candidate
+                    break
+                }
             }
-        } catch {
-            # Fallback to known good version
-            $downloadUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.2/MinGit-2.47.0.2-64-bit.zip"
-            Write-Step "  Using fixed MinGit 2.47.0.2 (API failed: $($_.Exception.Message))"
+            if ($gitPath) { break }
+        }
+    }
+    Write-Success "Git found in system PATH: $gitPath"
+} else {
+    # Git NOT on the global PATH. Provision if needed, then ask to persist.
+    if (-not $gitPath) {
+        Write-Warn "Git not found in PATH."
+        Write-Step "Downloading MinGit (portable Git for Windows, ~40 MB)..."
+        
+        $gitToolsDir = Join-Path $InstallDir "data\mingit"
+        $gitBin = Join-Path $gitToolsDir "cmd\git.exe"
+        
+        if (-not (Test-Path $gitBin)) {
+            # Try to get latest release URL from GitHub API
+            try {
+                $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
+                $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing -TimeoutSec 10
+                $minGitAsset = $release.assets | Where-Object { $_.name -like "MinGit-*-64-bit.zip" } | Select-Object -First 1
+                if ($minGitAsset) {
+                    $downloadUrl = $minGitAsset.browser_download_url
+                    Write-Step "  Found: $($minGitAsset.name)"
+                } else {
+                    throw "No MinGit asset found in latest release"
+                }
+            } catch {
+                # Fallback to known good version
+                $downloadUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.2/MinGit-2.47.0.2-64-bit.zip"
+                Write-Step "  Using fixed MinGit 2.47.0.2 (API failed: $($_.Exception.Message))"
+            }
+            
+            $downloadsDir = Join-Path $InstallDir "data\downloads"
+            New-Item -ItemType Directory -Force -Path $downloadsDir | Out-Null
+            $tempZip = Join-Path $downloadsDir "mingit.zip"
+            try {
+                Invoke-WithSpinner -Label "Downloading MinGit (40MB)" -DoneMessage "MinGit" -ScriptBlock {
+                  Invoke-WebRequest -Uri $using:downloadUrl -OutFile $using:tempZip -UseBasicParsing -TimeoutSec 120
+                }
+                
+                New-Item -ItemType Directory -Path $gitToolsDir -Force | Out-Null
+                Invoke-WithSpinner -Label "Extracting MinGit" -DoneMessage "MinGit" -ScriptBlock {
+                  Expand-Archive -Path $using:tempZip -DestinationPath $using:gitToolsDir -Force
+                }
+                Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
+                
+                if (-not (Test-Path $gitBin)) {
+                    throw "MinGit binary not found after extraction at $gitBin"
+                }
+                Write-Success "MinGit installed to $gitToolsDir"
+            } catch {
+                Write-Error "Failed to download MinGit: $_"
+                Write-Error "Install Git manually from https://git-scm.com/download/win"
+                Write-Error "After installing, restart your terminal and re-run the installer."
+                throw "Installation failed"
+            }
+        } else {
+            Write-Step "MinGit already installed at $gitToolsDir"
         }
         
-        $downloadsDir = Join-Path $InstallDir "data\downloads"
-        New-Item -ItemType Directory -Force -Path $downloadsDir | Out-Null
-        $tempZip = Join-Path $downloadsDir "mingit.zip"
-        try {
-            Invoke-WithSpinner -Label "Downloading MinGit (40MB)" -DoneMessage "MinGit" -ScriptBlock {
-              Invoke-WebRequest -Uri $using:downloadUrl -OutFile $using:tempZip -UseBasicParsing -TimeoutSec 120
-            }
-            
-            New-Item -ItemType Directory -Path $gitToolsDir -Force | Out-Null
-            Invoke-WithSpinner -Label "Extracting MinGit" -DoneMessage "MinGit" -ScriptBlock {
-              Expand-Archive -Path $using:tempZip -DestinationPath $using:gitToolsDir -Force
-            }
-            Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
-            
-            if (-not (Test-Path $gitBin)) {
-                throw "MinGit binary not found after extraction at $gitBin"
-            }
-            Write-Success "MinGit installed to $gitToolsDir"
-        } catch {
-            Write-Error "Failed to download MinGit: $_"
-            Write-Error "Install Git manually from https://git-scm.com/download/win"
-            Write-Error "After installing, restart your terminal and re-run the installer."
-            throw "Installation failed"
-        }
-    } else {
-        Write-Step "MinGit already installed at $gitToolsDir"
+        # Add MinGit to PATH for current session
+        $env:PATH = "$gitToolsDir\cmd;$env:PATH"
+        $gitPath = $gitBin
     }
-    
-    # Add MinGit to PATH for current session
-    $env:PATH = "$gitToolsDir\cmd;$env:PATH"
-    $gitPath = $gitBin
-
-    # Offer to persist MinGit to the User PATH so git works in any terminal.
-    # Bundled MinGit is only on the current session's $env:PATH; without this,
-    # a fresh PowerShell window won't recognize `git`.
-    Write-Host "  MinGit is installed but not on your system PATH." -ForegroundColor Yellow
+    # Now offer persistence. The dir to persist is the git binary's own dir.
+    $gitDir = Split-Path $gitPath -Parent
+    Write-Host "  Git is installed but not on your system PATH." -ForegroundColor Yellow
     Write-Host "  git will only work inside Glitch's launcher unless we add it." -ForegroundColor Yellow
-    Write-Prompt "  Add MinGit to your Windows user PATH so git works in any terminal? (Y/n): "
+    Write-Prompt "  Add Git to your Windows user PATH so it works in any terminal? (Y/n): "
     $persistAnswer = Read-Host
     if ($persistAnswer -eq '' -or $persistAnswer -like 'y*') {
         try {
             $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
             $newUserPath = if ([string]::IsNullOrEmpty($userPath)) {
-                "$gitToolsDir\cmd"
+                $gitDir
             } else {
-                "$gitToolsDir\cmd;$userPath"
+                "$gitDir;$userPath"
             }
             [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
-            Write-Success "  MinGit added to your user PATH. New terminals will recognize git."
+            Write-Success "  Git added to your user PATH. New terminals will recognize git."
             Write-Host "  Note: existing/open terminals need to be restarted to pick up the new PATH." -ForegroundColor DarkGray
         } catch {
             Write-Warn "  Could not update PATH automatically: $_"
             Write-Host "  You can add it manually later with:" -ForegroundColor Yellow
-            Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$gitToolsDir\cmd;' + [Environment]::GetEnvironmentVariable('Path','User'), 'User')" -ForegroundColor Gray
+            Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$gitDir;' + [Environment]::GetEnvironmentVariable('Path','User'), 'User')" -ForegroundColor Gray
         }
     } else {
-        Write-Step "  Skipped. You can add MinGit to your PATH later if needed."
+        Write-Step "  Skipped. You can add Git to your PATH later if needed."
     }
 }
-Write-Success "Git found: $gitPath"
 
 # 4. Check install directory
 Write-Header "Installation directory: $InstallDir"
@@ -811,6 +852,22 @@ if ($checkExit -ne 0) {
     Write-Warn "Some checks did not pass. Review the report above for details."
     Write-Warn "Items marked with [X] under 'Core' indicate critical issues."
 }
+
+# 6.5. Seed default plugins into user/plugins.json (additive merge)
+Write-Header "Seeding default plugins..."
+Push-Location $InstallDir
+try {
+    $seedOutput = & $checkNode scripts/plugin.mjs seed 2>&1
+    if ($LASTEXITCODE -eq 0) {
+        Write-Success "Seeded default plugins (model-ui). Edit user\plugins.json to customize."
+        if ($seedOutput) { Write-Host "  $seedOutput" -ForegroundColor DarkGray }
+    } else {
+        Write-Warn "Plugin seed returned non-zero (continuing): $seedOutput"
+    }
+} catch {
+    Write-Warn "Plugin seed failed (non-critical): $_"
+}
+Pop-Location
 
 # 7. Launch
 if (-not $NoLaunch) {
