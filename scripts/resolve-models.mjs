@@ -22,7 +22,7 @@ const __dirname = dirname(__filename);
 const ROOT_DIR = resolve(__dirname, '..');
 
 // ---- Paths ----
-const REGISTRY_PATH = join(ROOT_DIR, 'data', 'model-registry.json');
+const REGISTRY_PATH = join(ROOT_DIR, 'config', 'model-registry.json');
 const BUDGET_PATH = join(ROOT_DIR, 'user', 'model-budget.json');
 const CONFIG_PATH = join(ROOT_DIR, 'opencode.json');
 const CONFIG_BAK_PATH = join(ROOT_DIR, 'data', 'backups', 'opencode-pre-resolve.json');
@@ -170,7 +170,7 @@ async function main() {
   // Read registry
   const registry = readJson(REGISTRY_PATH, null);
   if (!registry || !registry.models) {
-    log(`${RED}[ERROR]${DARK_GRAY} model-registry.json not found or invalid. Run check-models.ps1 first.`, RED);
+    log(`${RED}[ERROR]${DARK_GRAY} config/model-registry.json not found or invalid. Run check-models.ps1 first.`, RED);
     process.exit(2);
   }
 

@@ -12,9 +12,10 @@
  *   toggle <name>     Toggle a plugin on/off
  *   start <name>      Start a plugin's server immediately
  *   stop <name>       Stop a plugin's server immediately
+ *   seed              Seed user/plugins.json with any missing system defaults
  */
 
-import { listPlugins, isEnabled, setEnabled, togglePlugin, startPlugin, stopPlugin, startEnabledPlugins, stopAllPlugins } from './lib/plugin-manager.mjs';
+import { listPlugins, isEnabled, setEnabled, togglePlugin, startPlugin, stopPlugin, startEnabledPlugins, stopAllPlugins, ensureDefaultRegistry } from './lib/plugin-manager.mjs';
 
 const cmd = process.argv[2];
 const name = process.argv[3];
@@ -128,6 +129,22 @@ async function main() {
       }
       break;
 
+    case 'seed': {
+      const result = ensureDefaultRegistry();
+      if (result.created) {
+        if (result.added.length === 0) {
+          log(GREEN, 'Created user/plugins.json (no default plugins to seed).');
+        } else {
+          log(GREEN, `Seeded ${result.added.length} default plugin(s): ${result.added.join(', ')}`);
+        }
+      } else if (result.added.length === 0) {
+        log(DARK_GRAY, 'No new defaults to seed.');
+      } else {
+        log(GREEN, `Seeded ${result.added.length} default plugin(s): ${result.added.join(', ')}`);
+      }
+      break;
+    }
+
     default:
       log(CYAN, 'Glitch Plugin Manager');
       console.log('');
@@ -138,6 +155,7 @@ async function main() {
       console.log('  node scripts/plugin.mjs toggle <name>     Toggle plugin on/off');
       console.log('  node scripts/plugin.mjs start <name>      Start plugin server now');
       console.log('  node scripts/plugin.mjs stop <name>       Stop plugin server');
+      console.log('  node scripts/plugin.mjs seed              Seed user/plugins.json with system defaults');
   }
 }
 

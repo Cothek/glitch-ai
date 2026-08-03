@@ -655,6 +655,22 @@ else
     echo "    cd $INSTALL_DIR && node scripts/check-install.mjs"
 fi
 
+# 6.5. Seed default plugins into user/plugins.json (additive merge)
+header "Seeding default plugins..."
+cd "$INSTALL_DIR"
+if command -v node >/dev/null 2>&1; then
+    if seed_output=$(node scripts/plugin.mjs seed 2>&1); then
+        success "Seeded default plugins (model-ui). Edit user/plugins.json to customize."
+        if [ -n "$seed_output" ]; then
+            echo "  $seed_output"
+        fi
+    else
+        warn "Plugin seed returned non-zero (continuing): $seed_output"
+    fi
+else
+    warn "Node.js not found — skipping plugin seed (will run on first launch)."
+fi
+
 # 7. Launch
 if [ "$NO_LAUNCH" = false ]; then
     header "Launch Glitch AI"
@@ -678,7 +694,7 @@ if [ "$NO_LAUNCH" = false ]; then
                 1|"") MODE_FLAG="--mode normal-paid"; break ;;
                 2) MODE_FLAG="--mode normal-free"; break ;;
                 3) MODE_FLAG="--mode normal-local"; break ;;
-                4) MODE_FLAG="--mode normal-safe"; break ;;
+                4) MODE_FLAG="--mode safe"; break ;;
                 *) echo "Invalid choice. Please enter 1, 2, 3, or 4 (or Enter for default)." ;;
             esac
         done

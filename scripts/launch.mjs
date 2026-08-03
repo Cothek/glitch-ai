@@ -11,6 +11,7 @@ import { checkUserRepoUpdates } from './lib/git-sync.mjs';
 import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
 import { bootstrapOpenCode } from './lib/bootstrap-opencode.mjs';
+import { migrateModelAssignments } from './lib/migrate-assignments.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -448,8 +449,11 @@ async function main() {
     let configObj = JSON.parse(runtimeJson);
     injectProviders(configObj);
 
-    // Apply model overrides from data/model-assignments.json (set by model UI)
-    const assignmentsPath = join(ROOT_DIR, 'data', 'model-assignments.json');
+    // One-time migration: copy legacy data/model-assignments.json to user/ if needed
+    migrateModelAssignments(ROOT_DIR, log);
+
+    // Apply model overrides from user/model-assignments.json (set by model UI)
+    const assignmentsPath = join(ROOT_DIR, 'user', 'model-assignments.json');
     if (existsSync(assignmentsPath)) {
       try {
         const assignmentsRaw = readFileSync(assignmentsPath, 'utf-8');
@@ -462,10 +466,10 @@ async function main() {
           }
         }
         if (overrideCount > 0) {
-          log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from model-assignments.json`);
+          log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from user/model-assignments.json`);
         }
       } catch (e) {
-        log(YELLOW, `  Warning: Could not read model-assignments.json (${e.message})`);
+        log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
       }
     }
 
@@ -587,7 +591,7 @@ async function main() {
   if (isWin) {
     try {
       const resolverScript = join(ROOT_DIR, 'scripts', 'resolve-models.mjs');
-      if (existsSync(resolverScript) && existsSync(join(ROOT_DIR, 'data', 'model-registry.json'))) {
+      if (existsSync(resolverScript) && existsSync(join(ROOT_DIR, 'config', 'model-registry.json'))) {
         // Always run resolver silently (keeps model-assignment.json current)
         run('node', [resolverScript], { timeout: 30000, stdio: 'ignore' });
 
@@ -844,7 +848,7 @@ async function main() {
       log(MAGENTA, '  Restarting Glitch...');
       log('');
 
-      // Re-generate config (picks up any model-assignments.json changes)
+      // Re-generate config (picks up any user/model-assignments.json changes)
       log(CYAN, '  Generating runtime config from template...');
       let templateText = readFileSync(TemplatePath, 'utf-8');
       if (templateText.charCodeAt(0) === 0xFEFF) templateText = templateText.slice(1);
@@ -860,8 +864,8 @@ async function main() {
 
       try {
         let configObj = JSON.parse(runtimeJson);
-        // Apply model overrides from data/model-assignments.json
-        const assignmentsPath = join(ROOT_DIR, 'data', 'model-assignments.json');
+        // Apply model overrides from user/model-assignments.json
+        const assignmentsPath = join(ROOT_DIR, 'user', 'model-assignments.json');
         if (existsSync(assignmentsPath)) {
           try {
             const assignmentsRaw = readFileSync(assignmentsPath, 'utf-8');
@@ -874,10 +878,10 @@ async function main() {
               }
             }
             if (overrideCount > 0) {
-              log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from model-assignments.json`);
+              log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from user/model-assignments.json`);
             }
           } catch (e) {
-            log(YELLOW, `  Warning: Could not read model-assignments.json (${e.message})`);
+            log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
           }
         }
         const finalJson = JSON.stringify(configObj, null, 2);

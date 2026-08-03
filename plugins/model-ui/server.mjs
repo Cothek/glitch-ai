@@ -3,13 +3,14 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync } from
 import { join, dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, exec } from 'node:child_process';
+import { migrateModelAssignments } from '../../scripts/lib/migrate-assignments.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = resolve(__dirname, '..', '..');
 const PORT = parseInt(process.env.MODEL_UI_PORT || '4104', 10);
 const TEMPLATE_PATH = join(ROOT_DIR, 'config', 'opencode-normal.json');
-const ASSIGNMENTS_PATH = join(ROOT_DIR, 'data', 'model-assignments.json');
+const ASSIGNMENTS_PATH = join(ROOT_DIR, 'user', 'model-assignments.json');
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -37,7 +38,7 @@ function getRegistry() {
   if (registryCache && now - registryCacheTime < REGISTRY_CACHE_TTL) {
     return registryCache;
   }
-  registryCache = readJson(join(ROOT_DIR, 'data', 'model-registry.json'));
+  registryCache = readJson(join(ROOT_DIR, 'config', 'model-registry.json'));
   registryCacheTime = now;
   return registryCache;
 }
@@ -64,6 +65,8 @@ function readJson(path) {
 }
 
 function writeJson(path, data) {
+  const dir = dirname(path);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(path, JSON.stringify(data, null, 2), 'utf-8');
 }
 
@@ -252,7 +255,7 @@ async function handler(req, res) {
     if (req.method === 'GET' && pathname === '/api/models') {
       const registry = getRegistry();
       if (!registry) {
-        sendJson(res, 500, { error: 'model-registry.json not found' });
+        sendJson(res, 500, { error: 'config/model-registry.json not found' });
         return;
       }
 
@@ -463,10 +466,13 @@ async function handler(req, res) {
   }
 }
 
+// One-time migration: copy legacy data/model-assignments.json to user/ if needed
+migrateModelAssignments(ROOT_DIR, (color, msg) => console.log(`${color}${msg}\x1b[0m`));
+
 const server = http.createServer(handler);
 server.listen(PORT, () => {
   console.log(`Model UI server listening on :${PORT}`);
   console.log(`OpenCode config: ${join(ROOT_DIR, 'opencode.json')}`);
-  const registry = readJson(join(ROOT_DIR, 'data', 'model-registry.json'));
+  const registry = readJson(join(ROOT_DIR, 'config', 'model-registry.json'));
   console.log(`Registry: ${registry?.models?.length || 0} models loaded`);
 });

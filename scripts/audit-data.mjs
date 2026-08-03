@@ -30,8 +30,6 @@ const KNOWN_MANIFEST = new Set([
   'backups',
   'free-models.json',
   'model-assignment.json',
-  'model-assignments.json',
-  'model-registry.json',
   'model-resolver-preference.json',
   'model-ui-err.log',
   'model-ui-error.log',
@@ -45,7 +43,6 @@ const KNOWN_MANIFEST = new Set([
   'nvidia-free-cache.json',
   'nvidia-free-watchlist-cache.json',
   'opencode.pid',
-  'plugins.json',
   'restart-kill.log',
   'review-install-ps1-submodule-fix.log',
   'skills-lock.json',
@@ -58,6 +55,12 @@ const KNOWN_MANIFEST = new Set([
   'launch.log',
   'server-debug.log',
   'vision-dispatch-log.txt',
+  // NOTE: plugins.json, model-assignments.json, and model-registry.json were
+  // moved out of data/ in the layered-config refactor (plugins.json and
+  // model-assignments.json now live in user/; model-registry.json in config/).
+  // Legacy copies in data/ from older installs are no longer protected here —
+  // they will be flagged for cleanup if they remain. This is intentional: the
+  // new locations are the source of truth.
 ].map(n => n.toLowerCase()));
 
 const AUTO_FLAG_EXTS = new Set(['.bak', '.tmp', '.old']);

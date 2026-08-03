@@ -840,7 +840,7 @@ $freeModelsData | ConvertTo-Json -Depth 4 | Out-File -FilePath $FreeModelsFile -
 
 # 6.75. Build model-registry.json (all models with pricing, tier, capabilities)
 # This is the primary input for resolve-models.mjs
-$RegistryFile = "$RootDir\data\model-registry.json"
+$RegistryFile = "$RootDir\config\model-registry.json"
 $registryModels = @()
 
 # Fetch OpenRouter full model data (pricing, context) for cross-referencing
@@ -1010,6 +1010,8 @@ $registryData = @{
     total_models = $dedupedModels.Count
     models = $dedupedModels
 }
+$registryDir = Split-Path -Parent $RegistryFile
+if (-not (Test-Path $registryDir)) { New-Item -ItemType Directory -Path $registryDir -Force | Out-Null }
 $registryData | ConvertTo-Json -Depth 4 | Out-File -FilePath $RegistryFile -Encoding utf8 -Force
 
 # 7. Write status file
@@ -1075,7 +1077,7 @@ if (-not $Silent) {
     Write-Host " Status written to: model-update-status.json" -ForegroundColor DarkGray
     Write-Host " Cache: glitch-memorycore\data\known-models.json" -ForegroundColor DarkGray
     Write-Host " Free models: data\free-models.json" -ForegroundColor DarkGray
-    Write-Host " Model registry: data\model-registry.json ($($dedupedModels.Count) models)" -ForegroundColor DarkGray
+    Write-Host " Model registry: config\model-registry.json ($($dedupedModels.Count) models)" -ForegroundColor DarkGray
     Write-Host ""
 }
 

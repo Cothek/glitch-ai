@@ -776,6 +776,22 @@ async function main() {
   log(DARK_GRAY, ' Make sure LM Studio is running and the model is loaded.');
   log('');
 
+  // ---- Start enabled plugins ----
+  log(CYAN, '  Starting enabled plugins...');
+  try {
+    const { startEnabledPlugins } = await import('./lib/plugin-manager.mjs');
+    const results = await startEnabledPlugins();
+    for (const r of results) {
+      if (r.success) {
+        log(DARK_GREEN, `  Plugin: ${r.name} (PID ${r.pid})`);
+      } else if (r.error && !r.error.includes('already running')) {
+        log(YELLOW, `  Plugin ${r.name}: ${r.error}`);
+      }
+    }
+  } catch (e) {
+    log(YELLOW, `  Plugin manager error: ${e.message}`);
+  }
+
   if (isServe) {
     // Server (web) mode
     const { launchServer } = await import('./lib/server-mode.mjs');

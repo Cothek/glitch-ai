@@ -163,6 +163,9 @@ function normalizeMode(mode) {
   // Old server mode -> normal-paid
   if (mode === 'serve' || mode === 'server') return 'normal-paid';
 
+  // Safe is now a delivery (not a tier). Accept bare 'safe' or legacy 'normal-safe'/'web-safe'.
+  if (mode === 'safe' || mode === 'normal-safe' || mode === 'web-safe') return 'safe';
+
   // Already in combined format
   if (mode.includes('-')) {
     const parts = mode.split('-');
@@ -193,29 +196,33 @@ function saveMode(mode) {
 }
 
 const DELIVERIES = [
-  { id: 'normal', name: 'Normal Mode', desc: 'terminal interface' },
-  { id: 'web', name: 'Web Mode', desc: 'web server' },
+  { id: 'normal', name: 'Terminal (TUI)', desc: 'terminal interface' },
+  { id: 'web', name: 'Web', desc: 'web server' },
+  { id: 'safe', name: 'Safe', desc: 'minimal config for fixing broken setup' },
 ];
 
 const MODELS = [
   { id: 'paid', name: 'Paid', desc: 'recommended' },
   { id: 'free', name: 'Free', desc: 'all agents use free models only' },
   { id: 'local', name: 'Local', desc: 'all agents via LM Studio (local LLM)' },
-  { id: 'safe', name: 'Safe', desc: 'minimal config for fixing broken setup' },
 ];
 
 const SCRIPT_MAP = {
   'normal-paid': { script: 'launch.mjs', args: [] },
   'normal-free': { script: 'launch-free.mjs', args: [] },
   'normal-local': { script: 'launch-local.mjs', args: [] },
-  'normal-safe': { script: 'launch-safe.mjs', args: [] },
   'web-paid': { script: 'launch.mjs', args: ['--serve'] },
   'web-free': { script: 'launch-free.mjs', args: ['--serve'] },
   'web-local': { script: 'launch-local.mjs', args: ['--serve'] },
-  'web-safe': { script: 'launch-safe.mjs', args: ['--serve'] },
+  'safe': { script: 'launch-safe.mjs', args: [] },
 };
 
 function getModeLabel(combinedKey) {
+  // Safe is a delivery with no tier — handle it before splitting.
+  if (combinedKey === 'safe') {
+    const safe = DELIVERIES.find(d => d.id === 'safe');
+    return safe ? safe.name : combinedKey;
+  }
   const [deliveryId, modelId] = combinedKey.split('-');
   const delivery = DELIVERIES.find(d => d.id === deliveryId);
   const model = MODELS.find(m => m.id === modelId);
@@ -402,8 +409,9 @@ async function main() {
     --help, -h       Show this help
     --mode <key>     Skip menu, launch specific mode directly
                      Combined format: <glitch-mode>-<tier>  (e.g. normal-paid, web-free)
-                     Old format: <tier>                 (assumes normal mode)
-                     Tiers: paid, free, local, safe
+                     Safe mode: safe                       (no tier)
+                     Old format: <tier>                    (assumes normal mode)
+                     Tiers: paid, free, local
     --reset          Clear saved preference and show menu
 
   The launcher remembers your last choice. Next time, just press Enter.
@@ -430,10 +438,16 @@ async function main() {
     let savedDelivery = null;
     let savedModel = null;
     if (savedMode) {
-      const parts = savedMode.split('-');
-      if (parts.length === 2) {
-        savedDelivery = parts[0];
-        savedModel = parts[1];
+      // Safe is a single-word delivery (no tier) — handle before splitting.
+      if (savedMode === 'safe') {
+        savedDelivery = 'safe';
+        savedModel = null;
+      } else {
+        const parts = savedMode.split('-');
+        if (parts.length === 2) {
+          savedDelivery = parts[0];
+          savedModel = parts[1];
+        }
       }
     }
 
@@ -453,24 +467,29 @@ async function main() {
       }
     }
 
-    // Level 2: Model tier (use saved model only if delivery didn't change)
-    const modelDefault = deliveryId === savedDelivery ? savedModel : null;
-    const modelSelection = await showModelMenu(modelDefault);
-    let modelId;
-    if (!modelSelection && modelDefault) {
-      modelId = modelDefault;
+    // Safe is a delivery with no tier — skip the model menu entirely.
+    if (deliveryId === 'safe') {
+      modeId = 'safe';
     } else {
-      const num = parseInt(modelSelection, 10);
-      if (!isNaN(num) && num >= 1 && num <= MODELS.length) {
-        modelId = MODELS[num - 1].id;
+      // Level 2: Model tier (use saved model only if delivery didn't change)
+      const modelDefault = deliveryId === savedDelivery ? savedModel : null;
+      const modelSelection = await showModelMenu(modelDefault);
+      let modelId;
+      if (!modelSelection && modelDefault) {
+        modelId = modelDefault;
       } else {
-        log(RED, ' Invalid model selection. Exiting.');
-        logToFile('ERROR: Invalid model selection');
-        process.exit(1);
+        const num = parseInt(modelSelection, 10);
+        if (!isNaN(num) && num >= 1 && num <= MODELS.length) {
+          modelId = MODELS[num - 1].id;
+        } else {
+          log(RED, ' Invalid model selection. Exiting.');
+          logToFile('ERROR: Invalid model selection');
+          process.exit(1);
+        }
       }
-    }
 
-    modeId = `${deliveryId}-${modelId}`;
+      modeId = `${deliveryId}-${modelId}`;
+    }
   }
 
   if (!modeId) {
