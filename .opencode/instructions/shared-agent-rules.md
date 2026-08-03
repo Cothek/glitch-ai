@@ -18,7 +18,7 @@ The rules in this file apply to ALL agents — including sub-agents (@coder, @ui
 Every task: (1) create todowrite with granular subtasks, (2) work through updating status in real time, (3) mark completed when done.
 
 **R9: GitNexus Code Graph**
-Use GitNexus MCP tools before code changes in indexed repos: `impact` for blast radius, `context` for callers/callees, `detect_changes` for diff analysis, `rename` for symbol renames, `query` for topic search.
+If the GitNexus MCP server is configured and available, use its tools (impact/context/detect_changes/rename/query) before code changes in indexed repos (ai-gm, ECD-website). If not available, fall back to regular grep/glob/read. Verify MCP availability before claiming it exists.
 
 **R16: Branch Discipline**
 Never modify Glitch core files on main. All core work on develop or feature branches.
