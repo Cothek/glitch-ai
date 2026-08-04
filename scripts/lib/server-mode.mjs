@@ -191,6 +191,7 @@ export async function launchServer(options = {}) {
   const PW_FILE = options.PwFile || join(ROOT_DIR, '.server-password');
   const AUTH_PROXY = options.AuthProxyPath || join(ROOT_DIR, 'plugins', 'auth-proxy.mjs');
   const FIX_PATHS = options.FixPathsMjs || join(ROOT_DIR, 'scripts', 'fix-paths.mjs');
+  const SETUP_TUNNEL_SCRIPT = join(ROOT_DIR, 'scripts', isWin ? 'setup-tunnel.ps1' : 'setup-tunnel.sh');
 
   // ---- Port check (zombie socket prevention) ----
   const portFree = await checkPort(TARGET_PORT);
@@ -253,7 +254,6 @@ export async function launchServer(options = {}) {
         // Tunnel credentials missing — try auto-setup
         const certPath = join(HOME_DIR, '.cloudflared', 'cert.pem');
         const hasAuth = existsSync(certPath);
-        const SETUP_TUNNEL_PS1 = join(ROOT_DIR, 'scripts', 'setup-tunnel.ps1');
         const LOCK_FILE = join(ROOT_DIR, 'data', '.tunnel-setup.lock');
 
         if (hasAuth) {
@@ -282,15 +282,17 @@ export async function launchServer(options = {}) {
             const dataDir = join(ROOT_DIR, 'data');
             if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
 
-            const setupResult = spawn('powershell.exe', [
-              '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
-              SETUP_TUNNEL_PS1, '-Auto'
-            ], { stdio: 'inherit' });
+            const setupResult = isWin
+              ? spawn('powershell.exe', [
+                  '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+                  SETUP_TUNNEL_SCRIPT, '-Auto'
+                ], { stdio: 'inherit' })
+              : spawn('bash', [SETUP_TUNNEL_SCRIPT, '--auto'], { stdio: 'inherit' });
 
             await new Promise((resolve, reject) => {
               setupResult.on('close', (code) => {
                 if (code === 0) resolve();
-                else reject(new Error(`setup-tunnel.ps1 exited with code ${code}`));
+                else reject(new Error(`${isWin ? 'setup-tunnel.ps1' : 'setup-tunnel.sh'} exited with code ${code}`));
               });
               setupResult.on('error', reject);
             });
@@ -327,14 +329,16 @@ export async function launchServer(options = {}) {
               });
               // After auth, retry auto-setup
               log(CYAN, '  Cloudflare authorized. Creating tunnel...');
-              const retryResult = spawn('powershell.exe', [
-                '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
-                SETUP_TUNNEL_PS1, '-Auto'
-              ], { stdio: 'inherit' });
+              const retryResult = isWin
+                ? spawn('powershell.exe', [
+                    '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File',
+                    SETUP_TUNNEL_SCRIPT, '-Auto'
+                  ], { stdio: 'inherit' })
+                : spawn('bash', [SETUP_TUNNEL_SCRIPT, '--auto'], { stdio: 'inherit' });
               await new Promise((resolve, reject) => {
                 retryResult.on('close', (code) => {
                   if (code === 0) resolve();
-                  else reject(new Error(`setup-tunnel.ps1 exited with code ${code}`));
+                  else reject(new Error(`${isWin ? 'setup-tunnel.ps1' : 'setup-tunnel.sh'} exited with code ${code}`));
                 });
                 retryResult.on('error', reject);
               });
@@ -348,12 +352,12 @@ export async function launchServer(options = {}) {
               log(YELLOW, '  Tunnel setup skipped. Run later: cloudflared tunnel login');
             }
           } else {
-            log(YELLOW, '  Run in a terminal to set up the tunnel: .\scripts\setup-tunnel.ps1');
+            log(YELLOW, `  Run in a terminal to set up the tunnel: ${isWin ? '.\\scripts\\setup-tunnel.ps1' : './scripts/setup-tunnel.sh'}`);
           }
         }
       }
     } else {
-      log(YELLOW, '  Cloudflare Tunnel: not configured. Run setup-tunnel.ps1 first.');
+      log(YELLOW, `  Cloudflare Tunnel: not configured. Run ${isWin ? 'setup-tunnel.ps1' : 'setup-tunnel.sh'} first.`);
     }
   } else {
     log(YELLOW, `  Cloudflare Tunnel: ${isWin ? 'cloudflared.exe' : 'cloudflared'} not found`);
