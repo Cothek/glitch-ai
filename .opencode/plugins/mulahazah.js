@@ -1,17 +1,27 @@
-// mulahazah.js - OpenCode plugin: threshold-based memory trigger
+// mulahazah.js - OpenCode plugin: per-session threshold-based memory trigger
 //
-// Observes every tool.execute.after event. Tracks tool call counts and session
-// duration. When thresholds are met (or a trigger phrase is detected in args),
-// writes a signal flag at data/MEMORY_TRIGGER_FLAG.
+// OBSERVATION MODEL (per-session state):
+// Each chat session gets its own independent trigger state, keyed by sessionID.
+// This prevents cross-session interference: session A's activity cannot trigger
+// a directive in session B, and sub-agent tool calls (which run in their own
+// sessionIDs) do not inflate the parent session's counter.
 //
-// CONSUMPTION (PM-022 fix): The plugin hooks `experimental.chat.messages.transform`,
-// which fires AFTER messages are read from the DB and BEFORE they are sent to
-// the LLM. If the trigger flag exists, its contents are appended as a text part
-// to the LAST message's parts — so the model is forced to see the directive and
-// dispatch @memory. This converts the previously-behavioral consumption step
-// into a mechanical one. The model still deletes the flag after dispatching
-// @memory (the plugin does NOT delete it — that keeps the protocol intact so
-// @memory actually gets dispatched).
+// TIME THRESHOLD (rolling window):
+// The time threshold measures elapsed time since the LAST TRIGGER for that
+// session (or since session start if never triggered). When the rolling window
+// fires, lastTriggerTime resets to now — so it fires at most once per
+// TIME_THRESHOLD_MS per session. This fixes the old bug where elapsed was
+// measured from a never-resetting sessionStartTime, causing the time threshold
+// to fire forever once 10 min passed.
+//
+// CONSUMPTION (experimental.chat.messages.transform):
+// The plugin hooks `experimental.chat.messages.transform`, which fires AFTER
+// messages are read from the DB and BEFORE they are sent to the LLM. If a
+// per-session trigger flag exists, its contents are appended as a text part
+// to the LAST message's parts — so the model is forced to see the directive
+// and dispatch @memory. The transform hook derives sessionID from
+// `output.messages[0].info.sessionID` (Message type has sessionID: string)
+// and reads ONLY that session's flag file, preventing cross-session spam.
 //
 // Why this hook and not `chat.message`: `chat.message` fires inside
 // createUserMessage AFTER parts are built but BEFORE they are saved to the DB.
@@ -24,21 +34,21 @@
 // to output.messages DO reach the model.
 //
 // State persistence:
-//   data/mulahazah/state.json       — counter, last trigger time, session start
+//   data/mulahazah/state.json       — per-session map keyed by sessionID
 //   data/mulahazah/observations.jsonl — append-only log of every tool call
 //
-// Signal flag:
-//   data/MEMORY_TRIGGER_FLAG        — short text summary, deleted after dispatch
+// Signal flags (per-session):
+//   data/MEMORY_TRIGGER_FLAG.<sessionID> — short text summary, deleted after dispatch
 //
 // Thresholds (hardcoded):
-//   25 tool calls OR 10 minutes elapsed → fire trigger
-//   1 minute cooldown between triggers
-//   24 hour stale reset on session start
+//   50 tool calls OR 30 minutes rolling window → fire trigger (per session)
+//   5 minute cooldown between triggers (per session)
+//   24 hour stale reset per session entry
 //
 // Trigger phrases (case-insensitive scan of input.args):
 //   "remember that", "i prefer", "from now on", "always do", "never do",
 //   "i want", "make sure to", "don't forget"
-//   → fire trigger immediately (subject to cooldown)
+//   → fire trigger immediately (subject to per-session cooldown)
 //
 // Install: Add to .opencode/opencode.json:
 //   "plugin": [".opencode/plugins/mulahazah.js"]
@@ -47,11 +57,10 @@ import { promises as fs } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 
-const TOOL_CALL_THRESHOLD = 25;
-const TIME_THRESHOLD_MS = 10 * 60 * 1000;       // 10 minutes
-const COOLDOWN_MS = 60 * 1000;                  // 1 minute
-const STALE_RESET_MS = 24 * 60 * 60 * 1000;     // 24 hours
-// Lowered from 50/15min/2min (2026-08-03) — PM-022 fix to make @memory dispatch more responsive.
+const TOOL_CALL_THRESHOLD = 50;
+const TIME_THRESHOLD_MS = 30 * 60 * 1000;
+const COOLDOWN_MS = 5 * 60 * 1000;
+const STALE_RESET_MS = 24 * 60 * 60 * 1000;
 
 const TRIGGER_PHRASES = [
   "remember that",
@@ -64,79 +73,91 @@ const TRIGGER_PHRASES = [
   "don't forget",
 ];
 
+function createSessionEntry() {
+  return {
+    toolCallCount: 0,
+    toolCounts: {},
+    lastTriggerTime: null,
+    sessionStartTime: Date.now(),
+  };
+}
+
 export const MulahazahPlugin = async ({ directory }) => {
   const dataDir = join(directory, "data");
   const mulahazahDir = join(dataDir, "mulahazah");
   const stateFile = join(mulahazahDir, "state.json");
   const observationsFile = join(mulahazahDir, "observations.jsonl");
-  const triggerFlag = join(dataDir, "MEMORY_TRIGGER_FLAG");
 
-  // Ensure directories exist (async, non-blocking)
   try {
     await fs.mkdir(mulahazahDir, { recursive: true });
   } catch (err) {
     console.error(`[mulahazah] Failed to create directory: ${err.message}`);
   }
 
-  // Load state from disk (or initialize defaults)
-  let state = {
-    toolCallCount: 0,
-    lastTriggerTime: null,
-    sessionStartTime: null,
-  };
+  const sessionStates = new Map();
 
   try {
     const raw = await fs.readFile(stateFile, "utf8");
     const parsed = JSON.parse(raw);
-    state = {
-      toolCallCount: typeof parsed.toolCallCount === "number" ? parsed.toolCallCount : 0,
-      lastTriggerTime: typeof parsed.lastTriggerTime === "number" ? parsed.lastTriggerTime : null,
-      sessionStartTime: typeof parsed.sessionStartTime === "number" ? parsed.sessionStartTime : null,
-    };
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const now = Date.now();
+      for (const [sid, entry] of Object.entries(parsed)) {
+        if (!entry || typeof entry !== "object") continue;
+        const e = {
+          toolCallCount: typeof entry.toolCallCount === "number" ? entry.toolCallCount : 0,
+          toolCounts: (entry.toolCounts && typeof entry.toolCounts === "object") ? entry.toolCounts : {},
+          lastTriggerTime: typeof entry.lastTriggerTime === "number" ? entry.lastTriggerTime : null,
+          sessionStartTime: typeof entry.sessionStartTime === "number" ? entry.sessionStartTime : now,
+        };
+        if (e.lastTriggerTime !== null && now - e.lastTriggerTime > STALE_RESET_MS) {
+          e.toolCallCount = 0;
+          e.toolCounts = {};
+        }
+        if (now - e.sessionStartTime > STALE_RESET_MS) {
+          e.toolCallCount = 0;
+          e.toolCounts = {};
+          e.sessionStartTime = now;
+          e.lastTriggerTime = null;
+        }
+        if (e.lastTriggerTime === null && e.toolCallCount > 1000) {
+          e.toolCallCount = 0;
+          e.toolCounts = {};
+        }
+        sessionStates.set(sid, e);
+      }
+    }
   } catch (err) {
-    // File doesn't exist or is corrupt — use defaults
     if (err.code !== "ENOENT") {
       console.error(`[mulahazah] Failed to load state: ${err.message}`);
     }
   }
 
-  // Tool count tracking (resets each trigger cycle)
-  // Declared before stale-reset block to avoid temporal dead zone ReferenceError
-  let toolCounts = {};
-
-  // Stale reset: if last trigger was >24h ago, reset counter
-  const now = Date.now();
-  if (state.lastTriggerTime !== null && now - state.lastTriggerTime > STALE_RESET_MS) {
-    state.toolCallCount = 0;
-    toolCounts = {};
-  }
-  if (state.sessionStartTime !== null && now - state.sessionStartTime > STALE_RESET_MS) {
-    state.toolCallCount = 0;
-    toolCounts = {};
-    state.sessionStartTime = now;
-  }
-  if (state.lastTriggerTime === null && state.toolCallCount > 1000) {
-    state.toolCallCount = 0;
-    toolCounts = {};
+  function getSessionState(sessionID) {
+    if (!sessionStates.has(sessionID)) {
+      sessionStates.set(sessionID, createSessionEntry());
+    }
+    return sessionStates.get(sessionID);
   }
 
-  // Set session start time if not already set
-  if (state.sessionStartTime === null) {
-    state.sessionStartTime = now;
-  }
-
-  // Atomic state write helper
   async function saveState() {
     try {
+      const now = Date.now();
+      for (const [sid, entry] of sessionStates) {
+        const lastActivity = entry.lastTriggerTime ?? entry.sessionStartTime;
+        if (now - lastActivity > STALE_RESET_MS) {
+          sessionStates.delete(sid);
+          fs.unlink(triggerFlagPath(sid)).catch(() => {});
+        }
+      }
+      const obj = Object.fromEntries(sessionStates);
       const tmpFile = stateFile + ".tmp";
-      await fs.writeFile(tmpFile, JSON.stringify(state, null, 2), "utf8");
+      await fs.writeFile(tmpFile, JSON.stringify(obj, null, 2), "utf8");
       await fs.rename(tmpFile, stateFile);
     } catch (err) {
       console.error(`[mulahazah] Failed to save state: ${err.message}`);
     }
   }
 
-  // Append observation to JSONL log
   async function appendObservation(tool, sessionID) {
     try {
       const entry = {
@@ -150,15 +171,13 @@ export const MulahazahPlugin = async ({ directory }) => {
     }
   }
 
-  // Format tool counts as sorted comma-separated list
-  function formatToolCounts() {
+  function formatToolCounts(toolCounts) {
     const entries = Object.entries(toolCounts);
     if (entries.length === 0) return "none";
     entries.sort((a, b) => b[1] - a[1]);
     return entries.map(([tool, count]) => `${tool}=${count}`).join(", ");
   }
 
-  // Format session duration as "Xmin" or "Xh Ymin"
   function formatDuration(ms) {
     const totalMinutes = Math.floor(ms / 60000);
     if (totalMinutes < 60) return `${totalMinutes}min`;
@@ -167,48 +186,55 @@ export const MulahazahPlugin = async ({ directory }) => {
     return `${hours}h ${minutes}min`;
   }
 
-  // Build threshold-based summary
-  function buildThresholdSummary() {
-    const elapsed = Date.now() - state.sessionStartTime;
+  function buildThresholdSummary(sessionState) {
+    const anchor = sessionState.lastTriggerTime ?? sessionState.sessionStartTime;
+    const elapsed = Date.now() - anchor;
     return [
-      `Mulahazah threshold reached: ${state.toolCallCount} tool calls / ${formatDuration(elapsed)} elapsed.`,
-      `Tool breakdown: ${formatToolCounts()}`,
+      `Mulahazah threshold reached: ${sessionState.toolCallCount} tool calls / ${formatDuration(elapsed)} elapsed.`,
+      `Tool breakdown: ${formatToolCounts(sessionState.toolCounts)}`,
       `Trigger @memory to record observations.`,
     ].join("\n");
   }
 
-  // Build trigger-phrase summary
-  function buildPhraseSummary(phrase) {
-    const elapsed = Date.now() - state.sessionStartTime;
+  function buildPhraseSummary(phrase, sessionState) {
+    const anchor = sessionState.lastTriggerTime ?? sessionState.sessionStartTime;
+    const elapsed = Date.now() - anchor;
     return [
       `Mulahazah trigger phrase detected: "${phrase}"`,
-      `Tool calls since last trigger: ${state.toolCallCount}`,
-      `Session duration: ${formatDuration(elapsed)}`,
+      `Tool calls since last trigger: ${sessionState.toolCallCount}`,
+      `Session window: ${formatDuration(elapsed)}`,
       `Trigger @memory to record this preference/decision.`,
     ].join("\n");
   }
 
-  // Fire trigger: write flag, update state, reset counters
-  async function fireTrigger(summary) {
+  function triggerFlagPath(sessionID) {
+    return join(dataDir, `MEMORY_TRIGGER_FLAG.${sessionID}`);
+  }
+
+  async function fireTrigger(sessionID, summary) {
     try {
-      await fs.writeFile(triggerFlag, summary + "\n", "utf8");
-      state.lastTriggerTime = Date.now();
-      state.toolCallCount = 0;
-      toolCounts = {};
+      const flagPath = triggerFlagPath(sessionID);
+      await fs.writeFile(flagPath, summary + "\n", "utf8");
+      const ss = sessionStates.get(sessionID);
+      if (ss) {
+        ss.lastTriggerTime = Date.now();
+        ss.toolCallCount = 0;
+        ss.toolCounts = {};
+      }
       await saveState();
-      console.log("[mulahazah] threshold reached, flag written");
+      if (process.env.MULAHAZAH_DEBUG) {
+        console.log(`[mulahazah] threshold reached for session ${sessionID}, flag written`);
+      }
     } catch (err) {
       console.error(`[mulahazah] Failed to write trigger flag: ${err.message}`);
     }
   }
 
-  // Check if cooldown has elapsed
-  function isCooldownElapsed() {
-    if (state.lastTriggerTime === null) return true;
-    return Date.now() - state.lastTriggerTime >= COOLDOWN_MS;
+  function isCooldownElapsed(sessionState) {
+    if (sessionState.lastTriggerTime === null) return true;
+    return Date.now() - sessionState.lastTriggerTime >= COOLDOWN_MS;
   }
 
-  // Scan args for trigger phrases (case-insensitive)
   function detectTriggerPhrase(args) {
     if (!args) return null;
     let argStr;
@@ -218,7 +244,6 @@ export const MulahazahPlugin = async ({ directory }) => {
       } else {
         argStr = JSON.stringify(args);
       }
-      // Cap length to prevent processing huge args
       if (argStr.length > 2000) {
         argStr = argStr.substring(0, 2000);
       }
@@ -233,57 +258,54 @@ export const MulahazahPlugin = async ({ directory }) => {
   }
 
   return {
-    /**
-     * Fires AFTER messages are read from the DB and BEFORE they are sent to
-     * the LLM. If a memory trigger flag is pending, append its contents as a
-     * text part to the LAST message's parts so the model MUST see the
-     * directive. This is the PM-022 fix — converts the previously-behavioral
-     * consumption step into a mechanical one. The model still deletes the
-     * flag after dispatching @memory (the plugin does NOT delete it).
-     *
-     * Appending to the last message's parts is cleaner than injecting a
-     * synthetic message — the model sees the directive without a confusing
-     * fake user turn.
-     */
     "experimental.chat.messages.transform": async (input, output) => {
       try {
         if (process.env.MULAHAZAH_DEBUG) {
           console.log(`[mulahazah] transform fired, ${output.messages?.length ?? 0} messages`);
         }
 
-        const flagContent = await fs.readFile(triggerFlag, "utf8");
-        if (!flagContent || !flagContent.trim()) return;
-
-        // Guard: messages array must exist and be non-empty
         if (!Array.isArray(output.messages) || output.messages.length === 0) return;
 
         const lastMessage = output.messages[output.messages.length - 1];
+        const sessionID = lastMessage?.info?.sessionID ?? output.messages[0]?.info?.sessionID;
+        if (!sessionID) {
+          if (process.env.MULAHAZAH_DEBUG) {
+            console.log("[mulahazah] transform: no sessionID on messages, skipping");
+          }
+          return;
+        }
+
+        const flagPath = triggerFlagPath(sessionID);
+        let flagContent;
+        try {
+          flagContent = await fs.readFile(flagPath, "utf8");
+        } catch (err) {
+          if (err.code === "ENOENT") return;
+          throw err;
+        }
+        if (!flagContent || !flagContent.trim()) return;
+
         if (!lastMessage || !Array.isArray(lastMessage.parts)) return;
 
+        const msgSessionID = lastMessage.info?.sessionID ?? sessionID;
+        const messageID = lastMessage.info?.id ?? `msg_${randomUUID()}`;
+
         const directive =
-          `[MEMORY TRIGGER PENDING] data/MEMORY_TRIGGER_FLAG exists:\n` +
+          `[MEMORY TRIGGER PENDING] data/MEMORY_TRIGGER_FLAG.${sessionID} exists:\n` +
           `---\n${flagContent.trim()}\n---\n` +
           `DISPATCH @memory NOW to record session observations, then delete the flag file.`;
 
-        // Guard: lastMessage.info may be undefined. If so, generate IDs so the
-        // pushed part still satisfies the TextPart schema (id, sessionID,
-        // messageID, type, text). Without these fields the part fails schema
-        // validation and never reaches the LLM.
-        const sessionID = lastMessage.info?.sessionID ?? `ses_${randomUUID()}`;
-        const messageID = lastMessage.info?.id ?? `msg_${randomUUID()}`;
-
         lastMessage.parts.push({
           id: `prt_${randomUUID()}`,
-          sessionID,
+          sessionID: msgSessionID,
           messageID,
           type: "text",
           text: directive,
           synthetic: true,
         });
 
-        console.log("[mulahazah] injected memory trigger directive into last message parts");
+        console.log(`[mulahazah] injected memory trigger directive for session ${sessionID}`);
       } catch (err) {
-        // ENOENT = no flag pending — normal case, no log noise
         if (err.code !== "ENOENT") {
           console.error(`[mulahazah] experimental.chat.messages.transform hook failed: ${err.message}`);
         }
@@ -294,42 +316,38 @@ export const MulahazahPlugin = async ({ directory }) => {
       const tool = input.tool || "unknown";
       const sessionID = input.sessionID || "unknown";
 
-      // 1. Increment counter
-      state.toolCallCount++;
+      const ss = getSessionState(sessionID);
 
-      // 2. Track tool counts
-      toolCounts[tool] = (toolCounts[tool] || 0) + 1;
+      ss.toolCallCount++;
+      ss.toolCounts[tool] = (ss.toolCounts[tool] || 0) + 1;
 
-      // 3. Append observation (fire-and-forget, don't await to keep handler fast)
       appendObservation(tool, sessionID).catch((err) => console.error(`[mulahazah] background task failed: ${err.message}`));
 
-      // 4. Check cooldown
-      if (!isCooldownElapsed()) {
-        // Still in cooldown — save state and return
+      if (!isCooldownElapsed(ss)) {
         saveState().catch((err) => console.error(`[mulahazah] background task failed: ${err.message}`));
         return;
       }
 
-      // 5. Check trigger phrase (override path)
       const phrase = detectTriggerPhrase(input.args);
       if (phrase) {
-        console.log(`[mulahazah] trigger phrase detected: "${phrase}"`);
-        await fireTrigger(buildPhraseSummary(phrase));
+        if (process.env.MULAHAZAH_DEBUG) {
+          console.log(`[mulahazah] trigger phrase detected: "${phrase}" in session ${sessionID}`);
+        }
+        await fireTrigger(sessionID, buildPhraseSummary(phrase, ss));
         return;
       }
 
-      // 6. Check thresholds
-      const elapsed = Date.now() - state.sessionStartTime;
-      const hitCallThreshold = state.toolCallCount >= TOOL_CALL_THRESHOLD;
+      const anchor = ss.lastTriggerTime ?? ss.sessionStartTime;
+      const elapsed = Date.now() - anchor;
+      const hitCallThreshold = ss.toolCallCount >= TOOL_CALL_THRESHOLD;
       const hitTimeThreshold = elapsed >= TIME_THRESHOLD_MS;
 
       if (hitCallThreshold || hitTimeThreshold) {
-        await fireTrigger(buildThresholdSummary());
+        await fireTrigger(sessionID, buildThresholdSummary(ss));
         return;
       }
 
-      // 7. No trigger — save state periodically (every 10 calls to reduce I/O)
-      if (state.toolCallCount % 10 === 0) {
+      if (ss.toolCallCount % 10 === 0) {
         saveState().catch((err) => console.error(`[mulahazah] background task failed: ${err.message}`));
       }
     },
