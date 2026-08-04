@@ -466,13 +466,17 @@ export async function launchServer(options = {}) {
   if (cloudflareDomain) {
     log(GREEN, `    Tunnel: https://${cloudflareDomain}/${dirSlug}/?auth_token=${authToken}`);
   }
+  log(GREEN,   `    Model Switcher: http://localhost:4104`);
+  if (cloudflareDomain) {
+    log(GREEN, `    Model Switcher (tunnel): https://${cloudflareDomain}/models?auth_token=${authToken}`);
+  }
   log(GREEN,   `    Local:  http://localhost:${TARGET_PORT}/${dirSlug}/`);
   log('');
   // Show enabled plugin URLs
   const { listPlugins } = await import('./plugin-manager.mjs');
   const allPlugins = listPlugins();
   for (const plugin of allPlugins) {
-    if (plugin.enabled && plugin.port) {
+    if (plugin.enabled && plugin.port && plugin.name !== 'model-ui') {
       const webPath = plugin.web_path || `/${plugin.name}/`;
       log(DARK_GREEN, `  ${plugin.name}: http://localhost:${plugin.port}`);
       if (cloudflareDomain) {
