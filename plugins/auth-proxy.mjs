@@ -6,6 +6,9 @@
  * Credentials accepted via:
  *   - Authorization: Basic <base64> header (browser native auth dialog)
  *   - ?auth_token=<base64> query parameter (bookmarkable one-click URL)
+ *   - glitch_auth=<base64> HttpOnly cookie (set automatically on any
+ *     successful auth; covers SPA internal fetches that carry no
+ *     credentials, e.g. Model Switcher /models/api/* calls)
  *
  * Usage: node plugins/auth-proxy.mjs [port] [upstream]
  *   Default port: 4101
@@ -29,6 +32,7 @@ try {
   process.exit(1);
 }
 const authToken = Buffer.from(`opencode:${password}`).toString('base64');
+const AUTH_COOKIE = `glitch_auth=${authToken}; HttpOnly; Path=/; SameSite=Lax; Max-Age=604800`;
 
 const PROXY_PORT = parseInt(process.argv[2] || '4101', 10);
 const UPSTREAM_URL = process.argv[3] || 'http://localhost:4102';
@@ -37,7 +41,7 @@ const upstream = new URL(UPSTREAM_URL);
 /**
  * Extract and validate credentials from request.
  * Returns true if auth matches, false otherwise.
- * Checks: Authorization header, then auth_token query param.
+ * Checks: Authorization header, then auth_token query param, then glitch_auth cookie.
  */
 function isAuthenticated(req) {
   // Check Authorization header
@@ -60,7 +64,42 @@ function isAuthenticated(req) {
     } catch {}
   }
 
+  // Check glitch_auth HttpOnly cookie (set on any successful auth; covers
+  // SPA internal fetches that carry no Authorization header or query param)
+  const cookieHeader = req.headers['cookie'];
+  if (cookieHeader) {
+    const cookies = cookieHeader.split(';');
+    for (const cookie of cookies) {
+      const eq = cookie.indexOf('=');
+      if (eq === -1) continue;
+      const name = cookie.slice(0, eq).trim();
+      const value = cookie.slice(eq + 1).trim();
+      if (name === 'glitch_auth' && value === authToken) {
+        return true;
+      }
+    }
+  }
+
   return false;
+}
+
+/**
+ * Merge the glitch_auth HttpOnly cookie into the upstream response headers.
+ * Node's res.writeHead(statusCode, headers) REPLACES any same-name header
+ * previously set via res.setHeader(), so we must merge set-cookie explicitly
+ * here in each proxy branch rather than relying on setHeader() at the top.
+ */
+function withAuthCookie(upstreamHeaders) {
+  const merged = { ...upstreamHeaders };
+  const upstreamCookies = upstreamHeaders['set-cookie'];
+  if (upstreamCookies) {
+    merged['set-cookie'] = Array.isArray(upstreamCookies)
+      ? [...upstreamCookies, AUTH_COOKIE]
+      : [upstreamCookies, AUTH_COOKIE];
+  } else {
+    merged['set-cookie'] = AUTH_COOKIE;
+  }
+  return merged;
 }
 
 const server = http.createServer((req, res) => {
@@ -73,6 +112,10 @@ const server = http.createServer((req, res) => {
     res.end('Authorization required');
     return;
   }
+
+  // ---- Auth cookie is merged into each proxy branch via withAuthCookie() ----
+  // (res.writeHead replaces same-name headers set via res.setHeader, so we
+  // cannot set the cookie once at the top — it must be merged per branch.)
 
   // ---- Route /models to model UI server (port 4104) ----
   if (req.url && req.url.startsWith('/models')) {
@@ -98,7 +141,7 @@ const server = http.createServer((req, res) => {
       },
     };
     const proxyReq = http.request(options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      res.writeHead(proxyRes.statusCode, withAuthCookie(proxyRes.headers));
       proxyRes.pipe(res);
     });
     proxyReq.on('error', (err) => {
@@ -136,7 +179,7 @@ const server = http.createServer((req, res) => {
       },
     };
     const proxyReq = http.request(options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      res.writeHead(proxyRes.statusCode, withAuthCookie(proxyRes.headers));
       proxyRes.pipe(res);
     });
     proxyReq.on('error', (err) => {
@@ -188,7 +231,7 @@ const server = http.createServer((req, res) => {
       proxyRes.headers['pragma'] = 'no-cache';
       proxyRes.headers['expires'] = '0';
     }
-    res.writeHead(proxyRes.statusCode, proxyRes.headers);
+    res.writeHead(proxyRes.statusCode, withAuthCookie(proxyRes.headers));
     proxyRes.pipe(res);
   });
 
@@ -207,5 +250,6 @@ server.listen(PROXY_PORT, () => {
   console.log(`  Auth proxy listening on :${PROXY_PORT} -> ${UPSTREAM_URL}`);
   console.log(`  /models -> http://localhost:4104`);
   console.log(`  /plugins/glitch-ui/ -> http://localhost:4104`);
+  console.log(`  Auth: Basic header | ?auth_token= | glitch_auth cookie`);
   console.log(`  Password: ${password}`);
 });

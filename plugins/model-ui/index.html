@@ -827,8 +827,13 @@
       loading: { agents: false, models: false, status: false }
     };
 
+    // Mount-aware API base: when served via Cloudflare tunnel at /models,
+    // the auth proxy strips /models before forwarding to port 4104. Direct
+    // access at localhost:4104 has pathname '/' so this stays '/api'.
+    const API_BASE = window.location.pathname.startsWith('/models') ? '/models/api' : '/api';
+
     async function api(path, options = {}) {
-      const res = await fetch(`/api/${path}`, {
+      const res = await fetch(`${API_BASE}/${path}`, {
         headers: { 'Content-Type': 'application/json' },
         ...options
       });
@@ -1330,7 +1335,7 @@
           const maxAttempts = 20;
           function pollServer() {
             attempts++;
-            fetch('/api/status')
+            fetch(`${API_BASE}/status`)
               .then(r => {
                 if (r.ok) window.location.reload();
                 else if (attempts < maxAttempts) setTimeout(pollServer, 3000);
@@ -1366,7 +1371,7 @@
           const maxAttempts = 20;
           function pollServer() {
             attempts++;
-            fetch('/api/status')
+            fetch(`${API_BASE}/status`)
               .then(r => {
                 if (r.ok) window.location.reload();
                 else if (attempts < maxAttempts) setTimeout(pollServer, 3000);
