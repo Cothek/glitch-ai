@@ -6,6 +6,7 @@
 #   curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash
 #   wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash
 #   bash install.sh [install_dir] [--no-launch]
+#   curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/develop/scripts/install.sh -o /tmp/glitch-install.sh && bash /tmp/glitch-install.sh --branch develop
 
 set -euo pipefail
 
@@ -13,6 +14,7 @@ set -euo pipefail
 INSTALL_DIR="${1:-$HOME/glitch-ai}"
 NO_LAUNCH=false
 USER_REPO=""
+BRANCH=""
 
 # Set up logging - captures all output to a file for diagnosis
 LOG_FILE=""
@@ -37,18 +39,21 @@ for arg in "$@"; do
         --no-launch) NO_LAUNCH=true ;;
         --user-repo) ;; # handled by next iteration
         --user-repo=*) USER_REPO="${arg#*=}" ;;
+        --branch) ;; # handled by next iteration
+        --branch=*) BRANCH="${arg#*=}" ;;
         --help|-h)
             cat <<'EOF'
 Glitch AI Installer for macOS/Linux
 
 Usage:
-  curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>]
-  wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>]
+  curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>] [--branch <name>]
+  wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>] [--branch <name>]
 
 Arguments:
   install_dir              Custom install directory (default: $HOME/glitch-ai)
   --no-launch              Skip launch prompt after installation
   --user-repo <url>        GitHub user repo URL for profile sync (e.g. https://github.com/user/repo.git)
+  --branch <name>          Checkout a specific repo branch after cloning (e.g. develop)
   --help, -h               Show this help
 
 Prerequisites:
@@ -61,9 +66,11 @@ EOF
             exit 0
             ;;
         *)
-            # Check if previous arg was --user-repo
+            # Check if previous arg was --user-repo or --branch
             if [ "${PREV_ARG:-}" = "--user-repo" ]; then
                 USER_REPO="$arg"
+            elif [ "${PREV_ARG:-}" = "--branch" ]; then
+                BRANCH="$arg"
             fi
             ;;
     esac
@@ -330,7 +337,16 @@ if [ ! -d "$INSTALL_DIR/.git" ]; then
     mkdir -p "$INSTALL_DIR/data"
     
     cd "$INSTALL_DIR" || exit 1
-    
+
+    # Optional branch checkout (mirrors install.ps1 -Branch behavior)
+    if [ -n "$BRANCH" ] && [ "$BRANCH" != "main" ]; then
+        step "Checking out branch: $BRANCH..."
+        if ! checkout_err=$(git checkout "$BRANCH" 2>&1); then
+            warn "Could not checkout branch: $BRANCH (continuing on default branch)"
+            echo "    $checkout_err" >&2
+        fi
+    fi
+
     echo ""
     step "Initializing submodules..."
     
