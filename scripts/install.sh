@@ -419,6 +419,28 @@ else
     step "No bootstrap needed - launch scripts handle Node.js/OpenCode download."
 fi
 
+
+# 4.5. Install GitNexus (MCP code graph)
+header "Installing GitNexus (MCP code graph)..."
+GITNEXUS_OK=0
+NPM_CMD=""
+if command -v npm >/dev/null 2>&1; then
+  NPM_CMD="npm"
+elif [ -x "$INSTALL_DIR/data/node/bin/npm" ]; then
+  NPM_CMD="$INSTALL_DIR/data/node/bin/npm"
+fi
+if [ -n "$NPM_CMD" ]; then
+  step "Installing gitnexus via npm (MCP code graph)..."
+  if $NPM_CMD install -g gitnexus >/dev/null 2>&1; then
+    GITNEXUS_OK=1
+  fi
+fi
+if [ "$GITNEXUS_OK" -eq 1 ]; then
+  success "GitNexus installed (MCP code graph)"
+else
+  warn "GitNexus install skipped/failed (non-fatal). MCP code graph needs: npm install -g gitnexus"
+fi
+
 # 5. User profile setup
 header "User Profile Setup"
 cat <<'EOF'

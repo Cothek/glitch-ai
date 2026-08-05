@@ -561,6 +561,28 @@ if ($bootstrapExit -ne 0) {
 }
 Write-Success "Bootstrap completed successfully"
 
+# 4.5. Install GitNexus (MCP code graph)
+Write-Header "Installing GitNexus (MCP code graph)..."
+$gitnexusOk = $false
+try {
+    $npmCmd = (Get-Command npm -ErrorAction SilentlyContinue).Source
+    if (-not $npmCmd -or -not (Test-Path $npmCmd)) {
+        $npmCmd = Join-Path "$InstallDir" "data\node\npm.cmd"
+    }
+    if (Test-Path $npmCmd) {
+        Write-Step "Installing gitnexus via npm (MCP code graph)..."
+        & $npmCmd install -g gitnexus 2>&1 | Out-Null
+        $gitnexusOk = ($LASTEXITCODE -eq 0)
+    }
+} catch {
+    $gitnexusOk = $false
+}
+if ($gitnexusOk) {
+    Write-Success "GitNexus installed (MCP code graph)"
+} else {
+    Write-Warn "GitNexus install skipped/failed (non-fatal). MCP code graph needs: npm install -g gitnexus"
+}
+
 # 5. User profile setup
 Write-Header "User Profile Setup"
 
@@ -797,10 +819,10 @@ if ($cloneAttempted -and -not (Test-Path "$userDir\.git")) {
     Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
     Write-Host ""
 } elseif ($cloneAttempted) {
-    # Clone was attempted but failed -- local starter files were created with git init on main
+    # Clone succeeded -- profile synced from GitHub
     Write-Host ""
-    Write-Host "  Could not reach GitHub. Local profile created (git repo on main branch)." -ForegroundColor Cyan
-    Write-Host "  To retry the GitHub connection later, start Glitch and say:" -ForegroundColor Cyan
+    Write-Host "  Profile downloaded from GitHub." -ForegroundColor Green
+    Write-Host "  To sync changes later, start Glitch and say:" -ForegroundColor Cyan
     Write-Host '    "Connect my user profile to GitHub"' -ForegroundColor Yellow
     Write-Host ""
 } elseif (-not $cloneAttempted) {

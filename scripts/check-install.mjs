@@ -245,6 +245,56 @@ check('Cloudflared', 'Tools', () => {
   };
 });
 
+// Resolve `gitnexus` on PATH. On Windows the global npm install creates
+// gitnexus.cmd (and gitnexus.exe on newer npm); on Unix it's a single binary.
+// We scan PATH entries directly so we don't depend on `where`/`which` being
+// available, and so we can report the exact resolved path.
+function resolveGitNexus() {
+  const pathEnv = process.env.PATH || process.env.Path || '';
+  const sep = isWin ? ';' : ':';
+  const exeNames = isWin ? ['gitnexus.cmd', 'gitnexus.exe', 'gitnexus'] : ['gitnexus'];
+  for (const dir of pathEnv.split(sep)) {
+    if (!dir) continue;
+    for (const name of exeNames) {
+      const candidate = join(dir, name);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+check('GitNexus MCP', 'Tools', () => {
+  const resolved = resolveGitNexus();
+  if (resolved) {
+    const v = tryReadVersion(resolved, '--version');
+    return {
+      ok: true,
+      version: v || 'installed',
+      path: resolved,
+      note: null,
+    };
+  }
+  // Fallback: ask npm whether gitnexus is in the global tree. This catches
+  // installs where the binary is on a PATH not visible to this process
+  // (e.g. user PATH vs system PATH on Windows).
+  const npmList = safeExec('npm', ['list', '-g', '--depth=0', 'gitnexus']);
+  if (npmList && /gitnexus@/.test(npmList)) {
+    const m = npmList.match(/gitnexus@([\w.\-]+)/);
+    return {
+      ok: true,
+      version: m ? m[1] : 'installed',
+      path: 'npm global',
+      note: 'binary not on PATH but installed globally',
+    };
+  }
+  return {
+    ok: false,
+    version: null,
+    path: null,
+    note: 'install: npm install -g gitnexus',
+  };
+});
+
 check('Image Gen', 'Tools', () => {
   // ComfyUI / image-gen marker -- check for the install script or a known marker
   const script = join(ROOT_DIR, 'scripts', 'install-image-gen.ps1');
