@@ -16,13 +16,12 @@ NO_LAUNCH=false
 USER_REPO=""
 BRANCH=""
 
-# Set up logging - captures all output to a file for diagnosis
-LOG_FILE=""
+# Set up logging - captures all output to a file for diagnosis.
+# Logs to /tmp first (the install dir may not exist yet and must not be
+# created before the clone). After a successful clone the log is copied
+# into $INSTALL_DIR/install.log at the end of the script.
+LOG_FILE="/tmp/glitch-install.log"
 setup_logging() {
-    LOG_FILE="$INSTALL_DIR/install.log"
-    mkdir -p "$INSTALL_DIR" 2>/dev/null || {
-        LOG_FILE="/tmp/glitch-install.log"
-    }
     exec > >(tee -a "$LOG_FILE") 2>&1
     echo "=== Install started: $(date) ==="
 }
@@ -751,3 +750,9 @@ Next steps:
 
 Documentation: https://github.com/Cothek/glitch-ai
 EOF
+
+# Copy the install log into the install dir now that it exists.
+if [ -f "$LOG_FILE" ] && [ -d "$INSTALL_DIR" ]; then
+    cp "$LOG_FILE" "$INSTALL_DIR/install.log" 2>/dev/null || true
+    step "Install log: $INSTALL_DIR/install.log"
+fi

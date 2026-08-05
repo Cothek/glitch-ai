@@ -55,30 +55,17 @@ param(
 )
 
 # Set up logging - captures all output to a file for diagnosis
-# Log always goes in the install directory (created after clone)
+# Log starts in TEMP (always exists) and is relocated into the install directory
+# AFTER the clone succeeds. Nothing is written inside $InstallDir before clone.
 $script:LogFile = $null
 try {
-    # For fresh installs, create the directory early so logging works
-    if (-not (Test-Path $InstallDir)) {
-        $parentDir = Split-Path $InstallDir -Parent
-        if (-not (Test-Path $parentDir)) {
-            New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
-        }
-        New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-    }
-    $script:LogFile = Join-Path $InstallDir "install.log"
+    $script:LogFile = Join-Path $env:TEMP "glitch-install.log"
     Start-Transcript -Path $script:LogFile -Append | Out-Null
     Write-Host "  Logging to: $script:LogFile" -ForegroundColor DarkGray
 } catch {
-    # If transcript fails, try temp as fallback
     try {
-        $fallbackLog = Join-Path $env:TEMP "glitch-install.log"
-        Start-Transcript -Path $fallbackLog -Append | Out-Null
-        $script:LogFile = $fallbackLog
-        Write-Host "  Logging to: $fallbackLog (install dir not available)" -ForegroundColor DarkGray
-    } catch {
         Write-Host "  (Could not start logging)" -ForegroundColor DarkGray
-    }
+    } catch {}
 }
 
 # Catch all unhandled errors and log them
@@ -99,23 +86,27 @@ function Write-Warn   { param([string]$msg) Write-Host "  $msg" -ForegroundColor
 function Write-Error  { param([string]$msg) Write-Host "  $msg" -ForegroundColor Red }
 function Write-Prompt { param([string]$msg) Write-Host "  $msg" -NoNewline -ForegroundColor Cyan }
 
-# Check whether git.exe is reachable via the PERSISTED (global) PATH.
-# This is the source of truth for whether git will be available in FUTURE
-# terminals. The session $env:PATH is NOT authoritative because launch scripts
-# (launch-glitch.bat, glitch.bat) prepend bundled MinGit at every launch
-# without persisting it -- so a session-only git would still leave fresh
-# terminals broken.
-function Test-GitInPersistedPath {
+# Find git.exe via the PERSISTED (global) PATH -- the source of truth for
+# whether git will be available in FUTURE terminals. The session $env:PATH is
+# NOT authoritative because launch scripts (launch-glitch.bat, glitch.bat)
+# prepend bundled MinGit at every launch without persisting it -- so a
+# session-only git would still leave fresh terminals broken.
+function Get-PersistedGitPath {
     foreach ($scope in @('User', 'Machine')) {
         $pathValue = [Environment]::GetEnvironmentVariable('Path', $scope)
         if ([string]::IsNullOrEmpty($pathValue)) { continue }
         foreach ($entry in $pathValue.Split(';')) {
             $trimmed = $entry.Trim().Trim('"').TrimEnd('\')
             if ([string]::IsNullOrEmpty($trimmed)) { continue }
-            if (Test-Path (Join-Path $trimmed 'git.exe')) { return $true }
+            $candidate = Join-Path $trimmed 'git.exe'
+            if (Test-Path $candidate) { return $candidate }
         }
     }
-    return $false
+    return $null
+}
+
+function Test-GitInPersistedPath {
+    return $null -ne (Get-PersistedGitPath)
 }
 
 # -- Spinner helper for long operations --
@@ -152,6 +143,32 @@ function Invoke-WithSpinner {
   if ($DoneMessage -ne "") {
     Write-Host "  $DoneMessage done! ($($sw.Elapsed.TotalSeconds.ToString('F1'))s)"
   }
+}
+
+# Ask whether to persist git's directory on the user PATH so it works in any
+# terminal. Takes the FINAL git directory (system git dir, or
+# $InstallDir\data\mingit\cmd once the staged MinGit is moved).
+function Ask-PersistGitOnPath {
+    param([string]$GitDir)
+    Write-Host "  Git is installed but not on your system PATH." -ForegroundColor Yellow
+    Write-Host "  git will only work inside Glitch's launcher unless we add it." -ForegroundColor Yellow
+    Write-Prompt "  Add Git to your Windows user PATH so it works in any terminal? (Y/n): "
+    $persistAnswer = Read-Host
+    if ($persistAnswer -eq '' -or $persistAnswer -like 'y*') {
+        try {
+            $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+            $newUserPath = if ([string]::IsNullOrEmpty($userPath)) { $GitDir } else { "$GitDir;$userPath" }
+            [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
+            Write-Success "  Git added to your user PATH. New terminals will recognize git."
+            Write-Host "  Note: existing/open terminals need to be restarted to pick up the new PATH." -ForegroundColor DarkGray
+        } catch {
+            Write-Warn "  Could not update PATH automatically: $_"
+            Write-Host "  You can add it manually later with:" -ForegroundColor Yellow
+            Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$GitDir;' + [Environment]::GetEnvironmentVariable('Path','User'), 'User')" -ForegroundColor Gray
+        }
+    } else {
+        Write-Step "  Skipped. You can add Git to your PATH later if needed."
+    }
 }
 
 # Show help
@@ -219,66 +236,37 @@ if (-not $PSBoundParameters.ContainsKey('InstallDir')) {
 }
 Write-Success "Installation directory: $InstallDir"
 
-# Move log file to the actual installation directory (if different from default)
-if ($script:LogFile) {
-    $targetLogFile = Join-Path $InstallDir "install.log"
-    if ($script:LogFile -ne $targetLogFile) {
-        try {
-            Stop-Transcript | Out-Null
-        } catch {}
-        try {
-            if (-not (Test-Path $InstallDir)) {
-                $parentDir = Split-Path $InstallDir -Parent
-                if (-not (Test-Path $parentDir)) {
-                    New-Item -ItemType Directory -Path $parentDir -Force | Out-Null
-                }
-                New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-            }
-            if (Test-Path $script:LogFile) {
-                Move-Item -Path $script:LogFile -Destination $targetLogFile -Force
-            }
-            $script:LogFile = $targetLogFile
-            Start-Transcript -Path $script:LogFile -Append | Out-Null
-        } catch {
-            # Keep logging to the original location
-        }
-    }
-}
-
 # 3. Check git -- auto-download portable MinGit if missing
+$gitProvisioned = $false
+$gitStagedDir = $null
+$gitNeedsPersistence = $false
 $gitPath = (Get-Command git -ErrorAction SilentlyContinue).Source
 
 if (Test-GitInPersistedPath) {
     # Git already on the global (persisted) PATH -- nothing to do, don't ask.
     if (-not $gitPath) {
         # Session doesn't see it yet (PATH changed after this terminal opened).
-        # Resolve the actual git.exe from the persisted PATH for the success message.
-        foreach ($scope in @('User', 'Machine')) {
-            $pathValue = [Environment]::GetEnvironmentVariable('Path', $scope)
-            if ([string]::IsNullOrEmpty($pathValue)) { continue }
-            foreach ($entry in $pathValue.Split(';')) {
-                $trimmed = $entry.Trim().Trim('"').TrimEnd('\')
-                if ([string]::IsNullOrEmpty($trimmed)) { continue }
-                $candidate = Join-Path $trimmed 'git.exe'
-                if (Test-Path $candidate) {
-                    $gitPath = $candidate
-                    break
-                }
-            }
-            if ($gitPath) { break }
-        }
+        # Resolve the actual git.exe from the persisted PATH.
+        $gitPath = Get-PersistedGitPath
     }
     Write-Success "Git found in system PATH: $gitPath"
 } else {
     # Git NOT on the global PATH. Provision if needed, then ask to persist.
     if (-not $gitPath) {
-        Write-Warn "Git not found in PATH."
-        Write-Step "Downloading MinGit (portable Git for Windows, ~40 MB)..."
-        
-        $gitToolsDir = Join-Path $InstallDir "data\mingit"
-        $gitBin = Join-Path $gitToolsDir "cmd\git.exe"
-        
-        if (-not (Test-Path $gitBin)) {
+        # Check if MinGit was already downloaded to the install dir (partial re-run)
+        $existingBundledGit = Join-Path $InstallDir "data\mingit\cmd\git.exe"
+        if (Test-Path $existingBundledGit) {
+            $gitPath = $existingBundledGit
+            $env:PATH = "$(Split-Path $gitPath -Parent);$env:PATH"
+            Write-Step "Using existing bundled Git at $gitPath"
+            $gitNeedsPersistence = $true
+        } else {
+            Write-Warn "Git not found in PATH."
+            Write-Step "Downloading MinGit (portable Git for Windows, ~40 MB)..."
+
+            $gitStagedDir = Join-Path $env:TEMP "glitch-mingit"
+            $gitBin = Join-Path $gitStagedDir "cmd\git.exe"
+
             # Try to get latest release URL from GitHub API
             try {
                 $apiUrl = "https://api.github.com/repos/git-for-windows/git/releases/latest"
@@ -295,63 +283,45 @@ if (Test-GitInPersistedPath) {
                 $downloadUrl = "https://github.com/git-for-windows/git/releases/download/v2.47.0.windows.2/MinGit-2.47.0.2-64-bit.zip"
                 Write-Step "  Using fixed MinGit 2.47.0.2 (API failed: $($_.Exception.Message))"
             }
-            
-            $downloadsDir = Join-Path $InstallDir "data\downloads"
-            New-Item -ItemType Directory -Force -Path $downloadsDir | Out-Null
-            $tempZip = Join-Path $downloadsDir "mingit.zip"
+
+            $tempZip = Join-Path $env:TEMP "glitch-mingit.zip"
             try {
                 Invoke-WithSpinner -Label "Downloading MinGit (40MB)" -DoneMessage "MinGit" -ScriptBlock {
                   Invoke-WebRequest -Uri $using:downloadUrl -OutFile $using:tempZip -UseBasicParsing -TimeoutSec 120
                 }
-                
-                New-Item -ItemType Directory -Path $gitToolsDir -Force | Out-Null
+
+                New-Item -ItemType Directory -Path $gitStagedDir -Force | Out-Null
                 Invoke-WithSpinner -Label "Extracting MinGit" -DoneMessage "MinGit" -ScriptBlock {
-                  Expand-Archive -Path $using:tempZip -DestinationPath $using:gitToolsDir -Force
+                  Expand-Archive -Path $using:tempZip -DestinationPath $using:gitStagedDir -Force
                 }
                 Remove-Item $tempZip -Force -ErrorAction SilentlyContinue
-                
+
                 if (-not (Test-Path $gitBin)) {
                     throw "MinGit binary not found after extraction at $gitBin"
                 }
-                Write-Success "MinGit installed to $gitToolsDir"
+                $env:PATH = "$gitStagedDir\cmd;$env:PATH"
+                $gitPath = $gitBin
+                $gitProvisioned = $true
+                $gitNeedsPersistence = $true
+                Write-Success "MinGit staged to $gitStagedDir (will be moved after clone)"
             } catch {
+                Remove-Item $gitStagedDir -Recurse -Force -ErrorAction SilentlyContinue
                 Write-Error "Failed to download MinGit: $_"
                 Write-Error "Install Git manually from https://git-scm.com/download/win"
                 Write-Error "After installing, restart your terminal and re-run the installer."
                 throw "Installation failed"
             }
-        } else {
-            Write-Step "MinGit already installed at $gitToolsDir"
-        }
-        
-        # Add MinGit to PATH for current session
-        $env:PATH = "$gitToolsDir\cmd;$env:PATH"
-        $gitPath = $gitBin
-    }
-    # Now offer persistence. The dir to persist is the git binary's own dir.
-    $gitDir = Split-Path $gitPath -Parent
-    Write-Host "  Git is installed but not on your system PATH." -ForegroundColor Yellow
-    Write-Host "  git will only work inside Glitch's launcher unless we add it." -ForegroundColor Yellow
-    Write-Prompt "  Add Git to your Windows user PATH so it works in any terminal? (Y/n): "
-    $persistAnswer = Read-Host
-    if ($persistAnswer -eq '' -or $persistAnswer -like 'y*') {
-        try {
-            $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-            $newUserPath = if ([string]::IsNullOrEmpty($userPath)) {
-                $gitDir
-            } else {
-                "$gitDir;$userPath"
-            }
-            [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
-            Write-Success "  Git added to your user PATH. New terminals will recognize git."
-            Write-Host "  Note: existing/open terminals need to be restarted to pick up the new PATH." -ForegroundColor DarkGray
-        } catch {
-            Write-Warn "  Could not update PATH automatically: $_"
-            Write-Host "  You can add it manually later with:" -ForegroundColor Yellow
-            Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$gitDir;' + [Environment]::GetEnvironmentVariable('Path','User'), 'User')" -ForegroundColor Gray
         }
     } else {
-        Write-Step "  Skipped. You can add Git to your PATH later if needed."
+        # gitPath was found via session PATH
+        $gitNeedsPersistence = $true
+    }
+    # Prompt now when the git location is already final (system git on session
+    # PATH, or bundled MinGit already at its final location). The just-downloaded
+    # staged case is deferred until after the clone when the final location is known.
+    if ($gitNeedsPersistence -and -not $gitProvisioned) {
+        Ask-PersistGitOnPath -GitDir (Split-Path $gitPath -Parent)
+        $gitNeedsPersistence = $false
     }
 }
 
@@ -391,61 +361,34 @@ if (Test-Path "$InstallDir\.git") {
         Write-Warn "Skipping update. Using existing installation."
     }
 } elseif (Test-Path $InstallDir) {
-    # Check if directory has actual content (not just our log file)
-    $dirHasContent = (Get-ChildItem $InstallDir -Force | Where-Object { $_.Name -ne "install.log" }).Count -gt 0
-    if (-not $dirHasContent) {
-        # Empty or only has our log file - delete so clone can create it fresh
-        Write-Step "Directory exists but is empty. Proceeding with fresh install..."
-        # Stop transcript so install.log isn't locked during delete
-        try { Stop-Transcript | Out-Null } catch {}
-        Remove-Item $InstallDir -Recurse -Force
-        Write-Success "Directory cleared."
-    } else {
-        # Directory exists and has actual content -- ask what to do
-        Write-Warn "Directory '$InstallDir' already exists (not a git repo)."
-        Write-Host ""
-        Write-Host "  [1] Overwrite (delete and re-clone)" -ForegroundColor White
-        Write-Host "  [2] Choose a different directory" -ForegroundColor White
-        Write-Host "  [3] Cancel" -ForegroundColor White
-        Write-Host ""
-        Write-Prompt "  Choose (Enter=3): "
-        $overChoice = Read-Host
-        switch ($overChoice) {
-            '1' {
-                Write-Step "Removing existing directory..."
-                # Stop transcript so install.log isn't locked during delete
-                try { Stop-Transcript | Out-Null } catch {}
-                Remove-Item $InstallDir -Recurse -Force
-                Write-Success "Directory cleared."
-                # Now fresh clone below
-            }
-            '2' {
-                $newDir = Read-Host "  Enter new installation path"
-                if (-not [string]::IsNullOrWhiteSpace($newDir)) {
-                    $InstallDir = $newDir.Trim()
-                    # Restart transcript in new location
-                    try { Stop-Transcript | Out-Null } catch {}
-                    try {
-                        if (-not (Test-Path $InstallDir)) {
-                            New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
-                        }
-                        $script:LogFile = Join-Path $InstallDir "install.log"
-                        Start-Transcript -Path $script:LogFile -Append | Out-Null
-                    } catch {
-                        $fallbackLog = Join-Path $env:TEMP "glitch-install.log"
-                        Start-Transcript -Path $fallbackLog -Append | Out-Null
-                        $script:LogFile = $fallbackLog
-                    }
-                    Write-Success "Will install to: $InstallDir"
-                } else {
-                    Write-Warn "Installation cancelled."
-                    exit 0
-                }
-            }
-            default {
+    # Directory exists and has actual content -- ask what to do
+    Write-Warn "Directory '$InstallDir' already exists (not a git repo)."
+    Write-Host ""
+    Write-Host "  [1] Overwrite (delete and re-clone)" -ForegroundColor White
+    Write-Host "  [2] Choose a different directory" -ForegroundColor White
+    Write-Host "  [3] Cancel" -ForegroundColor White
+    Write-Host ""
+    Write-Prompt "  Choose (Enter=3): "
+    $overChoice = Read-Host
+    switch ($overChoice) {
+        '1' {
+            Write-Step "Removing existing directory..."
+            Remove-Item $InstallDir -Recurse -Force
+            Write-Success "Directory cleared."
+        }
+        '2' {
+            $newDir = Read-Host "  Enter new installation path"
+            if (-not [string]::IsNullOrWhiteSpace($newDir)) {
+                $InstallDir = $newDir.Trim()
+                Write-Success "Will install to: $InstallDir"
+            } else {
                 Write-Warn "Installation cancelled."
                 exit 0
             }
+        }
+        default {
+            Write-Warn "Installation cancelled."
+            exit 0
         }
     }
 }
@@ -461,16 +404,6 @@ if (-not (Test-Path "$InstallDir\.git")) {
     $script:SubmoduleSuccess = @()
     $script:SubmoduleFailures = @()
     $script:CloneSucceeded = $false
-
-    # Ensure transcript is active for clone (may have been stopped for overwrite)
-    try {
-        $null = Get-Content $script:LogFile -ErrorAction Stop
-    } catch {
-        $tempLog = Join-Path $env:TEMP "glitch-install.log"
-        Start-Transcript -Path $tempLog -Append | Out-Null
-        $script:LogFile = $tempLog
-        Write-Host "  Logging to: $tempLog (temp)" -ForegroundColor DarkGray
-    }
 
     try {
       Invoke-WithSpinner -Label "Cloning Glitch AI repository" -DoneMessage "Repository" -ScriptBlock {
@@ -491,6 +424,28 @@ if (-not (Test-Path "$InstallDir\.git")) {
         & $gitPath checkout $Branch 2>$null
         $ErrorActionPreference = $prevEAP
         Pop-Location
+    }
+
+    # Finalize bundled git: move the staged MinGit into the install dir so the
+    # launcher (launch-glitch.bat / glitch.bat) finds it at data\mingit on future
+    # launches. Copy + remove, NOT Move-Item: %TEMP% may be on a different volume.
+    if ($gitProvisioned -and $gitStagedDir) {
+        $finalGitDir = Join-Path $InstallDir "data\mingit"
+        if (-not (Test-Path $finalGitDir)) { New-Item -ItemType Directory -Path $finalGitDir -Force | Out-Null }
+        Copy-Item "$gitStagedDir\*" $finalGitDir -Recurse -Force
+        if (-not (Test-Path (Join-Path $finalGitDir "cmd\git.exe"))) {
+            throw "MinGit copy failed: $finalGitDir\cmd\git.exe missing after copy"
+        }
+        Remove-Item $gitStagedDir -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item (Join-Path $env:TEMP "glitch-mingit.zip") -Force -ErrorAction SilentlyContinue
+        $env:PATH = "$finalGitDir\cmd;$env:PATH"
+        $gitPath = Join-Path $finalGitDir "cmd\git.exe"
+        Write-Success "MinGit installed to $finalGitDir"
+    }
+
+    # Persist the FINAL git location for the staged (just-downloaded) case.
+    if ($gitNeedsPersistence) {
+        Ask-PersistGitOnPath -GitDir (Split-Path $gitPath -Parent)
     }
 
     # Initialize submodules individually so one failure doesn't block the others
@@ -566,6 +521,23 @@ $subOutput
                 Write-Warn "Glitch will attempt to fix these on first launch."
             }
         }
+    }
+}
+
+# Relocate the install log into the install dir. The log always starts in TEMP
+# and this runs on BOTH the fresh and update paths: after the clone or pull the
+# install dir exists to receive it.
+$targetLog = Join-Path $InstallDir "install.log"
+if ($script:LogFile -and $script:LogFile -ne $targetLog) {
+    try {
+        Stop-Transcript | Out-Null
+        Copy-Item $script:LogFile $targetLog -Force
+        $script:LogFile = $targetLog
+        Start-Transcript -Path $script:LogFile -Append | Out-Null
+        Write-Host "  Log file: $script:LogFile" -ForegroundColor DarkGray
+    } catch {
+        # Keep logging to TEMP on failure
+        try { Start-Transcript -Path (Join-Path $env:TEMP "glitch-install.log") -Append | Out-Null } catch {}
     }
 }
 
