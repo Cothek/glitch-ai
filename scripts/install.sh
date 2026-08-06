@@ -423,22 +423,59 @@ fi
 # 4.5. Install GitNexus (MCP code graph)
 header "Installing GitNexus (MCP code graph)..."
 GITNEXUS_OK=0
-NPM_CMD=""
-if command -v npm >/dev/null 2>&1; then
-  NPM_CMD="npm"
-elif [ -x "$INSTALL_DIR/data/node/bin/npm" ]; then
-  NPM_CMD="$INSTALL_DIR/data/node/bin/npm"
+BUNDLED_NODE_BIN="$INSTALL_DIR/data/node/bin"
+BUNDLED_NPM="$BUNDLED_NODE_BIN/npm"
+
+# Skip if gitnexus is already present (bundled tree or PATH)
+ALREADY_INSTALLED=0
+if [ -d "$INSTALL_DIR/data/node/lib/node_modules/gitnexus" ] || \
+   [ -x "$BUNDLED_NODE_BIN/gitnexus" ] || \
+   command -v gitnexus >/dev/null 2>&1; then
+  ALREADY_INSTALLED=1
 fi
-if [ -n "$NPM_CMD" ]; then
-  step "Installing gitnexus via npm (MCP code graph)..."
-  if $NPM_CMD install -g gitnexus >/dev/null 2>&1; then
-    GITNEXUS_OK=1
+
+if [ "$ALREADY_INSTALLED" -eq 1 ]; then
+  GITNEXUS_OK=1
+  success "GitNexus already installed (MCP code graph)"
+else
+  # Prefer bundled npm (always writable, correct Node version); fall back to system npm
+  NPM_CMD=""
+  if [ -x "$BUNDLED_NPM" ]; then
+    NPM_CMD="$BUNDLED_NPM"
+  elif command -v npm >/dev/null 2>&1; then
+    NPM_CMD="npm"
+  fi
+
+  if [ -n "$NPM_CMD" ]; then
+    # Prepend bundled node bin to PATH so postinstall scripts and bare node/npx
+    # resolve the bundled node (gitnexus requires node >=22)
+    export PATH="$BUNDLED_NODE_BIN:$PATH"
+
+    step "Installing gitnexus via npm (MCP code graph)..."
+    if "$NPM_CMD" install -g gitnexus; then
+      GITNEXUS_OK=1
+    fi
+
+    # Verify after install
+    if [ "$GITNEXUS_OK" -ne 1 ]; then
+      if [ -x "$BUNDLED_NODE_BIN/gitnexus" ] || \
+         [ -d "$INSTALL_DIR/data/node/lib/node_modules/gitnexus" ]; then
+        GITNEXUS_OK=1
+      else
+        if "$NPM_CMD" list -g --depth=0 gitnexus 2>/dev/null | grep -q 'gitnexus@'; then
+          GITNEXUS_OK=1
+        fi
+      fi
+    fi
+  else
+    warn "No npm found (bundled or system). Cannot install GitNexus."
   fi
 fi
+
 if [ "$GITNEXUS_OK" -eq 1 ]; then
   success "GitNexus installed (MCP code graph)"
 else
-  warn "GitNexus install skipped/failed (non-fatal). MCP code graph needs: npm install -g gitnexus"
+  warn "GitNexus install failed (non-fatal). Manual install: cd $INSTALL_DIR && ./data/node/bin/npm install -g gitnexus"
 fi
 
 # 5. User profile setup
