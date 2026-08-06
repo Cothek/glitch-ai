@@ -450,11 +450,13 @@ EOF
 
 # Always create a local user profile so Glitch has memory from the start
 USER_DIR="$INSTALL_DIR/user"
-step "Creating local user profile..."
 mkdir -p "$USER_DIR"
 
-# Create starter files for the profile
-cat > "$USER_DIR/main-memory.md" << 'PROFILEEOF'
+# Create starter files for the profile (only if none exists yet — never clobber an existing profile)
+if [ ! -f "$USER_DIR/main-memory.md" ]; then
+  step "Creating local user profile..."
+
+  cat > "$USER_DIR/main-memory.md" << 'PROFILEEOF'
 ---
 type: UserProfile
 title: Main Memory
@@ -469,7 +471,7 @@ timestamp:
 *To be filled in through interaction with Glitch*
 PROFILEEOF
 
-cat > "$USER_DIR/current-session.md" << 'SESSIONEOF'
+  cat > "$USER_DIR/current-session.md" << 'SESSIONEOF'
 ---
 type: SessionMemory
 title: Current Session Memory
@@ -483,7 +485,7 @@ timestamp:
 *First session with Glitch*
 SESSIONEOF
 
-cat > "$USER_DIR/reminders.md" << 'REMINDERSEOF'
+  cat > "$USER_DIR/reminders.md" << 'REMINDERSEOF'
 ---
 type: ReminderLog
 title: Reminders
@@ -495,7 +497,7 @@ timestamp:
 # Reminders
 REMINDERSEOF
 
-cat > "$USER_DIR/session-dashboard.md" << 'DASHEOF'
+  cat > "$USER_DIR/session-dashboard.md" << 'DASHEOF'
 ---
 type: Dashboard
 title: Session Dashboard
@@ -507,7 +509,10 @@ timestamp:
 # Session Dashboard
 DASHEOF
 
-success "Local user profile created at $USER_DIR"
+  success "Local user profile created at $USER_DIR"
+else
+  success "User profile already exists at $USER_DIR (kept as-is)"
+fi
 
 # Optional: sync with GitHub for cross-machine access
 SHOULD_SYNC=false

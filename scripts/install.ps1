@@ -772,6 +772,18 @@ timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
 "@
         Set-Content -LiteralPath "$userDir\reminders.md" -Value $starterReminders -Encoding UTF8
 
+        $starterDashboard = @"
+---
+type: Dashboard
+title: Session Dashboard
+description: Active workstream tracker
+tags: [dashboard]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+# Session Dashboard
+"@
+        Set-Content -LiteralPath "$userDir\session-dashboard.md" -Value $starterDashboard -Encoding UTF8
+
         # Initialize git on main branch (never master) so the profile is ready for sync
         Push-Location $userDir
         try {
