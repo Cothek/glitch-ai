@@ -1,3 +1,15 @@
+import { execFileSync } from 'node:child_process';
+import { existsSync, mkdirSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const REVIEW_PASS_SCRIPT = resolve(
+  dirname(fileURLToPath(import.meta.url)), '..', '..', 'scripts', 'write-review-pass.mjs'
+);
+const MARKER_PATH = resolve(
+  dirname(fileURLToPath(import.meta.url)), '..', '..', 'data', '.review-pass.json'
+);
+
 export const DispatchReflexPlugin = async ({ directory, client }) => {
   const lastTaskTime = new Map();
   let pendingReview = false;
@@ -96,6 +108,43 @@ export const DispatchReflexPlugin = async ({ directory, client }) => {
     return input.agent || input.subagent_type || 'unknown';
   }
 
+  function extractResultText(output) {
+    if (!output) return '';
+    if (typeof output.result === 'string') return output.result;
+    if (typeof output === 'string') return output;
+    try {
+      return JSON.stringify(output);
+    } catch {
+      return '';
+    }
+  }
+
+  function isPassVerdict(text) {
+    if (!text) return false;
+    // Fail signals trump everything ("FIX THEN SHIP" contains "SHIP").
+    const fail = /FIX THEN SHIP|FIX AND RESHIP|REJECTED|\bFAILED\b|\bREJECT\b|\bDENIED\b/i.test(text);
+    if (fail) return false;
+    return /\bPASSED\b|\bPASS\b|\bPROCEED\b|verdict\s*:\s*✅|\bSHIP\b|\bAPPROVED\b/i.test(text);
+  }
+
+  function writeReviewPassMarker(agentName) {
+    try {
+      const markerDir = dirname(MARKER_PATH);
+      if (!existsSync(markerDir)) mkdirSync(markerDir, { recursive: true });
+      // Delegate to the canonical writer script so the marker format stays in one place.
+      execFileSync(process.execPath, [REVIEW_PASS_SCRIPT, '--verdict', 'PASS', '--agent', agentName], {
+        cwd: resolve(dirname(fileURLToPath(import.meta.url)), '..', '..'),
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: 20000,
+      });
+      console.log(`[dispatch-reflex] ✅ Review PASS (${agentName}) — review-pass marker written`);
+    } catch (e) {
+      // Never break the session because the marker write failed.
+      console.warn(`[dispatch-reflex] ⚠️ Could not write review-pass marker: ${(e && e.message) || e}`);
+    }
+  }
+
   return {
     "tool.execute.after": async (input, output) => {
       if (input.tool === 'task') {
@@ -110,6 +159,15 @@ export const DispatchReflexPlugin = async ({ directory, client }) => {
         if (REVIEW_AGENTS.has(agentName)) {
           pendingReview = false;
           lastReviewTaskTime = Date.now();
+          // Mechanical review gate (Layer B): auto-write the marker the pre-commit
+          // hook requires when the reviewer verdict is PASS, so commits stop being
+          // blocked by a stale/missing data/.review-pass.json.
+          const text = extractResultText(output);
+          if (isPassVerdict(text)) {
+            writeReviewPassMarker(agentName);
+          } else {
+            console.warn(`[dispatch-reflex] Review verdict for ${agentName} not PASS — marker not written`);
+          }
         }
       }
     },
