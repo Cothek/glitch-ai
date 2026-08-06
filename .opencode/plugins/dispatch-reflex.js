@@ -122,7 +122,7 @@ export const DispatchReflexPlugin = async ({ directory, client }) => {
   function isPassVerdict(text) {
     if (!text) return false;
     // Fail signals trump everything ("FIX THEN SHIP" contains "SHIP").
-    const fail = /FIX THEN SHIP|FIX AND RESHIP|REJECTED|\bFAILED\b|\bREJECT\b|\bDENIED\b/i.test(text);
+    const fail = /FIX THEN SHIP|FIX AND RESHIP|REJECTED|\bFAILED\b|\bREJECT\b|\bDENIED\b|\bPASS\b\s+(?:with|but)\b/i.test(text);
     if (fail) return false;
     return /\bPASSED\b|\bPASS\b|\bPROCEED\b|verdict\s*:\s*✅|\bSHIP\b|\bAPPROVED\b/i.test(text);
   }
