@@ -320,6 +320,53 @@ async function checkSkillImprovements() {
   }
 }
 
+function humanSizeCompact(bytes) {
+  if (!bytes || bytes === 0) return "0 B";
+  const u = ["B", "KB", "MB", "GB"];
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), u.length - 1);
+  const v = bytes / Math.pow(1024, i);
+  return `${i === 0 ? v : v.toFixed(1)} ${u[i]}`;
+}
+
+// --- Step 6: Audit data/ directory (single --json call covers both gate + report) ---
+async function runDataAudit() {
+  const scriptPath = path.join(CWD, "scripts", "audit-data.mjs");
+  try {
+    await stat(scriptPath);
+  } catch {
+    return { dataAudit: "✓ Data audit: N/A (script not found)", quarantineScan: "✓ Quarantine scan: N/A (script not found)" };
+  }
+
+  try {
+    const output = execSync(
+      `node "${scriptPath}" --json`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], timeout: 30000 }
+    );
+    const parsed = JSON.parse(output.trim());
+    const s = parsed.summary || {};
+
+    let dataAudit;
+    if (s.readyCount === 0 && s.newCount === 0) {
+      dataAudit = "✓ Data audit: clean";
+    } else {
+      const parts = [];
+      if (s.readyCount > 0) parts.push(`${s.readyCount} ready (${humanSizeCompact(s.readyBytes)})`);
+      if (s.newCount > 0) parts.push(`${s.newCount} new`);
+      dataAudit = `⚠️ Data audit: ${parts.join(", ")} — run \`node scripts/audit-data.mjs\` to review`;
+    }
+
+    const totalTracked = s.totalTracked || 0;
+    const quarantineScan = totalTracked > 0
+      ? `✓ Quarantine scan: ${totalTracked} tracked, ${s.newCount || 0} new, ${s.readyCount || 0} ready (${s.readyBytesHuman || "0 B"})`
+      : "✓ Quarantine scan: no candidates tracked";
+
+    return { dataAudit, quarantineScan };
+  } catch (e) {
+    warn(`Data audit failed: ${e.message}`);
+    return { dataAudit: `✗ Data audit: FAILED (${e.message})`, quarantineScan: `✗ Quarantine scan: FAILED (${e.message})` };
+  }
+}
+
 // --- Step 4b: Touch timestamps on all user memory files ---
 async function touchAllTimestamps() {
   const userDir = path.join(CWD, "user");
@@ -389,6 +436,7 @@ async function touchAllTimestamps() {
 
 // --- Main ---
 async function main() {
+  const auditResult = await runDataAudit();
   const results = {
     timestamp: await updateTimestamp(),
     diary: await checkDiaryStaleness(),
@@ -398,6 +446,8 @@ async function main() {
     touches: await touchAllTimestamps(),
     staleness: await checkMemoryStaleness(),
     skillImp: await checkSkillImprovements(),
+    dataAudit: auditResult.dataAudit,
+    quarantineScan: auditResult.quarantineScan,
   };
 
   // Split GC result into main line + potential alert
@@ -416,6 +466,8 @@ async function main() {
     results.curriculum,
     gcMain,
     ...results.git.split("\n"),
+    results.dataAudit,
+    ...results.quarantineScan.split("\n"),
     "",
     "=== Action Required ===",
     "⚠️ Step 6 — Pattern scan: Check scratchpad for 3x+ repeated workflows",

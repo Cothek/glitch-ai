@@ -132,7 +132,7 @@ glitch-ai/                    ← This repo (public)
 │   ├── update-status.json    ← Dependency check results
 │   ├── model-update-status.json
 │   ├── skills-lock.json
-│   └── screenshots/          ← Vision agent screenshots
+│   └── screenshots/          ← Vision agent screenshots + generated images
 │
 ├── launch-glitch.bat         ← Unified launcher (Windows) — all modes
 ├── launch-glitch.sh          ← Unified launcher (Mac/Linux) — all modes

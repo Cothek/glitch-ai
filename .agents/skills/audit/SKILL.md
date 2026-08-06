@@ -23,6 +23,8 @@ Code-only review is insufficient. Every audit/critique starts with the surface a
      - Full-page at 375px (mobile)
      - Dark mode of each, if supported."
 
+**On-demand install**: Playwright MCP is not part of the base Glitch install. To install it, run `node scripts/ensure-tools.mjs --manifest config/tools-playwright.json` from the glitch-ai root. If it's not installed, proceed to the next capture option below.
+
 Do not begin the review until visuals are captured or provided. State this explicitly to the user when no automation succeeds — don't silently fall back to code-only review.
 
 If the user declines to provide screenshots, run a code-only pass and clearly mark the report `[CODE-ONLY REVIEW — visual issues not assessed]` at the top so the limitation is explicit.

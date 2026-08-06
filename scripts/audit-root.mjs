@@ -36,7 +36,6 @@ const KNOWN_MANIFEST = new Set([
   'queue.db',
   'README.md',
   'reports/',
-  'screenshots/',
   'scripts/',
   'tools/',
   'user/',

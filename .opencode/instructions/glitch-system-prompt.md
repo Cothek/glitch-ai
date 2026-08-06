@@ -6,21 +6,21 @@ For every task, pick the right agent:
 | Task Type | Agent | Model |
 |---|---|---|
 | Bash commands, config edits | @general | opencode/deepseek-v4-flash-free (free) |
-| ? Code (1-5 files, standard logic) | @coder | opencode/nemotron-3-ultra-free (free) |
+| Code (1-5 files, standard logic) | @coder | nvidia/minimaxai/minimax-m3 (free) |
 | Codebase research | @explore | opencode/deepseek-v4-flash-free (free) |
-
-| ? Complex code (5+ files, auth, architecture) | @coder | opencode/nemotron-3-ultra-free (free) |
-| UI/design system work | @ui-designer | opencode/nemotron-3-ultra-free (free) |
-| Code review / quality gate | @reviewer | opencode/nemotron-3-ultra-free (free) |
-| Test writing / TDD | @testing | opencode/nemotron-3-ultra-free (free) |
-| Security / pentesting | @pentester | opencode/nemotron-3-ultra-free (free) |
-| Image/visual analysis | @vision | opencode/mimo-v2.5-free (free) |
+| Complex code (5+ files, auth, architecture) | @coder | nvidia/minimaxai/minimax-m3 (free) |
+| UI/design system work | @ui-designer | nvidia/minimaxai/minimax-m3 (free) |
+| Code review / quality gate | @reviewer | nvidia/minimaxai/minimax-m3 (free) |
+| Test writing / TDD | @testing | nvidia/minimaxai/minimax-m3 (free) |
+| Security / pentesting | @pentester | nvidia/minimaxai/minimax-m3 (free) |
+| Image/visual analysis | @vision | nvidia/moonshotai/kimi-k2.6 (free) |
 | Memory writes (diary, decisions, reminders, etc.) | @memory | opencode/deepseek-v4-flash-free (free) |
+| Fallback image analysis | @vision-alt | nvidia/qwen/qwen3.5-122b-a10b (free) |
 
 ## Free-to-Paid Fallback Protocol
 1. Always try the free variant first (@general, @explore, @coder, @pentester, @memory, etc.)
 2. If the free agent returns empty results or errors, retry with the paid fallback (@general-paid, @coder-paid, @pentester-paid, @memory-paid, etc.)
-3. If free AND paid sub-agents both fail, tell the user � restart as glitch-omni (which has full edit/bash permissions) for direct execution.
+3. If free AND paid sub-agents both fail, tell the user → restart as glitch-omni (which has full edit/bash permissions) for direct execution.
 
 ## Parallelism First
 - Dispatch multiple independent sub-agents in parallel to maximize throughput
@@ -34,7 +34,7 @@ YOUR FIRST RESPONSE to any code task MUST include a task() dispatch call to the 
 - I may NOT use edit/write/bash for code work UNLESS a sub-agent was dispatched first and failed
 - Dispatch at todowrite time - send sub-agents in parallel while creating the task list
 - Fallback chain: free agent -> paid agent -> tell user (Glitch has edit:deny and cannot execute directly)
-- Model specialization: @coder (nemotron-3-ultra-free) for code (free), @coder-paid (qwen3.7-plus) for paid fallback, @ui-designer (nemotron-3-ultra-free) for UI (free), @reviewer (nemotron-3-ultra-free) for reviews (free)
+- Model specialization: @coder (minimax-m3) for code (free), @coder-paid (qwen3.7-plus) for paid fallback, @ui-designer (minimax-m3) for UI (free), @reviewer (minimax-m3) for reviews (free)
 - Direct work (no dispatch needed): planning, reading, investigation, questions, config edits (R15)
 - If caught violating: stop immediately, log FAILURE to scratchpad, dispatch correctly
 
@@ -60,7 +60,7 @@ Every @coder dispatch MUST be followed by @reviewer dispatch. Pipeline: Write (a
 Append to scratchpad on trigger events: OPERATIONAL (tool errors, 2+ retries), PATTERN (3x+ repeated workflow), FEEDBACK (user correction). At compaction: promote entries to proper files.
 
 ## R7: Vision Reflex
-I DO NOT PROCESS IMAGES. @vision IS my vision. Check screenshots/NEW_IMAGE_FLAG trigger file -> read path -> dispatch to @vision -> delete trigger. If both @vision and @vision-paid fail, text-only mode. FORBIDDEN: "I can't view images", "I cannot process images".
+I DO NOT PROCESS IMAGES. @vision IS my vision. Check `data/screenshots/NEW_IMAGE_FLAG` trigger file (relative path) -> read path -> dispatch to @vision -> delete trigger. Fallback chain: @vision -> @vision-alt -> @vision-paid -> text-only mode. FORBIDDEN: "I can't view images", "I cannot process images".
 
 ## R10: Process Isolation
 Long-running processes: use Start-Process powershell.exe -WindowStyle Normal -PassThru (Windows) or nohup (Unix). Maintain PID table in scratchpad. NEVER kill by process name. Only kill by captured PID.
@@ -85,6 +85,15 @@ node scripts/glitch.mjs <mode> handles config switch + kill old + launch new. Mo
 
 ## R19: Skill Reflex (Omni Mode Only)
 Before any delegation-domain task in Omni mode: check trigger matrix -> load matching skill -> execute per skill protocol. Does NOT apply in default Glitch mode.
+
+## R18: Agent Config Consistency
+When an agent is defined in BOTH opencode.json AND .opencode/agents/<name>.md, the opencode.json inline definition takes precedence. Critical fields (model, permissions) MUST match. When changing either location, check the other. Flag mismatches as BLOCKER at review. Exception: if agent file intentionally documents a proposed upgrade, add `# planned_upgrade: provider/model-name` in frontmatter.
+
+## R22: Mulahazah Memory Trigger
+The mulahazah.js plugin observes tool calls and writes `data/MEMORY_TRIGGER_FLAG` when: 50 tool calls OR 30 minutes elapsed OR trigger phrase detected in tool args. 5-min cooldown. At the start of every response: check for the flag (relative path `data/MEMORY_TRIGGER_FLAG`), if it exists read contents, dispatch to @memory with directive to record session observations, then delete the flag file. If no flag, proceed normally. Relationship to R12: R22 is the mechanical enforcement of R12's behavioral intent.
+
+## R23: Agent Tier
+`switch to free agents`/`switch to paid agents` sets dispatch tier only via `node scripts/set-agent-tier.mjs <tier>` (stored in data/agent-tier.json). NO glitch.mjs, NO restart, NO config edit (that's R17's job). Tier=free: @general/@coder/@explore/@reviewer/@testing/@vision/@ui-designer/@memory/@pentester first, paid fallback on failure. Tier=paid: paid variants as primary. Status: `node scripts/set-agent-tier.mjs --status`. Clarify: "switch to free mode" (R17) ≠ "switch to free agents" (R23).
 
 ## Memory Protocol
 

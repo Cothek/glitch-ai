@@ -3,8 +3,14 @@
 /**
  * Plugin Manager — Glitch plugin engine
  * Reads plugin manifests from plugins/<name>/manifest.json
- * Manages enabled/disabled state in data/plugins.json
+ * Manages enabled/disabled state in user/plugins.json (user layer, synced cross-machine)
  * Starts/stops plugin processes with PID tracking
+ *
+ * Merge semantics (additive only — respects user intent):
+ *   - System defaults are declared per-plugin via manifest.json `default_enabled: true`
+ *   - On launch, ensureDefaultRegistry() reads all default-enabled plugins and adds
+ *     any missing entries to user/plugins.json with { enabled: true }
+ *   - Existing user entries (including enabled: false) are NEVER overwritten or removed
  */
 
 import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
@@ -15,7 +21,7 @@ import { spawn } from 'child_process';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = resolve(__dirname, '..', '..');
-const PLUGIN_REGISTRY_PATH = join(ROOT_DIR, 'data', 'plugins.json');
+const PLUGIN_REGISTRY_PATH = join(ROOT_DIR, 'user', 'plugins.json');
 const PLUGINS_DIR = join(ROOT_DIR, 'plugins');
 
 // Active plugin processes: Map<name, ChildProcess>
@@ -156,10 +162,65 @@ export function stopPlugin(pluginName) {
 }
 
 /**
+ * Collect all system-default plugins (manifest declares `default_enabled: true`).
+ * Returns array of plugin names.
+ */
+function collectDefaultEnabledPlugins() {
+  const names = [];
+  if (!existsSync(PLUGINS_DIR)) return names;
+  const entries = readdirSync(PLUGINS_DIR, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const manifest = readManifest(entry.name);
+    if (manifest && manifest.default_enabled === true) {
+      names.push(entry.name);
+    }
+  }
+  return names;
+}
+
+/**
+ * Ensure user/plugins.json exists and contains every system-default plugin.
+ * Additive merge — respects user intent:
+ *   - If user/plugins.json does NOT exist: create it with all default-enabled
+ *     plugins set to { enabled: true }. Returns { created: true, added: [...names] }.
+ *   - If it DOES exist: for each system-default plugin NOT already a key in the
+ *     user registry, add { enabled: true }. Existing entries (including
+ *     enabled: false) are NEVER overwritten or removed. Returns
+ *     { created: false, added: [...names] } where `added` lists newly-added plugins.
+ */
+export function ensureDefaultRegistry() {
+  const defaults = collectDefaultEnabledPlugins();
+
+  if (!existsSync(PLUGIN_REGISTRY_PATH)) {
+    const fresh = {};
+    for (const name of defaults) {
+      fresh[name] = { enabled: true };
+    }
+    writeRegistry(fresh);
+    return { created: true, added: [...defaults] };
+  }
+
+  const reg = readRegistry();
+  const added = [];
+  for (const name of defaults) {
+    if (!(name in reg)) {
+      reg[name] = { enabled: true };
+      added.push(name);
+    }
+  }
+  if (added.length > 0) {
+    writeRegistry(reg);
+  }
+  return { created: false, added };
+}
+
+/**
  * Start all enabled plugins. Called at Glitch startup.
  * Returns array of { name, success, pid?, error? }.
  */
 export async function startEnabledPlugins() {
+  ensureDefaultRegistry();
   const registry = readRegistry();
   const results = [];
   for (const [name, config] of Object.entries(registry)) {

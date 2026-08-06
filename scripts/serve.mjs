@@ -9,6 +9,7 @@ import { get as httpsGet } from 'https';
 import { checkRepoUpdates, checkUserRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
 import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
 import { bootstrapOpenCode } from './lib/bootstrap-opencode.mjs';
+import { migrateModelAssignments } from './lib/migrate-assignments.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -111,6 +112,10 @@ function askQuestion(query) {
 
 // ---- Branch check: warn if not on main and offer to switch ----
 async function checkAndSwitchToMain() {
+  if (process.env.GLITCH_BRANCH_OK !== undefined && process.env.GLITCH_BRANCH_OK !== '') {
+    return;
+  }
+
   // Skip branch check on restart (seamless restart, no user input)
   if (process.argv.includes('--restart')) {
     log(DARK_GREEN, '  Restart mode -- skipping branch check');
@@ -170,6 +175,13 @@ async function checkAndSwitchToMain() {
         log('');
         return;
       }
+    }
+
+    const mainExists = run(GIT_BIN, ['rev-parse', '--verify', 'main'], { cwd: ROOT_DIR, timeout: 5000 });
+    if (!mainExists.success) {
+      log(DARK_YELLOW, '  main branch not found locally, fetching...');
+      run(GIT_BIN, ['remote', 'set-branches', 'origin', '*'], { cwd: ROOT_DIR, timeout: 10000 });
+      run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
     }
 
     const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
@@ -422,8 +434,11 @@ async function main() {
   try {
     let configObj = JSON.parse(runtimeJson);
 
-    // Apply model overrides from data/model-assignments.json (set by model UI)
-    const assignmentsPath = join(ROOT_DIR, 'data', 'model-assignments.json');
+    // One-time migration: copy legacy data/model-assignments.json to user/ if needed
+    migrateModelAssignments(ROOT_DIR, log);
+
+    // Apply model overrides from user/model-assignments.json (set by model UI)
+    const assignmentsPath = join(ROOT_DIR, 'user', 'model-assignments.json');
     if (existsSync(assignmentsPath)) {
       try {
         const assignmentsRaw = readFileSync(assignmentsPath, 'utf-8');
@@ -436,10 +451,10 @@ async function main() {
           }
         }
         if (overrideCount > 0) {
-          log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from model-assignments.json`);
+          log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from user/model-assignments.json`);
         }
       } catch (e) {
-        log(YELLOW, `  Warning: Could not read model-assignments.json (${e.message})`);
+        log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
       }
     }
 
@@ -599,7 +614,7 @@ async function main() {
       log(MAGENTA, '  Restarting Glitch...');
       log('');
 
-      // Re-generate config (picks up any model-assignments.json changes)
+      // Re-generate config (picks up any user/model-assignments.json changes)
       log(CYAN, '  Generating runtime config from template...');
       let templateText = readFileSync(TemplatePath, 'utf-8');
       if (templateText.charCodeAt(0) === 0xFEFF) templateText = templateText.slice(1);
@@ -615,8 +630,8 @@ async function main() {
 
       try {
         let configObj = JSON.parse(runtimeJson);
-        // Apply model overrides from data/model-assignments.json
-        const assignmentsPath = join(ROOT_DIR, 'data', 'model-assignments.json');
+        // Apply model overrides from user/model-assignments.json
+        const assignmentsPath = join(ROOT_DIR, 'user', 'model-assignments.json');
         if (existsSync(assignmentsPath)) {
           try {
             const assignmentsRaw = readFileSync(assignmentsPath, 'utf-8');
@@ -629,10 +644,10 @@ async function main() {
               }
             }
             if (overrideCount > 0) {
-              log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from model-assignments.json`);
+              log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from user/model-assignments.json`);
             }
           } catch (e) {
-            log(YELLOW, `  Warning: Could not read model-assignments.json (${e.message})`);
+            log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
           }
         }
         const finalJson = JSON.stringify(configObj, null, 2);

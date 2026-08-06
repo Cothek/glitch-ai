@@ -6,8 +6,16 @@
                    ".opencode/plugins/compaction.js",
                    ".opencode/plugins/verify-claim.js",
                    ".opencode/plugins/recall.js",
-                   ".opencode/plugins/stuck-detector.js"
+                   ".opencode/plugins/stuck-detector.js",
+                   ".opencode/plugins/mulahazah.js",
+                   ".opencode/plugins/plan-reflex.js"
                ],
+    "mcp":  {
+               "gitnexus":  {
+                                "type":  "local",
+                                "command":  ["gitnexus",  "mcp"]
+                            }
+           },
     "agent":  {
                   "glitch":  {
                                  "model":  "opencode-go/deepseek-v4-flash",

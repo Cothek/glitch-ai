@@ -80,6 +80,10 @@ function askQuestion(query) {
 
 // ---- Branch check: warn if not on main and offer to switch ----
 async function checkAndSwitchToMain() {
+  if (process.env.GLITCH_BRANCH_OK !== undefined && process.env.GLITCH_BRANCH_OK !== '') {
+    return;
+  }
+
   const branch = run(GIT_BIN, ['symbolic-ref', '--short', 'HEAD'], { cwd: rootDir, timeout: 5000 });
   if (!branch.success) return;
   const current = branch.stdout.trim();
@@ -133,6 +137,13 @@ async function checkAndSwitchToMain() {
         log('');
         return;
       }
+    }
+
+    const mainExists = run(GIT_BIN, ['rev-parse', '--verify', 'main'], { cwd: rootDir, timeout: 5000 });
+    if (!mainExists.success) {
+      log(DARK_YELLOW, '  main branch not found locally, fetching...');
+      run(GIT_BIN, ['remote', 'set-branches', 'origin', '*'], { cwd: rootDir, timeout: 10000 });
+      run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: rootDir, timeout: 30000 });
     }
 
     const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: rootDir, timeout: 30000 });
@@ -381,6 +392,10 @@ async function main() {
   } catch (err) {
     if (err.status === null) {
       console.error(`  OpenCode exited with error: ${err.message}`);
+      process.exit(1);
+    } else if (err.status !== 0) {
+      console.error(`  OpenCode exited with error (code ${err.status})`);
+      process.exit(err.status);
     }
   }
 

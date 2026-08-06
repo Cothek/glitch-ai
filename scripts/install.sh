@@ -6,6 +6,7 @@
 #   curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash
 #   wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash
 #   bash install.sh [install_dir] [--no-launch]
+#   curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/develop/scripts/install.sh -o /tmp/glitch-install.sh && bash /tmp/glitch-install.sh --branch develop
 
 set -euo pipefail
 
@@ -13,14 +14,14 @@ set -euo pipefail
 INSTALL_DIR="${1:-$HOME/glitch-ai}"
 NO_LAUNCH=false
 USER_REPO=""
+BRANCH=""
 
-# Set up logging - captures all output to a file for diagnosis
-LOG_FILE=""
+# Set up logging - captures all output to a file for diagnosis.
+# Logs to /tmp first (the install dir may not exist yet and must not be
+# created before the clone). After a successful clone the log is copied
+# into $INSTALL_DIR/install.log at the end of the script.
+LOG_FILE="/tmp/glitch-install.log"
 setup_logging() {
-    LOG_FILE="$INSTALL_DIR/install.log"
-    mkdir -p "$INSTALL_DIR" 2>/dev/null || {
-        LOG_FILE="/tmp/glitch-install.log"
-    }
     exec > >(tee -a "$LOG_FILE") 2>&1
     echo "=== Install started: $(date) ==="
 }
@@ -37,18 +38,21 @@ for arg in "$@"; do
         --no-launch) NO_LAUNCH=true ;;
         --user-repo) ;; # handled by next iteration
         --user-repo=*) USER_REPO="${arg#*=}" ;;
+        --branch) ;; # handled by next iteration
+        --branch=*) BRANCH="${arg#*=}" ;;
         --help|-h)
             cat <<'EOF'
 Glitch AI Installer for macOS/Linux
 
 Usage:
-  curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>]
-  wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>]
+  curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>] [--branch <name>]
+  wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>] [--branch <name>]
 
 Arguments:
   install_dir              Custom install directory (default: $HOME/glitch-ai)
   --no-launch              Skip launch prompt after installation
   --user-repo <url>        GitHub user repo URL for profile sync (e.g. https://github.com/user/repo.git)
+  --branch <name>          Checkout a specific repo branch after cloning (e.g. develop)
   --help, -h               Show this help
 
 Prerequisites:
@@ -61,9 +65,11 @@ EOF
             exit 0
             ;;
         *)
-            # Check if previous arg was --user-repo
+            # Check if previous arg was --user-repo or --branch
             if [ "${PREV_ARG:-}" = "--user-repo" ]; then
                 USER_REPO="$arg"
+            elif [ "${PREV_ARG:-}" = "--branch" ]; then
+                BRANCH="$arg"
             fi
             ;;
     esac
@@ -330,7 +336,16 @@ if [ ! -d "$INSTALL_DIR/.git" ]; then
     mkdir -p "$INSTALL_DIR/data"
     
     cd "$INSTALL_DIR" || exit 1
-    
+
+    # Optional branch checkout (mirrors install.ps1 -Branch behavior)
+    if [ -n "$BRANCH" ] && [ "$BRANCH" != "main" ]; then
+        step "Checking out branch: $BRANCH..."
+        if ! checkout_err=$(git checkout "$BRANCH" 2>&1); then
+            warn "Could not checkout branch: $BRANCH (continuing on default branch)"
+            echo "    $checkout_err" >&2
+        fi
+    fi
+
     echo ""
     step "Initializing submodules..."
     
@@ -402,6 +417,28 @@ if [ -f "$BOOTSTRAP_PATH" ]; then
     warn "On macOS/Linux, dependencies are handled by the launch scripts automatically."
 else
     step "No bootstrap needed - launch scripts handle Node.js/OpenCode download."
+fi
+
+
+# 4.5. Install GitNexus (MCP code graph)
+header "Installing GitNexus (MCP code graph)..."
+GITNEXUS_OK=0
+NPM_CMD=""
+if command -v npm >/dev/null 2>&1; then
+  NPM_CMD="npm"
+elif [ -x "$INSTALL_DIR/data/node/bin/npm" ]; then
+  NPM_CMD="$INSTALL_DIR/data/node/bin/npm"
+fi
+if [ -n "$NPM_CMD" ]; then
+  step "Installing gitnexus via npm (MCP code graph)..."
+  if $NPM_CMD install -g gitnexus >/dev/null 2>&1; then
+    GITNEXUS_OK=1
+  fi
+fi
+if [ "$GITNEXUS_OK" -eq 1 ]; then
+  success "GitNexus installed (MCP code graph)"
+else
+  warn "GitNexus install skipped/failed (non-fatal). MCP code graph needs: npm install -g gitnexus"
 fi
 
 # 5. User profile setup
@@ -508,20 +545,52 @@ fi
 
 if [ "$SHOULD_SYNC" = true ] && [ -n "$GH_USER" ]; then
     cd "$USER_DIR"
-    git init >/dev/null
+    # Force main branch for new user dirs (never master).
+    # git >= 2.28 supports `git init -b <name>`; older git falls back to init + rename.
+    if git init -b main >/dev/null 2>&1; then
+        :
+    else
+        git init >/dev/null
+        git symbolic-ref HEAD refs/heads/main 2>/dev/null || git branch -m main 2>/dev/null || true
+    fi
     git add -A >/dev/null
     git commit -m "initial user profile" >/dev/null 2>&1 || true
     local_branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "main")
     git remote add origin "https://github.com/$GH_USER/$REPO_NAME.git" 2>/dev/null
 
+    # Auto-detect the primary (default) branch of the remote
     remote_head=$(git ls-remote --symref origin HEAD 2>/dev/null | awk '/^ref:/ {sub(/refs\/heads\//, "", $2); print $2}')
     if [ -n "$remote_head" ]; then
         default_branch="$remote_head"
+        # List all remote branches; if more than one, prompt the user to pick
+        branch_list=$(git ls-remote --heads origin 2>/dev/null | sed 's|.*refs/heads/||' | sort -u)
+        branch_count=$(printf '%s\n' "$branch_list" | grep -c . 2>/dev/null || echo "0")
+        if [ "$branch_count" -gt 1 ]; then
+            echo ""
+            warn "Remote repo has multiple branches:"
+            i=1
+            while IFS= read -r b; do
+                marker=""
+                [ "$b" = "$default_branch" ] && marker=" (primary)"
+                echo "    [$i] $b$marker"
+                i=$((i+1))
+            done <<< "$branch_list"
+            prompt "Which branch to use? (Enter=$default_branch): "
+            read -r branch_choice </dev/tty
+            if [ -n "$branch_choice" ]; then
+                chosen=$(echo "$branch_list" | sed -n "${branch_choice}p" 2>/dev/null)
+                if [ -n "$chosen" ]; then
+                    default_branch="$chosen"
+                else
+                    warn "Invalid choice, using primary: $default_branch"
+                fi
+            fi
+        fi
         if [ "$local_branch" != "$default_branch" ]; then
             git branch -m "$default_branch" 2>/dev/null
         fi
         if git pull origin "$default_branch" --allow-unrelated-histories 2>/dev/null; then
-            success "User profile synced from GitHub"
+            success "User profile synced from GitHub (branch: $default_branch)"
             git branch --set-upstream-to="origin/$default_branch" "$default_branch" 2>/dev/null
         else
             warn "Remote repository not found (or pull failed)."
@@ -535,7 +604,7 @@ if [ "$SHOULD_SYNC" = true ] && [ -n "$GH_USER" ]; then
     fi
 else
     echo "  Profile stays local-only (no GitHub sync)."
-    echo "  To sync later: cd $USER_DIR && git init && git remote add origin <url> && git push"
+    echo "  To sync later: cd $USER_DIR && git init -b main && git remote add origin <url> && git push"
 fi
 
 # 6. Verify installation
@@ -623,6 +692,22 @@ else
     echo "    cd $INSTALL_DIR && node scripts/check-install.mjs"
 fi
 
+# 6.5. Seed default plugins into user/plugins.json (additive merge)
+header "Seeding default plugins..."
+cd "$INSTALL_DIR"
+if command -v node >/dev/null 2>&1; then
+    if seed_output=$(node scripts/plugin.mjs seed 2>&1); then
+        success "Seeded default plugins (model-ui). Edit user/plugins.json to customize."
+        if [ -n "$seed_output" ]; then
+            echo "  $seed_output"
+        fi
+    else
+        warn "Plugin seed returned non-zero (continuing): $seed_output"
+    fi
+else
+    warn "Node.js not found — skipping plugin seed (will run on first launch)."
+fi
+
 # 7. Launch
 if [ "$NO_LAUNCH" = false ]; then
     header "Launch Glitch AI"
@@ -631,8 +716,27 @@ if [ "$NO_LAUNCH" = false ]; then
     if [ -z "$launch" ] || [[ "$launch" =~ ^[Yy] ]]; then
         step "Starting Glitch AI..."
         cd "$INSTALL_DIR"
-        # Launch in background, detached
-        nohup ./launch-glitch.sh > glitch.log 2>&1 &
+        echo ""
+        echo "Select launch mode:"
+        echo "  1) Normal (paid) - Recommended for most users"
+        echo "  2) Free - Emergency fallback when paid quota is exhausted"
+        echo "  3) Local - Use local LM Studio models"
+        echo "  4) Safe - Minimal config for troubleshooting"
+        echo ""
+        prompt "Enter choice [1-4, Enter for Normal (paid)]: "
+        MODE_FLAG=""
+        while true; do
+            read -r mode_choice </dev/tty
+            case "$mode_choice" in
+                1|"") MODE_FLAG="--mode normal-paid"; break ;;
+                2) MODE_FLAG="--mode normal-free"; break ;;
+                3) MODE_FLAG="--mode normal-local"; break ;;
+                4) MODE_FLAG="--mode safe"; break ;;
+                *) echo "Invalid choice. Please enter 1, 2, 3, or 4 (or Enter for default)." ;;
+            esac
+        done
+        step "Launching in $(echo "$MODE_FLAG" | sed 's/--mode //') mode..."
+        nohup ./launch-glitch.sh "$MODE_FLAG" > glitch.log 2>&1 &
         PID=$!
         success "Glitch AI launched (PID: $PID)"
         echo ""
@@ -668,3 +772,9 @@ Next steps:
 
 Documentation: https://github.com/Cothek/glitch-ai
 EOF
+
+# Copy the install log into the install dir now that it exists.
+if [ -f "$LOG_FILE" ] && [ -d "$INSTALL_DIR" ]; then
+    cp "$LOG_FILE" "$INSTALL_DIR/install.log" 2>/dev/null || true
+    step "Install log: $INSTALL_DIR/install.log"
+fi

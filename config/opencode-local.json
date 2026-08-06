@@ -6,12 +6,20 @@
                    ".opencode/plugins/compaction.js",
                    ".opencode/plugins/verify-claim.js",
                    ".opencode/plugins/recall.js",
-                   ".opencode/plugins/stuck-detector.js"
+                   ".opencode/plugins/stuck-detector.js",
+                   ".opencode/plugins/mulahazah.js",
+                   ".opencode/plugins/plan-reflex.js"
                ],
      "instructions":  [
     ".opencode/instructions/shared-agent-rules.md",
     "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
 ],
+    "mcp":  {
+               "gitnexus":  {
+                                "type":  "local",
+                                "command":  ["gitnexus",  "mcp"]
+                            }
+           },
     "agent":  {
                   "glitch":  {
                                  "model":  "__MODEL__",

@@ -39,4 +39,14 @@ else
   exit 1
 fi
 
-exec "$NODE_CMD" "$DIR/scripts/launch-unified.mjs" "$@"
+LOG_FILE="$DIR/data/launch.log"
+mkdir -p "$DIR/data"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Glitch starting..." > "$LOG_FILE"
+echo "[$(date '+%Y-%m-%d %H:%M:%S')] Args: $*" >> "$LOG_FILE"
+
+"$NODE_CMD" "$DIR/scripts/launch-unified.mjs" "$@"
+NODE_EXIT=$?
+if [ $NODE_EXIT -ne 0 ]; then
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] Glitch exited with code $NODE_EXIT" >> "$LOG_FILE"
+fi
+exit $NODE_EXIT

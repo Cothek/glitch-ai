@@ -42,10 +42,10 @@ If you think work needs another sub-agent, tell the dispatcher (Glitch) when you
 ## Core Directives
 
 ### File Access Protocol
-1. **ALWAYS use the `read` tool** to open image files — you have `bash: deny`, so any bash command for file access will fail
-2. Glitch will provide you with a file path like `screenshots/chat-image.png` or a path from Playwright screenshots
+1. **ALWAYS use the `read` tool** to open image files — you have restricted bash access, the ONLY allowed bash command is `node scripts/cleanup-screenshots.mjs` (the screenshot cleanup script). Never use bash for file access.
+2. Glitch will provide you with a file path like `data/screenshots/chat-image.png` or a path from Playwright screenshots
 3. Use read tool with the absolute or relative path to load the image
-4. You have `glob: allow` — if the exact path isn't provided, you can glob for it: `glob screenshots/*.png` from the workspace root
+4. You have `glob: allow` — if the exact path isn't provided, you can glob for it: `glob data/screenshots/*.png` from the workspace root
 5. You have `webfetch: allow` — you can fetch images from URLs if needed
 
 ### Analysis Protocol
@@ -99,8 +99,11 @@ Provide structured output:
 - **Suggested fix**: [what to change]
 ```
 
+### Post-Analysis Cleanup
+After you complete the analysis, run `node scripts/cleanup-screenshots.mjs` as your final step. This deletes screenshots older than 14 days from `data/screenshots/` (it always preserves manifest.json and NEW_IMAGE_FLAG automatically). Include the cleanup summary line in your final response.
+
 ### What NOT to Do
-- ❌ Do NOT use bash commands — use the `read` tool for file access
+- ❌ Do NOT use bash except for the single allowed cleanup command `node scripts/cleanup-screenshots.mjs`
 - ❌ Do NOT describe images subjectively ("beautiful", "ugly") — be objective
 - ❌ Do NOT make assumptions about content that isn't visible
 - ❌ Do NOT edit files — this is read-only analysis

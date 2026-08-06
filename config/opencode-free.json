@@ -6,12 +6,20 @@
                    ".opencode/plugins/compaction.js",
                    ".opencode/plugins/verify-claim.js",
                    ".opencode/plugins/recall.js",
-                   ".opencode/plugins/stuck-detector.js"
+                   ".opencode/plugins/stuck-detector.js",
+                   ".opencode/plugins/mulahazah.js",
+                   ".opencode/plugins/plan-reflex.js"
                ],
      "instructions":  [
-                           ".opencode/instructions/shared-agent-rules.md",
-                          "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
-                      ],
+                            ".opencode/instructions/shared-agent-rules.md",
+                           "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+                       ],
+    "mcp":  {
+               "gitnexus":  {
+                                "type":  "local",
+                                "command":  ["gitnexus",  "mcp"]
+                            }
+           },
     "agent":  {
                   "glitch":  {
                                  "model":  "__MODEL__",
@@ -106,7 +114,7 @@
                                   "description":  "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
                                   "permission":  {
                                                      "read":  "allow",
-                                                     "bash":  "deny",
+                                                      "bash":  "deny",
                                                      "glob":  "allow",
                                                      "grep":  "deny",
                                                      "edit":  "deny",
@@ -123,7 +131,7 @@
                                 "description": "Alternative image and visual content analysis agent. Fallback when @vision fails with model-level errors (NVIDIA DEGRADED function, quota exhaustion, model not found). Uses a different underlying model than @vision.",
                                 "permission": {
                                   "read": "allow",
-                                  "bash": "deny",
+                                   "bash": "deny",
                                   "glob": "allow",
                                   "grep": "deny",
                                   "edit": "deny",

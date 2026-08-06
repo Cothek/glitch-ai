@@ -3,7 +3,8 @@
 #
 # Server mode runs the Glitch web UI as a long-lived background process,
 # accessible remotely via Cloudflare Tunnel (or any reverse proxy).
-# This is the equivalent of serve-glitch.bat on Windows.
+# Server mode on both platforms runs through scripts/serve.mjs; this is the
+# Mac/Linux launcher.
 #
 # Usage:
 #   ./serve-glitch.sh                  # Start server with default config

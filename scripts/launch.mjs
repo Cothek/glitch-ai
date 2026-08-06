@@ -11,6 +11,7 @@ import { checkUserRepoUpdates } from './lib/git-sync.mjs';
 import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
 import { bootstrapOpenCode } from './lib/bootstrap-opencode.mjs';
+import { migrateModelAssignments } from './lib/migrate-assignments.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -246,6 +247,10 @@ function pwsh(args, opts = {}) {
 
 // ---- Branch check: warn if not on main and offer to switch ----
 async function checkAndSwitchToMain() {
+  if (process.env.GLITCH_BRANCH_OK !== undefined && process.env.GLITCH_BRANCH_OK !== '') {
+    return;
+  }
+
   // Skip branch check on restart (seamless restart, no user input)
   if (process.argv.includes('--restart')) {
     log(DARK_GREEN, '  Restart mode -- skipping branch check');
@@ -301,6 +306,13 @@ async function checkAndSwitchToMain() {
       log(YELLOW, '  Or run: git stash push -m "wip" && node scripts/launch.mjs');
       log('');
       return;
+    }
+
+    const mainExists = run(GIT_BIN, ['rev-parse', '--verify', 'main'], { cwd: ROOT_DIR, timeout: 5000 });
+    if (!mainExists.success) {
+      log(DARK_GRAY, '  main branch not found locally, fetching...');
+      run(GIT_BIN, ['remote', 'set-branches', 'origin', '*'], { cwd: ROOT_DIR, timeout: 10000 });
+      run(GIT_BIN, ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
     }
 
     const checkout = run(GIT_BIN, ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
@@ -437,8 +449,11 @@ async function main() {
     let configObj = JSON.parse(runtimeJson);
     injectProviders(configObj);
 
-    // Apply model overrides from data/model-assignments.json (set by model UI)
-    const assignmentsPath = join(ROOT_DIR, 'data', 'model-assignments.json');
+    // One-time migration: copy legacy data/model-assignments.json to user/ if needed
+    migrateModelAssignments(ROOT_DIR, log);
+
+    // Apply model overrides from user/model-assignments.json (set by model UI)
+    const assignmentsPath = join(ROOT_DIR, 'user', 'model-assignments.json');
     if (existsSync(assignmentsPath)) {
       try {
         const assignmentsRaw = readFileSync(assignmentsPath, 'utf-8');
@@ -451,10 +466,10 @@ async function main() {
           }
         }
         if (overrideCount > 0) {
-          log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from model-assignments.json`);
+          log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from user/model-assignments.json`);
         }
       } catch (e) {
-        log(YELLOW, `  Warning: Could not read model-assignments.json (${e.message})`);
+        log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
       }
     }
 
@@ -499,7 +514,7 @@ async function main() {
 
   // ---- Check dependency updates (shared module) ----
   const { checkAndPromptUpdates } = await import('./check-updates.mjs');
-  await checkAndPromptUpdates({ skipIfNoPowerShell: !isWin });
+  const depResult = await checkAndPromptUpdates({ skipIfNoPowerShell: !isWin });
 
   // ---- Check for new models (Win only) ----
   let hasNewModels = false;
@@ -576,7 +591,7 @@ async function main() {
   if (isWin) {
     try {
       const resolverScript = join(ROOT_DIR, 'scripts', 'resolve-models.mjs');
-      if (existsSync(resolverScript) && existsSync(join(ROOT_DIR, 'data', 'model-registry.json'))) {
+      if (existsSync(resolverScript) && existsSync(join(ROOT_DIR, 'config', 'model-registry.json'))) {
         // Always run resolver silently (keeps model-assignment.json current)
         run('node', [resolverScript], { timeout: 30000, stdio: 'ignore' });
 
@@ -641,54 +656,58 @@ async function main() {
 
 // ---- Auto-update opencode to latest (minor/patch) + sync local binary ----
   // Uses global npm install, then syncs local binary from global install
-  try {
-    const globalVer = run(NPM_BIN === 'npm.cmd' ? 'npm.cmd' : 'npm', ['--version'], { timeout: 5000 });
-    if (!globalVer.success) {
-      log(DARK_YELLOW, '  npm not available, skipping opencode update check');
-    } else {
-      const globalBinName = OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode';
-      const whichResult = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
-      const currentVer = whichResult.success ? run(globalBinName, ['--version'], { timeout: 10000 }).stdout : 'unknown';
+  if (!depResult.skipped) {
+    try {
+      const globalVer = run(NPM_BIN === 'npm.cmd' ? 'npm.cmd' : 'npm', ['--version'], { timeout: 5000 });
+      if (!globalVer.success) {
+        log(DARK_YELLOW, '  npm not available, skipping opencode update check');
+      } else {
+        const globalBinName = OPENCODE_BIN_NAME === 'opencode.exe' ? 'opencode.cmd' : 'opencode';
+        const whichResult = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+        const currentVer = whichResult.success ? run(globalBinName, ['--version'], { timeout: 10000 }).stdout : 'unknown';
 
-      const npmView = run(NPM_BIN, ['view', 'opencode-ai', 'version'], { timeout: 15000 });
-      const latestVer = npmView.success ? npmView.stdout : 'unknown';
+        const npmView = run(NPM_BIN, ['view', 'opencode-ai', 'version'], { timeout: 15000 });
+        const latestVer = npmView.success ? npmView.stdout : 'unknown';
 
-      const needsUpdate = currentVer !== 'unknown' && latestVer !== 'unknown' && currentVer !== latestVer;
+        const needsUpdate = currentVer !== 'unknown' && latestVer !== 'unknown' && currentVer !== latestVer;
 
-      if (needsUpdate) {
-        const cvParts = currentVer.split('.');
-        const lvParts = latestVer.split('.');
-        const autoSafe = cvParts[0] === lvParts[0];
+        if (needsUpdate) {
+          const cvParts = currentVer.split('.');
+          const lvParts = latestVer.split('.');
+          const autoSafe = cvParts[0] === lvParts[0];
 
-        if (autoSafe) {
-          log(CYAN, '  Updating opencode (' + currentVer + ' -> ' + latestVer + ')...');
-          run(NPM_BIN, ['install', '-g', 'opencode-ai@latest'], { stdio: 'inherit', timeout: 60000 });
-          const whichResult2 = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
-          const updatedVer = whichResult2.success ? run(globalBinName, ['--version'], { timeout: 10000 }) : { success: false };
-          log(GREEN, '  Done. Version: ' + (updatedVer.success ? updatedVer.stdout : currentVer));
+          if (autoSafe) {
+            log(CYAN, '  Updating opencode (' + currentVer + ' -> ' + latestVer + ')...');
+            run(NPM_BIN, ['install', '-g', 'opencode-ai@latest'], { stdio: 'inherit', timeout: 60000 });
+            const whichResult2 = run(isWin ? 'where' : 'which', [globalBinName], { timeout: 5000, stdio: ['ignore', 'pipe', 'ignore'] });
+            const updatedVer = whichResult2.success ? run(globalBinName, ['--version'], { timeout: 10000 }) : { success: false };
+            log(GREEN, '  Done. Version: ' + (updatedVer.success ? updatedVer.stdout : currentVer));
 
-          // Sync local binary from updated global install
-          const npmRoot = run(NPM_BIN, ['root', '-g'], { timeout: 10000 });
-          if (npmRoot.success) {
-            const globalBin = join(npmRoot.stdout.trim(), 'opencode-ai', 'bin', OPENCODE_BIN_NAME);
-            if (existsSync(globalBin) && existsSync(OpenCodeBin)) {
-              const globalVersion = run(globalBin, ['--version'], { timeout: 5000 });
-              const localVersion = run(OpenCodeBin, ['--version'], { timeout: 5000 });
-              if (globalVersion.success && localVersion.success && localVersion.stdout.trim() !== globalVersion.stdout.trim()) {
-                log(CYAN, '  Syncing local opencode binary (' + localVersion.stdout.trim() + ' -> ' + globalVersion.stdout.trim() + ')...');
-                copyFileSync(globalBin, OpenCodeBin);
-                log(GREEN, '  Done.');
+            // Sync local binary from updated global install
+            const npmRoot = run(NPM_BIN, ['root', '-g'], { timeout: 10000 });
+            if (npmRoot.success) {
+              const globalBin = join(npmRoot.stdout.trim(), 'opencode-ai', 'bin', OPENCODE_BIN_NAME);
+              if (existsSync(globalBin) && existsSync(OpenCodeBin)) {
+                const globalVersion = run(globalBin, ['--version'], { timeout: 5000 });
+                const localVersion = run(OpenCodeBin, ['--version'], { timeout: 5000 });
+                if (globalVersion.success && localVersion.success && localVersion.stdout.trim() !== globalVersion.stdout.trim()) {
+                  log(CYAN, '  Syncing local opencode binary (' + localVersion.stdout.trim() + ' -> ' + globalVersion.stdout.trim() + ')...');
+                  copyFileSync(globalBin, OpenCodeBin);
+                  log(GREEN, '  Done.');
+                }
               }
             }
+          } else {
+            log(YELLOW, '  \u26A0 OpenCode major version available: ' + currentVer + ' -> ' + latestVer);
+            log(YELLOW, '  Run: npm install -g opencode-ai@latest');
           }
-        } else {
-          log(YELLOW, '  \u26A0 OpenCode major version available: ' + currentVer + ' -> ' + latestVer);
-          log(YELLOW, '  Run: npm install -g opencode-ai@latest');
         }
       }
+    } catch (e) {
+      log(YELLOW, '  WARNING: Binary sync failed: ' + (e.message || e));
     }
-  } catch (e) {
-    log(YELLOW, '  WARNING: Binary sync failed: ' + (e.message || e));
+  } else {
+    log(DARK_YELLOW, '  OpenCode binary update skipped (user skipped updates)');
   }
 
   // ---- Root directory audit (print warning if untracked artifacts found) ----
@@ -808,11 +827,13 @@ async function main() {
 
       try {
         const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
-        if (!result.success && result.status !== null) {
+        if (!result.success && result.status !== null && result.status !== 0) {
           log(RED, `  OpenCode exited with error (code ${result.status})`);
+          process.exit(result.status);
         }
       } catch (e) {
         log(RED, `  OpenCode exited with error: ${e.message || e}`);
+        process.exit(1);
       }
 
       console.log('');
@@ -827,7 +848,7 @@ async function main() {
       log(MAGENTA, '  Restarting Glitch...');
       log('');
 
-      // Re-generate config (picks up any model-assignments.json changes)
+      // Re-generate config (picks up any user/model-assignments.json changes)
       log(CYAN, '  Generating runtime config from template...');
       let templateText = readFileSync(TemplatePath, 'utf-8');
       if (templateText.charCodeAt(0) === 0xFEFF) templateText = templateText.slice(1);
@@ -843,8 +864,8 @@ async function main() {
 
       try {
         let configObj = JSON.parse(runtimeJson);
-        // Apply model overrides from data/model-assignments.json
-        const assignmentsPath = join(ROOT_DIR, 'data', 'model-assignments.json');
+        // Apply model overrides from user/model-assignments.json
+        const assignmentsPath = join(ROOT_DIR, 'user', 'model-assignments.json');
         if (existsSync(assignmentsPath)) {
           try {
             const assignmentsRaw = readFileSync(assignmentsPath, 'utf-8');
@@ -857,10 +878,10 @@ async function main() {
               }
             }
             if (overrideCount > 0) {
-              log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from model-assignments.json`);
+              log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from user/model-assignments.json`);
             }
           } catch (e) {
-            log(YELLOW, `  Warning: Could not read model-assignments.json (${e.message})`);
+            log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
           }
         }
         const finalJson = JSON.stringify(configObj, null, 2);

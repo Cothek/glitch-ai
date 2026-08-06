@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, appendFileSync, mkdirSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { execFileSync, spawn } from 'child_process';
+import { execFileSync, execSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { checkRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
 
@@ -11,6 +11,18 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SCRIPT_DIR = __dirname;
 const ROOT_DIR = resolve(SCRIPT_DIR, '..');
+
+const LOG_FILE = join(ROOT_DIR, 'data', 'launch.log');
+
+function logToFile(message) {
+  try {
+    mkdirSync(dirname(LOG_FILE), { recursive: true });
+    const timestamp = new Date().toISOString();
+    appendFileSync(LOG_FILE, `[${timestamp}] ${message}\n`, 'utf-8');
+  } catch (e) {
+    // Silently fail if log file can't be written
+  }
+}
 
 const PrefFile = join(ROOT_DIR, 'user', 'launch-preference.json');
 
@@ -20,7 +32,9 @@ const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
 const YELLOW = '\x1b[33m';
 const DARK_GREEN = '\x1b[32;2m';
+const DARK_YELLOW = '\x1b[33;2m';
 const DARK_GRAY = '\x1b[90m';
+const WHITE = '\x1b[37m';
 const RESET = '\x1b[0m';
 
 function log(color, msg) {
@@ -39,6 +53,91 @@ function askQuestion(query) {
       resolve(answer);
     });
   });
+}
+
+function runGit(cmd, args, opts = {}) {
+  try {
+    const out = execFileSync(cmd, args, {
+      encoding: 'utf-8',
+      maxBuffer: 10 * 1024 * 1024,
+      ...opts,
+    });
+    return { success: true, stdout: (out || '').toString().trim(), status: 0 };
+  } catch (e) {
+    return {
+      success: false,
+      stdout: ((e.stdout || '')).toString().trim(),
+      stderr: ((e.stderr || '')).toString().trim(),
+      error: e.message || String(e),
+      status: e.status,
+    };
+  }
+}
+
+async function checkBranchBeforeLaunch() {
+  if (process.env.GLITCH_BRANCH_OK !== undefined && process.env.GLITCH_BRANCH_OK !== '') {
+    return;
+  }
+
+  const branch = runGit('git', ['symbolic-ref', '--short', 'HEAD'], { cwd: ROOT_DIR, timeout: 5000 });
+  if (!branch.success) return;
+  const current = branch.stdout.trim();
+  if (current === 'main') return;
+
+  log(YELLOW, '');
+  log(YELLOW, `  !! Currently on branch '${current}', not 'main'`);
+  log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
+  log(WHITE, '  [Y/n] Switch to main now (recommended)');
+  const choice = await askQuestion('  > ');
+  const raw = (choice ?? '').trim().toLowerCase();
+
+  if (raw === 'n' || raw === 'no') {
+    process.env.GLITCH_BRANCH_OK = '1';
+    log(DARK_YELLOW, '  Continuing on current branch (may have unstable config)');
+    log('');
+    return;
+  }
+
+  log(CYAN, '  Switching to main...');
+
+  const mainExists = runGit('git', ['rev-parse', '--verify', 'main'], { cwd: ROOT_DIR, timeout: 5000 });
+  if (!mainExists.success) {
+    log(DARK_GRAY, '  main branch not found locally, fetching...');
+    runGit('git', ['remote', 'set-branches', 'origin', '*'], { cwd: ROOT_DIR, timeout: 10000 });
+    runGit('git', ['fetch', 'origin', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
+  }
+
+  const status = runGit('git', ['status', '--porcelain'], { cwd: ROOT_DIR, timeout: 5000 });
+  const isDirty = status.success && status.stdout.trim().length > 0;
+  if (isDirty) {
+    log(YELLOW, '  Local changes detected, stashing before switch...');
+    const stashMsg = `glitch-auto-stash: ${current}`;
+    const stash = runGit('git', ['stash', 'push', '-m', stashMsg], { cwd: ROOT_DIR, timeout: 15000 });
+    if (!stash.success) {
+      log(RED, `  Failed to stash: ${stash.stderr || stash.error}`);
+      log(YELLOW, '  Continuing on current branch...');
+      log('');
+      process.env.GLITCH_BRANCH_OK = '1';
+      return;
+    }
+  }
+
+  const checkout = runGit('git', ['checkout', 'main'], { cwd: ROOT_DIR, timeout: 30000 });
+  if (!checkout.success) {
+    log(RED, `  Failed to switch: ${checkout.stderr || checkout.error}`);
+    log(YELLOW, '  Continuing on current branch...');
+    log('');
+    process.env.GLITCH_BRANCH_OK = '1';
+    return;
+  }
+
+  log(GREEN, '  Switched to main.');
+  // Continue in the SAME process — no detached spawn, no exit.
+  // The launcher reads config templates from disk fresh, so it picks up
+  // main's templates naturally. GLITCH_BRANCH_OK prevents re-prompting.
+  process.env.GLITCH_BRANCH_OK = '1';
+  log('');
+  return;
 }
 
 function readJson(path) {
@@ -63,6 +162,9 @@ function normalizeMode(mode) {
 
   // Old server mode -> normal-paid
   if (mode === 'serve' || mode === 'server') return 'normal-paid';
+
+  // Safe is now a delivery (not a tier). Accept bare 'safe' or legacy 'normal-safe'/'web-safe'.
+  if (mode === 'safe' || mode === 'normal-safe' || mode === 'web-safe') return 'safe';
 
   // Already in combined format
   if (mode.includes('-')) {
@@ -94,29 +196,33 @@ function saveMode(mode) {
 }
 
 const DELIVERIES = [
-  { id: 'normal', name: 'Normal Mode', desc: 'terminal interface' },
-  { id: 'web', name: 'Web Mode', desc: 'web server' },
+  { id: 'normal', name: 'Terminal (TUI)', desc: 'terminal interface' },
+  { id: 'web', name: 'Web', desc: 'web server' },
+  { id: 'safe', name: 'Safe', desc: 'minimal config for fixing broken setup' },
 ];
 
 const MODELS = [
   { id: 'paid', name: 'Paid', desc: 'recommended' },
   { id: 'free', name: 'Free', desc: 'all agents use free models only' },
   { id: 'local', name: 'Local', desc: 'all agents via LM Studio (local LLM)' },
-  { id: 'safe', name: 'Safe', desc: 'minimal config for fixing broken setup' },
 ];
 
 const SCRIPT_MAP = {
   'normal-paid': { script: 'launch.mjs', args: [] },
   'normal-free': { script: 'launch-free.mjs', args: [] },
   'normal-local': { script: 'launch-local.mjs', args: [] },
-  'normal-safe': { script: 'launch-safe.mjs', args: [] },
   'web-paid': { script: 'launch.mjs', args: ['--serve'] },
   'web-free': { script: 'launch-free.mjs', args: ['--serve'] },
   'web-local': { script: 'launch-local.mjs', args: ['--serve'] },
-  'web-safe': { script: 'launch-safe.mjs', args: ['--serve'] },
+  'safe': { script: 'launch-safe.mjs', args: [] },
 };
 
 function getModeLabel(combinedKey) {
+  // Safe is a delivery with no tier — handle it before splitting.
+  if (combinedKey === 'safe') {
+    const safe = DELIVERIES.find(d => d.id === 'safe');
+    return safe ? safe.name : combinedKey;
+  }
   const [deliveryId, modelId] = combinedKey.split('-');
   const delivery = DELIVERIES.find(d => d.id === deliveryId);
   const model = MODELS.find(m => m.id === modelId);
@@ -198,23 +304,47 @@ function runScript(scriptName, extraArgs = []) {
     execFileSync('node', [scriptPath, ...extraArgs], {
       cwd: ROOT_DIR,
       stdio: 'inherit',
-      timeout: 0
+      timeout: 0,
+      env: process.env
     });
     return { success: true, status: 0 };
   } catch (e) {
     if (e.status !== null) {
       log(RED, `  Script exited with code ${e.status}`);
+      logToFile(`Script exited with code ${e.status}`);
     } else {
       log(RED, `  Script error: ${e.message || e}`);
+      logToFile(`ERROR: ${e.message || e}`);
     }
     return { success: false, error: e };
   }
 }
 
 async function main() {
+  // ---- Branch check: FIRST thing, before repo updates ----
+  await checkBranchBeforeLaunch();
+
   // ---- Check for repo updates before anything else ----
-  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: true });
+  const branchOkSet = process.env.GLITCH_BRANCH_OK !== undefined && process.env.GLITCH_BRANCH_OK !== '';
+  const syncResult = await checkRepoUpdates({ cwd: ROOT_DIR, interactive: true, allowBranchSwitch: !branchOkSet });
   handleRestartOnUpdate(spawn, syncResult, ROOT_DIR);
+
+  const restartFlagPath = join(ROOT_DIR, 'data', '.restart-timestamp');
+  // Clean up restart flag after successful launch (5 second delay to ensure we're past the critical startup phase)
+  const cleanupTimer = setTimeout(() => {
+    try {
+      if (existsSync(restartFlagPath)) {
+        unlinkSync(restartFlagPath);
+      }
+    } catch {
+      // Best-effort cleanup
+    }
+  }, 5000);
+
+  // Clear timer if process exits before timer fires
+  process.on('exit', () => {
+    clearTimeout(cleanupTimer);
+  });
 
   // ---- Check for install issues (submodule failures, etc.) ----
   const issuesFile = join(ROOT_DIR, 'data', 'install-issues.md');
@@ -249,11 +379,22 @@ async function main() {
   const userMainMem = join(userDir, 'main-memory.md');
 
   if (existsSync(userMainMem) && !existsSync(userGitDir)) {
-    // User profile exists but is not a git repo - offer to set up sync
-    log(YELLOW, '  User profile is local-only (not synced to GitHub).');
-    log(YELLOW, '  To enable cross-machine sync, run:');
-    log(DARK_GRAY, '    cd user && git init && git remote add origin <your-repo-url> && git push');
-    log('');
+    // user/ has no own .git — check if it's tracked by the parent repo
+    let trackedByParent = false;
+    try {
+      const output = execSync('git ls-files user', { cwd: ROOT_DIR, encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+      trackedByParent = output.trim().length > 0;
+    } catch {
+      trackedByParent = false;
+    }
+
+    if (!trackedByParent) {
+      // User profile exists but is not a git repo - offer to set up sync
+      log(YELLOW, '  User profile is local-only (not synced to GitHub).');
+      log(YELLOW, '  To enable cross-machine sync, run:');
+      log(DARK_GRAY, '    cd user && git init && git remote add origin <your-repo-url> && git push');
+      log('');
+    }
   }
 
   const args = process.argv.slice(2);
@@ -268,8 +409,9 @@ async function main() {
     --help, -h       Show this help
     --mode <key>     Skip menu, launch specific mode directly
                      Combined format: <glitch-mode>-<tier>  (e.g. normal-paid, web-free)
-                     Old format: <tier>                 (assumes normal mode)
-                     Tiers: paid, free, local, safe
+                     Safe mode: safe                       (no tier)
+                     Old format: <tier>                    (assumes normal mode)
+                     Tiers: paid, free, local
     --reset          Clear saved preference and show menu
 
   The launcher remembers your last choice. Next time, just press Enter.
@@ -279,8 +421,8 @@ async function main() {
 
   if (args.includes('--reset')) {
     if (existsSync(PrefFile)) {
-      writeJson(PrefFile, { last_mode: null, saved_at: new Date().toISOString() });
-      log(GREEN, '  Saved preference cleared.');
+      unlinkSync(PrefFile);
+      log(GREEN, '  Saved mode preference cleared.');
     }
   }
 
@@ -296,10 +438,16 @@ async function main() {
     let savedDelivery = null;
     let savedModel = null;
     if (savedMode) {
-      const parts = savedMode.split('-');
-      if (parts.length === 2) {
-        savedDelivery = parts[0];
-        savedModel = parts[1];
+      // Safe is a single-word delivery (no tier) — handle before splitting.
+      if (savedMode === 'safe') {
+        savedDelivery = 'safe';
+        savedModel = null;
+      } else {
+        const parts = savedMode.split('-');
+        if (parts.length === 2) {
+          savedDelivery = parts[0];
+          savedModel = parts[1];
+        }
       }
     }
 
@@ -314,43 +462,54 @@ async function main() {
         deliveryId = DELIVERIES[num - 1].id;
       } else {
         log(RED, ' Invalid Glitch mode selection. Exiting.');
+        logToFile('ERROR: Invalid Glitch mode selection');
         process.exit(1);
       }
     }
 
-    // Level 2: Model tier (use saved model only if delivery didn't change)
-    const modelDefault = deliveryId === savedDelivery ? savedModel : null;
-    const modelSelection = await showModelMenu(modelDefault);
-    let modelId;
-    if (!modelSelection && modelDefault) {
-      modelId = modelDefault;
+    // Safe is a delivery with no tier — skip the model menu entirely.
+    if (deliveryId === 'safe') {
+      modeId = 'safe';
     } else {
-      const num = parseInt(modelSelection, 10);
-      if (!isNaN(num) && num >= 1 && num <= MODELS.length) {
-        modelId = MODELS[num - 1].id;
+      // Level 2: Model tier (use saved model only if delivery didn't change)
+      const modelDefault = deliveryId === savedDelivery ? savedModel : null;
+      const modelSelection = await showModelMenu(modelDefault);
+      let modelId;
+      if (!modelSelection && modelDefault) {
+        modelId = modelDefault;
       } else {
-        log(RED, ' Invalid model selection. Exiting.');
-        process.exit(1);
+        const num = parseInt(modelSelection, 10);
+        if (!isNaN(num) && num >= 1 && num <= MODELS.length) {
+          modelId = MODELS[num - 1].id;
+        } else {
+          log(RED, ' Invalid model selection. Exiting.');
+          logToFile('ERROR: Invalid model selection');
+          process.exit(1);
+        }
       }
-    }
 
-    modeId = `${deliveryId}-${modelId}`;
+      modeId = `${deliveryId}-${modelId}`;
+    }
   }
 
   if (!modeId) {
     log(RED, ' No mode selected. Exiting.');
+    logToFile('ERROR: No mode selected');
     process.exit(1);
   }
 
   const config = SCRIPT_MAP[modeId];
   if (!config) {
     log(RED, ` Unknown mode: ${modeId}`);
+    logToFile(`ERROR: Unknown mode: ${modeId}`);
     log(YELLOW, ' Valid format: <glitch-mode>-<tier> (e.g. normal-paid, web-free)');
     process.exit(1);
   }
 
   saveMode(modeId);
+  logToFile(`Mode selected: ${modeId}`);
   log(GREEN, ` Launching ${getModeLabel(modeId)}...`);
+  logToFile(`Launching ${getModeLabel(modeId)}`);
   log('');
 
   const result = runScript(config.script, config.args);
@@ -361,5 +520,6 @@ async function main() {
 
 main().catch(e => {
   log(RED, ` Fatal error: ${e.message || e}`);
+  logToFile(`ERROR: ${e.message || e}`);
   process.exit(1);
 });

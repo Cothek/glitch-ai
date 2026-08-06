@@ -28,6 +28,9 @@ opencode.json
 # Auto-generated config (written by tunnel auto-setup)
 config/cloudflared-config.yml
 
+# Runtime-generated model catalog (built by check-models.ps1)
+config/model-registry.json
+
 # Auto-generated status files (written by launch scripts)
 /update-status.json
 /model-update-status.json
@@ -40,7 +43,6 @@ data/skills-lock.json
 data/screenshots/
 
 # Dynamically saved chat images (saved by save-images.js plugin)
-/screenshots/
 data/bootstrap.log
 data/backups/
 glitch-memorycore/data/known-models.json

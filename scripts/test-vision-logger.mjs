@@ -51,7 +51,7 @@ async function main() {
 
   // --- Test 1: logVisionDetection ---
   console.log('Test 1: logVisionDetection');
-  const testImagePath = 'E:\\Glitch AI\\glitch-ai\\screenshots\\chat-image-test.png';
+  const testImagePath = 'E:\\Glitch AI\\glitch-ai\\data\\screenshots\\chat-image-test.png';
   await logVisionDetection(testImagePath);
   assert(true, 'logVisionDetection did not throw');
 

@@ -23,6 +23,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = dirname(__dirname);
 
+// Platform-aware binary paths
+const isWin = process.platform === 'win32';
+const isMac = process.platform === 'darwin';
+const NODE_BUNDLED = isWin
+  ? join(ROOT_DIR, 'data', 'node', 'node.exe')
+  : join(ROOT_DIR, 'data', 'node', 'bin', 'node');
+const CLOUDFLARED = isWin
+  ? join(ROOT_DIR, 'cloudflared.exe')
+  : join(ROOT_DIR, 'cloudflared');
+const OPENCODE_BIN = isWin
+  ? join(ROOT_DIR, 'opencode', 'opencode.exe')
+  : join(ROOT_DIR, 'opencode', 'opencode');
+const HANDY_BIN = isWin
+  ? join(ROOT_DIR, 'handy-voice', 'Handy', 'handy.exe')
+  : isMac
+    ? join(ROOT_DIR, 'handy-voice', 'Handy.app', 'Contents', 'MacOS', 'Handy')
+    : join(ROOT_DIR, 'handy-voice', 'Handy.AppImage');
+
 // ANSI colors (no deps)
 const C = {
   reset: '\x1b[0m',
@@ -99,13 +117,13 @@ function check(name, group, run) {
 // --- Core ---
 
 check('Node.js', 'Core', () => {
-  const bundled = join(ROOT_DIR, 'data', 'node', 'node.exe');
-  if (existsSync(bundled)) {
-    const v = tryReadVersion(bundled);
+  const bundledPath = isWin ? 'data/node/node.exe' : 'data/node/bin/node';
+  if (existsSync(NODE_BUNDLED)) {
+    const v = tryReadVersion(NODE_BUNDLED);
     return {
       ok: true,
       version: v || 'unknown',
-      path: 'data/node/node.exe',
+      path: bundledPath,
       note: 'bundled',
     };
   }
@@ -128,8 +146,8 @@ check('Node.js', 'Core', () => {
 });
 
 check('OpenCode', 'Core', () => {
-  const exe = join(ROOT_DIR, 'opencode', 'opencode.exe');
-  if (!existsSync(exe)) {
+  const exePath = isWin ? 'opencode/opencode.exe' : 'opencode/opencode';
+  if (!existsSync(OPENCODE_BIN)) {
     return {
       ok: false,
       version: null,
@@ -137,11 +155,11 @@ check('OpenCode', 'Core', () => {
       note: 'install: scripts/bootstrap.ps1',
     };
   }
-  const v = tryReadVersion(exe);
+  const v = tryReadVersion(OPENCODE_BIN);
   return {
     ok: true,
     version: v || 'unknown',
-    path: 'opencode/opencode.exe',
+    path: exePath,
     note: null,
   };
 });
@@ -187,8 +205,12 @@ check('glitch-memorycore', 'Core', () => {
 // --- Tools ---
 
 check('Handy', 'Tools', () => {
-  const exe = join(ROOT_DIR, 'handy-voice', 'Handy', 'handy.exe');
-  if (!existsSync(exe)) {
+  const exePath = isWin
+    ? 'handy-voice/Handy/handy.exe'
+    : isMac
+      ? 'handy-voice/Handy.app/Contents/MacOS/Handy'
+      : 'handy-voice/Handy.AppImage';
+  if (!existsSync(HANDY_BIN)) {
     return {
       ok: false,
       version: null,
@@ -199,14 +221,14 @@ check('Handy', 'Tools', () => {
   return {
     ok: true,
     version: 'installed',
-    path: 'handy-voice/Handy/handy.exe',
+    path: exePath,
     note: null,
   };
 });
 
 check('Cloudflared', 'Tools', () => {
-  const exe = join(ROOT_DIR, 'cloudflared.exe');
-  if (!existsSync(exe)) {
+  const exePath = isWin ? 'cloudflared.exe' : 'cloudflared';
+  if (!existsSync(CLOUDFLARED)) {
     return {
       ok: false,
       version: null,
@@ -214,12 +236,62 @@ check('Cloudflared', 'Tools', () => {
       note: 'optional -- tunnel access',
     };
   }
-  const v = tryReadVersion(exe);
+  const v = tryReadVersion(CLOUDFLARED);
   return {
     ok: true,
     version: v || 'unknown',
-    path: 'cloudflared.exe',
+    path: exePath,
     note: null,
+  };
+});
+
+// Resolve `gitnexus` on PATH. On Windows the global npm install creates
+// gitnexus.cmd (and gitnexus.exe on newer npm); on Unix it's a single binary.
+// We scan PATH entries directly so we don't depend on `where`/`which` being
+// available, and so we can report the exact resolved path.
+function resolveGitNexus() {
+  const pathEnv = process.env.PATH || process.env.Path || '';
+  const sep = isWin ? ';' : ':';
+  const exeNames = isWin ? ['gitnexus.cmd', 'gitnexus.exe', 'gitnexus'] : ['gitnexus'];
+  for (const dir of pathEnv.split(sep)) {
+    if (!dir) continue;
+    for (const name of exeNames) {
+      const candidate = join(dir, name);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+check('GitNexus MCP', 'Tools', () => {
+  const resolved = resolveGitNexus();
+  if (resolved) {
+    const v = tryReadVersion(resolved, '--version');
+    return {
+      ok: true,
+      version: v || 'installed',
+      path: resolved,
+      note: null,
+    };
+  }
+  // Fallback: ask npm whether gitnexus is in the global tree. This catches
+  // installs where the binary is on a PATH not visible to this process
+  // (e.g. user PATH vs system PATH on Windows).
+  const npmList = safeExec('npm', ['list', '-g', '--depth=0', 'gitnexus']);
+  if (npmList && /gitnexus@/.test(npmList)) {
+    const m = npmList.match(/gitnexus@([\w.\-]+)/);
+    return {
+      ok: true,
+      version: m ? m[1] : 'installed',
+      path: 'npm global',
+      note: 'binary not on PATH but installed globally',
+    };
+  }
+  return {
+    ok: false,
+    version: null,
+    path: null,
+    note: 'install: npm install -g gitnexus',
   };
 });
 
