@@ -335,6 +335,47 @@ check('GitNexus MCP', 'Tools', () => {
   };
 });
 
+check('GitNexus MCP Config', 'Tools', () => {
+  const runtimeConfig = join(ROOT_DIR, 'opencode.json');
+  if (!existsSync(runtimeConfig)) {
+    return {
+      ok: true,
+      version: null,
+      path: null,
+      note: 'runtime config not generated yet (created on first launch)',
+    };
+  }
+  let cfg = null;
+  try {
+    cfg = JSON.parse(readFileSync(runtimeConfig, 'utf-8'));
+  } catch (err) {
+    const note = err && err.code === 'EISDIR'
+      ? 'opencode.json is a directory, not a file'
+      : 'opencode.json exists but is unreadable/invalid JSON';
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note,
+    };
+  }
+  const gn = cfg && cfg.mcp && cfg.mcp.gitnexus;
+  if (gn && Array.isArray(gn.command) && String(gn.command[0]).includes('gitnexus')) {
+    return {
+      ok: true,
+      version: 'configured',
+      path: 'opencode.json -> mcp.gitnexus',
+      note: null,
+    };
+  }
+  return {
+    ok: false,
+    version: null,
+    path: null,
+    note: 'opencode.json missing mcp.gitnexus — regenerate by running launch-glitch.bat, or fix config/opencode-*.json template',
+  };
+});
+
 check('Image Gen', 'Tools', () => {
   // ComfyUI / image-gen marker -- check for the install script or a known marker
   const script = join(ROOT_DIR, 'scripts', 'install-image-gen.ps1');
