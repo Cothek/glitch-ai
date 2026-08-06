@@ -448,7 +448,7 @@ Glitch AI stores your personal memory, preferences, and projects in a separate d
 This lets your AI companion remember you across sessions.
 EOF
 
-# Always create a local user profile so Glitch has memory from the start
+# Ensure a local user profile exists so Glitch has memory from the start (never clobber an existing profile)
 USER_DIR="$INSTALL_DIR/user"
 mkdir -p "$USER_DIR"
 
@@ -508,6 +508,14 @@ timestamp:
 
 # Session Dashboard
 DASHEOF
+
+  # Fill empty timestamp fields in the 4 starter files with the current UTC time.
+  # Heredocs are single-quoted (no shell expansion), so we patch them after writing.
+  # sed -i.bak works on both GNU sed (Linux) and BSD sed (macOS); .bak is removed after.
+  _TS="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  for _f in "$USER_DIR/main-memory.md" "$USER_DIR/current-session.md" "$USER_DIR/reminders.md" "$USER_DIR/session-dashboard.md"; do
+    sed -i.bak "s|^timestamp: *$|timestamp: $_TS|" "$_f" && rm -f "$_f.bak"
+  done
 
   success "Local user profile created at $USER_DIR"
 else
