@@ -11,6 +11,7 @@ import { checkUserRepoUpdates } from './lib/git-sync.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
 import { ensureEngine } from './lib/engine-bootstrap.mjs';
 import { bootstrapOpenCode } from './lib/bootstrap-opencode.mjs';
+import { initLaunchLog, logToFile } from './lib/launch-log.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,6 +20,10 @@ const ROOT_DIR = resolve(SCRIPT_DIR, '..');
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 const isLinux = process.platform === 'linux';
+
+// Install tee wrapper on stdout/stderr so every console.log line is also
+// appended to data/launch.log (ANSI-stripped, ISO-timestamped).
+initLaunchLog();
 
 const OPENCODE_BIN_NAME = isWin ? 'opencode.exe' : 'opencode';
 const OpenCodeBin = join(ROOT_DIR, 'opencode', OPENCODE_BIN_NAME);
@@ -53,7 +58,6 @@ const WHITE = '\x1b[37m';
 const RESET = '\x1b[0m';
 
 const UpdateLogPath = join(ROOT_DIR, 'data', 'opencode-update.log');
-const LaunchLogPath = join(ROOT_DIR, 'data', 'launch.log');
 
 function logUpdate(msg) {
   try {
@@ -61,16 +65,6 @@ function logUpdate(msg) {
     const ts = `${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')} ${String(n.getHours()).padStart(2,'0')}:${String(n.getMinutes()).padStart(2,'0')}:${String(n.getSeconds()).padStart(2,'0')}`;
     appendFileSync(UpdateLogPath, `[${ts}] ${msg}\n`, 'utf-8');
   } catch {}
-}
-
-function logToFile(message) {
-  try {
-    mkdirSync(dirname(LaunchLogPath), { recursive: true });
-    const timestamp = new Date().toISOString();
-    appendFileSync(LaunchLogPath, `[${timestamp}] ${message}\n`, 'utf-8');
-  } catch (e) {
-    // Silently fail if log file can't be written
-  }
 }
 
 // ---- Prepend bundled Node to PATH if available ----

@@ -6,11 +6,16 @@ import { fileURLToPath } from 'url';
 import { execFileSync } from 'child_process';
 import { createInterface } from 'readline';
 import { platform } from 'os';
+import { initLaunchLog } from './lib/launch-log.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = resolve(__dirname, '..');
 const isWin = platform() === 'win32';
+
+// Install tee wrapper on stdout/stderr so every console.log line is also
+// appended to data/launch.log (ANSI-stripped, ISO-timestamped).
+initLaunchLog();
 
 const ConfigPath = join(ROOT_DIR, 'opencode.json');
 const BackupDir = join(ROOT_DIR, 'data', 'backups');
