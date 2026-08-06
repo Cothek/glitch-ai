@@ -381,6 +381,12 @@ try {
     }
   }
 
+  # After a successful update, clear the flag if the binary now matches latest (PM-026: stale update_available in update-status.json)
+  if ($curVer -eq $latestVer) {
+    $updateNeeded = $false
+    if ($updatesAvailable -gt 0) { $updatesAvailable-- }
+  }
+
   $results += @{
     name = "opencode"
     current = $curVer
@@ -432,6 +438,11 @@ try {
       $null = Invoke-WithSpinner -Label "Upgrading gitnexus from $curVer to $latestVer" -ScriptBlock { & "npm" "install" "-g" "gitnexus@latest" 2>&1 | Out-Null }
       try { $curVer = (& "gitnexus" "--version" 2>$null).Trim() } catch {}
       Write-ColorHost "  Done. Version: $curVer" "Green"
+      # After a successful update, clear the flag if the binary now matches latest
+      if ($curVer -eq $latestVer) {
+        $hasUpdate = $false
+        if ($updatesAvailable -gt 0) { $updatesAvailable-- }
+      }
     }
   }
 

@@ -10,6 +10,7 @@
  */
 
 import { existsSync, readdirSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { join } from 'path';
 
 // ===== Color constants =====
@@ -29,6 +30,35 @@ function log(color, msg) {
   }
 }
 
+// ---- Step 0: Self-heal missing profile file (PM-019/PM-025 recurrence) ----
+// The nested user repo at user/ can lose user/main-memory.md from the working
+// tree when parent-repo git operations touch the shared working directory.
+// If the file is tracked in the user repo's HEAD but missing on disk, restore
+// it automatically so profile detection doesn't silently fail.
+function selfHealMissingProfile(rootDir) {
+  const userBase = join(rootDir, 'user');
+  const mainMem = join(userBase, 'main-memory.md');
+  if (existsSync(mainMem)) return false;
+  if (!existsSync(join(userBase, '.git'))) return false;
+  try {
+    const r = execFileSync('git', ['ls-files', '--error-unmatch', '--', 'main-memory.md'], { cwd: userBase, encoding: 'utf-8', timeout: 5000 });
+    if (!r || !r.trim()) return false; // not tracked -> nothing to restore
+  } catch {
+    return false; // not tracked or git error -> skip
+  }
+  try {
+    execFileSync('git', ['restore', '--source=HEAD', '--', 'main-memory.md'], { cwd: userBase, encoding: 'utf-8', timeout: 10000 });
+    if (existsSync(mainMem)) {
+      log(GREEN, '  Self-healed: restored user/main-memory.md from user repo HEAD (was missing from disk)');
+      return true;
+    }
+  } catch (e) {
+    // restore failed — leave it; the caller will fall through to "no profile"
+    log(DARK_GRAY, `  Self-heal skipped: ${(e && e.message) || 'git restore failed'}`);
+  }
+  return false;
+}
+
 /**
  * Detect user profile from env vars or by scanning the user/ directory.
  *
@@ -41,6 +71,11 @@ function log(color, msg) {
 export function detectUserProfile(rootDir, envVarNames = ['GLITCH_USER']) {
   let UserName = null;
   let userFound = false;
+
+  // Step 0: Self-heal missing user/main-memory.md before any detection runs.
+  // Throw-safe: selfHealMissingProfile never throws, but wrap defensively so
+  // a profile-detection failure can never crash the launch script.
+  try { selfHealMissingProfile(rootDir); } catch { /* swallow -- fall through */ }
 
   // Step 1: Check env vars
   for (const varName of envVarNames) {
