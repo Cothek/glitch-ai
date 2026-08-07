@@ -51,7 +51,10 @@ param(
     [string]$Branch = "main",
 
     [Parameter(Mandatory=$false)]
-    [string]$UserRepo
+    [string]$UserRepo,
+
+    [Parameter(Mandatory=$false)]
+    [switch]$NoShortcut
 )
 
 # Set up logging - captures all output to a file for diagnosis
@@ -171,17 +174,57 @@ function Ask-PersistGitOnPath {
     }
 }
 
+# Offer to create a desktop shortcut to launch-glitch.bat. Uses WScript.Shell COM
+# to write a .lnk on the user's Desktop (handles OneDrive-redirected desktops via
+# [Environment]::GetFolderPath('Desktop')). Wrapped in try/catch so a shortcut
+# failure NEVER fails the install — prints a warning and continues.
+function Ask-DesktopShortcut {
+    param([string]$InstallDir)
+    $launcherPath = Join-Path $InstallDir 'launch-glitch.bat'
+    if (-not (Test-Path $launcherPath)) {
+        Write-Warn "  Skipping desktop shortcut: launcher not found at $launcherPath"
+        return
+    }
+    try {
+        $desktopDir = [Environment]::GetFolderPath('Desktop')
+        if ([string]::IsNullOrEmpty($desktopDir) -or -not (Test-Path $desktopDir)) {
+            Write-Warn "  Skipping desktop shortcut: could not resolve Desktop folder."
+            return
+        }
+        $shortcutPath = Join-Path $desktopDir 'Glitch.lnk'
+        Write-Prompt "  Create a desktop shortcut to launch Glitch? (Y/n): "
+        $answer = Read-Host
+        if ($answer -eq '' -or $answer -like 'y*') {
+            $ws = New-Object -ComObject WScript.Shell
+            $sc = $ws.CreateShortcut($shortcutPath)
+            $sc.TargetPath = $launcherPath
+            $sc.WorkingDirectory = $InstallDir
+            $sc.WindowStyle = 1   # normal window
+            $sc.Description = "Launch Glitch AI"
+            $sc.Save()
+            [System.Runtime.Interopservices.Marshal]::ReleaseComObject($ws) | Out-Null
+            Write-Success "  Desktop shortcut created: $shortcutPath"
+        } else {
+            Write-Step "  Skipped desktop shortcut."
+        }
+    } catch {
+        Write-Warn "  Could not create desktop shortcut: $_"
+        Write-Host "  You can create one manually later (right-click Desktop > New > Shortcut > $launcherPath)." -ForegroundColor DarkGray
+    }
+}
+
 # Show help
 if ($Help) {
     Write-Host @"
 Glitch AI Installer for Windows
 
 Usage:
-  irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex [-InstallDir <path>] [-NoLaunch] [-Help] [-UserRepo <url>]
+  irm https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.ps1 | iex [-InstallDir <path>] [-NoLaunch] [-NoShortcut] [-Help] [-UserRepo <url>]
 
 Parameters:
   -InstallDir <path>   Custom install directory (default: $HOME\glitch-ai)
   -NoLaunch            Skip launch prompt after installation
+  -NoShortcut          Skip desktop shortcut offer
   -Help                Show this help
   -UserRepo <url>      GitHub user repo URL for profile sync (e.g. https://github.com/user/repo.git)
 
@@ -598,9 +641,13 @@ if ($alreadyInstalled) {
 
         Write-Step "Installing gitnexus via npm (MCP code graph)..."
         try {
-            & $npmCmd install -g gitnexus
+            [string[]]$npmOutput = & $npmCmd install -g gitnexus 2>&1
             if ($LASTEXITCODE -eq 0) {
                 $gitnexusOk = $true
+            } else {
+                $gitnexusOk = $false
+                Write-Warn "gitnexus npm install failed (exit code $LASTEXITCODE). Output:"
+                $npmOutput | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkYellow }
             }
         } catch {
             Write-Warn "GitNexus install threw exception: $_"
@@ -942,6 +989,11 @@ if (-not $NoLaunch) {
         Write-Host "    .\launch-glitch.bat" -ForegroundColor Gray
         Pop-Location
     }
+}
+
+# 7.5. Desktop shortcut offer (skipped when -NoShortcut is set)
+if (-not $NoShortcut) {
+    Ask-DesktopShortcut -InstallDir $InstallDir
 }
 
 # Summary of any install issues (shown only if something failed)
