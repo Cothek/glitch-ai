@@ -358,18 +358,6 @@ export function handleRestartOnUpdate(spawnFn, syncResult, cwd) {
 
   const childArgs = [process.argv[1], ...process.argv.slice(2)];
 
-  const prefPath = join(cwd, 'user', 'launch-preference.json');
-  if (existsSync(prefPath)) {
-    try {
-      const pref = JSON.parse(readFileSync(prefPath, 'utf8'));
-      if (pref.last_mode && !childArgs.includes('--mode')) {
-        childArgs.push('--mode', pref.last_mode);
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-
   if (isWin) {
     // Windows: blocking re-exec keeps the SAME console window (detached spawn
     // would flash a new window and the bat would close the old one).
