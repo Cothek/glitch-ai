@@ -13,6 +13,7 @@ set -euo pipefail
 # Default values
 INSTALL_DIR="${1:-$HOME/glitch-ai}"
 NO_LAUNCH=false
+NO_SHORTCUT=false
 USER_REPO=""
 BRANCH=""
 
@@ -36,6 +37,7 @@ INSTALL_ISSUES=false
 for arg in "$@"; do
     case "$arg" in
         --no-launch) NO_LAUNCH=true ;;
+        --no-shortcut) NO_SHORTCUT=true ;;
         --user-repo) ;; # handled by next iteration
         --user-repo=*) USER_REPO="${arg#*=}" ;;
         --branch) ;; # handled by next iteration
@@ -45,12 +47,13 @@ for arg in "$@"; do
 Glitch AI Installer for macOS/Linux
 
 Usage:
-  curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>] [--branch <name>]
-  wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--user-repo <url>] [--branch <name>]
+  curl -sL https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--no-shortcut] [--user-repo <url>] [--branch <name>]
+  wget -qO- https://raw.githubusercontent.com/Cothek/glitch-ai/main/scripts/install.sh | bash [install_dir] [--no-launch] [--no-shortcut] [--user-repo <url>] [--branch <name>]
 
 Arguments:
   install_dir              Custom install directory (default: $HOME/glitch-ai)
   --no-launch              Skip launch prompt after installation
+  --no-shortcut            Skip desktop shortcut offer
   --user-repo <url>        GitHub user repo URL for profile sync (e.g. https://github.com/user/repo.git)
   --branch <name>          Checkout a specific repo branch after cloning (e.g. develop)
   --help, -h               Show this help
@@ -138,6 +141,81 @@ spinner() {
   
   rm -f "$tmp_out" 2>/dev/null || true
   return $exit_code
+}
+
+# ── Desktop shortcut offer ──
+# Creates a double-clickable launcher on the user's Desktop.
+# macOS: ~/Desktop/Glitch.command (Terminal launcher, chmod +x)
+# Linux: ~/Desktop/glitch.desktop (XDG launcher, chmod +x)
+# Wrapped so a shortcut failure NEVER fails the install — warns and continues.
+offer_desktop_shortcut() {
+    local launcher="$INSTALL_DIR/launch-glitch.sh"
+    if [ ! -x "$launcher" ] && [ ! -f "$launcher" ]; then
+        warn "Skipping desktop shortcut: launcher not found at $launcher"
+        return 0
+    fi
+
+    local os
+    os="$(uname -s 2>/dev/null || echo unknown)"
+
+    if [ "$os" = "Darwin" ]; then
+        # macOS — ~/Desktop/Glitch.command (Terminal launcher)
+        local desktop_dir="$HOME/Desktop"
+        if [ ! -d "$desktop_dir" ]; then
+            warn "Skipping desktop shortcut: $desktop_dir does not exist."
+            return 0
+        fi
+        local shortcut="$desktop_dir/Glitch.command"
+        prompt "Create a desktop shortcut to launch Glitch? (Y/n): "
+        local answer=""
+        read -r answer </dev/tty || answer=""
+        if [ -z "$answer" ] || [[ "$answer" =~ ^[Yy] ]]; then
+            if {
+                printf '#!/usr/bin/env bash\n'
+                printf '# Launch Glitch AI — double-click to start.\n'
+                printf 'cd %q || exit 1\n' "$INSTALL_DIR"
+                printf 'exec %q "$@"\n' "$launcher"
+            } > "$shortcut" && chmod +x "$shortcut"; then
+                success "Desktop shortcut created: $shortcut"
+            else
+                warn "Could not create desktop shortcut at $shortcut"
+            fi
+        else
+            step "Skipped desktop shortcut."
+        fi
+    else
+        # Linux (and other Unix) — XDG .desktop file
+        local desktop_dir
+        desktop_dir="$(xdg-user-dir DESKTOP 2>/dev/null || true)"
+        if [ -z "$desktop_dir" ] || [ ! -d "$desktop_dir" ]; then
+            desktop_dir="$HOME/Desktop"
+        fi
+        if [ ! -d "$desktop_dir" ]; then
+            warn "Skipping desktop shortcut: $desktop_dir does not exist."
+            return 0
+        fi
+        local shortcut="$desktop_dir/glitch.desktop"
+        prompt "Create a desktop shortcut to launch Glitch? (Y/n): "
+        local answer=""
+        read -r answer </dev/tty || answer=""
+        if [ -z "$answer" ] || [[ "$answer" =~ ^[Yy] ]]; then
+            if {
+                printf '[Desktop Entry]\n'
+                printf 'Type=Application\n'
+                printf 'Name=Glitch\n'
+                printf 'Comment=Launch Glitch AI\n'
+                printf 'Exec=%q\n' "$launcher"
+                printf 'Terminal=true\n'
+                printf 'Categories=Development;\n'
+            } > "$shortcut" && chmod +x "$shortcut"; then
+                success "Desktop shortcut created: $shortcut"
+            else
+                warn "Could not create desktop shortcut at $shortcut"
+            fi
+        else
+            step "Skipped desktop shortcut."
+        fi
+    fi
 }
 
 # Banner
@@ -452,8 +530,11 @@ else
     export PATH="$BUNDLED_NODE_BIN:$PATH"
 
     step "Installing gitnexus via npm (MCP code graph)..."
-    if "$NPM_CMD" install -g gitnexus; then
+    if NPM_OUTPUT=$("$NPM_CMD" install -g gitnexus 2>&1); then
       GITNEXUS_OK=1
+    else
+      warn "gitnexus npm install failed. Output:"
+      printf '%s\n' "$NPM_OUTPUT" | sed 's/^/  /'
     fi
 
     # Verify after install
@@ -799,6 +880,12 @@ if [ "$NO_LAUNCH" = false ]; then
 fi
 
 # Completion
+# 7.5. Desktop shortcut offer (skipped when --no-shortcut is set)
+if [ "$NO_SHORTCUT" = false ]; then
+    header "Desktop shortcut"
+    offer_desktop_shortcut || warn "Desktop shortcut offer failed (continuing)."
+fi
+
 if [ "$INSTALL_ISSUES" = true ]; then
     echo ""
     warn "Some components couldn't be downloaded during install."
