@@ -423,22 +423,59 @@ fi
 # 4.5. Install GitNexus (MCP code graph)
 header "Installing GitNexus (MCP code graph)..."
 GITNEXUS_OK=0
-NPM_CMD=""
-if command -v npm >/dev/null 2>&1; then
-  NPM_CMD="npm"
-elif [ -x "$INSTALL_DIR/data/node/bin/npm" ]; then
-  NPM_CMD="$INSTALL_DIR/data/node/bin/npm"
+BUNDLED_NODE_BIN="$INSTALL_DIR/data/node/bin"
+BUNDLED_NPM="$BUNDLED_NODE_BIN/npm"
+
+# Skip if gitnexus is already present (bundled tree or PATH)
+ALREADY_INSTALLED=0
+if [ -d "$INSTALL_DIR/data/node/lib/node_modules/gitnexus" ] || \
+   [ -x "$BUNDLED_NODE_BIN/gitnexus" ] || \
+   command -v gitnexus >/dev/null 2>&1; then
+  ALREADY_INSTALLED=1
 fi
-if [ -n "$NPM_CMD" ]; then
-  step "Installing gitnexus via npm (MCP code graph)..."
-  if $NPM_CMD install -g gitnexus >/dev/null 2>&1; then
-    GITNEXUS_OK=1
+
+if [ "$ALREADY_INSTALLED" -eq 1 ]; then
+  GITNEXUS_OK=1
+  success "GitNexus already installed (MCP code graph)"
+else
+  # Prefer bundled npm (always writable, correct Node version); fall back to system npm
+  NPM_CMD=""
+  if [ -x "$BUNDLED_NPM" ]; then
+    NPM_CMD="$BUNDLED_NPM"
+  elif command -v npm >/dev/null 2>&1; then
+    NPM_CMD="npm"
+  fi
+
+  if [ -n "$NPM_CMD" ]; then
+    # Prepend bundled node bin to PATH so postinstall scripts and bare node/npx
+    # resolve the bundled node (gitnexus requires node >=22)
+    export PATH="$BUNDLED_NODE_BIN:$PATH"
+
+    step "Installing gitnexus via npm (MCP code graph)..."
+    if "$NPM_CMD" install -g gitnexus; then
+      GITNEXUS_OK=1
+    fi
+
+    # Verify after install
+    if [ "$GITNEXUS_OK" -ne 1 ]; then
+      if [ -x "$BUNDLED_NODE_BIN/gitnexus" ] || \
+         [ -d "$INSTALL_DIR/data/node/lib/node_modules/gitnexus" ]; then
+        GITNEXUS_OK=1
+      else
+        if "$NPM_CMD" list -g --depth=0 gitnexus 2>/dev/null | grep -q 'gitnexus@'; then
+          GITNEXUS_OK=1
+        fi
+      fi
+    fi
+  else
+    warn "No npm found (bundled or system). Cannot install GitNexus."
   fi
 fi
+
 if [ "$GITNEXUS_OK" -eq 1 ]; then
   success "GitNexus installed (MCP code graph)"
 else
-  warn "GitNexus install skipped/failed (non-fatal). MCP code graph needs: npm install -g gitnexus"
+  warn "GitNexus install failed (non-fatal). Manual install: cd $INSTALL_DIR && ./data/node/bin/npm install -g gitnexus"
 fi
 
 # 5. User profile setup
@@ -448,13 +485,15 @@ Glitch AI stores your personal memory, preferences, and projects in a separate d
 This lets your AI companion remember you across sessions.
 EOF
 
-# Always create a local user profile so Glitch has memory from the start
+# Ensure a local user profile exists so Glitch has memory from the start (never clobber an existing profile)
 USER_DIR="$INSTALL_DIR/user"
-step "Creating local user profile..."
 mkdir -p "$USER_DIR"
 
-# Create starter files for the profile
-cat > "$USER_DIR/main-memory.md" << 'PROFILEEOF'
+# Create starter files for the profile (only if none exists yet — never clobber an existing profile)
+if [ ! -f "$USER_DIR/main-memory.md" ]; then
+  step "Creating local user profile..."
+
+  cat > "$USER_DIR/main-memory.md" << 'PROFILEEOF'
 ---
 type: UserProfile
 title: Main Memory
@@ -469,7 +508,7 @@ timestamp:
 *To be filled in through interaction with Glitch*
 PROFILEEOF
 
-cat > "$USER_DIR/current-session.md" << 'SESSIONEOF'
+  cat > "$USER_DIR/current-session.md" << 'SESSIONEOF'
 ---
 type: SessionMemory
 title: Current Session Memory
@@ -483,7 +522,7 @@ timestamp:
 *First session with Glitch*
 SESSIONEOF
 
-cat > "$USER_DIR/reminders.md" << 'REMINDERSEOF'
+  cat > "$USER_DIR/reminders.md" << 'REMINDERSEOF'
 ---
 type: ReminderLog
 title: Reminders
@@ -495,7 +534,7 @@ timestamp:
 # Reminders
 REMINDERSEOF
 
-cat > "$USER_DIR/session-dashboard.md" << 'DASHEOF'
+  cat > "$USER_DIR/session-dashboard.md" << 'DASHEOF'
 ---
 type: Dashboard
 title: Session Dashboard
@@ -507,7 +546,18 @@ timestamp:
 # Session Dashboard
 DASHEOF
 
-success "Local user profile created at $USER_DIR"
+  # Fill empty timestamp fields in the 4 starter files with the current UTC time.
+  # Heredocs are single-quoted (no shell expansion), so we patch them after writing.
+  # sed -i.bak works on both GNU sed (Linux) and BSD sed (macOS); .bak is removed after.
+  _TS="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+  for _f in "$USER_DIR/main-memory.md" "$USER_DIR/current-session.md" "$USER_DIR/reminders.md" "$USER_DIR/session-dashboard.md"; do
+    sed -i.bak "s|^timestamp: *$|timestamp: $_TS|" "$_f" && rm -f "$_f.bak"
+  done
+
+  success "Local user profile created at $USER_DIR"
+else
+  success "User profile already exists at $USER_DIR (kept as-is)"
+fi
 
 # Optional: sync with GitHub for cross-machine access
 SHOULD_SYNC=false

@@ -1,4 +1,4 @@
-﻿#!/usr/bin/env node
+#!/usr/bin/env node
 
 import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync } from 'fs';
 import { join, dirname, resolve } from 'path';
@@ -6,11 +6,16 @@ import { fileURLToPath } from 'url';
 import { execFileSync, spawn } from 'child_process';
 import { platform } from 'os';
 import { checkRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
+import { initLaunchLog } from './lib/launch-log.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = resolve(__dirname, '..');
 const isWin = platform() === 'win32';
+
+// Install tee wrapper on stdout/stderr so every console.log line is also
+// appended to data/launch.log (ANSI-stripped, ISO-timestamped).
+initLaunchLog();
 
 const ConfigPath = join(ROOT_DIR, 'opencode.json');
 const BackupDir = join(ROOT_DIR, 'data', 'backups');

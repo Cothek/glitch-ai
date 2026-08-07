@@ -11,6 +11,7 @@ import { checkUserRepoUpdates } from './lib/git-sync.mjs';
 import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
 import { bootstrapOpenCode } from './lib/bootstrap-opencode.mjs';
+import { initLaunchLog } from './lib/launch-log.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,6 +20,10 @@ const ROOT_DIR = resolve(SCRIPT_DIR, '..');
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 const isLinux = process.platform === 'linux';
+
+// Install tee wrapper on stdout/stderr so every console.log line is also
+// appended to data/launch.log (ANSI-stripped, ISO-timestamped).
+initLaunchLog();
 
 const OPENCODE_BIN_NAME = isWin ? 'opencode.exe' : 'opencode';
 const OpenCodeBin = join(ROOT_DIR, 'opencode', OPENCODE_BIN_NAME);

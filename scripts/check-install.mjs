@@ -65,6 +65,10 @@ const SYM = {
 
 function safeExec(cmd, args = []) {
   try {
+    if (isWin && (cmd.endsWith('.cmd') || cmd.endsWith('.bat'))) {
+      args = ['/d', '/s', '/c', cmd, ...args];
+      cmd = 'cmd.exe';
+    }
     const out = execFileSync(cmd, args, {
       cwd: ROOT_DIR,
       encoding: 'utf8',
@@ -245,14 +249,18 @@ check('Cloudflared', 'Tools', () => {
   };
 });
 
-// Resolve `gitnexus` on PATH. On Windows the global npm install creates
-// gitnexus.cmd (and gitnexus.exe on newer npm); on Unix it's a single binary.
-// We scan PATH entries directly so we don't depend on `where`/`which` being
-// available, and so we can report the exact resolved path.
+// Resolve `gitnexus` on PATH or in the bundled node tree. On Windows the global
+// npm install creates gitnexus.cmd (and gitnexus.exe on newer npm); on Unix it's
+// a single binary. We scan PATH entries directly so we don't depend on
+// `where`/`which` being available, and so we can report the exact resolved path.
+// We also check the bundled node tree (data/node on Windows, data/node/bin on
+// Unix) since launch-glitch.bat/sh prepends it to PATH at runtime.
 function resolveGitNexus() {
   const pathEnv = process.env.PATH || process.env.Path || '';
   const sep = isWin ? ';' : ':';
   const exeNames = isWin ? ['gitnexus.cmd', 'gitnexus.exe', 'gitnexus'] : ['gitnexus'];
+
+  // Scan PATH entries
   for (const dir of pathEnv.split(sep)) {
     if (!dir) continue;
     for (const name of exeNames) {
@@ -260,6 +268,18 @@ function resolveGitNexus() {
       if (existsSync(candidate)) return candidate;
     }
   }
+
+  // Also check the bundled node tree (not always on PATH during check)
+  const bundledDirs = isWin
+    ? [join(ROOT_DIR, 'data', 'node')]
+    : [join(ROOT_DIR, 'data', 'node', 'bin')];
+  for (const dir of bundledDirs) {
+    for (const name of exeNames) {
+      const candidate = join(dir, name);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+
   return null;
 }
 
@@ -274,10 +294,30 @@ check('GitNexus MCP', 'Tools', () => {
       note: null,
     };
   }
+
+  // Direct existence check of bundled global install dir (catches installs
+  // where the binary is present but not on PATH and tryReadVersion failed)
+  const bundledGlobalDir = isWin
+    ? join(ROOT_DIR, 'data', 'node', 'node_modules', 'gitnexus')
+    : join(ROOT_DIR, 'data', 'node', 'lib', 'node_modules', 'gitnexus');
+  if (existsSync(bundledGlobalDir)) {
+    return {
+      ok: true,
+      version: 'installed',
+      path: bundledGlobalDir,
+      note: 'bundled npm global',
+    };
+  }
+
   // Fallback: ask npm whether gitnexus is in the global tree. This catches
   // installs where the binary is on a PATH not visible to this process
-  // (e.g. user PATH vs system PATH on Windows).
-  const npmList = safeExec('npm', ['list', '-g', '--depth=0', 'gitnexus']);
+  // (e.g. user PATH vs system PATH on Windows). Prefer bundled npm if present
+  // (fresh machines may not have system npm).
+  const bundledNpm = isWin
+    ? join(ROOT_DIR, 'data', 'node', 'npm.cmd')
+    : join(ROOT_DIR, 'data', 'node', 'bin', 'npm');
+  const npmCmd = existsSync(bundledNpm) ? bundledNpm : (isWin ? 'npm.cmd' : 'npm');
+  const npmList = safeExec(npmCmd, ['list', '-g', '--depth=0', 'gitnexus']);
   if (npmList && /gitnexus@/.test(npmList)) {
     const m = npmList.match(/gitnexus@([\w.\-]+)/);
     return {
@@ -292,6 +332,47 @@ check('GitNexus MCP', 'Tools', () => {
     version: null,
     path: null,
     note: 'install: npm install -g gitnexus',
+  };
+});
+
+check('GitNexus MCP Config', 'Tools', () => {
+  const runtimeConfig = join(ROOT_DIR, 'opencode.json');
+  if (!existsSync(runtimeConfig)) {
+    return {
+      ok: true,
+      version: null,
+      path: null,
+      note: 'runtime config not generated yet (created on first launch)',
+    };
+  }
+  let cfg = null;
+  try {
+    cfg = JSON.parse(readFileSync(runtimeConfig, 'utf-8'));
+  } catch (err) {
+    const note = err && err.code === 'EISDIR'
+      ? 'opencode.json is a directory, not a file'
+      : 'opencode.json exists but is unreadable/invalid JSON';
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note,
+    };
+  }
+  const gn = cfg && cfg.mcp && cfg.mcp.gitnexus;
+  if (gn && Array.isArray(gn.command) && String(gn.command[0]).includes('gitnexus')) {
+    return {
+      ok: true,
+      version: 'configured',
+      path: 'opencode.json -> mcp.gitnexus',
+      note: null,
+    };
+  }
+  return {
+    ok: false,
+    version: null,
+    path: null,
+    note: 'opencode.json missing mcp.gitnexus — regenerate by running launch-glitch.bat, or fix config/opencode-*.json template',
   };
 });
 

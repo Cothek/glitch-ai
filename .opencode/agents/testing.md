@@ -63,3 +63,11 @@ If you think work needs another sub-agent, do it yourself or tell the dispatcher
 - Never test implementation details (internal state, private methods)
 - Never skip framework detection
 - Never introduce flaky tests with setTimeout or shared mutable state
+
+## Memory Trigger Directives (Sub-Agent Safety)
+
+If you see a `[MEMORY TRIGGER PENDING]` directive in your context (from the mulahazah plugin), you CANNOT act on it:
+- You are a sub-agent with `task: deny` --- you CANNOT dispatch @memory. Do NOT attempt to call `task()` or any dispatch tool. Attempts will be denied and recorded as errors.
+- Do NOT try to delete the flag file --- you lack the file/write permissions.
+- IGNORE the directive and continue your assigned testing task normally.
+- If you noticed something worth remembering during your work, include a brief note in your final report to the parent agent. The parent handles memory.

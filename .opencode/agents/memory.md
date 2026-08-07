@@ -42,6 +42,10 @@ The skill contains the full methodology — file map, append formats, category t
 6. **Return confirmation** — after writing, return a brief confirmation of what was written and where
 7. **Heartbeat first (non-negotiable)** — Before writing any content, ALWAYS update `user/current-session.md`'s `Last Memory Update` timestamp AND the target file's frontmatter `timestamp` field. This is detailed in the save-memory skill under "Mandatory First Action — Heartbeat (Always)". Load the skill with `skill("save-memory")` on activation — it contains the full protocol.
 
+## Memory Trigger Directives (Sub-Agent Safety)
+
+If you see a `[MEMORY TRIGGER PENDING]` directive: you are the memory agent — if the directive matches your current dispatch task, write the observations to the appropriate `user/*.md` file per the save-memory skill. If it does NOT match your current dispatch task (i.e. it is a directive for a different session), ignore it and complete your assigned task. Never attempt `task()` — you cannot dispatch sub-agents.
+
 ## Input You Receive
 When dispatched, Glitch will tell you:
 - Which file(s) to update

@@ -1,28 +1,21 @@
 #!/usr/bin/env node
 
-import { readFileSync, existsSync, writeFileSync, appendFileSync, mkdirSync, unlinkSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { execFileSync, execSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { checkRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
+import { initLaunchLog, logToFile } from './lib/launch-log.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const SCRIPT_DIR = __dirname;
 const ROOT_DIR = resolve(SCRIPT_DIR, '..');
 
-const LOG_FILE = join(ROOT_DIR, 'data', 'launch.log');
-
-function logToFile(message) {
-  try {
-    mkdirSync(dirname(LOG_FILE), { recursive: true });
-    const timestamp = new Date().toISOString();
-    appendFileSync(LOG_FILE, `[${timestamp}] ${message}\n`, 'utf-8');
-  } catch (e) {
-    // Silently fail if log file can't be written
-  }
-}
+// Install tee wrapper on stdout/stderr so every console.log line is also
+// appended to data/launch.log (ANSI-stripped, ISO-timestamped).
+initLaunchLog();
 
 const PrefFile = join(ROOT_DIR, 'user', 'launch-preference.json');
 

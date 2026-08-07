@@ -358,18 +358,6 @@ export function handleRestartOnUpdate(spawnFn, syncResult, cwd) {
 
   const childArgs = [process.argv[1], ...process.argv.slice(2)];
 
-  const prefPath = join(cwd, 'user', 'launch-preference.json');
-  if (existsSync(prefPath)) {
-    try {
-      const pref = JSON.parse(readFileSync(prefPath, 'utf8'));
-      if (pref.last_mode && !childArgs.includes('--mode')) {
-        childArgs.push('--mode', pref.last_mode);
-      }
-    } catch {
-      // Ignore parse errors
-    }
-  }
-
   if (isWin) {
     // Windows: blocking re-exec keeps the SAME console window (detached spawn
     // would flash a new window and the bat would close the old one).
@@ -555,6 +543,7 @@ export async function checkRepoUpdates(options = {}) {
     }
     log('');
     log(C.WHITE, '  [d] Discard local changes and retry (reverts tracked files only)');
+    log(C.WHITE, `  [m] Commit the ${modified.length} listed file(s) and retry`);
     log(C.WHITE, '  [c] Cancel (keep changes, update later)');
     const retry = (await askQuestion('  > ')).trim().toLowerCase();
     if (retry === 'd') {
@@ -566,6 +555,24 @@ export async function checkRepoUpdates(options = {}) {
         return { checked: true, updated: true, switchedBranch: false, ...computeRestartInfo(cwd) };
       }
       log(C.RED, `  ${label}: pull still failed after discarding. Check git status.`);
+    }
+    if (retry === 'm') {
+      log(C.CYAN, '  Committing local changes...');
+      const commitMsg = `glitch-auto: commit ${modified.length} modified file(s) before pull (interactive recovery)`;
+      const addRes = run('git', ['add', ...modified], { cwd, timeout: 15000 });
+      const commitRes = run('git', ['commit', '-m', commitMsg], { cwd, timeout: 15000 });
+      if (addRes.success && commitRes.success) {
+        if (pullBranch(cwd, branch)) {
+          log(C.GREEN, `  ${label}: updated!`);
+          syncSubmodules(cwd);
+          return { checked: true, updated: true, switchedBranch: false, ...computeRestartInfo(cwd) };
+        }
+        log(C.RED, `  ${label}: pull still failed after committing. Check git status.`);
+        log(C.YELLOW, `  ${label}: local changes committed but NOT pushed (local-only commit).`);
+      } else {
+        log(C.YELLOW, `  ${label}: commit failed (${commitRes.stderr || commitRes.error || 'nothing to commit?'})`);
+        log(C.YELLOW, '  Try [d] discard, or commit manually.');
+      }
     }
     return { checked: true, updated: false, switchedBranch: false, restartNeeded: false, changedStartupFiles: [] };
   }

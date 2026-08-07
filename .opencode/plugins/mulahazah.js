@@ -79,6 +79,11 @@ function createSessionEntry() {
     toolCounts: {},
     lastTriggerTime: null,
     sessionStartTime: Date.now(),
+    // isDispatcher: true only for sessions that have successfully called task()
+    // (i.e. parent agents that can delegate to sub-agents). Sub-agents have
+    // task: deny in their agent definitions and cannot dispatch @memory, so
+    // we must never inject a memory-trigger directive into their context.
+    isDispatcher: false,
   };
 }
 
@@ -108,6 +113,9 @@ export const MulahazahPlugin = async ({ directory }) => {
           toolCounts: (entry.toolCounts && typeof entry.toolCounts === "object") ? entry.toolCounts : {},
           lastTriggerTime: typeof entry.lastTriggerTime === "number" ? entry.lastTriggerTime : null,
           sessionStartTime: typeof entry.sessionStartTime === "number" ? entry.sessionStartTime : now,
+          // Backward-compatible: missing field defaults to false. On next save
+          // it will be persisted.
+          isDispatcher: entry.isDispatcher === true,
         };
         if (e.lastTriggerTime !== null && now - e.lastTriggerTime > STALE_RESET_MS) {
           e.toolCallCount = 0;
@@ -132,6 +140,47 @@ export const MulahazahPlugin = async ({ directory }) => {
     }
   }
 
+  // P1-3: Startup sweep — delete orphaned flag files. A flag is orphaned if:
+  //   (a) its sessionID is not present in the loaded state map, OR
+  //   (b) its file mtime is older than STALE_RESET_MS (24h).
+  // This handles flags left behind by crashed sessions, flags from before
+  // this fix, and any other stale state. Wrapped in try/catch — never throws.
+  try {
+    const entries = await fs.readdir(dataDir);
+    const now = Date.now();
+    for (const name of entries) {
+      if (!name.startsWith("MEMORY_TRIGGER_FLAG.")) continue;
+      const sid = name.slice("MEMORY_TRIGGER_FLAG.".length);
+      if (!sid) continue;
+      const flagPath = join(dataDir, name);
+      let stale = !sessionStates.has(sid);
+      if (!stale) {
+        try {
+          const st = await fs.stat(flagPath);
+          if (now - st.mtimeMs > STALE_RESET_MS) stale = true;
+        } catch {
+          stale = true;
+        }
+      }
+      if (stale) {
+        try {
+          await fs.unlink(flagPath);
+          if (process.env.MULAHAZAH_DEBUG) {
+            console.log(`[mulahazah] startup sweep: deleted orphaned flag for session ${sid}`);
+          }
+        } catch (unlinkErr) {
+          if (unlinkErr.code !== "ENOENT") {
+            console.error(`[mulahazah] startup sweep: failed to delete flag for ${sid}: ${unlinkErr.message}`);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    if (err.code !== "ENOENT") {
+      console.error(`[mulahazah] startup sweep failed: ${err.message}`);
+    }
+  }
+
   function getSessionState(sessionID) {
     if (!sessionStates.has(sessionID)) {
       sessionStates.set(sessionID, createSessionEntry());
@@ -146,7 +195,11 @@ export const MulahazahPlugin = async ({ directory }) => {
         const lastActivity = entry.lastTriggerTime ?? entry.sessionStartTime;
         if (now - lastActivity > STALE_RESET_MS) {
           sessionStates.delete(sid);
-          fs.unlink(triggerFlagPath(sid)).catch(() => {});
+          try {
+            await fs.unlink(triggerFlagPath(sid));
+          } catch (e) {
+            console.warn(`[mulahazah] Failed to delete stale flag for session ${sid}: ${e.message}`);
+          }
         }
       }
       const obj = Object.fromEntries(sessionStates);
@@ -213,14 +266,32 @@ export const MulahazahPlugin = async ({ directory }) => {
 
   async function fireTrigger(sessionID, summary) {
     try {
+      const ss = sessionStates.get(sessionID);
+      // P0-1: Gate triggers to dispatcher sessions only. Sub-agents (reviewer,
+      // coder, explore, etc.) have task: deny in their agent definitions and
+      // cannot dispatch @memory. If we wrote a flag for them, the transform
+      // hook would inject "DISPATCH @memory" into their context on every
+      // subsequent message, and they'd loop forever trying (and failing) to
+      // dispatch. Their observations are already captured in observations.jsonl
+      // and swept by the parent at compaction.
+      if (!ss || !ss.isDispatcher) {
+        console.log(`[mulahazah] skipping memory trigger for non-dispatcher session ${sessionID} (sub-agent) — observations already logged to observations.jsonl`);
+        // Still reset counters so we don't re-fire in a tight loop on the
+        // same session. lastTriggerTime advances to enforce cooldown.
+        if (ss) {
+          ss.lastTriggerTime = Date.now();
+          ss.toolCallCount = 0;
+          ss.toolCounts = {};
+        }
+        await saveState();
+        return;
+      }
+
       const flagPath = triggerFlagPath(sessionID);
       await fs.writeFile(flagPath, summary + "\n", "utf8");
-      const ss = sessionStates.get(sessionID);
-      if (ss) {
-        ss.lastTriggerTime = Date.now();
-        ss.toolCallCount = 0;
-        ss.toolCounts = {};
-      }
+      ss.lastTriggerTime = Date.now();
+      ss.toolCallCount = 0;
+      ss.toolCounts = {};
       await saveState();
       if (process.env.MULAHAZAH_DEBUG) {
         console.log(`[mulahazah] threshold reached for session ${sessionID}, flag written`);
@@ -287,13 +358,35 @@ export const MulahazahPlugin = async ({ directory }) => {
 
         if (!lastMessage || !Array.isArray(lastMessage.parts)) return;
 
+        // P0-1 (defense in depth): if a flag exists for a session that is NOT
+        // a dispatcher (e.g. a stale flag left from before this fix, or an
+        // edge case where fireTrigger's gate was bypassed), DELETE the flag
+        // instead of injecting the dispatch directive. This guarantees a
+        // sub-agent can never be told to dispatch.
+        const ss = sessionStates.get(sessionID);
+        if (!ss || !ss.isDispatcher) {
+          try {
+            await fs.unlink(flagPath);
+            console.log(`[mulahazah] deleted stale trigger flag for non-dispatcher session ${sessionID}`);
+          } catch (unlinkErr) {
+            if (unlinkErr.code !== "ENOENT") {
+              console.error(`[mulahazah] Failed to delete stale flag: ${unlinkErr.message}`);
+            }
+          }
+          return;
+        }
+
         const msgSessionID = lastMessage.info?.sessionID ?? sessionID;
         const messageID = lastMessage.info?.id ?? `msg_${randomUUID()}`;
 
+        // P1-2: Hardened directive — safe if it ever reaches an incapable
+        // session. Sub-agents see the warning and know to skip dispatch and
+        // include observations in their final report instead.
         const directive =
           `[MEMORY TRIGGER PENDING] data/MEMORY_TRIGGER_FLAG.${sessionID} exists:\n` +
           `---\n${flagContent.trim()}\n---\n` +
-          `DISPATCH @memory NOW to record session observations, then delete the flag file.`;
+          `⚠️ IMPORTANT: If you are a SUB-AGENT and CANNOT call task()/@memory (task denied): DO NOT attempt to dispatch. Do NOT try to delete this flag with file tools if you cannot. Instead, include any notable observations in your final report to the parent agent, then continue your task normally.\n` +
+          `If you CAN dispatch: dispatch @memory to record session observations, then delete the flag file (data/MEMORY_TRIGGER_FLAG.${sessionID}).`;
 
         lastMessage.parts.push({
           id: `prt_${randomUUID()}`,
@@ -323,8 +416,22 @@ export const MulahazahPlugin = async ({ directory }) => {
 
       appendObservation(tool, sessionID).catch((err) => console.error(`[mulahazah] background task failed: ${err.message}`));
 
+      // P0-1: Mark session as a dispatcher if it has successfully called task().
+      // Only the delegating parent agent can successfully call task — sub-agents
+      // have task: deny and their attempts surface as tool name "invalid" in the
+      // observation log. We check for an error on the output to distinguish a
+      // real delegation from a denied attempt.
+      if (tool === "task" && output && !output.error) {
+        if (!ss.isDispatcher) {
+          ss.isDispatcher = true;
+          if (process.env.MULAHAZAH_DEBUG) {
+            console.log(`[mulahazah] session ${sessionID} marked as dispatcher (successful task() call)`);
+          }
+        }
+      }
+
       if (!isCooldownElapsed(ss)) {
-        saveState().catch((err) => console.error(`[mulahazah] background task failed: ${err.message}`));
+        await saveState();
         return;
       }
 
@@ -348,7 +455,7 @@ export const MulahazahPlugin = async ({ directory }) => {
       }
 
       if (ss.toolCallCount % 10 === 0) {
-        saveState().catch((err) => console.error(`[mulahazah] background task failed: ${err.message}`));
+        await saveState();
       }
     },
   };

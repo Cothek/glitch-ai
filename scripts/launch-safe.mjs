@@ -7,6 +7,7 @@ import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { platform } from 'os';
+import { initLaunchLog } from './lib/launch-log.mjs';
 
 const isWin = platform() === 'win32';
 const isMac = platform() === 'darwin';
@@ -273,6 +274,10 @@ function run(cmd, args, opts = {}) {
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const rootDir = dirname(scriptDir);
+
+// Install tee wrapper on stdout/stderr so every console.log line is also
+// appended to data/launch.log (ANSI-stripped, ISO-timestamped).
+initLaunchLog();
 
 const HANDY_VERSION = '0.8.3';
 const HandyBin = isWin

@@ -27,7 +27,7 @@ Never modify Glitch core files on main. All core work on develop or feature bran
 Before ANY UI change: scan for `components/ui/` design system. If exists, ALL elements must use it. Never use raw `<button>`/`<input>` when Button/Input components exist. Never use nonexistent variants.
 
 **R21: Stuck Detection**
-`stuck-detector.js` monitors tool patterns. Writes `data/.stuck-signal.json` on: same tool 3+ times, 3+ consecutive errors, same bash command 2+ times. When signal exists: read it, load `skill("breakthrough")`, delete signal, reframe problem.
+`stuck-detector.js` monitors tool patterns. Writes `data/.stuck-signal.<sessionID>.json` on: same tool 3+ times, 3+ consecutive errors, same bash command 2+ times. The global `data/.stuck-signal.json` may be a mirror of the most recent active signal and now includes a `sessionID` field, so a parent agent reading it can identify which sub-agent is stuck. When signal exists: read it, load `skill("breakthrough")`, delete signal, reframe problem.
 
 ## Available Tools (Bash-Accessible)
 

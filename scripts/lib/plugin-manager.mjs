@@ -6,6 +6,13 @@
  * Manages enabled/disabled state in user/plugins.json (user layer, synced cross-machine)
  * Starts/stops plugin processes with PID tracking
  *
+ * Optional manifest field:
+ *   visible_window (boolean) — When true AND platform is win32, the plugin runs in its
+ *     own visible console window so the user can see output and close it directly.
+ *     A PowerShell launcher script is generated at data/plugin-<name>-window.ps1 and
+ *     the real server PID is written to data/plugin-<name>.pid for stop/cleanup.
+ *     Non-Windows platforms fall back to the standard hidden background spawn.
+ *
  * Merge semantics (additive only — respects user intent):
  *   - System defaults are declared per-plugin via manifest.json `default_enabled: true`
  *   - On launch, ensureDefaultRegistry() reads all default-enabled plugins and adds
@@ -13,16 +20,17 @@
  *   - Existing user entries (including enabled: false) are NEVER overwritten or removed
  */
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync } from 'fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, unlinkSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
-import { spawn } from 'child_process';
+import { spawn, execFileSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = resolve(__dirname, '..', '..');
 const PLUGIN_REGISTRY_PATH = join(ROOT_DIR, 'user', 'plugins.json');
 const PLUGINS_DIR = join(ROOT_DIR, 'plugins');
+const VISIBLE_WINDOW_PID_RETRY_MS = 2000;
 
 // Active plugin processes: Map<name, ChildProcess>
 const activePlugins = new Map();
@@ -127,6 +135,13 @@ export async function startPlugin(pluginName) {
     return { success: false, error: `Plugin "${pluginName}" manifest has no start_command` };
   }
 
+  if (manifest.visible_window === true) {
+    if (process.platform === 'win32') {
+      return startPluginVisible(pluginName, manifest);
+    }
+    console.warn(`[plugin-manager] visible_window is Windows-only for now; starting "${pluginName}" as hidden background process`);
+  }
+
   try {
     const parts = manifest.start_command.split(' ');
     const cmd = parts[0];
@@ -147,9 +162,116 @@ export async function startPlugin(pluginName) {
 }
 
 /**
+ * Start a plugin in its own visible console window (Windows only).
+ * Generates a PS1 launcher that opens a normal PowerShell window running the
+ * plugin's start_command in foreground. The real server PID is written to
+ * data/plugin-<name>.pid so stopPlugin can kill it by PID.
+ */
+async function startPluginVisible(pluginName, manifest) {
+  const dataDir = join(ROOT_DIR, 'data');
+  mkdirSync(dataDir, { recursive: true });
+
+  const parts = manifest.start_command.split(' ');
+  const cmd = parts[0];
+  const args = parts.slice(1);
+  const cmdStr = args.length > 0 ? `& ${cmd} ${args.join(' ')}` : `& ${cmd}`;
+
+  const portTag = manifest.port ? ` (port ${manifest.port})` : '';
+  const title = `Glitch: ${pluginName}${portTag}`;
+
+  const ps1Path = join(dataDir, `plugin-${pluginName}-window.ps1`);
+  const pidFilePath = join(dataDir, `plugin-${pluginName}.pid`);
+
+  const esc = (s) => s.replace(/'/g, "''");
+
+  const innerCommand = `& { $host.ui.RawUI.WindowTitle = '${esc(title)}'; Set-Location -LiteralPath '${esc(ROOT_DIR)}'; ${cmdStr} }`;
+  const ps1Inner = esc(innerCommand);
+  const ps1PidPath = esc(pidFilePath);
+
+  const ps1Content =
+    `$proc = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-Command', '${ps1Inner}')\r\n` +
+    `if ($proc) { $proc.Id | Out-File -FilePath '${ps1PidPath}' -Encoding ascii }\r\n`;
+
+  try {
+    writeFileSync(ps1Path, ps1Content, 'utf-8');
+
+    const launcher = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path], {
+      cwd: ROOT_DIR,
+      stdio: 'ignore',
+      windowsHide: true,
+      detached: false,
+    });
+    launcher.unref();
+    launcher._visibleWindow = true;
+    activePlugins.set(pluginName, launcher);
+
+    let launcherFailed = false;
+    launcher.on('exit', () => { launcherFailed = true; });
+
+    let realPid = null;
+    const startedAt = Date.now();
+    while (Date.now() - startedAt < VISIBLE_WINDOW_PID_RETRY_MS) {
+      await new Promise(r => setTimeout(r, 100));
+      if (existsSync(pidFilePath)) {
+        try {
+          const content = readFileSync(pidFilePath, 'utf-8').trim();
+          const parsed = parseInt(content, 10);
+          if (parsed > 0) { realPid = parsed; break; }
+        } catch {}
+      }
+      if (launcherFailed && !existsSync(pidFilePath)) break;
+    }
+
+    if (!realPid && launcherFailed) {
+      try { unlinkSync(ps1Path); } catch {}
+      try { unlinkSync(pidFilePath); } catch {}
+      activePlugins.delete(pluginName);
+      return { success: false, error: `Launcher exited before creating the visible window for "${pluginName}"` };
+    }
+
+    return { success: true, pid: realPid || launcher.pid };
+  } catch (err) {
+    try { unlinkSync(ps1Path); } catch {}
+    try { unlinkSync(pidFilePath); } catch {}
+    return { success: false, error: err.message };
+  }
+}
+
+/**
  * Stop a plugin's server process by name.
  */
 export function stopPlugin(pluginName) {
+  const dataDir = join(ROOT_DIR, 'data');
+  const pidFilePath = join(dataDir, `plugin-${pluginName}.pid`);
+  const ps1Path = join(dataDir, `plugin-${pluginName}-window.ps1`);
+
+  if (existsSync(pidFilePath)) {
+    const pid = parseInt(readFileSync(pidFilePath, 'utf-8').trim(), 10);
+    if (pid > 0) {
+      let taskkillOk = false;
+      let taskkillMsg = '';
+      try {
+        execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'pipe' });
+        taskkillOk = true;
+      } catch (err) {
+        const msg = (err && err.message) || '';
+        const status = err && err.status;
+        if (status === 128 || /not found/i.test(msg) || /No tasks running/i.test(msg)) {
+          taskkillOk = true;
+        } else {
+          taskkillMsg = msg || String(err);
+        }
+      }
+      if (!taskkillOk) {
+        return { success: false, error: `Failed to stop "${pluginName}": ${taskkillMsg}` };
+      }
+    }
+    try { unlinkSync(pidFilePath); } catch {}
+    try { unlinkSync(ps1Path); } catch {}
+    activePlugins.delete(pluginName);
+    return { success: true };
+  }
+
   const proc = activePlugins.get(pluginName);
   if (!proc) {
     return { success: false, error: `Plugin "${pluginName}" is not running` };
@@ -238,10 +360,45 @@ export async function startEnabledPlugins() {
 export function stopAllPlugins() {
   const results = [];
   for (const [name, proc] of activePlugins) {
-    try {
-      if (!proc.killed) proc.kill();
-    } catch {}
-    results.push({ name, stopped: true });
+    if (proc._visibleWindow) {
+      results.push({ name, stopped: false, reason: 'visible-window plugin persists independently' });
+      continue;
+    }
+    const dataDir = join(ROOT_DIR, 'data');
+    const pidFilePath = join(dataDir, `plugin-${name}.pid`);
+    const ps1Path = join(dataDir, `plugin-${name}-window.ps1`);
+
+    if (existsSync(pidFilePath)) {
+      const pid = parseInt(readFileSync(pidFilePath, 'utf-8').trim(), 10);
+      let taskkillOk = true;
+      let taskkillMsg = '';
+      if (pid > 0) {
+        try {
+          execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'pipe' });
+        } catch (err) {
+          const msg = (err && err.message) || '';
+          const status = err && err.status;
+          if (status === 128 || /not found/i.test(msg) || /No tasks running/i.test(msg)) {
+            taskkillOk = true;
+          } else {
+            taskkillOk = false;
+            taskkillMsg = msg || String(err);
+          }
+        }
+      }
+      if (taskkillOk) {
+        try { unlinkSync(pidFilePath); } catch {}
+        try { unlinkSync(ps1Path); } catch {}
+        results.push({ name, stopped: true });
+      } else {
+        results.push({ name, stopped: false, error: `Failed to stop "${name}": ${taskkillMsg}` });
+      }
+    } else {
+      try {
+        if (!proc.killed) proc.kill();
+      } catch {}
+      results.push({ name, stopped: true });
+    }
   }
   activePlugins.clear();
   return results;

@@ -564,23 +564,73 @@ Write-Success "Bootstrap completed successfully"
 # 4.5. Install GitNexus (MCP code graph)
 Write-Header "Installing GitNexus (MCP code graph)..."
 $gitnexusOk = $false
-try {
-    $npmCmd = (Get-Command npm -ErrorAction SilentlyContinue).Source
-    if (-not $npmCmd -or -not (Test-Path $npmCmd)) {
-        $npmCmd = Join-Path "$InstallDir" "data\node\npm.cmd"
-    }
-    if (Test-Path $npmCmd) {
-        Write-Step "Installing gitnexus via npm (MCP code graph)..."
-        & $npmCmd install -g gitnexus 2>&1 | Out-Null
-        $gitnexusOk = ($LASTEXITCODE -eq 0)
-    }
-} catch {
-    $gitnexusOk = $false
+$bundledNodeBin = Join-Path $InstallDir "data\node"
+$bundledNpm = Join-Path $bundledNodeBin "npm.cmd"
+
+# Skip if gitnexus is already present (bundled tree or PATH)
+$alreadyInstalled = $false
+if ((Test-Path (Join-Path $bundledNodeBin "node_modules\gitnexus")) -or
+    (Test-Path (Join-Path $bundledNodeBin "gitnexus.cmd")) -or
+    (Test-Path (Join-Path $bundledNodeBin "gitnexus.exe")) -or
+    (Get-Command gitnexus -ErrorAction SilentlyContinue)) {
+    $alreadyInstalled = $true
 }
+
+if ($alreadyInstalled) {
+    $gitnexusOk = $true
+    Write-Success "GitNexus already installed (MCP code graph)"
+} else {
+    # Prefer bundled npm (always writable, correct Node version); fall back to system npm
+    $npmCmd = $null
+    if (Test-Path $bundledNpm) {
+        $npmCmd = $bundledNpm
+    } else {
+        $sysNpm = Get-Command npm -ErrorAction SilentlyContinue
+        if ($sysNpm -and (Test-Path $sysNpm.Source)) {
+            $npmCmd = $sysNpm.Source
+        }
+    }
+
+    if ($npmCmd) {
+        # Prepend bundled node bin to PATH so postinstall scripts and bare node/npx
+        # resolve the bundled node (gitnexus requires node >=22)
+        $env:PATH = "$bundledNodeBin;$env:PATH"
+
+        Write-Step "Installing gitnexus via npm (MCP code graph)..."
+        try {
+            & $npmCmd install -g gitnexus
+            if ($LASTEXITCODE -eq 0) {
+                $gitnexusOk = $true
+            }
+        } catch {
+            Write-Warn "GitNexus install threw exception: $_"
+            $gitnexusOk = $false
+        }
+
+        # Verify after install
+        if (-not $gitnexusOk) {
+            if ((Test-Path (Join-Path $bundledNodeBin "gitnexus.cmd")) -or
+                (Test-Path (Join-Path $bundledNodeBin "gitnexus.exe")) -or
+                (Test-Path (Join-Path $bundledNodeBin "node_modules\gitnexus"))) {
+                $gitnexusOk = $true
+            } else {
+                try {
+                    $listOut = & $npmCmd list -g --depth=0 gitnexus 2>&1
+                    if ($LASTEXITCODE -eq 0 -and $listOut -match 'gitnexus@') {
+                        $gitnexusOk = $true
+                    }
+                } catch {}
+            }
+        }
+    } else {
+        Write-Warn "No npm found (bundled or system). Cannot install GitNexus."
+    }
+}
+
 if ($gitnexusOk) {
     Write-Success "GitNexus installed (MCP code graph)"
 } else {
-    Write-Warn "GitNexus install skipped/failed (non-fatal). MCP code graph needs: npm install -g gitnexus"
+    Write-Warn "GitNexus install failed (non-fatal). Manual install: cd $InstallDir; .\data\node\npm.cmd install -g gitnexus"
 }
 
 # 5. User profile setup
@@ -771,6 +821,18 @@ timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
 # Reminders
 "@
         Set-Content -LiteralPath "$userDir\reminders.md" -Value $starterReminders -Encoding UTF8
+
+        $starterDashboard = @"
+---
+type: Dashboard
+title: Session Dashboard
+description: Active workstream tracker
+tags: [dashboard]
+timestamp: $(Get-Date -Format "yyyy-MM-ddTHH:mm:ssZ")
+---
+# Session Dashboard
+"@
+        Set-Content -LiteralPath "$userDir\session-dashboard.md" -Value $starterDashboard -Encoding UTF8
 
         # Initialize git on main branch (never master) so the profile is ready for sync
         Push-Location $userDir
