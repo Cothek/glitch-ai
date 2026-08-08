@@ -48,7 +48,7 @@ from a previous session. Check for each binary directly.
 
 ### 0.4 Create Working Directory
 ```
-mkdir -p reports/security/YYYY-MM-DD-targetname/
+mkdir -p data/reports/security/YYYY-MM-DD-targetname/
 ```
 All findings, logs, and reports go here.
 
@@ -145,13 +145,13 @@ Identify external services the app talks to:
 Run template-based vulnerability scanning against web targets:
 ```bash
 # Basic scan against target URL
-tools/security/nuclei.exe -u <target-url> -o reports/security/nuclei-results.txt
+tools/security/nuclei.exe -u <target-url> -o data/reports/security/nuclei-results.txt
 
 # Focused scan: OWASP Top 10 templates
-tools/security/nuclei.exe -u <target-url> -t ~/nuclei-templates/http/cves/ -o reports/security/nuclei-cves.txt
+tools/security/nuclei.exe -u <target-url> -t ~/nuclei-templates/http/cves/ -o data/reports/security/nuclei-cves.txt
 
 # Tech stack detection
-tools/security/nuclei.exe -u <target-url> -t ~/nuclei-templates/http/technologies/ -o reports/security/tech-stack.txt
+tools/security/nuclei.exe -u <target-url> -t ~/nuclei-templates/http/technologies/ -o data/reports/security/tech-stack.txt
 ```
 
 **Interpreting results**: Each finding includes a severity (critical/high/medium/low/info), description, and reference URL. Verified findings go into the report.
@@ -450,7 +450,7 @@ If the app uses JWT:
 ```
 
 ### 7.3 Report Delivery
-- Store report to `reports/security/YYYY-MM-DD-targetname/report.md`
+- Store report to `data/reports/security/YYYY-MM-DD-targetname/report.md`
 - If findings are critical/high, alert immediately
 - Include raw tool output files in the report directory
 
@@ -479,5 +479,5 @@ Before finalizing a report:
 - [ ] Security headers checked
 - [ ] Every finding includes reproduction steps
 - [ ] False positives identified and filtered out
-- [ ] Report stored to `reports/security/YYYY-MM-DD/`
+- [ ] Report stored to `data/reports/security/YYYY-MM-DD/`
 - [ ] CRITICAL findings reported immediately if any

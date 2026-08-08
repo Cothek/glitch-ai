@@ -88,6 +88,10 @@ tools/security/*.exe
 tools/security/*.tar.gz
 tools/security/*.zip
 
+# Moved to data/ (2026-08-08) — historical UI mockups, security reports
+/samples/
+/reports/
+
 # Runtime data directory (config backups, node bundle, model cache, screenshots)
 data/
 

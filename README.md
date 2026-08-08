@@ -141,8 +141,7 @@ glitch-ai/                    ← This repo (public)
 ├── plugins/                  ← Auth proxy, helpers
 ├── opencode/                 ← OpenCode binary
 ├── handy-voice/              ← Offline voice-to-text
-├── cloudflared.exe           ← Cloudflare Tunnel binary
-└── tools/                    ← Debug utilities
+└── cloudflared.exe           ← Cloudflare Tunnel binary
 ```
 
 ## What's Inside
