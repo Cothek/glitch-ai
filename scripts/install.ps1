@@ -201,6 +201,8 @@ function Ask-DesktopShortcut {
             $sc.WorkingDirectory = $InstallDir
             $sc.WindowStyle = 1   # normal window
             $sc.Description = "Launch Glitch AI"
+            $iconPath = Join-Path $InstallDir 'assets\glitch-icon.ico'
+            if (Test-Path $iconPath) { $sc.IconLocation = "$iconPath,0" }
             $sc.Save()
             [System.Runtime.Interopservices.Marshal]::ReleaseComObject($ws) | Out-Null
             Write-Success "  Desktop shortcut created: $shortcutPath"

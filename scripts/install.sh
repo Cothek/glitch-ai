@@ -207,6 +207,7 @@ offer_desktop_shortcut() {
                 printf 'Exec=%q\n' "$launcher"
                 printf 'Terminal=true\n'
                 printf 'Categories=Development;\n'
+                printf 'Icon=%s\n' "$INSTALL_DIR/assets/glitch-icon.png"
             } > "$shortcut" && chmod +x "$shortcut"; then
                 success "Desktop shortcut created: $shortcut"
             else
