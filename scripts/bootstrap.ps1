@@ -161,7 +161,7 @@ if ($existingGit) {
   Write-Host "[2/6] MinGit -- git found: $existingGit" -ForegroundColor DarkGreen
 } elseif (Test-Path $gitBin) {
   Write-Host "[2/6] MinGit -- bundled git found at $gitBin" -ForegroundColor DarkGreen
-  $env:PATH = "$gitToolsDir\cmd;$env:PATH"
+  $env:PATH = "$gitToolsDir\cmd;$gitToolsDir\usr\bin;$env:PATH"
 } else {
   Write-Host "[2/6] Installing MinGit (portable Git)..." -ForegroundColor Cyan
   try {
@@ -235,7 +235,7 @@ if ($existingGit) {
       throw "MinGit binary not found after extraction at $gitBin"
     }
     # Add to PATH so the next step (submodules) can use git in-process
-    $env:PATH = "$gitToolsDir\cmd;$env:PATH"
+    $env:PATH = "$gitToolsDir\cmd;$gitToolsDir\usr\bin;$env:PATH"
     Write-Host "  MinGit installed to $gitToolsDir" -ForegroundColor Green
   } catch {
     Write-Host "  ERROR installing MinGit: $_" -ForegroundColor Red

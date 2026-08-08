@@ -389,7 +389,7 @@ if (Test-GitInPersistedPath) {
                 if (-not (Test-Path $gitBin)) {
                     throw "MinGit binary not found after extraction at $gitBin"
                 }
-                $env:PATH = "$gitStagedDir\cmd;$env:PATH"
+                $env:PATH = "$gitStagedDir\cmd;$gitStagedDir\usr\bin;$env:PATH"
                 $gitPath = $gitBin
                 $gitProvisioned = $true
                 $gitNeedsPersistence = $true
@@ -528,7 +528,7 @@ if (-not (Test-Path "$InstallDir\.git")) {
         }
         Remove-Item $gitStagedDir -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item (Join-Path $env:TEMP "glitch-mingit.zip") -Force -ErrorAction SilentlyContinue
-        $env:PATH = "$finalGitDir\cmd;$env:PATH"
+        $env:PATH = "$finalGitDir\cmd;$finalGitDir\usr\bin;$env:PATH"
         $gitPath = Join-Path $finalGitDir "cmd\git.exe"
         Write-Success "MinGit installed to $finalGitDir"
     }

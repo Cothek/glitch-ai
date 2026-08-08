@@ -8,9 +8,9 @@ if exist "%~dp0..\data\node\node.exe" (
   set "PATH=%~dp0..\data\node;%PATH%"
 )
 echo [%date% %time%] glitch.bat %* >> "%LOG_FILE%" 2>&1
-REM Add bundled MinGit to PATH if present
+REM Add bundled MinGit to PATH if present (cmd/ for git.exe, usr/bin/ for bash.exe etc.)
 if exist "%~dp0..\data\mingit\cmd\git.exe" (
-  set "PATH=%~dp0..\data\mingit\cmd;%PATH%"
+  set "PATH=%~dp0..\data\mingit\cmd;%~dp0..\data\mingit\usr\bin;%PATH%"
 )
 REM Run node script with live output
 "%NODE_CMD%" "%~dp0scripts\glitch.mjs" %*
