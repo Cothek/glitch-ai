@@ -3,7 +3,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { resolve, relative } from 'node:path';
 
-const DEFAULT_PATH = 'samples/design-system.html';
+const DEFAULT_PATH = 'data/samples/design-system.html';
 const SECTIONS = ['color', 'typography', 'spacing', 'radius', 'shadow', 'breakpoints', 'transition', 'components', 'all'];
 
 function parseArgs(argv) {
@@ -36,7 +36,7 @@ USAGE
   node scripts/extract-design-tokens.mjs [options]
 
 OPTIONS
-  --path <path>      Path to HTML file (default: samples/design-system.html)
+  --path <path>      Path to HTML file (default: data/samples/design-system.html)
   --section <name>   Extract one section: color, typography, spacing, radius,
                      shadow, breakpoints, transition, components, or all (default: all)
   --json             Output raw JSON (for piping)

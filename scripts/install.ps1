@@ -112,6 +112,27 @@ function Test-GitInPersistedPath {
     return $null -ne (Get-PersistedGitPath)
 }
 
+# Find node.exe via the PERSISTED (global) PATH -- same philosophy as the git
+# check above. The session $env:PATH is NOT authoritative because launch
+# scripts prepend bundled Node.js at every launch without persisting it.
+function Get-PersistedNodePath {
+    foreach ($scope in @('User', 'Machine')) {
+        $pathValue = [Environment]::GetEnvironmentVariable('Path', $scope)
+        if ([string]::IsNullOrEmpty($pathValue)) { continue }
+        foreach ($entry in $pathValue.Split(';')) {
+            $trimmed = $entry.Trim().Trim('"').TrimEnd('\')
+            if ([string]::IsNullOrEmpty($trimmed)) { continue }
+            $candidate = Join-Path $trimmed 'node.exe'
+            if (Test-Path $candidate) { return $candidate }
+        }
+    }
+    return $null
+}
+
+function Test-NodeInPersistedPath {
+    return $null -ne (Get-PersistedNodePath)
+}
+
 # -- Spinner helper for long operations --
 # Shows a rotating spinner + elapsed seconds while a background job runs.
 # Use $using:varName inside the scriptblock to pass parent variables.
@@ -171,6 +192,32 @@ function Ask-PersistGitOnPath {
         }
     } else {
         Write-Step "  Skipped. You can add Git to your PATH later if needed."
+    }
+}
+
+# Ask whether to persist the bundled Node.js directory on the user PATH so
+# node/npm work in any terminal. Takes the bundled node bin directory
+# ($InstallDir\data\node).
+function Ask-PersistNodeOnPath {
+    param([string]$NodeDir)
+    Write-Host "  Node.js is installed but not on your system PATH." -ForegroundColor Yellow
+    Write-Host "  node will only work inside Glitch's launcher unless we add it." -ForegroundColor Yellow
+    Write-Prompt "  Add Node.js to your Windows user PATH so it works in any terminal? (Y/n): "
+    $persistAnswer = Read-Host
+    if ($persistAnswer -eq '' -or $persistAnswer -like 'y*') {
+        try {
+            $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+            $newUserPath = if ([string]::IsNullOrEmpty($userPath)) { $NodeDir } else { "$NodeDir;$userPath" }
+            [Environment]::SetEnvironmentVariable('Path', $newUserPath, 'User')
+            Write-Success "  Node.js added to your user PATH. New terminals will recognize node."
+            Write-Host "  Note: existing/open terminals need to be restarted to pick up the new PATH." -ForegroundColor DarkGray
+        } catch {
+            Write-Warn "  Could not update PATH automatically: $_"
+            Write-Host "  You can add it manually later with:" -ForegroundColor Yellow
+            Write-Host "    [Environment]::SetEnvironmentVariable('Path', '$NodeDir;' + [Environment]::GetEnvironmentVariable('Path','User'), 'User')" -ForegroundColor Gray
+        }
+    } else {
+        Write-Step "  Skipped. You can add Node.js to your PATH later if needed."
     }
 }
 
@@ -344,7 +391,7 @@ if (Test-GitInPersistedPath) {
                 if (-not (Test-Path $gitBin)) {
                     throw "MinGit binary not found after extraction at $gitBin"
                 }
-                $env:PATH = "$gitStagedDir\cmd;$env:PATH"
+                $env:PATH = "$gitStagedDir\cmd;$gitStagedDir\usr\bin;$env:PATH"
                 $gitPath = $gitBin
                 $gitProvisioned = $true
                 $gitNeedsPersistence = $true
@@ -483,7 +530,7 @@ if (-not (Test-Path "$InstallDir\.git")) {
         }
         Remove-Item $gitStagedDir -Recurse -Force -ErrorAction SilentlyContinue
         Remove-Item (Join-Path $env:TEMP "glitch-mingit.zip") -Force -ErrorAction SilentlyContinue
-        $env:PATH = "$finalGitDir\cmd;$env:PATH"
+        $env:PATH = "$finalGitDir\cmd;$finalGitDir\usr\bin;$env:PATH"
         $gitPath = Join-Path $finalGitDir "cmd\git.exe"
         Write-Success "MinGit installed to $finalGitDir"
     }
@@ -605,6 +652,14 @@ if ($bootstrapExit -ne 0) {
     throw "Installation failed"
 }
 Write-Success "Bootstrap completed successfully"
+
+# Offer to persist bundled Node.js on the user PATH (only if node actually
+# exists and is not already on the persisted User/Machine PATH).
+$bundledNodeExe = Join-Path $InstallDir "data\node\node.exe"
+if ((Test-Path $bundledNodeExe) -and -not (Test-NodeInPersistedPath)) {
+    $bundledNodeDir = Join-Path $InstallDir "data\node"
+    Ask-PersistNodeOnPath -NodeDir $bundledNodeDir
+}
 
 # 4.5. Install GitNexus (MCP code graph)
 Write-Header "Installing GitNexus (MCP code graph)..."

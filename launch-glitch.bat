@@ -9,9 +9,9 @@ if exist "%~dp0data\node\node.exe" (
   set "PATH=%~dp0data\node;%PATH%"
 )
 
-REM Add bundled MinGit to PATH if present
+REM Add bundled MinGit to PATH if present (cmd/ for git.exe, usr/bin/ for bash.exe etc.)
 if exist "%~dp0data\mingit\cmd\git.exe" (
-  set "PATH=%~dp0data\mingit\cmd;%PATH%"
+  set "PATH=%~dp0data\mingit\cmd;%~dp0data\mingit\usr\bin;%PATH%"
 )
 
 REM Auto-bootstrap if Node.js not available - neither bundled nor system

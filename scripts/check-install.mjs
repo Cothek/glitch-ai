@@ -249,6 +249,42 @@ check('Cloudflared', 'Tools', () => {
   };
 });
 
+check('Bash (MinGit)', 'Tools', () => {
+  if (isWin) {
+    const bashExe = join(ROOT_DIR, 'data', 'mingit', 'usr', 'bin', 'bash.exe');
+    if (existsSync(bashExe)) {
+      return {
+        ok: true,
+        version: null,
+        path: 'data/mingit/usr/bin/bash.exe',
+        note: 'bundled MinGit',
+      };
+    }
+    return {
+      ok: false,
+      version: null,
+      path: null,
+      note: 'MinGit not installed -- run scripts/bootstrap.ps1',
+    };
+  }
+  const v = safeExec('bash', ['--version']);
+  if (v) {
+    const m = v.match(/version\s+(\d+\.\d+(?:\.\d+)?)/i);
+    return {
+      ok: true,
+      version: m ? m[1] : 'available',
+      path: 'system',
+      note: null,
+    };
+  }
+  return {
+    ok: false,
+    version: null,
+    path: null,
+    note: 'bash not found -- install: apt install bash / brew install bash',
+  };
+});
+
 // Resolve `gitnexus` on PATH or in the bundled node tree. On Windows the global
 // npm install creates gitnexus.cmd (and gitnexus.exe on newer npm); on Unix it's
 // a single binary. We scan PATH entries directly so we don't depend on

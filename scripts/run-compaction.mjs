@@ -367,6 +367,51 @@ async function runDataAudit() {
   }
 }
 
+// --- Step 6b: Monthly data/ review check ---
+async function checkDataReview() {
+  const reviewScript = path.join(CWD, "scripts", "audit-data-review.mjs");
+  try {
+    await stat(reviewScript);
+  } catch {
+    return "✓ Data review: N/A (script not found)";
+  }
+
+  const reviewedFile = path.join(CWD, "data", "last-data-review.json");
+  let lastReview = null;
+  try {
+    const raw = await readFile(reviewedFile, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (parsed.lastReview) lastReview = new Date(parsed.lastReview);
+  } catch (e) {
+    if (e.code !== "ENOENT") warn(`Data review timestamp read failed: ${e.message}`);
+  }
+
+  const daysSinceReview = lastReview ? daysSince(lastReview) : null;
+  const isDue = daysSinceReview === null || daysSinceReview >= 30;
+
+  let summaryLine = "";
+  try {
+    const output = execSync(
+      `node "${reviewScript}" --json`,
+      { encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"], timeout: 30000 }
+    );
+    const parsed = JSON.parse(output.trim());
+    const cands = parsed.candidateCount || 0;
+    const reclaim = parsed.reclaimableHuman || "0 B";
+    summaryLine = `${cands} candidate(s) (~${reclaim} reclaimable)`;
+  } catch (e) {
+    warn(`Data review summary failed: ${e.message}`);
+    summaryLine = "summary unavailable";
+  }
+
+  if (isDue) {
+    const lastStr = lastReview ? formatDate(lastReview) : "never";
+    return `⚠️ DATA_REVIEW_DUE: Monthly data/ review is due (last: ${lastStr}) — run \`node scripts/audit-data-review.mjs\` | ${summaryLine}`;
+  }
+
+  return `✓ Data review: current (last ${formatDate(lastReview)}, ${daysSinceReview}d ago) | ${summaryLine}`;
+}
+
 // --- Step 4b: Touch timestamps on all user memory files ---
 async function touchAllTimestamps() {
   const userDir = path.join(CWD, "user");
@@ -437,6 +482,7 @@ async function touchAllTimestamps() {
 // --- Main ---
 async function main() {
   const auditResult = await runDataAudit();
+  const dataReviewResult = await checkDataReview();
   const results = {
     timestamp: await updateTimestamp(),
     diary: await checkDiaryStaleness(),
@@ -448,6 +494,7 @@ async function main() {
     skillImp: await checkSkillImprovements(),
     dataAudit: auditResult.dataAudit,
     quarantineScan: auditResult.quarantineScan,
+    dataReview: dataReviewResult,
   };
 
   // Split GC result into main line + potential alert
@@ -468,6 +515,7 @@ async function main() {
     ...results.git.split("\n"),
     results.dataAudit,
     ...results.quarantineScan.split("\n"),
+    results.dataReview,
     "",
     "=== Action Required ===",
     "⚠️ Step 6 — Pattern scan: Check scratchpad for 3x+ repeated workflows",

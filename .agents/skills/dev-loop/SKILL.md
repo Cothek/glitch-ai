@@ -291,7 +291,7 @@ When the same tool gets created in 3+ different dev loops, that's a Forge trigge
 
 5. **Dynamic security scan** — While the server is running, run nuclei against it:
    ```bash
-   tools/security/nuclei.exe -u http://localhost:3000 -o reports/security/dev-loop-nuclei.txt
+    tools/security/nuclei.exe -u http://localhost:3000 -o data/reports/security/dev-loop-nuclei.txt
    ```
    Parse results for any CRITICAL/HIGH findings. Add them to the failure context if found.
 
