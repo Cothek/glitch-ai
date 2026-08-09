@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 import { createHash } from 'node:crypto';
 import { writeFileSync, existsSync, mkdirSync, unlinkSync } from 'node:fs';
-import { resolve, join, dirname } from 'node:path';
+import { join, dirname } from 'node:path';
 import { execSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { fileExistsOnDiskOrBranch } from './lib/review-pass-helper.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -16,12 +17,14 @@ Options:
   --verdict <verdict>    Review verdict (default: "PASS")
   --agent <name>         Reviewer agent name (default: "reviewer")
   --files <list>         Comma-separated list of reviewed files (optional)
+  --target-branch <ref>  Allow files that resolve on a git ref (for pre-merge markers)
   --help                 Show this help message
 
 Examples:
   node scripts/write-review-pass.mjs
   node scripts/write-review-pass.mjs --verdict PASS --agent reviewer
-  node scripts/write-review-pass.mjs --files "src/file1.ts,src/file2.ts"`);
+  node scripts/write-review-pass.mjs --files "src/file1.ts,src/file2.ts"
+  node scripts/write-review-pass.mjs --files ".github/workflows/validate-submodules.yml" --target-branch origin/main`);
 }
 
 function parseArgs(argv) {
@@ -29,6 +32,7 @@ function parseArgs(argv) {
     verdict: 'PASS',
     agent: 'reviewer',
     files: null,
+    targetBranch: null,
   };
 
   for (let i = 0; i < argv.length; i++) {
@@ -47,6 +51,9 @@ function parseArgs(argv) {
         break;
       case '--files':
         args.files = argv[++i] ?? null;
+        break;
+      case '--target-branch':
+        args.targetBranch = argv[++i] ?? null;
         break;
       default:
         console.error(`Unknown argument: ${arg}`);
@@ -75,21 +82,29 @@ function getChangedFiles() {
   }
 }
 
-function validateFiles(files) {
+function validateFiles(files, branchRef = null) {
   const validated = [];
+  let diskCount = 0;
+  let branchCount = 0;
   for (const file of files) {
     if (!file || typeof file !== 'string') {
       console.error(`Invalid file path: ${file}`);
       return null;
     }
-    const absolute = resolve(ROOT, file);
-    if (!existsSync(absolute)) {
+    const result = fileExistsOnDiskOrBranch(file, ROOT, branchRef);
+    if (!result.exists) {
       console.error(`File does not exist: ${file}`);
       return null;
     }
+    if (result.source === 'branch') {
+      console.log(`⚠ File ${file} only exists on ${branchRef} — allowed for pre-merge markers`);
+      branchCount++;
+    } else {
+      diskCount++;
+    }
     validated.push(file);
   }
-  return validated;
+  return { files: validated, diskCount, branchCount };
 }
 
 function computeHash(files) {
@@ -126,18 +141,22 @@ function main() {
   const changedFiles = getChangedFiles();
 
   let reviewedFiles;
+  let diskCount = 0;
+  let branchCount = 0;
   if (args.files) {
     const provided = args.files
       .split(',')
       .map((f) => f.trim())
       .filter((f) => f.length > 0);
-    const validated = validateFiles(provided);
+    const validated = validateFiles(provided, args.targetBranch);
     if (validated === null) {
       console.error('Path validation failed. Resetting marker.');
       resetMarker();
       process.exit(1);
     }
-    reviewedFiles = validated;
+    reviewedFiles = validated.files;
+    diskCount = validated.diskCount;
+    branchCount = validated.branchCount;
   } else {
     reviewedFiles = changedFiles;
   }
@@ -155,13 +174,23 @@ function main() {
     hash: computeHash(reviewedFiles),
   };
 
+  if (args.targetBranch) {
+    marker.target_branch = args.targetBranch;
+  }
+
   try {
     writeMarker(marker);
     console.log(`Review pass marker written: ${MARKER_PATH}`);
     console.log(`  Verdict: ${marker.verdict}`);
     console.log(`  Agent: ${marker.reviewer_agent}`);
     console.log(`  Files: ${marker.files.length}`);
+    if (branchCount > 0) {
+      console.log(`  Files: disk: ${diskCount}, branch-only: ${branchCount}`);
+    }
     console.log(`  Hash: ${marker.hash.slice(0, 16)}...`);
+    if (args.targetBranch) {
+      console.log(`  Target branch: ${args.targetBranch}`);
+    }
   } catch (err) {
     console.error(`Failed to write marker: ${err.message}`);
     process.exit(1);
