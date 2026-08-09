@@ -249,6 +249,22 @@ check('Cloudflared', 'Tools', () => {
   };
 });
 
+function findBashViaSystemGit() {
+  if (process.platform !== 'win32') return null;
+  const pathDirs = (process.env.PATH || process.env.Path || '')
+    .split(';').map(p => p.trim().replace(/^"|"$/g, '')).filter(Boolean);
+  for (const dir of pathDirs) {
+    const gitExe = join(dir, 'git.exe');
+    if (existsSync(gitExe)) {
+      const gitRoot = dirname(dir);
+      const usrBin = join(gitRoot, 'usr', 'bin');
+      const bashExe = join(usrBin, 'bash.exe');
+      if (existsSync(bashExe)) return bashExe;
+    }
+  }
+  return null;
+}
+
 check('Bash (MinGit)', 'Tools', () => {
   if (isWin) {
     const bashExe = join(ROOT_DIR, 'data', 'mingit', 'usr', 'bin', 'bash.exe');
@@ -260,11 +276,20 @@ check('Bash (MinGit)', 'Tools', () => {
         note: 'bundled MinGit',
       };
     }
+    const sysBash = findBashViaSystemGit();
+    if (sysBash) {
+      return {
+        ok: true,
+        version: null,
+        path: sysBash,
+        note: 'system git bash',
+      };
+    }
     return {
       ok: false,
       version: null,
       path: null,
-      note: 'MinGit not installed -- run scripts/bootstrap.ps1',
+      note: 'Bash not found (no bundled MinGit and no system git bash) -- run scripts/bootstrap.ps1',
     };
   }
   const v = safeExec('bash', ['--version']);

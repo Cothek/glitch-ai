@@ -133,6 +133,21 @@ function Test-NodeInPersistedPath {
     return $null -ne (Get-PersistedNodePath)
 }
 
+function Test-PathInPersistedPath {
+    param([string]$TargetDir)
+    $target = $TargetDir.Trim().Replace('/', '\').TrimEnd('\').ToLowerInvariant()
+    foreach ($scope in @('User', 'Machine')) {
+        $pathValue = [Environment]::GetEnvironmentVariable('Path', $scope)
+        if ([string]::IsNullOrEmpty($pathValue)) { continue }
+        foreach ($entry in $pathValue.Split(';')) {
+            $trimmed = $entry.Trim().Trim('"').Replace('/', '\').TrimEnd('\')
+            if ([string]::IsNullOrEmpty($trimmed)) { continue }
+            if ($trimmed.ToLowerInvariant() -eq $target) { return $true }
+        }
+    }
+    return $false
+}
+
 # -- Spinner helper for long operations --
 # Shows a rotating spinner + elapsed seconds while a background job runs.
 # Use $using:varName inside the scriptblock to pass parent variables.
@@ -656,9 +671,11 @@ Write-Success "Bootstrap completed successfully"
 # Offer to persist bundled Node.js on the user PATH (only if node actually
 # exists and is not already on the persisted User/Machine PATH).
 $bundledNodeExe = Join-Path $InstallDir "data\node\node.exe"
-if ((Test-Path $bundledNodeExe) -and -not (Test-NodeInPersistedPath)) {
-    $bundledNodeDir = Join-Path $InstallDir "data\node"
+$bundledNodeDir = Join-Path $InstallDir "data\node"
+if ((Test-Path $bundledNodeExe) -and -not (Test-PathInPersistedPath -TargetDir $bundledNodeDir)) {
     Ask-PersistNodeOnPath -NodeDir $bundledNodeDir
+} elseif (Test-Path $bundledNodeExe) {
+    Write-Step "Bundled Node.js is already on your persisted PATH (no need to add it)."
 }
 
 # 4.5. Install GitNexus (MCP code graph)
@@ -697,6 +714,9 @@ if ($alreadyInstalled) {
         $env:PATH = "$bundledNodeBin;$env:PATH"
 
         Write-Step "Installing gitnexus via npm (MCP code graph)..."
+        $script:GitNexusInstallException = $null
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
         try {
             [string[]]$npmOutput = & $npmCmd install -g gitnexus 2>&1
             if ($LASTEXITCODE -eq 0) {
@@ -707,8 +727,10 @@ if ($alreadyInstalled) {
                 $npmOutput | ForEach-Object { Write-Host "  $_" -ForegroundColor DarkYellow }
             }
         } catch {
-            Write-Warn "GitNexus install threw exception: $_"
+            $script:GitNexusInstallException = $_
             $gitnexusOk = $false
+        } finally {
+            $ErrorActionPreference = $prevEAP
         }
 
         # Verify after install
@@ -733,6 +755,9 @@ if ($alreadyInstalled) {
 
 if ($gitnexusOk) {
     Write-Success "GitNexus installed (MCP code graph)"
+} elseif ($script:GitNexusInstallException) {
+    Write-Warn "GitNexus install had an issue (non-fatal): $($script:GitNexusInstallException.Exception.Message)"
+    Write-Host "  Manual install: cd $InstallDir; .\data\node\npm.cmd install -g gitnexus" -ForegroundColor DarkGray
 } else {
     Write-Warn "GitNexus install failed (non-fatal). Manual install: cd $InstallDir; .\data\node\npm.cmd install -g gitnexus"
 }
@@ -1029,6 +1054,11 @@ try {
 }
 Pop-Location
 
+# 6.7. Desktop shortcut offer (skipped when -NoShortcut is set)
+if (-not $NoShortcut) {
+    Ask-DesktopShortcut -InstallDir $InstallDir
+}
+
 # 7. Launch
 if (-not $NoLaunch) {
     Write-Header "Launch Glitch AI"
@@ -1046,11 +1076,6 @@ if (-not $NoLaunch) {
         Write-Host "    .\launch-glitch.bat" -ForegroundColor Gray
         Pop-Location
     }
-}
-
-# 7.5. Desktop shortcut offer (skipped when -NoShortcut is set)
-if (-not $NoShortcut) {
-    Ask-DesktopShortcut -InstallDir $InstallDir
 }
 
 # Summary of any install issues (shown only if something failed)

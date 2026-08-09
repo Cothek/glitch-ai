@@ -159,6 +159,13 @@ $existingGit = (Get-Command git -ErrorAction SilentlyContinue).Source
 
 if ($existingGit) {
   Write-Host "[2/6] MinGit -- git found: $existingGit" -ForegroundColor DarkGreen
+  $sysGitCmdDir = Split-Path $existingGit -Parent
+  $sysGitRootDir = Split-Path $sysGitCmdDir -Parent
+  $sysGitUsrBin = Join-Path $sysGitRootDir "usr\bin"
+  if (Test-Path (Join-Path $sysGitUsrBin "bash.exe")) {
+    $env:PATH = "$sysGitUsrBin;$env:PATH"
+    Write-Host "  Added system git's bash to PATH: $sysGitUsrBin" -ForegroundColor Cyan
+  }
 } elseif (Test-Path $gitBin) {
   Write-Host "[2/6] MinGit -- bundled git found at $gitBin" -ForegroundColor DarkGreen
   $env:PATH = "$gitToolsDir\cmd;$gitToolsDir\usr\bin;$env:PATH"
