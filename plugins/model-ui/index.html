@@ -614,6 +614,7 @@
             <p class="glitch-page-header__desc">Browse and manage agent model assignments. Changes are staged until you apply them.</p>
           </div>
           <div class="header-buttons gl-flex gl-gap-3" style="align-items: flex-start;">
+            <button class="gl-btn gl-btn--secondary gl-btn--md" id="btn-refresh-models">&#8635; Refresh Models</button>
             <button class="gl-btn gl-btn--secondary gl-btn--md" id="btn-rollback" disabled>&#8634; Rollback</button>
             <div class="restart-dropdown" style="position: relative;">
               <div class="restart-split-group">
@@ -1323,32 +1324,17 @@
         updatePendingUI();
 
         if (data.restarting) {
-          // Server mode: show restart overlay and poll
           showToast(`Changes applied. Restarting Glitch...`, 'success');
           document.querySelectorAll('.gl-btn').forEach(b => b.disabled = true);
           const overlay = document.createElement('div');
           overlay.id = 'restart-overlay';
           overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 16px;';
-          overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload automatically.</div>';
+          overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload in a moment.</div>';
           document.body.appendChild(overlay);
-          let attempts = 0;
-          const maxAttempts = 20;
-          function pollServer() {
-            attempts++;
-            fetch(`${API_BASE}/status`)
-              .then(r => {
-                if (r.ok) window.location.reload();
-                else if (attempts < maxAttempts) setTimeout(pollServer, 3000);
-                else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
-              })
-              .catch(() => {
-                if (attempts < maxAttempts) setTimeout(pollServer, 3000);
-                else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
-              });
-          }
-          setTimeout(pollServer, 3000);
+          setTimeout(() => window.location.reload(), 2500);
+        } else if (data.restart_error) {
+          showToast(`Changes applied but restart failed: ${data.restart_error}`, 'warning');
         } else {
-          // TUI mode: just show success message
           showToast(data.message || 'Changes applied. Please restart opencode manually.', 'success');
         }
       } catch (err) {
@@ -1363,28 +1349,20 @@
         const overlay = document.createElement('div');
         overlay.id = 'restart-overlay';
         overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 16px;';
-        overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload automatically.</div>';
+        overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload in a moment.</div>';
         document.body.appendChild(overlay);
         const data = await api('restart', { method: 'POST' });
-        if (data.restarting) {
-          let attempts = 0;
-          const maxAttempts = 20;
-          function pollServer() {
-            attempts++;
-            fetch(`${API_BASE}/status`)
-              .then(r => {
-                if (r.ok) window.location.reload();
-                else if (attempts < maxAttempts) setTimeout(pollServer, 3000);
-                else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
-              })
-              .catch(() => {
-                if (attempts < maxAttempts) setTimeout(pollServer, 3000);
-                else document.querySelector('#restart-overlay div:last-child').textContent = 'Server not responding. Please refresh manually.';
-              });
-          }
-          setTimeout(pollServer, 3000);
+        if (data.ok && data.restarting) {
+          setTimeout(() => window.location.reload(), 2500);
+        } else {
+          overlay.remove();
+          document.querySelectorAll('.gl-btn').forEach(b => b.disabled = false);
+          showToast(`Restart failed: ${data.error || 'Unknown error'}`, 'error');
         }
       } catch (err) {
+        const overlay = document.getElementById('restart-overlay');
+        if (overlay) overlay.remove();
+        document.querySelectorAll('.gl-btn').forEach(b => b.disabled = false);
         showToast(`Failed to restart: ${err.message}`, 'error');
       }
     }
@@ -1399,6 +1377,27 @@
         await loadStatus();
       } catch (err) {
         showToast(`Failed to rollback: ${err.message}`, 'error');
+      }
+    }
+
+    async function refreshModels() {
+      const btn = document.getElementById('btn-refresh-models');
+      const originalText = btn.innerHTML;
+      btn.disabled = true;
+      btn.innerHTML = '<span class="gl-spinner gl-spinner--sm" style="display:inline-block;vertical-align:middle;margin-right:4px;border-color:var(--glitch-text-secondary);border-top-color:transparent;"></span> Refreshing...';
+      try {
+        const data = await api('refresh-models', { method: 'POST' });
+        if (data.ok) {
+          showToast(`Models refreshed: ${data.total} total, ${data.nvidia} NVIDIA`, 'success');
+          await Promise.all([loadStatus(), loadAgents()]);
+        } else {
+          showToast(`Refresh failed: ${data.error}`, 'error');
+        }
+      } catch (err) {
+        showToast(`Failed to refresh models: ${err.message}`, 'error');
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = originalText;
       }
     }
 
@@ -1481,6 +1480,7 @@
     document.getElementById('model-retry-btn').addEventListener('click', fetchModels);
 
     document.getElementById('btn-rollback').addEventListener('click', rollbackChanges);
+    document.getElementById('btn-refresh-models').addEventListener('click', refreshModels);
 
     // Main Apply & Restart button - triggers apply directly
     document.getElementById('btn-apply-restart').addEventListener('click', (e) => {

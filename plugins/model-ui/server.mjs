@@ -141,30 +141,41 @@ function restartOpenCode() {
   writeFileSync(restartFlagPath, '1', 'utf-8');
   const pidFilePath = join(ROOT_DIR, 'data', 'opencode.pid');
   const logPath = join(ROOT_DIR, 'data', 'restart-kill.log');
+
+  let pidStr;
+  try {
+    pidStr = readFileSync(pidFilePath, 'utf-8').trim();
+  } catch (e) {
+    return { ok: false, error: `PID file not found: ${e.message}`, code: 'NO_PID_FILE' };
+  }
+
+  const pid = parseInt(pidStr, 10);
+  if (!pid || pid <= 0 || isNaN(pid)) {
+    return { ok: false, error: `Invalid PID in file: "${pidStr}"`, code: 'INVALID_PID' };
+  }
+
   setTimeout(() => {
     try {
-      const pidStr = readFileSync(pidFilePath, 'utf-8').trim();
-      const pid = parseInt(pidStr, 10);
-      if (pid > 0) {
-        const logMsg = `[${new Date().toISOString()}] Killing opencode PID ${pid}...\n`;
-        writeFileSync(logPath, logMsg, 'utf-8');
-        if (process.platform === 'win32') {
-          const killProc = spawn('taskkill', ['/PID', String(pid), '/F'], { stdio: ['ignore', 'pipe', 'pipe'] });
-          let stdout = '', stderr = '';
-          killProc.stdout.on('data', (d) => { stdout += d.toString(); });
-          killProc.stderr.on('data', (d) => { stderr += d.toString(); });
-          killProc.on('close', (code) => {
-            writeFileSync(logPath, `exit code: ${code}\nstdout: ${stdout}\nstderr: ${stderr}\n`, 'utf-8');
-          });
-        } else {
-          process.kill(pid, 'SIGTERM');
-          writeFileSync(logPath, 'SIGTERM sent\n', 'utf-8');
-        }
+      const logMsg = `[${new Date().toISOString()}] Killing opencode PID ${pid}...\n`;
+      writeFileSync(logPath, logMsg, 'utf-8');
+      if (process.platform === 'win32') {
+        const killProc = spawn('taskkill', ['/PID', String(pid), '/F'], { stdio: ['ignore', 'pipe', 'pipe'] });
+        let stdout = '', stderr = '';
+        killProc.stdout.on('data', (d) => { stdout += d.toString(); });
+        killProc.stderr.on('data', (d) => { stderr += d.toString(); });
+        killProc.on('close', (code) => {
+          writeFileSync(logPath, `exit code: ${code}\nstdout: ${stdout}\nstderr: ${stderr}\n`, 'utf-8');
+        });
+      } else {
+        process.kill(pid, 'SIGTERM');
+        writeFileSync(logPath, 'SIGTERM sent\n', 'utf-8');
       }
     } catch (e) {
       writeFileSync(logPath, `Error: ${e.message}\n`, 'utf-8');
     }
   }, 2000);
+
+  return { ok: true };
 }
 
 async function handler(req, res) {
@@ -417,14 +428,23 @@ async function handler(req, res) {
       const applied = pendingChanges.length;
       const changes = [...pendingChanges];
       pendingChanges = [];
+
+      const restartResult = restartOpenCode();
+      if (!restartResult.ok) {
+        sendJson(res, 503, { success: true, applied, changes, restarting: false, restart_error: restartResult.error, restart_code: restartResult.code });
+        return;
+      }
       sendJson(res, 200, { success: true, applied, changes, restarting: true });
-      restartOpenCode();
       return;
     }
 
     if (req.method === 'POST' && pathname === '/api/restart') {
-      sendJson(res, 200, { success: true, restarting: true });
-      restartOpenCode();
+      const restartResult = restartOpenCode();
+      if (!restartResult.ok) {
+        sendJson(res, 503, { ok: false, error: restartResult.error, code: restartResult.code });
+        return;
+      }
+      sendJson(res, 200, { ok: true, restarting: true });
       return;
     }
 
@@ -456,6 +476,68 @@ async function handler(req, res) {
         registry_age_hours: registryAgeHours,
         pending_changes: pendingChanges.length,
         backup_dir: existsSync(backupDir) ? 'data/backups' : 'not created',
+      });
+      return;
+    }
+
+    if (req.method === 'POST' && pathname === '/api/refresh-models') {
+      const scriptPath = join(ROOT_DIR, 'scripts', 'check-models.ps1');
+      if (!existsSync(scriptPath)) {
+        sendJson(res, 500, { ok: false, error: 'check-models.ps1 not found' });
+        return;
+      }
+
+      const proc = spawn('pwsh', ['-File', scriptPath, '-UpdateCache', '-Force'], {
+        cwd: ROOT_DIR,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true,
+      });
+
+      let stdout = '';
+      let stderr = '';
+      proc.stdout.on('data', (d) => { stdout += d.toString(); });
+      proc.stderr.on('data', (d) => { stderr += d.toString(); });
+
+      const REFRESH_TIMEOUT_MS = 180_000;
+      let timedOut = false;
+      const timeout = setTimeout(() => {
+        timedOut = true;
+        try { proc.kill('SIGTERM'); } catch {}
+      }, REFRESH_TIMEOUT_MS);
+
+      proc.on('close', (code) => {
+        clearTimeout(timeout);
+        if (code !== 0) {
+          const lastLines = stderr.trim().split('\n').slice(-10).join('\n');
+          const errorMsg = timedOut
+            ? `check-models.ps1 timed out after ${REFRESH_TIMEOUT_MS / 1000}s`
+            : `check-models.ps1 exited with code ${code}`;
+          sendJson(res, 500, {
+            ok: false,
+            error: errorMsg,
+            details: lastLines || stderr.trim().slice(-500),
+          });
+          return;
+        }
+
+        registryCacheTime = 0;
+        const freshRegistry = getRegistry();
+        const total = freshRegistry?.models?.length || 0;
+        const nvidia = (freshRegistry?.models || []).filter((m) => m.id?.startsWith('nvidia/')).length;
+        const generatedAt = freshRegistry?.generated_at || null;
+
+        sendJson(res, 200, {
+          ok: true,
+          total,
+          nvidia,
+          generatedAt,
+          refreshedAt: new Date().toISOString(),
+        });
+      });
+
+      proc.on('error', (err) => {
+        clearTimeout(timeout);
+        sendJson(res, 500, { ok: false, error: `Failed to spawn pwsh: ${err.message}` });
       });
       return;
     }
