@@ -288,6 +288,11 @@ if (-not $isGitRepo) {
 }
 
 # -- Step 4: OpenCode --
+$opencodeExtractDir = "$env:TEMP\opencode-extracted"
+# Prefer Windows' built-in bsdtar (handles C:\ paths). GNU tar from Git/MinGit
+# on PATH misreads "C:\..." as a remote host ("Cannot connect to C: resolve failed").
+$systemTarExe = Join-Path $env:SystemRoot "System32\tar.exe"
+$TarExe = if (Test-Path $systemTarExe) { $systemTarExe } else { 'tar' }
 $stepOk = $true
 if (-not (Test-Path $OpenCodeBin) -or $Force) {
   Write-Host "[4/6] Installing OpenCode..." -ForegroundColor Cyan
@@ -331,13 +336,13 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
       }
 
       Invoke-WithSpinner -Label "Extracting opencode" -ScriptBlock {
-        if (Test-Path "$using:extractDir") { Remove-Item "$using:extractDir" -Recurse -Force }
-        New-Item -ItemType Directory -Path "$using:extractDir" -Force | Out-Null
-        tar -xf $using:tgzPath -C $using:extractDir
+        if (Test-Path "$using:opencodeExtractDir") { Remove-Item "$using:opencodeExtractDir" -Recurse -Force }
+        New-Item -ItemType Directory -Path "$using:opencodeExtractDir" -Force | Out-Null
+        & $using:TarExe -xf $using:tgzPath -C $using:opencodeExtractDir --force-local
         if ($LASTEXITCODE -ne 0) { throw "tar extraction failed" }
       }
 
-      $extractedExe = Get-ChildItem $extractDir -Recurse -Filter "opencode.exe" | Select-Object -First 1
+      $extractedExe = Get-ChildItem $opencodeExtractDir -Recurse -Filter "opencode.exe" | Select-Object -First 1
       if ($extractedExe) {
         if (-not (Test-Path $OpenCodeDir)) { New-Item -ItemType Directory -Path $OpenCodeDir -Force | Out-Null }
         Move-Item $extractedExe.FullName $OpenCodeBin -Force
@@ -345,7 +350,7 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
         throw "Could not find opencode.exe in extracted package"
       }
       Remove-Item $tgzPath -Force -ErrorAction SilentlyContinue
-      Remove-Item $extractDir -Recurse -Force -ErrorAction SilentlyContinue
+      Remove-Item $opencodeExtractDir -Recurse -Force -ErrorAction SilentlyContinue
     }
     Write-Host "  OpenCode ready!" -ForegroundColor Green
   } catch {

@@ -528,7 +528,7 @@ if (-not (Test-Path "$InstallDir\.git")) {
         Push-Location $InstallDir
         $prevEAP = $ErrorActionPreference
         $ErrorActionPreference = "Continue"
-        & $gitPath checkout $Branch 2>$null
+        & $gitPath checkout $Branch 2>&1 | Out-Null
         $ErrorActionPreference = $prevEAP
         Pop-Location
     }

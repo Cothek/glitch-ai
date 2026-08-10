@@ -16,6 +16,15 @@ import { tmpdir } from 'os';
 import { execFileSync } from 'child_process';
 import { get as httpsGet } from 'https';
 
+function resolveTar() {
+  if (process.platform === 'win32') {
+    const sysTar = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+    if (existsSync(sysTar)) return sysTar;
+  }
+  return 'tar';
+}
+const TAR = resolveTar();
+
 // ANSI color codes (kept local so the module has no external deps)
 const CYAN = '\x1b[36m';
 const GREEN = '\x1b[32m';
@@ -168,7 +177,7 @@ function findFileRecursive(dir, fileName) {
  */
 function extractTarGz(tgzPath, destDir) {
   try {
-    execFileSync('tar', ['-xzf', tgzPath, '-C', destDir], {
+    execFileSync(TAR, ['-xzf', tgzPath, '-C', destDir], {
       stdio: ['ignore', 'ignore', 'pipe'],
       maxBuffer: 10 * 1024 * 1024,
     });

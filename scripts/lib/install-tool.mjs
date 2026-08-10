@@ -2,6 +2,15 @@ import { existsSync, mkdirSync, rmSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { tmpdir } from 'os';
 
+function resolveTar() {
+  if (process.platform === 'win32') {
+    const sysTar = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+    if (existsSync(sysTar)) return sysTar;
+  }
+  return 'tar';
+}
+const TAR = resolveTar();
+
 const CYAN = '\x1b[36m';
 const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
@@ -110,7 +119,7 @@ export async function installTool(options) {
         extractSuccess = result.success;
       }
     } else if (platformConfig.archive === 'targz') {
-      const result = run('tar', ['-xzf', archivePath, '-C', extractDir], { timeout: 60000 });
+      const result = run(TAR, ['-xzf', archivePath, '-C', extractDir], { timeout: 60000 });
       extractSuccess = result.success;
 
       if (!extractSuccess && isWin) {

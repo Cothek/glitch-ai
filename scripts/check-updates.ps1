@@ -1332,8 +1332,9 @@ try {
                 if ($platformConfig.archive -eq "zip") {
                   Expand-Archive -Path $archivePath -DestinationPath $binaryDir -Force
                 } elseif ($platformConfig.archive -eq "targz") {
-                  # tar.exe is available on Windows 10 1803+ (2018+)
-                  tar -xzf $archivePath -C $binaryDir 2>&1 | Out-Null
+                  $systemTarExe = Join-Path $env:SystemRoot "System32\tar.exe"
+                  $tarExe = if (Test-Path $systemTarExe) { $systemTarExe } else { 'tar' }
+                  & $tarExe -xzf $archivePath -C $binaryDir 2>&1 | Out-Null
                   if (-not (Test-Path $binaryPath)) {
                     # Fallback: search recursively for the binary
                     $found = Get-ChildItem -Path $binaryDir -Recurse -Filter "$toolName*" | Select-Object -First 1

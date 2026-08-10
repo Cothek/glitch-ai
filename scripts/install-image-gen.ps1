@@ -131,7 +131,9 @@ if (-not $SkipPython) {
     $null = New-Item -ItemType Directory -Path $extractTemp -Force
 
     try {
-      tar -xzf $archivePath -C $extractTemp 2>$null
+      $systemTarExe = Join-Path $env:SystemRoot "System32\tar.exe"
+      $tarExe = if (Test-Path $systemTarExe) { $systemTarExe } else { 'tar' }
+      & $tarExe -xzf $archivePath -C $extractTemp --force-local 2>&1 | Out-Null
       if ($LASTEXITCODE -ne 0) { throw "tar extraction failed with exit code $LASTEXITCODE" }
     } catch {
       Write-Warn "tar extraction failed, trying alternative..."

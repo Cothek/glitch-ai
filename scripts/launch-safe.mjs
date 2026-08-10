@@ -13,6 +13,15 @@ const isWin = platform() === 'win32';
 const isMac = platform() === 'darwin';
 const isLinux = platform() === 'linux';
 
+function resolveTar() {
+  if (process.platform === 'win32') {
+    const sysTar = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+    if (existsSync(sysTar)) return sysTar;
+  }
+  return 'tar';
+}
+const TAR = resolveTar();
+
 const RED = '\x1b[31m';
 const WHITE = '\x1b[37m';
 const GIT_BIN = 'git';
@@ -221,7 +230,7 @@ async function ensureHandy() {
       await downloadFile(url, tarPath);
 
       log(CYAN, '  Extracting...');
-      const result = run('tar', ['-xzf', tarPath, '-C', handyVoiceDir], { timeout: 30000 });
+      const result = run(TAR, ['-xzf', tarPath, '-C', handyVoiceDir], { timeout: 30000 });
       if (!result.success) throw new Error('Extraction failed: ' + (result.stderr || result.error));
 
       try { unlinkSync(tarPath); } catch {}

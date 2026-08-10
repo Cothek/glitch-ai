@@ -10,6 +10,15 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const ROOT_DIR = join(__dirname, '..');
 
+function resolveTar() {
+  if (process.platform === 'win32') {
+    const sysTar = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+    if (existsSync(sysTar)) return sysTar;
+  }
+  return 'tar';
+}
+const TAR = resolveTar();
+
 // ── CLI Args ────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
 let checkOnly = false;
@@ -113,7 +122,7 @@ function extractArchive(archivePath, extractDir, type) {
       const cmd = `Expand-Archive -Path '${psQuote(archivePath)}' -DestinationPath '${psQuote(extractDir)}' -Force`;
       execFileSync('powershell.exe', ['-NoProfile', '-Command', cmd], { stdio: 'pipe' });
     } else if (type === 'targz') {
-      const cmd = `tar -xzf '${psQuote(archivePath)}' -C '${psQuote(extractDir)}'`;
+      const cmd = `& '${psQuote(TAR)}' -xzf '${psQuote(archivePath)}' -C '${psQuote(extractDir)}' --force-local`;
       execFileSync('powershell.exe', ['-NoProfile', '-Command', cmd], { stdio: 'pipe' });
     } else {
       throw new Error(`Unsupported archive type: ${type}`);
@@ -122,7 +131,7 @@ function extractArchive(archivePath, extractDir, type) {
     if (type === 'zip') {
       execFileSync('unzip', ['-o', archivePath, '-d', extractDir], { stdio: 'pipe' });
     } else if (type === 'targz') {
-      execFileSync('tar', ['-xzf', archivePath, '-C', extractDir], { stdio: 'pipe' });
+      execFileSync(TAR, ['-xzf', archivePath, '-C', extractDir], { stdio: 'pipe' });
     } else {
       throw new Error(`Unsupported archive type: ${type}`);
     }

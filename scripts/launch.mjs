@@ -13,6 +13,7 @@ import { injectProviders } from './lib/inject-providers.mjs';
 import { bootstrapOpenCode } from './lib/bootstrap-opencode.mjs';
 import { migrateModelAssignments } from './lib/migrate-assignments.mjs';
 import { initLaunchLog } from './lib/launch-log.mjs';
+import { superviseOpenCodeTUI } from './lib/opencode-supervisor.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -21,6 +22,15 @@ const ROOT_DIR = resolve(SCRIPT_DIR, '..');
 const isWin = process.platform === 'win32';
 const isMac = process.platform === 'darwin';
 const isLinux = process.platform === 'linux';
+
+function resolveTar() {
+  if (process.platform === 'win32') {
+    const sysTar = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'tar.exe');
+    if (existsSync(sysTar)) return sysTar;
+  }
+  return 'tar';
+}
+const TAR = resolveTar();
 
 // Install tee wrapper on stdout/stderr so every console.log line is also
 // appended to data/launch.log (ANSI-stripped, ISO-timestamped).
@@ -208,7 +218,7 @@ async function ensureHandy() {
       await downloadFile(url, tarPath);
 
       log(CYAN, '  Extracting...');
-      const result = run('tar', ['-xzf', tarPath, '-C', handyVoiceDir], { timeout: 30000 });
+      const result = run(TAR, ['-xzf', tarPath, '-C', handyVoiceDir], { timeout: 30000 });
       if (!result.success) throw new Error('Extraction failed: ' + (result.stderr || result.error));
 
       try { unlinkSync(tarPath); } catch {}
@@ -831,10 +841,10 @@ async function main() {
       console.log('');
 
       try {
-        const result = run(OpenCodeBin, [], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 });
-        if (!result.success && result.status !== null && result.status !== 0) {
-          log(RED, `  OpenCode exited with error (code ${result.status})`);
-          process.exit(result.status);
+        const result = await superviseOpenCodeTUI({ bin: OpenCodeBin, args: [], rootDir: ROOT_DIR, env: process.env });
+        if (result.code !== 0) {
+          log(RED, `  OpenCode exited with error (code ${result.code})`);
+          process.exit(result.code);
         }
       } catch (e) {
         log(RED, `  OpenCode exited with error: ${e.message || e}`);
