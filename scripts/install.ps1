@@ -58,7 +58,7 @@ param(
 )
 
 # Bump this whenever installer behavior changes -- printed at startup for issue identification
-$InstallerVersion = "1.0.0"
+$InstallerVersion = "1.0.1"
 
 # Set up logging - captures all output to a file for diagnosis
 # Log starts in TEMP (always exists) and is relocated into the install directory
@@ -312,11 +312,27 @@ Node.js is NOT required - the bootstrap script downloads a portable Node.js bund
     exit 0
 }
 
+# Resolve the last commit that touched this installer on the selected branch (best-effort, for issue identification)
+$InstallerCommit = ""
+try {
+    $commitApi = Invoke-RestMethod -Uri "https://api.github.com/repos/Cothek/glitch-ai/commits?path=scripts/install.ps1&sha=$Branch" -Headers @{ "User-Agent" = "glitch-installer" } -TimeoutSec 10 -ErrorAction Stop
+    if ($commitApi -and $commitApi.Count -gt 0 -and $commitApi[0].sha) {
+        $InstallerCommit = $commitApi[0].sha
+        if ($InstallerCommit.Length -gt 7) { $InstallerCommit = $InstallerCommit.Substring(0, 7) }
+    }
+} catch {
+    $InstallerCommit = ""
+}
+
 # Banner
+$BannerVersionContent = if ($InstallerCommit) { "v$InstallerVersion - commit $InstallerCommit ($Branch)" } else { "v$InstallerVersion" }
+$BannerPad = [Math]::Max(0, [Math]::Floor((77 - $BannerVersionContent.Length) / 2))
+$BannerVersionLine = "|" + (" " * $BannerPad) + $BannerVersionContent + (" " * [Math]::Max(0, 77 - $BannerPad - $BannerVersionContent.Length)) + "|"
 Write-Host @"
 +=============================================================================+
 |                         GLITCH AI INSTALLER (Windows)                        |
 |                    Personal AI Companion - Persistent Memory                 |
+$BannerVersionLine
 +=============================================================================+
 "@ -ForegroundColor Magenta
 

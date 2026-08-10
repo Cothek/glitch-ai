@@ -18,7 +18,7 @@ USER_REPO=""
 BRANCH=""
 
 # Bump this whenever installer behavior changes -- printed at startup for issue identification
-INSTALLER_VERSION="1.0.0"
+INSTALLER_VERSION="1.0.1"
 
 # Set up logging - captures all output to a file for diagnosis.
 # Logs to /tmp first (the install dir may not exist yet and must not be
@@ -230,11 +230,33 @@ offer_desktop_shortcut() {
     fi
 }
 
+# Resolve the last commit that touched this installer on the selected branch (best-effort, for issue identification)
+INSTALLER_COMMIT=""
+if command -v curl >/dev/null 2>&1; then
+  COMMIT_API_JSON=$(curl -s --max-time 10 "https://api.github.com/repos/Cothek/glitch-ai/commits?path=scripts/install.sh&sha=${BRANCH:-main}" 2>/dev/null || true)
+  if [ -n "$COMMIT_API_JSON" ]; then
+    if command -v jq >/dev/null 2>&1; then
+      INSTALLER_COMMIT=$(printf '%s' "$COMMIT_API_JSON" | jq -r '.[0].sha // empty' 2>/dev/null | head -c 7)
+    else
+      INSTALLER_COMMIT=$(printf '%s' "$COMMIT_API_JSON" | grep -o '"sha": *"[a-f0-9]\{40\}"' | head -n 1 | sed -n 's/.*"\([a-f0-9]\{7\}\)[a-f0-9]*".*/\1/p')
+    fi
+  fi
+fi
+
 # Banner
-cat <<'EOF'
+if [ -n "$INSTALLER_COMMIT" ]; then
+  BANNER_VERSION_CONTENT="v${INSTALLER_VERSION} - commit ${INSTALLER_COMMIT} (${BRANCH:-main})"
+else
+  BANNER_VERSION_CONTENT="v${INSTALLER_VERSION}"
+fi
+BANNER_PAD=$(( (77 - ${#BANNER_VERSION_CONTENT}) / 2 ))
+if [ "$BANNER_PAD" -lt 0 ]; then BANNER_PAD=0; fi
+BANNER_VERSION_LINE="║$(printf '%*s' "$BANNER_PAD" '')${BANNER_VERSION_CONTENT}$(printf '%*s' $((77 - BANNER_PAD - ${#BANNER_VERSION_CONTENT})) '')║"
+cat <<EOF
 ╔═══════════════════════════════════════════════════════════════════════════════╗
 ║                         GLITCH AI INSTALLER (macOS/Linux)                    ║
 ║                    Personal AI Companion - Persistent Memory                 ║
+$BANNER_VERSION_LINE
 ╚══════════════════════════════════════════════════════════════════════════════╝
 EOF
 
