@@ -1,8 +1,8 @@
 import http from 'node:http';
-import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, mkdirSync, copyFileSync, statSync } from 'node:fs';
 import { join, dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawn, exec } from 'node:child_process';
+import { spawn, exec, execFileSync } from 'node:child_process';
 import { migrateModelAssignments } from '../../scripts/lib/migrate-assignments.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -68,6 +68,29 @@ function writeJson(path, data) {
   const dir = dirname(path);
   if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
   writeFileSync(path, JSON.stringify(data, null, 2), 'utf-8');
+}
+
+const isWin = process.platform === 'win32';
+
+function resolvePowerShell() {
+  if (isWin) {
+    try {
+      const where = execFileSync('where.exe', ['pwsh'], { encoding: 'utf-8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] });
+      const first = where.split(/\r?\n/).find(l => l.trim().length > 0);
+      if (first && existsSync(first.trim())) {
+        try { if (statSync(first.trim()).size === 0) { /* WindowsApps 0-byte alias, skip */ } else return first.trim(); } catch {}
+      }
+    } catch {}
+    const pf7 = 'C:\\Program Files\\PowerShell\\7\\pwsh.exe';
+    if (existsSync(pf7)) return pf7;
+    const waPwsh = join(process.env.LOCALAPPDATA || '', 'Microsoft', 'WindowsApps', 'pwsh.exe');
+    if (existsSync(waPwsh)) {
+      try { if (statSync(waPwsh).size > 0) return waPwsh; } catch {}
+    }
+    return 'powershell.exe';
+  }
+  try { execFileSync('which', ['pwsh'], { encoding: 'utf-8', timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }); return 'pwsh'; } catch {}
+  return 'powershell';
 }
 
 function backupConfig() {
@@ -487,7 +510,15 @@ async function handler(req, res) {
         return;
       }
 
-      const proc = spawn('pwsh', ['-File', scriptPath, '-UpdateCache', '-Force'], {
+      const psExe = resolvePowerShell();
+      if (!psExe) {
+        sendJson(res, 500, { ok: false, error: 'No PowerShell found (tried pwsh, Program Files, WindowsApps, powershell.exe)' });
+        return;
+      }
+
+      let settled = false;
+
+      const proc = spawn(psExe, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-UpdateCache', '-Force'], {
         cwd: ROOT_DIR,
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true,
@@ -507,6 +538,8 @@ async function handler(req, res) {
 
       proc.on('close', (code) => {
         clearTimeout(timeout);
+        if (settled) return;
+        settled = true;
         if (code !== 0) {
           const lastLines = stderr.trim().split('\n').slice(-10).join('\n');
           const errorMsg = timedOut
@@ -537,7 +570,9 @@ async function handler(req, res) {
 
       proc.on('error', (err) => {
         clearTimeout(timeout);
-        sendJson(res, 500, { ok: false, error: `Failed to spawn pwsh: ${err.message}` });
+        if (settled) return;
+        settled = true;
+        sendJson(res, 500, { ok: false, error: `Failed to spawn ${psExe}: ${err.message}` });
       });
       return;
     }
