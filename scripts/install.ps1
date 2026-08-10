@@ -57,6 +57,9 @@ param(
     [switch]$NoShortcut
 )
 
+# Bump this whenever installer behavior changes -- printed at startup for issue identification
+$InstallerVersion = "1.0.0"
+
 # Set up logging - captures all output to a file for diagnosis
 # Log starts in TEMP (always exists) and is relocated into the install directory
 # AFTER the clone succeeds. Nothing is written inside $InstallDir before clone.
@@ -70,6 +73,13 @@ try {
         Write-Host "  (Could not start logging)" -ForegroundColor DarkGray
     } catch {}
 }
+
+Write-Host ""
+Write-Host "  Glitch AI Installer v$InstallerVersion (Windows)" -ForegroundColor Cyan
+Write-Host "  Install dir : $InstallDir" -ForegroundColor DarkGray
+Write-Host "  Branch      : $Branch" -ForegroundColor DarkGray
+Write-Host "  PowerShell  : $($PSVersionTable.PSVersion)" -ForegroundColor DarkGray
+Write-Host ""
 
 # Catch all unhandled errors and log them
 $ErrorActionPreference = "Stop"

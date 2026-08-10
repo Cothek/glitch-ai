@@ -17,6 +17,9 @@ NO_SHORTCUT=false
 USER_REPO=""
 BRANCH=""
 
+# Bump this whenever installer behavior changes -- printed at startup for issue identification
+INSTALLER_VERSION="1.0.0"
+
 # Set up logging - captures all output to a file for diagnosis.
 # Logs to /tmp first (the install dir may not exist yet and must not be
 # created before the clone). After a successful clone the log is copied
@@ -24,9 +27,17 @@ BRANCH=""
 LOG_FILE="/tmp/glitch-install.log"
 setup_logging() {
     exec > >(tee -a "$LOG_FILE") 2>&1
-    echo "=== Install started: $(date) ==="
+    echo "=== Install started: $(date) -- installer v${INSTALLER_VERSION} ==="
 }
 setup_logging
+
+_BRANCH_DISPLAY="${BRANCH:-(default main)}"
+echo ""
+echo "  Glitch AI Installer v${INSTALLER_VERSION}"
+echo "  Install dir : $INSTALL_DIR"
+echo "  Branch      : $_BRANCH_DISPLAY"
+echo "  Platform    : $(uname -s)"
+echo ""
 
 # Catch errors and show log location
 trap 'echo ""; echo "  FATAL ERROR: Line $LINENO"; echo "  Log file: $LOG_FILE"; echo "  Please share this log file when reporting the issue."; exit 1' ERR
