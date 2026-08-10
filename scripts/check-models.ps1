@@ -102,53 +102,56 @@ function Fetch-Models($url) {
       }
 }
 
-# --- Helper: fetch NVIDIA models (needs API key) --------------------------------
+# --- Helper: get NVIDIA API key (used by Fetch-NvidiaModels) ---
 # API key sources (checked in order):
 #   1. NVIDIA_API_KEY environment variable
 #   2. OpenCode auth store: ~/.local/share/opencode/auth.json (legacy, set via /connect)
 #   3. OpenCode account store: ~/.local/share/opencode/account.json (modern, set via /connect)
+$script:nvidiaApiKey = $null
+$script:nvidiaApiKeyResolved = $false
+
+function Get-NvidiaApiKey {
+    if ($script:nvidiaApiKeyResolved) { return $script:nvidiaApiKey }
+    $script:nvidiaApiKeyResolved = $true
+
+    $key = $env:NVIDIA_API_KEY
+
+    if (-not $key) {
+        $authFile = "$env:USERPROFILE\.local\share\opencode\auth.json"
+        if (Test-Path $authFile) {
+            try {
+                $auth = Get-Content $authFile -Raw | ConvertFrom-Json
+                $nvidiaAuth = $auth.PSObject.Properties | Where-Object { $_.Name -like "*nvidia*" } | Select-Object -First 1
+                if ($nvidiaAuth) { $key = $nvidiaAuth.Value.key }
+            } catch { }
+        }
+    }
+
+    if (-not $key) {
+        $accountFile = "$env:USERPROFILE\.local\share\opencode\account.json"
+        if (Test-Path $accountFile) {
+            try {
+                $account = Get-Content $accountFile -Raw | ConvertFrom-Json
+                if ($account.accounts) {
+                    $activeNvidiaId = $account.active.nvidia
+                    if ($activeNvidiaId -and $account.accounts.$activeNvidiaId) {
+                        $key = $account.accounts.$activeNvidiaId.credential.key
+                    } else {
+                        $nvidiaAccount = $account.accounts.PSObject.Properties | Where-Object { $_.Value.serviceID -eq "nvidia" } | Select-Object -First 1
+                        if ($nvidiaAccount) { $key = $nvidiaAccount.Value.credential.key }
+                    }
+                }
+            } catch { }
+        }
+    }
+
+    $script:nvidiaApiKey = $key
+    return $key
+}
+
+# --- Helper: fetch NVIDIA models (needs API key) --------------------------------
 function Fetch-NvidiaModels {
-  # Try environment variable first
-  $apiKey = $env:NVIDIA_API_KEY
-
-  # Fall back to opencode auth store (legacy format: auth.json)
-  if (-not $apiKey) {
-    $authFile = "$env:USERPROFILE\.local\share\opencode\auth.json"
-    if (Test-Path $authFile) {
-      try {
-        $auth = Get-Content $authFile -Raw | ConvertFrom-Json
-        # NVIDIA keys in auth.json are keyed by the provider slug
-        $nvidiaAuth = $auth.PSObject.Properties | Where-Object { $_.Name -like "*nvidia*" } | Select-Object -First 1
-        if ($nvidiaAuth) {
-          $apiKey = $nvidiaAuth.Value.key
-        }
-      } catch { }
-    }
-  }
-
-  # Fall back to opencode account store (modern format: account.json)
-  if (-not $apiKey) {
-    $accountFile = "$env:USERPROFILE\.local\share\opencode\account.json"
-    if (Test-Path $accountFile) {
-      try {
-        $account = Get-Content $accountFile -Raw | ConvertFrom-Json
-        # account.json has structure: { accounts: { id: { serviceID: "nvidia", credential: { key: "..." } } }, active: { nvidia: "id" } }
-        if ($account.accounts) {
-          # Find the active NVIDIA account
-          $activeNvidiaId = $account.active.nvidia
-          if ($activeNvidiaId -and $account.accounts.$activeNvidiaId) {
-            $apiKey = $account.accounts.$activeNvidiaId.credential.key
-          } else {
-            # No active account found, try to find any NVIDIA account
-            $nvidiaAccount = $account.accounts.PSObject.Properties | Where-Object { $_.Value.serviceID -eq "nvidia" } | Select-Object -First 1
-            if ($nvidiaAccount) {
-              $apiKey = $nvidiaAccount.Value.credential.key
-            }
-          }
-        }
-      } catch { }
-    }
-  }
+  $apiKey = Get-NvidiaApiKey
 
   if (-not $apiKey) {
     if (-not $Silent) { Write-Host " [WARN] NVIDIA_API_KEY not found. Set env var or run `/connect nvidia` in OpenCode TUI to store key in auth.json" -ForegroundColor Yellow }
@@ -582,87 +585,45 @@ function Fetch-OpenRouterFullModels {
     }
 }
 
-# --- Helper: check if a NVIDIA model has "Free Endpoint" badge on build.nvidia.com ---
-# Cache to avoid repeated HTTP requests
-$script:nvidiaFreeEndpointCache = @{}
-$script:nvidiaFreeCacheFile = "$RootDir\data\nvidia-free-cache.json"
+# --- Helper: determine NVIDIA free models from OpenRouter pricing data ---
+# A NVIDIA model is free if OpenRouter has a :free variant with zero pricing.
+# This replaces the broken API probe (Test-NvidiaFreeEndpoint) which only tested
+# whether a model responded to a ping, not whether it was free vs paid.
+# OpenRouter pricing is authoritative: free models have pricing.prompt == "0" AND pricing.completion == "0" on :free variants.
+$script:nvidiaFreeFromOpenRouter = $null
 
-# Load persistent cache for NVIDIA free endpoint status (24h TTL)
-if (Test-Path $script:nvidiaFreeCacheFile) {
-    try {
-        $cache = Get-Content $script:nvidiaFreeCacheFile -Raw | ConvertFrom-Json
-        $cachedAt = [DateTime]::Parse($cache.cached_at)
-        if ((Get-Date) - $cachedAt -lt [TimeSpan]::FromHours(24)) {
-            foreach ($entry in $cache.results.PSObject.Properties) {
-                $script:nvidiaFreeEndpointCache[$entry.Name] = $entry.Value
-            }
+function Get-NvidiaFreeSetFromOpenRouter {
+    if ($null -ne $script:nvidiaFreeFromOpenRouter) { return $script:nvidiaFreeFromOpenRouter }
+
+    $orFull = Fetch-OpenRouterFullModels
+    $freeSet = @{}
+
+    foreach ($orId in $orFull.Keys) {
+        if ($orId -notmatch ':free$') { continue }
+
+        $data = $orFull[$orId]
+        $p = 0.0; $c = 0.0
+        $hasP = [double]::TryParse([string]$data.pricing.prompt, [ref]$p)
+        $hasC = [double]::TryParse([string]$data.pricing.completion, [ref]$c)
+        if ($hasP -and $hasC -and $p -eq 0.0 -and $c -eq 0.0) {
+            $baseId = $orId -replace ':free$', ''
+            $normalized = Normalize-For-Matching $baseId
+            $freeSet[$normalized] = $true
         }
-    } catch { }
+    }
+
+    if (-not $Silent) {
+        Write-Host "  OpenRouter free NVIDIA models: $($freeSet.Count) confirmed" -ForegroundColor DarkGray
+    }
+    $script:nvidiaFreeFromOpenRouter = $freeSet
+    return $freeSet
 }
 
-function Test-NvidiaFreeEndpoint($modelId) {
-    # Check cache first
-    if ($script:nvidiaFreeEndpointCache.ContainsKey($modelId)) {
-        return $script:nvidiaFreeEndpointCache[$modelId]
-    }
-    
-    # Convert API model ID to website URL path
-    # The build.nvidia.com URLs use the full path including provider prefix
-    # Examples:
-    #   minimaxai/minimax-m3 -> https://build.nvidia.com/minimaxai/minimax-m3
-    #   nvidia/nemotron-3-nano-30b-a3b -> https://build.nvidia.com/nvidia/nemotron-3-nano-30b-a3b
-    #   qwen/qwen3.5-122b-a10b -> https://build.nvidia.com/qwen/qwen3.5-122b-a10b
-    # So we use the model ID as-is (it already has the correct provider prefix)
-    $cardUrl = "https://build.nvidia.com/$modelId"
-    
-    try {
-        $response = Invoke-WebRequest -Uri $cardUrl -Headers @{ "Accept" = "text/html" } -UseBasicParsing -TimeoutSec 10 -ErrorAction Stop
-        $isFree = $response.Content -match 'Free Endpoint'
-        $script:nvidiaFreeEndpointCache[$modelId] = $isFree
-        return $isFree
-    } catch {
-        # If we can't check, return null (unknown)
-        return $null
-    }
-}
-
-# --- Helper: verify NVIDIA models against build.nvidia.com dynamically ---
-# Accepts the full filtered model list and checks each one.
-# Uses cached results when available (loaded at script start).
-function Verify-NvidiaFreeModels {
-    param($models)
-    
-    if (-not $models -or $models.Count -eq 0) { return @{} }
-    
-    Write-Host "  Checking $($models.Count) NVIDIA models for free endpoint status..." -ForegroundColor Cyan
-    $results = @{}
-    $fetchedCount = 0
-    $cachedCount = 0
-    foreach ($model in $models) {
-        # Use cached result if available (from file cache loaded at script start)
-        if ($script:nvidiaFreeEndpointCache.ContainsKey($model)) {
-            $isFree = $script:nvidiaFreeEndpointCache[$model]
-            $cachedCount++
-        } else {
-            $isFree = Test-NvidiaFreeEndpoint $model
-            $fetchedCount++
-            Start-Sleep -Milliseconds 300  # Be nice to server during live fetch
-        }
-        $results[$model] = $isFree
-        if ($isFree -eq $true) {
-            Write-Host "  [OK] $model - Free Endpoint confirmed" -ForegroundColor Green
-        } elseif ($isFree -eq $false) {
-            Write-Host "  [FAIL] $model - NOT free (no badge)" -ForegroundColor Red
-        } else {
-            Write-Host "  [WARN] $model - Could not verify" -ForegroundColor Yellow
-        }
-    }
-    if ($fetchedCount -gt 0) {
-        Write-Host "  ($cachedCount from cache, $fetchedCount live fetches)" -ForegroundColor DarkGray
-    } elseif ($cachedCount -gt 0) {
-        Write-Host "  (all $cachedCount from cache)" -ForegroundColor DarkGray
-    }
-    return $results
+function Test-NvidiaFreeFromOpenRouter($nvidiaModelId) {
+    $freeSet = Get-NvidiaFreeSetFromOpenRouter
+    $fullId = Normalize-ModelId "nvidia/$($nvidiaModelId.Replace('nvidia/', ''))"
+    $normalized = Normalize-For-Matching $fullId
+    return $freeSet.ContainsKey($normalized)
 }
 
 # OpenCode Zen: models ending in -free or named big-pickle
@@ -784,8 +745,7 @@ function Filter-NvidiaModels($models) {
   return $kept
 }
 
-# NVIDIA: all models on the free endpoint are free (listed last)
-# If API is available, use live list; otherwise use known fallback
+# NVIDIA: free models determined by OpenRouter pricing data (zero-cost :free variants)
 $nvidiaGroup = @{
   name = "NVIDIA (free endpoint, requires /connect)"
   id_prefix = "nvidia"
@@ -795,38 +755,33 @@ $nvidiaGroup = @{
 if ($nvidiaModels -ne $null) {
   # Filter to keep only useful models
   $filteredModels = Filter-NvidiaModels $nvidiaModels
-  
-    if ($SkipNvidiaFreeCheck) {
-      # Normal mode - skip free endpoint verification, include all NVIDIA models
-      foreach ($m in $filteredModels) {
+
+    # Determine free status from OpenRouter pricing data (authoritative source).
+    # A NVIDIA model is free if OpenRouter has a :free variant with zero pricing.
+    # This is fast (no HTTP requests) since OpenRouter data is already fetched/cached.
+    if (-not $Silent) {
+        Write-Host " Checking NVIDIA free status via OpenRouter pricing..." -ForegroundColor Cyan
+    }
+    $confirmedFreeCount = 0
+    $skippedCount = 0
+
+    foreach ($m in $filteredModels) {
+        $isFree = Test-NvidiaFreeFromOpenRouter $m
+        if (-not $isFree) {
+            $skippedCount++
+            continue
+        }
+        $confirmedFreeCount++
         $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
         $parts = $m -split '/'
         $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
         $displayName = Get-NvidiaDisplayName -modelName $shortName -isVision (Is-VisionModel $m)
         $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
-      }
-  } else {
-    # Free mode - verify free endpoint status, only include confirmed-free models
-    Write-Host " Verifying NVIDIA free endpoint status..." -ForegroundColor Cyan
-    $freeStatus = Verify-NvidiaFreeModels -models $filteredModels
-    
-    $confirmedFree = @($freeStatus.Keys | Where-Object { $freeStatus[$_] -eq $true })
-    $skippedCount = 0
-    
-    foreach ($m in $filteredModels) {
-      if ($m -notin $confirmedFree) {
-        $skippedCount++
-        continue
-      }
-      $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
-      $parts = $m -split '/'
-      $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
-      $displayName = Get-NvidiaDisplayName -modelName $shortName -isVision (Is-VisionModel $m)
-      $nvidiaGroup.models += @{ id = $fullId; name = $displayName }
     }
-    
-    Write-Host "  Free models: $($nvidiaGroup.models.Count) confirmed, $skippedCount filtered out (unverified/paid)" -ForegroundColor DarkGray
-  }
+
+    if (-not $Silent) {
+        Write-Host "  Free models: $($nvidiaGroup.models.Count) confirmed, $skippedCount filtered out (paid/unverified)" -ForegroundColor DarkGray
+    }
 } else {
   # No API key or API unavailable - don't write a static fallback list.
   # The picker will show "(no models available)" and the user gets a clear message.
@@ -946,28 +901,32 @@ if ($nvidiaModels -ne $null) {
         $orData = Get-OpenRouterPricing $fullId
         $capabilities = @(Get-ModelCapabilities -modelId $m -provider "nvidia")
 
+        # Free status from OpenRouter pricing: a model is free if OpenRouter has a :free variant with zero pricing
+        $isFree = Test-NvidiaFreeFromOpenRouter $m
+
         if ($orData) {
             $p = 0.0; $c = 0.0
             [void][double]::TryParse($orData.pricing.prompt, [ref]$p)
             [void][double]::TryParse($orData.pricing.completion, [ref]$c)
-            $isFreeEndpoint = $false
-            try { $isFreeEndpoint = (Test-NvidiaFreeEndpoint $m) -eq $true } catch {}
+            # tier = "free" if OpenRouter confirms free; otherwise use OpenRouter pricing tier
+            $costTier = Get-CostTier $p $c
+            if ($isFree) { $costTier = "free" }
             $registryModels += @{
                 id = $fullId; source = "nvidia"; provider = "nvidia"
                 pricing = @{ prompt = $p; completion = $c }
-                tier = if ($isFreeEndpoint) { "free" } else { Get-CostTier $p $c }
+                tier = $costTier
                 capabilities = $capabilities
                 context_length = $orData.context_length
-                vision = ($capabilities -contains "vision"); free = $isFreeEndpoint
+                vision = ($capabilities -contains "vision"); free = $isFree
             }
         } else {
-            # No OpenRouter match — use free/endpoint heuristic only
-            $isFree = $false
-            try { $isFree = (Test-NvidiaFreeEndpoint $m) -eq $true } catch {}
+            # No OpenRouter match — tier from OpenRouter free check only
+            $costTier = "unknown"
+            if ($isFree) { $costTier = "free" }
             $registryModels += @{
                 id = $fullId; source = "nvidia"; provider = "nvidia"
                 pricing = $null
-                tier = if ($isFree) { "free" } else { "unknown" }
+                tier = $costTier
                 capabilities = $capabilities
                 context_length = $null
                 vision = ($capabilities -contains "vision"); free = $isFree
@@ -1032,15 +991,6 @@ $status = @{
     current_agent_models = $agentModels
 }
 $status | ConvertTo-Json -Depth 4 | Out-File -FilePath $StatusFile -Encoding utf8 -Force
-
-# 7.5 Save NVIDIA free endpoint cache for next launch
-$cacheSave = @{
-    cached_at = (Get-Date).ToString("o")
-    results = $script:nvidiaFreeEndpointCache
-}
-$cacheDir = Split-Path -Parent $script:nvidiaFreeCacheFile
-if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
-$cacheSave | ConvertTo-Json -Depth 4 | Out-File -FilePath $script:nvidiaFreeCacheFile -Encoding utf8 -Force
 
 # 8. Print summary
 if (-not $Silent) {
