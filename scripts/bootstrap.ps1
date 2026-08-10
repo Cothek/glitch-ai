@@ -289,8 +289,9 @@ if (-not $isGitRepo) {
 
 # -- Step 4: OpenCode --
 $opencodeExtractDir = "$env:TEMP\opencode-extracted"
-# Prefer Windows' built-in bsdtar (handles C:\ paths). GNU tar from Git/MinGit
+# Prefer Windows' built-in bsdtar (handles C:\ paths natively). GNU tar from Git/MinGit
 # on PATH misreads "C:\..." as a remote host ("Cannot connect to C: resolve failed").
+# Do NOT pass --force-local: bsdtar rejects it (GNU-only option).
 $systemTarExe = Join-Path $env:SystemRoot "System32\tar.exe"
 $TarExe = if (Test-Path $systemTarExe) { $systemTarExe } else { 'tar' }
 $stepOk = $true
@@ -338,7 +339,7 @@ if (-not (Test-Path $OpenCodeBin) -or $Force) {
       Invoke-WithSpinner -Label "Extracting opencode" -ScriptBlock {
         if (Test-Path "$using:opencodeExtractDir") { Remove-Item "$using:opencodeExtractDir" -Recurse -Force }
         New-Item -ItemType Directory -Path "$using:opencodeExtractDir" -Force | Out-Null
-        & $using:TarExe -xf $using:tgzPath -C $using:opencodeExtractDir --force-local
+        & $using:TarExe -xf $using:tgzPath -C $using:opencodeExtractDir
         if ($LASTEXITCODE -ne 0) { throw "tar extraction failed" }
       }
 

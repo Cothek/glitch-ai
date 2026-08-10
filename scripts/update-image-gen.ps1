@@ -89,7 +89,7 @@ if ($UpdatePython -and $pythonUpdate -and $pythonLatest) {
     # Extract tar.gz using tar (Windows 10+ built-in)
     $systemTarExe = Join-Path $env:SystemRoot "System32\tar.exe"
     $tarExe = if (Test-Path $systemTarExe) { $systemTarExe } else { 'tar' }
-    & $tarExe -xzf $tempGz -C $tempExtract --force-local 2>&1 | Out-Null
+    & $tarExe -xzf $tempGz -C $tempExtract 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
       # Fallback: try 7z or expand
       $7z = Get-Command "7z" -ErrorAction SilentlyContinue

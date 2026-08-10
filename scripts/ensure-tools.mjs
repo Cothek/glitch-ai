@@ -122,7 +122,7 @@ function extractArchive(archivePath, extractDir, type) {
       const cmd = `Expand-Archive -Path '${psQuote(archivePath)}' -DestinationPath '${psQuote(extractDir)}' -Force`;
       execFileSync('powershell.exe', ['-NoProfile', '-Command', cmd], { stdio: 'pipe' });
     } else if (type === 'targz') {
-      const cmd = `& '${psQuote(TAR)}' -xzf '${psQuote(archivePath)}' -C '${psQuote(extractDir)}' --force-local`;
+      const cmd = `& '${psQuote(TAR)}' -xzf '${psQuote(archivePath)}' -C '${psQuote(extractDir)}'`;
       execFileSync('powershell.exe', ['-NoProfile', '-Command', cmd], { stdio: 'pipe' });
     } else {
       throw new Error(`Unsupported archive type: ${type}`);
