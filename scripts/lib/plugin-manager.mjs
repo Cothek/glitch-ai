@@ -24,6 +24,7 @@ import { readFileSync, existsSync, writeFileSync, mkdirSync, readdirSync, unlink
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
 import { spawn, execFileSync } from 'child_process';
+import net from 'node:net';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,6 +35,67 @@ const VISIBLE_WINDOW_PID_RETRY_MS = 2000;
 
 // Active plugin processes: Map<name, ChildProcess>
 const activePlugins = new Map();
+
+/**
+ * Cross-platform process-existence check via signal 0.
+ * Returns true if the pid is alive, or if we lack permission to signal it
+ * (EPERM — process exists but belongs to another user).
+ */
+function isProcessAlive(pid) {
+  if (!pid || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (err) {
+    return err && err.code === 'EPERM';
+  }
+}
+
+/**
+ * Read data/plugin-<name>.pid and return the parsed pid if > 0, else null.
+ * Missing file or unparseable content → null.
+ */
+function getExistingPid(pluginName) {
+  const pidFilePath = join(ROOT_DIR, 'data', `plugin-${pluginName}.pid`);
+  try {
+    const content = readFileSync(pidFilePath, 'utf-8').trim();
+    const parsed = parseInt(content, 10);
+    return parsed > 0 ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Async TCP connect check to 127.0.0.1:<port> with a ~500ms timeout.
+ * Resolves true if the connection succeeds (port is accepting connections),
+ * false on any connect error or timeout. Any error means the port is not
+ * accepting connections — kept simple per spec.
+ */
+function isPortInUse(port) {
+  return new Promise((resolve) => {
+    let settled = false;
+    const done = (val) => {
+      if (settled) return;
+      settled = true;
+      resolve(val);
+    };
+    const socket = net.connect({ port, host: '127.0.0.1' });
+    const timer = setTimeout(() => {
+      socket.destroy();
+      done(false);
+    }, 500);
+    socket.on('connect', () => {
+      clearTimeout(timer);
+      socket.destroy();
+      done(true);
+    });
+    socket.on('error', () => {
+      clearTimeout(timer);
+      done(false);
+    });
+  });
+}
 
 function readJson(path) {
   try {
@@ -127,12 +189,32 @@ export async function startPlugin(pluginName) {
     return { success: true, message: `Plugin "${pluginName}" already running` };
   }
 
+  // OS-level idempotency: if a pid file points at a live process, the plugin
+  // is already running (possibly started by a prior launch/server-mode call).
+  // This guards against the double-start that happens when launch.mjs and
+  // server-mode.mjs both call startEnabledPlugins() in web mode.
+  const existingPid = getExistingPid(pluginName);
+  if (existingPid && isProcessAlive(existingPid)) {
+    return { success: true, alreadyRunning: true, pid: existingPid };
+  }
+
   const manifest = readManifest(pluginName);
   if (!manifest) {
     return { success: false, error: `No manifest.json found for plugin "${pluginName}" at plugins/${pluginName}/` };
   }
   if (!manifest.start_command) {
     return { success: false, error: `Plugin "${pluginName}" manifest has no start_command` };
+  }
+
+  // Port-level idempotency: if the pid file is missing/stale but a previous
+  // instance is already listening on the port, treat it as already running.
+  // Catches the case where the pid file points at a dead launcher while the
+  // real server holds the port.
+  if (manifest.port) {
+    const portBusy = await isPortInUse(manifest.port);
+    if (portBusy) {
+      return { success: true, alreadyRunning: true, port: manifest.port };
+    }
   }
 
   if (manifest.visible_window === true) {
