@@ -627,15 +627,29 @@ function Test-NvidiaFreeFromOpenRouter($nvidiaModelId) {
 }
 
 # --- NVIDIA behavioral free-endpoint detection ---
-# Detects free endpoints via HTTP behavior (rate-limit headers, burst 429s, error codes).
-# Catches models that are free on NVIDIA but NOT mirrored as free on OpenRouter
-# (e.g. GLM 5.2, MiniMax M3, Step 3.7 Flash).
+# Classification rationale (Troy, 2026-08-10): Troy's NVIDIA API key has NO billing
+# attached (free tier only, no credits, no payment method). Therefore a 200 response
+# from the chat completions API means the model is served without payment = FREE.
+# The burst rate-limit test was removed because it was disambiguating a non-existent
+# ambiguity (200 already means free when the key has no billing).
+#
+# Classification:
+#   200       -> free  (no_billing_200_free — served without payment)
+#   429       -> free  (rate_limited_429 — rate-limited but accessible)
+#   402 / 403 -> paid  (billing_required — payment needed)
+#   410       -> deprecated (deprecated_410 — no retry, genuinely gone)
+#   404       -> deprecated (deprecated_404 — last candidate not found)
+#   500+ / 0  -> error
+#
+# Two-form retry: prefixed ID first, bare form on 404. 410 = no retry.
 # Cache: data/nvidia-free-cache.json with 24h TTL.
 
 $NvidiaFreeCacheFile = "$RootDir\data\nvidia-free-cache.json"
 $NvidiaFreeCacheTTLHours = 24
 
 function Load-NvidiaFreeCache {
+    param([switch]$Force)
+    if ($Force) { return $null }
     if (-not (Test-Path $NvidiaFreeCacheFile)) { return $null }
     try {
         $cache = Get-Content $NvidiaFreeCacheFile -Raw | ConvertFrom-Json
@@ -662,6 +676,9 @@ function Save-NvidiaFreeCache($results) {
     Rename-Item -LiteralPath $tmpFile -NewName (Split-Path -Leaf $NvidiaFreeCacheFile) -Force
 }
 
+# Behavioral probe: tries the model ID as-is first. If the NVIDIA API returns 404
+# and the ID has an "nvidia/" prefix, retries once with the bare form (prefix stripped).
+# Some models are only reachable without the prefix. 410 (Gone) is NOT retried.
 function Test-NvidiaFreeEndpoint {
     param(
         [string]$ModelId,
@@ -675,144 +692,114 @@ function Test-NvidiaFreeEndpoint {
         reason = "unknown"
         rateLimitLimit = $null
         rateLimitRemaining = $null
-        burstTested = $false
-        burst429Count = 0
         tested_at = (Get-Date).ToString("o")
     }
 
     $url = "https://integrate.api.nvidia.com/v1/chat/completions"
-    $bodyObj = @{
-        model = $ModelId
-        messages = @(@{ role = "user"; content = "ping" })
-        max_tokens = 1
-    }
-    $body = $bodyObj | ConvertTo-Json -Depth 3
-
     $reqHeaders = @{
         "Authorization" = "Bearer $ApiKey"
         "Content-Type" = "application/json"
     }
 
-    try {
-        $response = Invoke-WebRequest -Uri $url -Method Post -Body $body -Headers $reqHeaders -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop
-        $result.statusCode = [int]$response.StatusCode
+    # Build candidate ID list: prefixed form first, bare form as fallback on 404
+    $candidateIds = @($ModelId)
+    if ($ModelId -match '^nvidia/') {
+        $bareId = $ModelId -replace '^nvidia/+', ''
+        if ($bareId) { $candidateIds += $bareId }
+    }
 
-        if ($response.Headers.ContainsKey("X-RateLimit-Limit")) {
-            $result.rateLimitLimit = [string]$response.Headers["X-RateLimit-Limit"]
-        }
-        if ($response.Headers.ContainsKey("X-RateLimit-Remaining")) {
-            $result.rateLimitRemaining = [string]$response.Headers["X-RateLimit-Remaining"]
-        }
+    $body = $null
 
-        $result.reason = "accessible_200"
-    } catch {
-        $statusCode = 0
-        $respHeaders = $null
-        if ($_.Exception.Response) {
-            $statusCode = [int]$_.Exception.Response.StatusCode
-            $respHeaders = $_.Exception.Response.Headers
-        }
-        $result.statusCode = $statusCode
+    for ($ci = 0; $ci -lt $candidateIds.Count; $ci++) {
+        $tryId = $candidateIds[$ci]
+        $isLastCandidate = ($ci -eq ($candidateIds.Count - 1))
 
-        if ($respHeaders) {
-            try {
-                $rlLimit = $respHeaders["X-RateLimit-Limit"]
-                if ($rlLimit) { $result.rateLimitLimit = [string]$rlLimit }
-            } catch { }
-            try {
-                $rlRemain = $respHeaders["X-RateLimit-Remaining"]
-                if ($rlRemain) { $result.rateLimitRemaining = [string]$rlRemain }
-            } catch { }
+        $bodyObj = @{
+            model = $tryId
+            messages = @(@{ role = "user"; content = "ping" })
+            max_tokens = 1
         }
+        $body = $bodyObj | ConvertTo-Json -Depth 3
 
-        if ($statusCode -eq 429) {
+        try {
+            $response = Invoke-WebRequest -Uri $url -Method Post -Body $body -Headers $reqHeaders -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop
+            $result.statusCode = [int]$response.StatusCode
+
+            if ($response.Headers.ContainsKey("X-RateLimit-Limit")) {
+                $result.rateLimitLimit = [string]$response.Headers["X-RateLimit-Limit"]
+            }
+            if ($response.Headers.ContainsKey("X-RateLimit-Remaining")) {
+                $result.rateLimitRemaining = [string]$response.Headers["X-RateLimit-Remaining"]
+            }
+
             $result.isFree = $true
-            $hasRetryAfter = $false
+            $result.reason = "no_billing_200_free"
+            $result.model = $tryId
+            return $result
+        } catch {
+            $statusCode = 0
+            $respHeaders = $null
+            if ($_.Exception.Response) {
+                $statusCode = [int]$_.Exception.Response.StatusCode
+                $respHeaders = $_.Exception.Response.Headers
+            }
+            $result.statusCode = $statusCode
+
             if ($respHeaders) {
                 try {
-                    $ra = $respHeaders["Retry-After"]
-                    if ($ra) { $hasRetryAfter = $true }
+                    $rlLimit = $respHeaders["X-RateLimit-Limit"]
+                    if ($rlLimit) { $result.rateLimitLimit = [string]$rlLimit }
+                } catch { }
+                try {
+                    $rlRemain = $respHeaders["X-RateLimit-Remaining"]
+                    if ($rlRemain) { $result.rateLimitRemaining = [string]$rlRemain }
                 } catch { }
             }
-            if ($hasRetryAfter) {
-                $result.reason = "rate_limited_429_retry_after"
-            } else {
-                $result.reason = "rate_limited_429"
-            }
-            return $result
-        } elseif ($statusCode -eq 402 -or $statusCode -eq 403) {
-            $result.isFree = $false
-            $result.reason = "billing_required_$statusCode"
-            return $result
-        } elseif ($statusCode -eq 410 -or $statusCode -eq 404) {
-            $result.isFree = $false
-            $result.reason = "deprecated_$statusCode"
-            return $result
-        } elseif ($statusCode -ge 500 -or $statusCode -eq 0) {
-            $result.isFree = $false
-            $result.reason = "error_$statusCode"
-            return $result
-        } else {
-            $result.isFree = $false
-            $result.reason = "unexpected_$statusCode"
-            return $result
-        }
-    }
 
-    # M1: Skip burst test when rate-limit header clearly indicates paid (high limit > 50 rpm)
-    $skipBurst = $false
-    $limit = $result.rateLimitLimit
-    if ($limit) {
-        $limitNum = 0
-        $parsed = [int]::TryParse([string]$limit, [ref]$limitNum)
-        if ($parsed -and $limitNum -gt 50) {
-            $skipBurst = $true
-            $result.isFree = $false
-            $result.reason = "high_rate_limit_${limitNum}_rpm"
-        }
-    }
-
-    if (-not $skipBurst) {
-        # Burst test: 5 rapid requests with 100ms delay, count 429s
-        $burst429 = 0
-        for ($i = 0; $i -lt 5; $i++) {
-            try {
-                Invoke-WebRequest -Uri $url -Method Post -Body $body -Headers $reqHeaders -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop | Out-Null
-            } catch {
-                $burstStatus = 0
-                if ($_.Exception.Response) {
-                    $burstStatus = [int]$_.Exception.Response.StatusCode
+            if ($statusCode -eq 429) {
+                $result.isFree = $true
+                $result.model = $tryId
+                $hasRetryAfter = $false
+                if ($respHeaders) {
+                    try {
+                        $ra = $respHeaders["Retry-After"]
+                        if ($ra) { $hasRetryAfter = $true }
+                    } catch { }
                 }
-                if ($burstStatus -eq 429) {
-                    $burst429++
-                }
-            }
-            if ($i -lt 4) { Start-Sleep -Milliseconds 100 }
-        }
-
-        $result.burstTested = $true
-        $result.burst429Count = $burst429
-
-        if ($burst429 -gt 0) {
-            $result.isFree = $true
-            $result.reason = "burst_rate_limited_${burst429}_of_5"
-        } else {
-            if ($limit) {
-                $limitNum = 0
-                $parsed = [int]::TryParse([string]$limit, [ref]$limitNum)
-                if ($parsed -and $limitNum -gt 0 -and $limitNum -le 10) {
-                    $result.isFree = $true
-                    $result.reason = "low_rate_limit_${limitNum}_rpm"
-                } elseif ($parsed) {
-                    $result.isFree = $false
-                    $result.reason = "high_rate_limit_${limitNum}_rpm"
+                if ($hasRetryAfter) {
+                    $result.reason = "rate_limited_429_retry_after"
                 } else {
-                    $result.isFree = $false
-                    $result.reason = "unparseable_rate_limit"
+                    $result.reason = "rate_limited_429"
                 }
+                return $result
+            } elseif ($statusCode -eq 402 -or $statusCode -eq 403) {
+                $result.isFree = $false
+                $result.reason = "billing_required_$statusCode"
+                $result.model = $tryId
+                return $result
+            } elseif ($statusCode -eq 410) {
+                $result.isFree = $false
+                $result.reason = "deprecated_410"
+                $result.model = $tryId
+                return $result
+            } elseif ($statusCode -eq 404) {
+                if (-not $isLastCandidate) {
+                    continue
+                }
+                $result.isFree = $false
+                $result.reason = "deprecated_404"
+                $result.model = $tryId
+                return $result
+            } elseif ($statusCode -ge 500 -or $statusCode -eq 0) {
+                $result.isFree = $false
+                $result.reason = "error_$statusCode"
+                $result.model = $tryId
+                return $result
             } else {
                 $result.isFree = $false
-                $result.reason = "no_rate_limit_headers"
+                $result.reason = "unexpected_$statusCode"
+                $result.model = $tryId
+                return $result
             }
         }
     }
@@ -824,12 +811,13 @@ function Get-NvidiaBehavioralFreeSet {
     param(
         [array]$FilteredModels,
         [string]$ApiKey,
-        [switch]$UseCacheOnly
+        [switch]$UseCacheOnly,
+        [switch]$Force
     )
 
     $freeSet = @{}
 
-    $cache = Load-NvidiaFreeCache
+    $cache = Load-NvidiaFreeCache -Force:$Force
     if ($cache -and $cache.results) {
         foreach ($prop in $cache.results.PSObject.Properties) {
             $entry = $prop.Value
@@ -1047,7 +1035,7 @@ if ($nvidiaModels -ne $null) {
     # Combined with OpenRouter pricing: either source saying free -> model is free.
     $nvidiaApiKey = Get-NvidiaApiKey
     $useCacheOnly = $SkipNvidiaFreeCheck
-    $script:behavioralFreeSet = Get-NvidiaBehavioralFreeSet -FilteredModels $filteredModels -ApiKey $nvidiaApiKey -UseCacheOnly:$useCacheOnly
+    $script:behavioralFreeSet = Get-NvidiaBehavioralFreeSet -FilteredModels $filteredModels -ApiKey $nvidiaApiKey -UseCacheOnly:$useCacheOnly -Force:$Force
 
     # Determine free status from OpenRouter pricing + behavioral detection.
     # OpenRouter is fast (already fetched). Behavioral catches NVIDIA-only free endpoints.
