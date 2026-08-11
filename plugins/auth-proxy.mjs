@@ -193,6 +193,52 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // ---- Route /money to glitch-money dashboard (port 4110) ----
+  if (req.url && req.url.startsWith('/money')) {
+    // Normalize /money -> /money/ so relative asset URLs (styles.css) resolve correctly
+    if (req.url === '/money' || req.url.startsWith('/money?')) {
+      const queryIndex = req.url.indexOf('?');
+      const query = queryIndex >= 0 ? req.url.slice(queryIndex) : '';
+      res.writeHead(301, { Location: `/money/${query}` });
+      res.end();
+      return;
+    }
+    const moneyUpstream = new URL('http://localhost:4110');
+    let targetPath = req.url.replace('/money', '') || '/';
+    // Strip auth_token from forwarded URL
+    try {
+      const parsed = new URL(targetPath, 'http://localhost');
+      parsed.searchParams.delete('auth_token');
+      targetPath = parsed.pathname + parsed.search;
+    } catch {}
+    const options = {
+      hostname: moneyUpstream.hostname,
+      port: moneyUpstream.port,
+      path: targetPath,
+      method: req.method,
+      headers: {
+        ...(Object.fromEntries(
+          Object.entries(req.headers)
+            .filter(([key]) => !['host', 'authorization'].includes(key.toLowerCase()))
+        )),
+        host: moneyUpstream.host,
+      },
+    };
+    const proxyReq = http.request(options, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, withAuthCookie(proxyRes.headers));
+      proxyRes.pipe(res);
+    });
+    proxyReq.on('error', (err) => {
+      console.error(`Money dashboard proxy error for ${req.method} ${req.url}:`, err.message);
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'text/plain' });
+        res.end('Money dashboard server unavailable');
+      }
+    });
+    req.pipe(proxyReq);
+    return;
+  }
+
   // Strip directory and workspace params from /agent requests
   // (server bug: workspace crashes, directory filters out custom agents)
   let targetPath = req.url;
