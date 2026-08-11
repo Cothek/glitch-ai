@@ -626,6 +626,293 @@ function Test-NvidiaFreeFromOpenRouter($nvidiaModelId) {
     return $freeSet.ContainsKey($normalized)
 }
 
+# --- NVIDIA behavioral free-endpoint detection ---
+# Detects free endpoints via HTTP behavior (rate-limit headers, burst 429s, error codes).
+# Catches models that are free on NVIDIA but NOT mirrored as free on OpenRouter
+# (e.g. GLM 5.2, MiniMax M3, Step 3.7 Flash).
+# Cache: data/nvidia-free-cache.json with 24h TTL.
+
+$NvidiaFreeCacheFile = "$RootDir\data\nvidia-free-cache.json"
+$NvidiaFreeCacheTTLHours = 24
+
+function Load-NvidiaFreeCache {
+    if (-not (Test-Path $NvidiaFreeCacheFile)) { return $null }
+    try {
+        $cache = Get-Content $NvidiaFreeCacheFile -Raw | ConvertFrom-Json
+        if ($cache.generated_at) {
+            $age = (Get-Date) - (Get-Date $cache.generated_at)
+            if ($age.TotalHours -lt $NvidiaFreeCacheTTLHours) {
+                return $cache
+            }
+        }
+        return $null
+    } catch { return $null }
+}
+
+function Save-NvidiaFreeCache($results) {
+    $cacheDir = Split-Path -Parent $NvidiaFreeCacheFile
+    if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
+    $data = @{
+        generated_at = (Get-Date).ToString("o")
+        ttl_hours = $NvidiaFreeCacheTTLHours
+        results = $results
+    }
+    $tmpFile = "$NvidiaFreeCacheFile.tmp"
+    $data | ConvertTo-Json -Depth 4 | Out-File -FilePath $tmpFile -Encoding utf8 -Force
+    Rename-Item -LiteralPath $tmpFile -NewName (Split-Path -Leaf $NvidiaFreeCacheFile) -Force
+}
+
+function Test-NvidiaFreeEndpoint {
+    param(
+        [string]$ModelId,
+        [string]$ApiKey
+    )
+
+    $result = @{
+        model = $ModelId
+        isFree = $false
+        statusCode = 0
+        reason = "unknown"
+        rateLimitLimit = $null
+        rateLimitRemaining = $null
+        burstTested = $false
+        burst429Count = 0
+        tested_at = (Get-Date).ToString("o")
+    }
+
+    $url = "https://integrate.api.nvidia.com/v1/chat/completions"
+    $bodyObj = @{
+        model = $ModelId
+        messages = @(@{ role = "user"; content = "ping" })
+        max_tokens = 1
+    }
+    $body = $bodyObj | ConvertTo-Json -Depth 3
+
+    $reqHeaders = @{
+        "Authorization" = "Bearer $ApiKey"
+        "Content-Type" = "application/json"
+    }
+
+    try {
+        $response = Invoke-WebRequest -Uri $url -Method Post -Body $body -Headers $reqHeaders -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop
+        $result.statusCode = [int]$response.StatusCode
+
+        if ($response.Headers.ContainsKey("X-RateLimit-Limit")) {
+            $result.rateLimitLimit = [string]$response.Headers["X-RateLimit-Limit"]
+        }
+        if ($response.Headers.ContainsKey("X-RateLimit-Remaining")) {
+            $result.rateLimitRemaining = [string]$response.Headers["X-RateLimit-Remaining"]
+        }
+
+        $result.reason = "accessible_200"
+    } catch {
+        $statusCode = 0
+        $respHeaders = $null
+        if ($_.Exception.Response) {
+            $statusCode = [int]$_.Exception.Response.StatusCode
+            $respHeaders = $_.Exception.Response.Headers
+        }
+        $result.statusCode = $statusCode
+
+        if ($respHeaders) {
+            try {
+                $rlLimit = $respHeaders["X-RateLimit-Limit"]
+                if ($rlLimit) { $result.rateLimitLimit = [string]$rlLimit }
+            } catch { }
+            try {
+                $rlRemain = $respHeaders["X-RateLimit-Remaining"]
+                if ($rlRemain) { $result.rateLimitRemaining = [string]$rlRemain }
+            } catch { }
+        }
+
+        if ($statusCode -eq 429) {
+            $result.isFree = $true
+            $hasRetryAfter = $false
+            if ($respHeaders) {
+                try {
+                    $ra = $respHeaders["Retry-After"]
+                    if ($ra) { $hasRetryAfter = $true }
+                } catch { }
+            }
+            if ($hasRetryAfter) {
+                $result.reason = "rate_limited_429_retry_after"
+            } else {
+                $result.reason = "rate_limited_429"
+            }
+            return $result
+        } elseif ($statusCode -eq 402 -or $statusCode -eq 403) {
+            $result.isFree = $false
+            $result.reason = "billing_required_$statusCode"
+            return $result
+        } elseif ($statusCode -eq 410 -or $statusCode -eq 404) {
+            $result.isFree = $false
+            $result.reason = "deprecated_$statusCode"
+            return $result
+        } elseif ($statusCode -ge 500 -or $statusCode -eq 0) {
+            $result.isFree = $false
+            $result.reason = "error_$statusCode"
+            return $result
+        } else {
+            $result.isFree = $false
+            $result.reason = "unexpected_$statusCode"
+            return $result
+        }
+    }
+
+    # M1: Skip burst test when rate-limit header clearly indicates paid (high limit > 50 rpm)
+    $skipBurst = $false
+    $limit = $result.rateLimitLimit
+    if ($limit) {
+        $limitNum = 0
+        $parsed = [int]::TryParse([string]$limit, [ref]$limitNum)
+        if ($parsed -and $limitNum -gt 50) {
+            $skipBurst = $true
+            $result.isFree = $false
+            $result.reason = "high_rate_limit_${limitNum}_rpm"
+        }
+    }
+
+    if (-not $skipBurst) {
+        # Burst test: 5 rapid requests with 100ms delay, count 429s
+        $burst429 = 0
+        for ($i = 0; $i -lt 5; $i++) {
+            try {
+                Invoke-WebRequest -Uri $url -Method Post -Body $body -Headers $reqHeaders -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop | Out-Null
+            } catch {
+                $burstStatus = 0
+                if ($_.Exception.Response) {
+                    $burstStatus = [int]$_.Exception.Response.StatusCode
+                }
+                if ($burstStatus -eq 429) {
+                    $burst429++
+                }
+            }
+            if ($i -lt 4) { Start-Sleep -Milliseconds 100 }
+        }
+
+        $result.burstTested = $true
+        $result.burst429Count = $burst429
+
+        if ($burst429 -gt 0) {
+            $result.isFree = $true
+            $result.reason = "burst_rate_limited_${burst429}_of_5"
+        } else {
+            if ($limit) {
+                $limitNum = 0
+                $parsed = [int]::TryParse([string]$limit, [ref]$limitNum)
+                if ($parsed -and $limitNum -gt 0 -and $limitNum -le 10) {
+                    $result.isFree = $true
+                    $result.reason = "low_rate_limit_${limitNum}_rpm"
+                } elseif ($parsed) {
+                    $result.isFree = $false
+                    $result.reason = "high_rate_limit_${limitNum}_rpm"
+                } else {
+                    $result.isFree = $false
+                    $result.reason = "unparseable_rate_limit"
+                }
+            } else {
+                $result.isFree = $false
+                $result.reason = "no_rate_limit_headers"
+            }
+        }
+    }
+
+    return $result
+}
+
+function Get-NvidiaBehavioralFreeSet {
+    param(
+        [array]$FilteredModels,
+        [string]$ApiKey,
+        [switch]$UseCacheOnly
+    )
+
+    $freeSet = @{}
+
+    $cache = Load-NvidiaFreeCache
+    if ($cache -and $cache.results) {
+        foreach ($prop in $cache.results.PSObject.Properties) {
+            $entry = $prop.Value
+            if ($entry.isFree -eq $true) {
+                $freeSet[$prop.Name] = $true
+            }
+        }
+        if (-not $Silent) {
+            Write-Host "  NVIDIA behavioral cache: $($freeSet.Count) free models (cached)" -ForegroundColor DarkGray
+        }
+        if ($UseCacheOnly) { return $freeSet }
+    }
+
+    if ($UseCacheOnly) { return $freeSet }
+    if (-not $ApiKey) {
+        if (-not $Silent) {
+            Write-Host "  NVIDIA behavioral detection: no API key, skipping" -ForegroundColor DarkGray
+        }
+        return $freeSet
+    }
+
+    $results = @{}
+    if ($cache -and $cache.results) {
+        foreach ($prop in $cache.results.PSObject.Properties) {
+            $results[$prop.Name] = $prop.Value
+        }
+    }
+
+    $toTest = @()
+    foreach ($m in $FilteredModels) {
+        $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
+        if (-not $results.ContainsKey($fullId)) {
+            $toTest += $m
+        }
+    }
+
+    if ($toTest.Count -gt 0) {
+        if (-not $Silent) {
+            Write-Host "  Behavioral free detection: testing $($toTest.Count) models..." -ForegroundColor Cyan
+        }
+
+        $tested = 0
+        foreach ($m in $toTest) {
+            $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
+            $testResult = Test-NvidiaFreeEndpoint -ModelId $fullId -ApiKey $ApiKey
+            $results[$fullId] = $testResult
+            if ($testResult.isFree) {
+                $freeSet[$fullId] = $true
+            }
+            $tested++
+            if (-not $Silent -and ($tested % 10 -eq 0)) {
+                Write-Host "    Tested $tested / $($toTest.Count)..." -ForegroundColor DarkGray
+            }
+            Start-Sleep -Milliseconds 200
+        }
+
+        Save-NvidiaFreeCache $results
+
+        if (-not $Silent) {
+            Write-Host "  Behavioral detection complete: $($freeSet.Count) free models ($tested tested)" -ForegroundColor DarkGray
+        }
+    } elseif (-not $Silent) {
+        Write-Host "  Behavioral detection: all models cached, no new tests needed" -ForegroundColor DarkGray
+    }
+
+    return $freeSet
+}
+
+$script:behavioralFreeSet = $null
+
+function Test-NvidiaFreeCombined($nvidiaModelId) {
+    if (Test-NvidiaFreeFromOpenRouter $nvidiaModelId) { return $true }
+    if (-not $script:behavioralFreeSet) {
+        if (-not $Silent) {
+            Write-Host "  [WARN] Test-NvidiaFreeCombined: behavioralFreeSet not computed, falling back to OpenRouter-only" -ForegroundColor Yellow
+        }
+        return $false
+    }
+    $fullId = Normalize-ModelId "nvidia/$($nvidiaModelId.Replace('nvidia/', ''))"
+    if ($script:behavioralFreeSet.ContainsKey($fullId)) { return $true }
+    return $false
+}
+
 # OpenCode Zen: models ending in -free or named big-pickle
 if ($zenModels -ne $null) {
   $zenGroup = @{
@@ -756,17 +1043,22 @@ if ($nvidiaModels -ne $null) {
   # Filter to keep only useful models
   $filteredModels = Filter-NvidiaModels $nvidiaModels
 
-    # Determine free status from OpenRouter pricing data (authoritative source).
-    # A NVIDIA model is free if OpenRouter has a :free variant with zero pricing.
-    # This is fast (no HTTP requests) since OpenRouter data is already fetched/cached.
+    # Compute behavioral free set (loads from cache or runs HTTP probes).
+    # Combined with OpenRouter pricing: either source saying free -> model is free.
+    $nvidiaApiKey = Get-NvidiaApiKey
+    $useCacheOnly = $SkipNvidiaFreeCheck
+    $script:behavioralFreeSet = Get-NvidiaBehavioralFreeSet -FilteredModels $filteredModels -ApiKey $nvidiaApiKey -UseCacheOnly:$useCacheOnly
+
+    # Determine free status from OpenRouter pricing + behavioral detection.
+    # OpenRouter is fast (already fetched). Behavioral catches NVIDIA-only free endpoints.
     if (-not $Silent) {
-        Write-Host " Checking NVIDIA free status via OpenRouter pricing..." -ForegroundColor Cyan
+        Write-Host " Checking NVIDIA free status (OpenRouter + behavioral)..." -ForegroundColor Cyan
     }
     $confirmedFreeCount = 0
     $skippedCount = 0
 
     foreach ($m in $filteredModels) {
-        $isFree = Test-NvidiaFreeFromOpenRouter $m
+        $isFree = Test-NvidiaFreeCombined $m
         if (-not $isFree) {
             $skippedCount++
             continue
@@ -901,8 +1193,8 @@ if ($nvidiaModels -ne $null) {
         $orData = Get-OpenRouterPricing $fullId
         $capabilities = @(Get-ModelCapabilities -modelId $m -provider "nvidia")
 
-        # Free status from OpenRouter pricing: a model is free if OpenRouter has a :free variant with zero pricing
-        $isFree = Test-NvidiaFreeFromOpenRouter $m
+        # Free status from OpenRouter pricing + behavioral detection (either says free -> free)
+        $isFree = Test-NvidiaFreeCombined $m
 
         if ($orData) {
             $p = 0.0; $c = 0.0
