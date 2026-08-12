@@ -348,8 +348,7 @@ async function main() {
 
   const modeInfo = JSON.stringify({
     mode: 'safe',
-    timestamp: new Date().toISOString(),
-    model: 'opencode/deepseek-v4-flash-free'
+    timestamp: new Date().toISOString()
   }, null, 2);
   writeFileSync(modeFile, modeInfo, 'utf-8');
 

@@ -1,9 +1,8 @@
 {
     "$schema":  "https://opencode.ai/config.json",
     "agent":  {
-                  "glitch":  {
-                                 "model":  "opencode/deepseek-v4-flash-free",
-                                 "mode":  "primary",
+                   "glitch":  {
+                                  "mode":  "primary",
                                  "description":  "Safe mode -- troubleshoot and repair Glitch configuration",
                                  "color":  "#e74c3c",
                                  "temperature":  0.2,
