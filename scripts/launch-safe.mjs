@@ -346,6 +346,40 @@ async function main() {
   copyFileSync(templatePath, configPath);
   console.log('  Safe mode config loaded.');
 
+  // ---- Neutralize extra config files that opencode reads ----
+  // opencode loads configs from multiple paths. Our opencode.json is clean,
+  // but stale .opencode/opencode.json or .opencode/opencode.jsonc files (from
+  // previous opencode versions or manual creation) can contain broken
+  // provider configs that crash Provider.list. Safe mode must guarantee a
+  // clean config environment, so we move these out of the way.
+  const extraConfigFiles = [
+    join(rootDir, '.opencode', 'opencode.json'),
+    join(rootDir, '.opencode', 'opencode.jsonc'),
+  ];
+  // Also neutralize global config files that may have broken provider entries.
+  // The global dir is ~/.config/opencode/ on all platforms.
+  const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+  if (homeDir) {
+    const globalOcDir = join(homeDir, '.config', 'opencode');
+    extraConfigFiles.push(
+      join(globalOcDir, 'config.json'),
+      join(globalOcDir, 'opencode.json'),
+      join(globalOcDir, 'opencode.jsonc'),
+    );
+  }
+  for (const extra of extraConfigFiles) {
+    if (existsSync(extra)) {
+      const backupExtra = join(backupDir, `extra-config-${Date.now()}-${extra.split(/[\\/]/).pop()}`);
+      try {
+        copyFileSync(extra, backupExtra);
+        unlinkSync(extra);
+        log(YELLOW, `  Removed stale config: ${extra.split(/[\\/]/).pop()} (backed up to data/backups/)`);
+      } catch {
+        log(DARK_YELLOW, `  Could not remove: ${extra} (ignored)`);
+      }
+    }
+  }
+
   const modeInfo = JSON.stringify({
     mode: 'safe',
     timestamp: new Date().toISOString()
