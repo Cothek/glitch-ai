@@ -113,7 +113,7 @@ const PROGRESS_TOOLS = new Set([
 
 const READONLY_TOOLS = new Set(["read", "glob", "grep"]);
 
-export function detectStuck(history, options = {}) {
+function detectStuck(history, options = {}) {
   const STUCK_THRESHOLD = options.STUCK_THRESHOLD ?? 3;
   const ERROR_THRESHOLD = options.ERROR_THRESHOLD ?? 3;
   const READONLY_THRESHOLD = options.READONLY_THRESHOLD ?? 6;
@@ -479,3 +479,6 @@ export const StuckDetectorPlugin = async ({ directory }) => {
     },
   };
 };
+
+// Expose detectStuck as a property for test access (single-export pattern).
+StuckDetectorPlugin.detectStuck = detectStuck;

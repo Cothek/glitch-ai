@@ -3,7 +3,8 @@
 // Run: node scripts/test-stuck-detector.mjs
 // (or: data\node\node.exe scripts/test-stuck-detector.mjs)
 
-import { detectStuck } from "../.opencode/plugins/stuck-detector.js";
+import { StuckDetectorPlugin } from "../.opencode/plugins/stuck-detector.js";
+const detectStuck = StuckDetectorPlugin.detectStuck;
 import assert from "node:assert";
 
 let passed = 0;
