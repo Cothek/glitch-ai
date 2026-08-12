@@ -342,6 +342,9 @@ async function main() {
     process.exit(1);
   }
 
+  // Ensure backup dir exists (on fresh installs it may not have been created yet)
+  if (!existsSync(backupDir)) mkdirSync(backupDir, { recursive: true });
+
   console.log('  Loading safe mode config...');
   copyFileSync(templatePath, configPath);
   console.log('  Safe mode config loaded.');
@@ -369,9 +372,11 @@ async function main() {
   }
   for (const extra of extraConfigFiles) {
     if (existsSync(extra)) {
-      const backupExtra = join(backupDir, `extra-config-${Date.now()}-${extra.split(/[\\/]/).pop()}`);
       try {
-        copyFileSync(extra, backupExtra);
+        const backupExtra = join(backupDir, `extra-config-${Date.now()}-${extra.split(/[\\/]/).pop()}`);
+        try {
+          copyFileSync(extra, backupExtra);
+        } catch {}
         unlinkSync(extra);
         log(YELLOW, `  Removed stale config: ${extra.split(/[\\/]/).pop()} (backed up to data/backups/)`);
       } catch {
@@ -383,18 +388,21 @@ async function main() {
   // ---- Neutralize auth.json to prevent Provider.list crash ----
   // opencode's Provider.list crashes with "n.provider is undefined" when
   // it encounters a malformed or missing auth entry. Safe mode doesn't need
-  // real provider auth — it just needs to start. Back up and replace with
-  // a minimal auth.json that has the opencode free-tier provider.
-  const ocDataDir = join(homeDir, '.local', 'share', 'opencode');
-  const authFile = join(ocDataDir, 'auth.json');
-  if (existsSync(authFile)) {
-    const authBackup = join(backupDir, `auth-${Date.now()}.json`);
-    try {
-      copyFileSync(authFile, authBackup);
-      unlinkSync(authFile);
-      log(YELLOW, '  Backed up auth.json (will restore on next normal launch)');
-    } catch {
-      log(DARK_YELLOW, '  Could not back up auth.json (ignored)');
+  // real provider auth — it just needs to start. Back up and remove auth.json
+  // so Provider.list has no auth entries to crash on.
+  // All operations are fully defensive — never crashes on missing/locked files.
+  if (homeDir) {
+    const ocDataDir = join(homeDir, '.local', 'share', 'opencode');
+    const authFile = join(ocDataDir, 'auth.json');
+    if (existsSync(authFile)) {
+      try {
+        const authBackup = join(backupDir, `auth-${Date.now()}.json`);
+        copyFileSync(authFile, authBackup);
+        unlinkSync(authFile);
+        log(YELLOW, '  Backed up auth.json (will restore on next normal launch)');
+      } catch {
+        log(DARK_YELLOW, '  Could not back up/remove auth.json (ignored)');
+      }
     }
   }
 
