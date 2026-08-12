@@ -8,7 +8,8 @@
                    ".opencode/plugins/recall.js",
                    ".opencode/plugins/stuck-detector.js",
                    ".opencode/plugins/mulahazah.js",
-                   ".opencode/plugins/plan-reflex.js"
+                   ".opencode/plugins/plan-reflex.js",
+                   ".opencode/plugins/agent-watchdog.mjs"
                ],
      "instructions":  [
     ".opencode/instructions/shared-agent-rules.md",

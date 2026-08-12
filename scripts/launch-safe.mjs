@@ -2,7 +2,7 @@
 
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
-import { existsSync, copyFileSync, mkdirSync, writeFileSync, createWriteStream, unlinkSync, rmSync, readFileSync } from 'fs';
+import { existsSync, copyFileSync, mkdirSync, writeFileSync, createWriteStream, unlinkSync, rmSync, readFileSync, readdirSync } from 'fs';
 import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
@@ -382,6 +382,53 @@ async function main() {
       } catch {
         log(DARK_YELLOW, `  Could not remove: ${extra} (ignored)`);
       }
+    }
+  }
+
+  // ---- Neutralize plugins not in the safe-mode plugin whitelist ----
+  // opencode auto-discovers all .js/.mjs files in .opencode/plugins/ and
+  // tries to load them. A broken plugin (one that crashes in Bun's plugin
+  // loader) causes a cascade: the plugin's config hook fails with
+  // "undefined is not an object (evaluating 'N.config')", which then crashes
+  // Provider.list with "n.provider is undefined", which makes opencode exit
+  // immediately (code 0, ~3.8s) before rendering the TUI.
+  //
+  // Safe mode must guarantee a clean plugin environment. We move any plugin
+  // NOT in the safe-mode whitelist out of the plugins directory (backed up).
+  const pluginsDir = join(rootDir, '.opencode', 'plugins');
+  if (existsSync(pluginsDir)) {
+    // These are the known-good plugins that exist in the repo and work with
+    // the current opencode version. Any other .js/.mjs file is suspect.
+    const safePlugins = new Set([
+      'agent-watchdog.mjs',
+      'compaction.js',
+      'dispatch-reflex.js',
+      'glitch-image-gen.mjs',
+      'graphify.js',
+      'mulahazah.js',
+      'plan-reflex.js',
+      'recall.js',
+      'save-images.js',
+      'stuck-detector.js',
+      'verify-claim.js',
+    ]);
+    try {
+      const pluginFiles = readdirSync(pluginsDir).filter(f => f.endsWith('.js') || f.endsWith('.mjs'));
+      for (const pf of pluginFiles) {
+        if (!safePlugins.has(pf)) {
+          const src = join(pluginsDir, pf);
+          const dst = join(backupDir, `quarantined-plugin-${Date.now()}-${pf}`);
+          try {
+            copyFileSync(src, dst);
+            unlinkSync(src);
+            log(YELLOW, `  Quarantined unknown plugin: ${pf} (backed up to data/backups/)`);
+          } catch {
+            log(DARK_YELLOW, `  Could not quarantine: ${pf} (ignored)`);
+          }
+        }
+      }
+    } catch {
+      // plugins dir not readable — nothing to do
     }
   }
 
