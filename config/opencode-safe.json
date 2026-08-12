@@ -1,6 +1,6 @@
 {
     "$schema":  "https://opencode.ai/config.json",
-    "enabled_providers":  ["opencode"],
+    "enabled_providers":  ["opencode", "nvidia", "openrouter"],
     "agent":  {
                    "glitch":  {
                                   "mode":  "primary",

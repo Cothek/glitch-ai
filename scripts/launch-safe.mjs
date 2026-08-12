@@ -385,23 +385,41 @@ async function main() {
     }
   }
 
-  // ---- Neutralize auth.json to prevent Provider.list crash ----
+  // ---- Sanitize auth.json to prevent Provider.list crash ----
   // opencode's Provider.list crashes with "n.provider is undefined" when
-  // it encounters a malformed or missing auth entry. Safe mode doesn't need
-  // real provider auth — it just needs to start. Back up and remove auth.json
-  // so Provider.list has no auth entries to crash on.
+  // auth.json has a malformed entry. Instead of removing auth.json entirely
+  // (which wipes all providers), validate each entry and only remove malformed
+  // ones. A valid entry has at minimum a "type" and "key" field.
   // All operations are fully defensive — never crashes on missing/locked files.
   if (homeDir) {
     const ocDataDir = join(homeDir, '.local', 'share', 'opencode');
     const authFile = join(ocDataDir, 'auth.json');
     if (existsSync(authFile)) {
       try {
-        const authBackup = join(backupDir, `auth-${Date.now()}.json`);
-        copyFileSync(authFile, authBackup);
-        unlinkSync(authFile);
-        log(YELLOW, '  Backed up auth.json (will restore on next normal launch)');
+        const authRaw = readFileSync(authFile, 'utf-8');
+        const auth = JSON.parse(authRaw);
+        let changed = false;
+        for (const provider of Object.keys(auth)) {
+          const entry = auth[provider];
+          if (!entry || typeof entry !== 'object' || !entry.type || !entry.key) {
+            log(YELLOW, `  Removing malformed auth entry: ${provider}`);
+            delete auth[provider];
+            changed = true;
+          }
+        }
+        if (changed) {
+          const authBackup = join(backupDir, `auth-${Date.now()}.json`);
+          copyFileSync(authFile, authBackup);
+          if (Object.keys(auth).length === 0) {
+            unlinkSync(authFile);
+            log(YELLOW, '  All auth entries malformed — removed auth.json (backed up)');
+          } else {
+            writeFileSync(authFile, JSON.stringify(auth, null, 2), 'utf-8');
+            log(YELLOW, '  Sanitized auth.json (malformed entries removed, valid ones kept)');
+          }
+        }
       } catch {
-        log(DARK_YELLOW, '  Could not back up/remove auth.json (ignored)');
+        log(DARK_YELLOW, '  Could not read/parse auth.json (ignored)');
       }
     }
   }
