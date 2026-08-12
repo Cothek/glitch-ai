@@ -423,6 +423,13 @@ async function main() {
   }
 
   console.log('');
+  // Print opencode version for diagnostics
+  try {
+    const verResult = run(openCodeBin, ['--version'], { timeout: 5000 });
+    if (verResult.success && verResult.stdout) {
+      console.log(`  OpenCode version: ${verResult.stdout.trim()}`);
+    }
+  } catch {}
   console.log('  Starting OpenCode in safe mode...');
   console.log('  Current config saved to data/backups/ with timestamp.');
   console.log("  When you're done fixing, exit normally and launch normally.");
