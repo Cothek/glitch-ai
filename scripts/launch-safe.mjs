@@ -380,6 +380,24 @@ async function main() {
     }
   }
 
+  // ---- Neutralize auth.json to prevent Provider.list crash ----
+  // opencode's Provider.list crashes with "n.provider is undefined" when
+  // it encounters a malformed or missing auth entry. Safe mode doesn't need
+  // real provider auth — it just needs to start. Back up and replace with
+  // a minimal auth.json that has the opencode free-tier provider.
+  const ocDataDir = join(homeDir, '.local', 'share', 'opencode');
+  const authFile = join(ocDataDir, 'auth.json');
+  if (existsSync(authFile)) {
+    const authBackup = join(backupDir, `auth-${Date.now()}.json`);
+    try {
+      copyFileSync(authFile, authBackup);
+      unlinkSync(authFile);
+      log(YELLOW, '  Backed up auth.json (will restore on next normal launch)');
+    } catch {
+      log(DARK_YELLOW, '  Could not back up auth.json (ignored)');
+    }
+  }
+
   const modeInfo = JSON.stringify({
     mode: 'safe',
     timestamp: new Date().toISOString()
