@@ -1,7 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 
-export const PLAN_MARKER_PATH = (directory) =>
+const PLAN_MARKER_PATH = (directory) =>
   path.join(directory, 'data', 'plans', 'current-plan.md');
 
 const PLAN_MAX_AGE_MS = 6 * 60 * 60 * 1000;
@@ -77,7 +77,7 @@ function hasValidPlanMarker(directory) {
   }
 }
 
-export function isComplexTask(input) {
+function isComplexTask(input) {
   const prompt = (input.prompt || '').toLowerCase();
   const filePath = input.filePath || input.path || '';
 
