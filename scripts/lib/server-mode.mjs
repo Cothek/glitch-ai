@@ -121,13 +121,75 @@ function isProcessRunning(name) {
   }
 }
 
+// Module-scope process helpers (used by both launchServer's port-check and
+// killPidFromFile). Defined here so cleanup() — which runs on process exit,
+// outside launchServer's closure — can verify a PID is alive and matches the
+// expected service before taskkilling it. Windows recycles PIDs; a stale pid
+// file could otherwise point at an unrelated process that now holds that PID.
+function getProcessName(pid) {
+  if (!pid) return null;
+  try {
+    if (process.platform === 'win32') {
+      const out = execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH'], { encoding: 'utf-8', timeout: 5000 });
+      // Line looks like: "node.exe  1234 Console  1 12,345 K"
+      const m = out.match(/^\s*(\S+)\.exe\s/i);
+      return m ? m[1].toLowerCase() : null;
+    } else {
+      const out = execFileSync('ps', ['-p', String(pid), '-o', 'comm='], { encoding: 'utf-8', timeout: 5000 });
+      return out.trim().toLowerCase() || null;
+    }
+  } catch {
+    return null;
+  }
+}
+
+function isProcessAlive(pid) {
+  if (!pid) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    // EPERM means the process exists but we lack permission to signal it.
+    return e.code === 'EPERM';
+  }
+}
+
 // ---- Background process tracking ----
 const backgroundProcesses = [];
 let fixerInterval = null;
+// Set by launchServer() so cleanup() can find data/<service>.pid files.
+// Visible-window services (cloudflared, auth-proxy) are NOT in
+// backgroundProcesses (they run in their own windows); cleanup reads their
+// pid files and taskkills them on Ctrl+C to prevent orphans holding ports.
+let rootDirRef = null;
 
 function trackProcess(proc) {
   backgroundProcesses.push(proc);
   return proc;
+}
+
+function killPidFromFile(pidFileName, expectedNames) {
+  if (!rootDirRef) return;
+  const pidFile = join(rootDirRef, 'data', pidFileName);
+  if (!existsSync(pidFile)) return;
+  try {
+    const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+    if (pid > 0 && process.platform === 'win32') {
+      // Guard against recycled PIDs: only kill if the process is alive AND its
+      // name matches one of the expected services. A stale pid file pointing
+      // at an unrelated process (Windows recycles PIDs aggressively) is left
+      // untouched rather than risk killing the user's own work.
+      if (isProcessAlive(pid)) {
+        const name = getProcessName(pid);
+        if (name && expectedNames.includes(name)) {
+          execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', timeout: 5000 });
+        }
+      }
+    }
+  } catch {}
+  // Intentionally do NOT delete the pid file: the visible window may still be
+  // open if the user closed it manually, and stale files are harmless (they
+  // get overwritten on next launch).
 }
 
 function cleanup() {
@@ -135,6 +197,12 @@ function cleanup() {
     try { if (!proc.killed) proc.kill(); } catch {}
   }
   backgroundProcesses.length = 0;
+  // Kill visible-window services by their pid files (Windows only).
+  // Each call verifies the PID is alive and its process name matches the
+  // expected set before taskkilling — guards against recycled PIDs.
+  killPidFromFile('cloudflared.pid', ['cloudflared', 'powershell', 'pwsh', 'node']);
+  killPidFromFile('auth-proxy.pid', ['node', 'powershell', 'pwsh']);
+  killPidFromFile('money-dashboard.pid', ['node', 'powershell', 'pwsh']);
   if (fixerInterval) {
     clearInterval(fixerInterval);
     fixerInterval = null;
@@ -205,6 +273,78 @@ async function startSessionsApi(ROOT_DIR) {
   }
 }
 
+// ---- Visible window launcher (shared helper) ----
+// Extracts the Windows visible-PowerShell-window pattern (mirrors
+// startPluginVisible in plugin-manager.mjs) into a reusable helper so
+// cloudflared, auth-proxy, and the money dashboard all start the same way.
+// The user can see and close each service window; PID files let cleanup()
+// kill orphans on Ctrl+C. Unix callers fall back to a detached hidden spawn.
+//
+// @param {Object} opts
+// @param {string} opts.ROOT_DIR     - Project root (data/ lives here).
+// @param {string} opts.title        - Window title (also shown in logs).
+// @param {string} opts.ps1FileName  - File name written under data/ (e.g. 'cloudflared-window.ps1').
+// @param {string} opts.pidFileName  - File name written under data/ (e.g. 'cloudflared.pid').
+// @param {string} opts.cwd          - Working directory for the inner command.
+// @param {string} opts.innerCommand - PowerShell command string run inside the window.
+// @returns {Promise<number|null>}   - Real PID read from the pid file, or null on timeout.
+async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, cwd, innerCommand }) {
+  const dataDir = join(ROOT_DIR, 'data');
+  if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
+
+  const ps1Path = join(dataDir, ps1FileName);
+  const pidFilePath = join(dataDir, pidFileName);
+  const esc = (s) => s.replace(/'/g, "''");
+
+  // Wrap the caller's inner command with a title setter + Set-Location so the
+  // window is labeled and starts in the right directory. -NoExit keeps the
+  // window open on error so the user can read the message before closing.
+  const wrapped = `& { $host.ui.RawUI.WindowTitle = '${esc(title)}'; Set-Location -LiteralPath '${esc(cwd)}'; ${innerCommand} }`;
+  const ps1Inner = esc(wrapped);
+  const ps1PidPath = esc(pidFilePath);
+
+  const ps1Content =
+    `$proc = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-Command', '${ps1Inner}')\r\n` +
+    `if ($proc) { $proc.Id | Out-File -FilePath '${ps1PidPath}' -Encoding ascii }\r\n`;
+
+  writeFileSync(ps1Path, ps1Content, 'utf-8');
+
+  const launcher = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path], {
+    cwd,
+    stdio: 'ignore',
+    windowsHide: true,
+    detached: false,
+  });
+  launcher.unref();
+  trackProcess(launcher);
+
+  // Track launcher failure so the wait loop can bail early instead of spinning
+  // the full 2s after the launcher has already exited (mirrors plugin-manager
+  // startPluginVisible). Without this, a launcher that dies immediately (e.g.
+  // powershell.exe not on PATH) leaves us waiting for a pid file that will
+  // never appear.
+  let launcherFailed = false;
+  launcher.on('exit', () => { launcherFailed = true; });
+
+  // Wait up to 2s for the PID file to appear (mirrors plugin-manager pattern).
+  let realPid = null;
+  const startedAt = Date.now();
+  while (Date.now() - startedAt < 2000) {
+    await new Promise(r => setTimeout(r, 100));
+    if (existsSync(pidFilePath)) {
+      try {
+        const content = readFileSync(pidFilePath, 'utf-8').trim();
+        const parsed = parseInt(content, 10);
+        if (parsed > 0) { realPid = parsed; break; }
+      } catch {}
+    }
+    // Launcher died and no pid file appeared — nothing to wait for.
+    if (launcherFailed && !existsSync(pidFilePath)) break;
+  }
+
+  return realPid;
+}
+
 // ---- Money dashboard (port 4110) ----
 // Standalone glitch-money control dashboard. Runs in its own visible
 // PowerShell window on Windows (mirrors the model-ui visible_window pattern
@@ -231,53 +371,22 @@ async function startMoneyDashboard(ROOT_DIR) {
   }
 
   try {
-    if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
-
     if (isWin) {
-      // Visible PowerShell window pattern (mirrors startPluginVisible in plugin-manager.mjs)
-      const title = `Glitch: money-dashboard (port ${MONEY_DASHBOARD_PORT})`;
-      const ps1Path = join(dataDir, 'money-dashboard-window.ps1');
-      const esc = (s) => s.replace(/'/g, "''");
-
-      // Run node in foreground with -NoExit so the window stays open on error.
       // Pass GLITCH_AI_ROOT so the dashboard's fleet-db/cost-db can locate the
       // opencode DB and config files without hardcoded paths.
-      const innerCommand = `& { $host.ui.RawUI.WindowTitle = '${esc(title)}'; Set-Location -LiteralPath '${esc(moneyDir)}'; $env:GLITCH_AI_ROOT = '${esc(ROOT_DIR)}'; node dashboard/server.mjs }`;
-      const ps1Inner = esc(innerCommand);
-      const ps1PidPath = esc(pidFilePath);
-
-      const ps1Content =
-        `$proc = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-Command', '${ps1Inner}')\r\n` +
-        `if ($proc) { $proc.Id | Out-File -FilePath '${ps1PidPath}' -Encoding ascii }\r\n`;
-
-      writeFileSync(ps1Path, ps1Content, 'utf-8');
-
-      const launcher = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path], {
+      const innerCommand = `$env:GLITCH_AI_ROOT = '${ROOT_DIR.replace(/'/g, "''")}'; node dashboard/server.mjs`;
+      const realPid = await startVisibleWindow({
+        ROOT_DIR,
+        title: `Glitch: money-dashboard (port ${MONEY_DASHBOARD_PORT})`,
+        ps1FileName: 'money-dashboard-window.ps1',
+        pidFileName: 'money-dashboard.pid',
         cwd: moneyDir,
-        stdio: 'ignore',
-        windowsHide: true,
-        detached: false,
+        innerCommand,
       });
-      launcher.unref();
-      trackProcess(launcher);
-
-      // Wait briefly for the PID file to appear (mirrors plugin-manager pattern).
-      let realPid = null;
-      const startedAt = Date.now();
-      while (Date.now() - startedAt < 2000) {
-        await new Promise(r => setTimeout(r, 100));
-        if (existsSync(pidFilePath)) {
-          try {
-            const content = readFileSync(pidFilePath, 'utf-8').trim();
-            const parsed = parseInt(content, 10);
-            if (parsed > 0) { realPid = parsed; break; }
-          } catch {}
-        }
-      }
-
-      log(DARK_GREEN, `  Money dashboard: listening on port ${MONEY_DASHBOARD_PORT} (PID ${realPid || launcher.pid})`);
+      log(DARK_GREEN, `  Money dashboard: listening on port ${MONEY_DASHBOARD_PORT} (PID ${realPid || 'unknown'})`);
     } else {
       // Non-Windows: detached hidden spawn fallback
+      if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
       const proc = spawn('node', [serverScript], {
         cwd: moneyDir,
         stdio: 'ignore',
@@ -335,6 +444,9 @@ export async function launchServer(options = {}) {
     process.exit(1);
   }
 
+  // Capture ROOT_DIR for cleanup() so it can kill visible-window services by pid file.
+  rootDirRef = ROOT_DIR;
+
   const isWin = process.platform === 'win32';
   const isMac = process.platform === 'darwin';
 
@@ -352,17 +464,112 @@ export async function launchServer(options = {}) {
   const SETUP_TUNNEL_SCRIPT = join(ROOT_DIR, 'scripts', isWin ? 'setup-tunnel.ps1' : 'setup-tunnel.sh');
 
   // ---- Port check (zombie socket prevention) ----
-  const portFree = await checkPort(TARGET_PORT);
-  if (!portFree) {
-    log(RED, `  ERROR: Port ${TARGET_PORT} is in use (likely orphan TCP socket from previous crash).`);
+  // Detects the exact PID holding a port and, if it looks like an orphaned
+  // Glitch process, offers to kill it. Two tiers of process names:
+  //   - GLITCH_SPECIFIC: opencode, cloudflared — safe to auto-kill (default Y)
+  //   - GENERIC: node, powershell, pwsh — could be the user's own work, so an
+  //     explicit 'y'/'yes' is required (default N)
+  // Falls back to the existing error + manual fix hint for unknown processes.
+  const GLITCH_SPECIFIC_PROCESS_NAMES = new Set(['opencode', 'cloudflared']);
+  const GENERIC_PROCESS_NAMES = new Set(['node', 'powershell', 'pwsh']);
+  const ALL_KNOWN_PROCESS_NAMES = new Set([...GLITCH_SPECIFIC_PROCESS_NAMES, ...GENERIC_PROCESS_NAMES]);
+
+  function getPortPid(port) {
+    try {
+      if (isWin) {
+        // netstat -ano: find the LISTENING line for :<port>, last column is PID.
+        // Windows output looks like:
+        //   "  TCP    0.0.0.0:4102           0.0.0.0:0              LISTENING       12345"
+        // The port is preceded by a COLON (0.0.0.0:4102), not whitespace, so
+        // the regex must accept either a colon or whitespace before the port.
+        // IPv6 form "[::]:4102 ... LISTENING 12345" also matches (same PID).
+        const out = execFileSync('netstat', ['-ano'], { encoding: 'utf-8', timeout: 5000, maxBuffer: 10 * 1024 * 1024 });
+        const re = new RegExp(`[:\\s]${port}\\s+\\S+\\s+LISTENING\\s+(\\d+)$`, 'm');
+        const m = out.match(re);
+        return m ? parseInt(m[1], 10) : null;
+      } else {
+        const out = execFileSync('lsof', ['-i', `:${port}`, '-t'], { encoding: 'utf-8', timeout: 5000 });
+        const pid = parseInt(out.trim().split('\n')[0], 10);
+        return pid > 0 ? pid : null;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  async function checkAndClearPort(port) {
+    const free = await checkPort(port);
+    if (free) {
+      log(CYAN, `  Port ${port} is free`);
+      return true;
+    }
+
+    const pid = getPortPid(port);
+    const name = getProcessName(pid);
+
+    if (pid && name && ALL_KNOWN_PROCESS_NAMES.has(name)) {
+      const isGlitchSpecific = GLITCH_SPECIFIC_PROCESS_NAMES.has(name);
+      log(YELLOW, `  Port ${port} is held by ${name} (PID ${pid}) — likely an orphaned Glitch process.`);
+
+      // Decide whether to kill. Two gates:
+      //   1. TTY gate (m2): only prompt interactively when stdin is a TTY.
+      //      Non-interactive callers (serve.mjs) get default behavior silently.
+      //   2. Default-Y vs default-N (M1): Glitch-specific names (opencode,
+      //      cloudflared) default to YES (empty answer kills). Generic names
+      //      (node, powershell, pwsh) default to NO — require explicit 'y'/'yes'
+      //      so we never kill the user's own node server by accident.
+      let shouldKill;
+      if (process.stdin.isTTY) {
+        const hint = isGlitchSpecific ? '[Y/n]' : '[y/N]';
+        const answer = await promptUser(`  Kill it and continue? ${hint}: `);
+        if (isGlitchSpecific) {
+          shouldKill = (answer === '' || answer === 'y' || answer === 'yes');
+        } else {
+          shouldKill = (answer === 'y' || answer === 'yes');
+        }
+      } else {
+        // Non-interactive: auto-kill Glitch-specific, skip generic.
+        shouldKill = isGlitchSpecific;
+      }
+
+      if (shouldKill) {
+        try {
+          if (isWin) {
+            execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', timeout: 5000 });
+          } else {
+            execFileSync('kill', [String(pid)], { stdio: 'ignore', timeout: 5000 });
+          }
+        } catch {}
+        await new Promise(r => setTimeout(r, 500));
+        const nowFree = await checkPort(port);
+        if (nowFree) {
+          log(GREEN, `  Port ${port} freed (killed PID ${pid}).`);
+          return true;
+        }
+        log(RED, `  Port ${port} still in use after killing PID ${pid}.`);
+      } else {
+        log(YELLOW, `  Declined to kill PID ${pid}.`);
+      }
+    }
+
+    // Either unknown process, user declined, or kill failed — show the error.
+    log(RED, `  ERROR: Port ${port} is in use (likely orphan TCP socket from previous crash).`);
+    if (pid && name) {
+      log(YELLOW, `  Held by: ${name} (PID ${pid}). Close that process or kill it manually.`);
+    }
     if (isWin) {
       log(YELLOW, '  Fix: Run PowerShell as Admin and execute: net stop winnat; net start winnat');
     } else {
-      log(YELLOW, `  Fix: lsof -i :${TARGET_PORT} -t | xargs kill`);
+      log(YELLOW, `  Fix: lsof -i :${port} -t | xargs kill`);
     }
-    process.exit(1);
+    return false;
   }
-  log(CYAN, `  Port ${TARGET_PORT} is free`);
+
+  const targetOk = await checkAndClearPort(TARGET_PORT);
+  if (!targetOk) process.exit(1);
+
+  const authProxyOk = await checkAndClearPort(AUTH_PROXY_PORT);
+  if (!authProxyOk) process.exit(1);
 
   // ---- Cloudflare Tunnel status check + auto-setup ----
   let cloudflareOk = false;
@@ -543,16 +750,36 @@ export async function launchServer(options = {}) {
   // ---- Start Cloudflare Tunnel ----
   if (cloudflareOk) {
     log(CYAN, '  Starting Cloudflare Tunnel...');
-    const cfProc = spawn(CLOUDFLARED_BIN, ['tunnel', '--config', CLOUDFLARED_CONFIG, 'run'], {
-      stdio: 'ignore',
-      windowsHide: true
-    });
-    cfProc.on('error', () => { cloudflareOk = false; });
-    cfProc.unref();
-    trackProcess(cfProc);
-    await new Promise(r => setTimeout(r, 2000));
-    if (cloudflareDomain) {
-      log(GREEN, `  Tunnel running: https://${cloudflareDomain}`);
+    if (isWin) {
+      // Visible window so the user can see/close the tunnel process.
+      const innerCommand = `& '${CLOUDFLARED_BIN.replace(/'/g, "''")}' tunnel --config '${CLOUDFLARED_CONFIG.replace(/'/g, "''")}' run`;
+      const cfPid = await startVisibleWindow({
+        ROOT_DIR,
+        title: 'Glitch: cloudflare-tunnel',
+        ps1FileName: 'cloudflared-window.ps1',
+        pidFileName: 'cloudflared.pid',
+        cwd: ROOT_DIR,
+        innerCommand,
+      });
+      await new Promise(r => setTimeout(r, 2000));
+      if (cloudflareDomain) {
+        log(GREEN, `  Tunnel running: https://${cloudflareDomain} (PID ${cfPid || 'unknown'})`);
+      }
+    } else {
+      // Unix: detached hidden spawn fallback
+      const cfProc = spawn(CLOUDFLARED_BIN, ['tunnel', '--config', CLOUDFLARED_CONFIG, 'run'], {
+        stdio: 'ignore',
+        windowsHide: true,
+        detached: true,
+      });
+      cfProc.on('error', () => { cloudflareOk = false; });
+      cfProc.unref();
+      trackProcess(cfProc);
+      try { writeFileSync(join(ROOT_DIR, 'data', 'cloudflared.pid'), String(cfProc.pid), 'utf-8'); } catch {}
+      await new Promise(r => setTimeout(r, 2000));
+      if (cloudflareDomain) {
+        log(GREEN, `  Tunnel running: https://${cloudflareDomain} (PID ${cfProc.pid})`);
+      }
     }
   }
 
@@ -584,16 +811,35 @@ export async function launchServer(options = {}) {
   // ---- Start Auth Proxy ----
   log(CYAN, `  Starting auth proxy (port ${AUTH_PROXY_PORT} -> ${TARGET_PORT})...`);
   try {
-    const authProxyProc = spawn('node', [AUTH_PROXY, String(AUTH_PROXY_PORT), `http://localhost:${TARGET_PORT}`], {
-      stdio: 'ignore',
-      windowsHide: true
-    });
-    authProxyProc.on('error', (err) => {
-      log(YELLOW, `  Auth proxy failed to start: ${err.message}`);
-    });
-    authProxyProc.unref();
-    trackProcess(authProxyProc);
-    await new Promise(r => setTimeout(r, 1000));
+    if (isWin) {
+      // Visible window so the user can see/close the auth proxy process.
+      const innerCommand = `node '${AUTH_PROXY.replace(/'/g, "''")}' ${AUTH_PROXY_PORT} http://localhost:${TARGET_PORT}`;
+      const apPid = await startVisibleWindow({
+        ROOT_DIR,
+        title: `Glitch: auth-proxy (port ${AUTH_PROXY_PORT})`,
+        ps1FileName: 'auth-proxy-window.ps1',
+        pidFileName: 'auth-proxy.pid',
+        cwd: ROOT_DIR,
+        innerCommand,
+      });
+      await new Promise(r => setTimeout(r, 1000));
+      log(DARK_GREEN, `  Auth proxy listening (PID ${apPid || 'unknown'})`);
+    } else {
+      // Unix: detached hidden spawn fallback
+      const authProxyProc = spawn('node', [AUTH_PROXY, String(AUTH_PROXY_PORT), `http://localhost:${TARGET_PORT}`], {
+        stdio: 'ignore',
+        windowsHide: true,
+        detached: true,
+      });
+      authProxyProc.on('error', (err) => {
+        log(YELLOW, `  Auth proxy failed to start: ${err.message}`);
+      });
+      authProxyProc.unref();
+      trackProcess(authProxyProc);
+      try { writeFileSync(join(ROOT_DIR, 'data', 'auth-proxy.pid'), String(authProxyProc.pid), 'utf-8'); } catch {}
+      await new Promise(r => setTimeout(r, 1000));
+      log(DARK_GREEN, `  Auth proxy listening (PID ${authProxyProc.pid})`);
+    }
   } catch (e) {
     log(YELLOW, `  Auth proxy start failed: ${e.message}`);
   }
