@@ -1388,24 +1388,28 @@
 
       try {
         // POST returns 202 immediately. A 409 means refresh is already running —
-        // treat it as success and start polling instead of erroring.
+        // treat it as info and start polling instead of erroring.
+        let alreadyRunning = false;
         try {
           await api('refresh-models', { method: 'POST' });
+          showToast('Refresh started — checking NVIDIA free endpoints...', 'info');
         } catch (postErr) {
-          if (!postErr.message || !postErr.message.includes('already in progress')) {
+          if (postErr.message && postErr.message.includes('already in progress')) {
+            alreadyRunning = true;
+            showToast('Refresh already running — checking status...', 'info');
+          } else {
             showToast('Failed to start refresh: ' + postErr.message, 'error');
             btn.disabled = false;
             btn.innerHTML = originalText;
             return;
           }
-          // 409 "already in progress" — fall through to polling
         }
 
-        // Poll for completion (max 60 polls = 3 minutes at 3s interval)
+        // Poll for completion (max 120 polls = 6 minutes at 3s interval)
         let pollCount = 0;
         const pollInterval = setInterval(async () => {
           pollCount++;
-          if (pollCount > 60) {
+          if (pollCount > 120) {
             clearInterval(pollInterval);
             btn.disabled = false;
             btn.innerHTML = originalText;

@@ -525,18 +525,25 @@ async function handler(req, res) {
 
       refreshState = { running: true, startedAt: new Date().toISOString(), finishedAt: null, error: null, result: null };
 
-      const proc = spawn(psExe, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-UpdateCache', '-Force'], {
-        cwd: ROOT_DIR,
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-      });
+      let proc;
+      try {
+        proc = spawn(psExe, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-UpdateCache', '-Force'], {
+          cwd: ROOT_DIR,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          windowsHide: true,
+        });
+      } catch (spawnErr) {
+        refreshState = { running: false, startedAt: refreshState.startedAt, finishedAt: new Date().toISOString(), error: `Failed to spawn ${psExe}: ${spawnErr.message}`, result: null };
+        sendJson(res, 500, { ok: false, error: `Failed to spawn ${psExe}: ${spawnErr.message}` });
+        return;
+      }
 
       let stdout = '';
       let stderr = '';
       proc.stdout.on('data', (d) => { stdout += d.toString(); });
       proc.stderr.on('data', (d) => { stderr += d.toString(); });
 
-      const REFRESH_TIMEOUT_MS = 180_000;
+      const REFRESH_TIMEOUT_MS = 600_000;
       let timedOut = false;
       const timeout = setTimeout(() => {
         timedOut = true;
