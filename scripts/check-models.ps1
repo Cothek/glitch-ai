@@ -956,8 +956,13 @@ function Get-NvidiaBehavioralFreeSet {
             if (-not $Silent) {
                 Write-Host "  NVIDIA behavioral cache: $($freeSet.Count) free models (STALE - cache past TTL, using last-known-good)" -ForegroundColor Yellow
             }
+            return $freeSet
         }
-        return $freeSet
+        # No cache file exists at all — fall through to probe instead of returning empty.
+        # First launch on a fresh machine needs the probe to build the initial cache.
+        if (-not $Silent) {
+            Write-Host "  NVIDIA behavioral cache: not found, running probe (first launch)..." -ForegroundColor Yellow
+        }
     }
     if (-not $ApiKey) {
         if (-not $Silent) {

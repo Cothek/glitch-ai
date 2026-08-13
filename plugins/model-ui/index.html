@@ -1385,17 +1385,57 @@
       const originalText = btn.innerHTML;
       btn.disabled = true;
       btn.innerHTML = '<span class="gl-spinner gl-spinner--sm" style="display:inline-block;vertical-align:middle;margin-right:4px;border-color:var(--glitch-text-secondary);border-top-color:transparent;"></span> Refreshing...';
+
       try {
-        const data = await api('refresh-models', { method: 'POST' });
-        if (data.ok) {
-          showToast(`Models refreshed: ${data.total} total, ${data.nvidia} NVIDIA`, 'success');
-          await Promise.all([loadStatus(), loadAgents()]);
-        } else {
-          showToast(`Refresh failed: ${data.error}`, 'error');
+        // POST returns 202 immediately. A 409 means refresh is already running —
+        // treat it as success and start polling instead of erroring.
+        try {
+          await api('refresh-models', { method: 'POST' });
+        } catch (postErr) {
+          if (!postErr.message || !postErr.message.includes('already in progress')) {
+            showToast('Failed to start refresh: ' + postErr.message, 'error');
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            return;
+          }
+          // 409 "already in progress" — fall through to polling
         }
+
+        // Poll for completion (max 60 polls = 3 minutes at 3s interval)
+        let pollCount = 0;
+        const pollInterval = setInterval(async () => {
+          pollCount++;
+          if (pollCount > 60) {
+            clearInterval(pollInterval);
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+            showToast('Refresh timed out — try again', 'warning');
+            return;
+          }
+          try {
+            const status = await api('refresh-status');
+            if (status.running) {
+              const elapsed = status.startedAt ? Math.round((Date.now() - new Date(status.startedAt).getTime()) / 1000) : 0;
+              btn.innerHTML = '<span class="gl-spinner gl-spinner--sm" style="display:inline-block;vertical-align:middle;margin-right:4px;border-color:var(--glitch-text-secondary);border-top-color:transparent;"></span> Refreshing... (' + elapsed + 's)';
+            } else {
+              clearInterval(pollInterval);
+              btn.disabled = false;
+              btn.innerHTML = originalText;
+              if (status.error) {
+                showToast('Refresh failed: ' + status.error, 'error');
+              } else if (status.result && status.result.ok) {
+                showToast('Models refreshed: ' + status.result.total + ' total, ' + status.result.nvidia + ' NVIDIA', 'success');
+                await Promise.all([loadStatus(), loadAgents()]);
+              } else {
+                showToast('Refresh completed with unknown result', 'warning');
+              }
+            }
+          } catch (pollErr) {
+            // Keep polling — transient network errors through tunnel
+          }
+        }, 3000);
       } catch (err) {
-        showToast(`Failed to refresh models: ${err.message}`, 'error');
-      } finally {
+        showToast('Failed to start refresh: ' + err.message, 'error');
         btn.disabled = false;
         btn.innerHTML = originalText;
       }

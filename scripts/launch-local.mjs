@@ -583,7 +583,7 @@ async function main() {
     try {
       const checkModelsScript = join(ROOT_DIR, 'scripts', 'check-models.ps1');
       if (existsSync(checkModelsScript)) {
-        pwsh(['-File', checkModelsScript, '-CheckOnly', '-SkipNvidiaFreeCheck'], { timeout: 60000, stdio: 'inherit' });
+        pwsh(['-File', checkModelsScript, '-CheckOnly', '-SkipNvidiaFreeCheck'], { timeout: 600000, stdio: 'inherit' });
 
         const modelStatusFile = join(ROOT_DIR, 'data', 'model-update-status.json');
         if (existsSync(modelStatusFile)) {

@@ -606,7 +606,7 @@ async function main() {
     if (existsSync(checkModelsScript)) {
       try {
         // Show raw PS1 output (no -Silent, stdio: inherit) so user sees any errors
-        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 60000, stdio: 'inherit' });
+        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 600000, stdio: 'inherit' });
       } catch {
         log(DARK_YELLOW, '  Model fetch script failed');
       }

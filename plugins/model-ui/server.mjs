@@ -33,6 +33,8 @@ let configCache = null;
 let configCacheTime = 0;
 const CONFIG_CACHE_TTL = 5_000; // 5 seconds
 
+let refreshState = { running: false, startedAt: null, finishedAt: null, error: null, result: null };
+
 function getRegistry() {
   const now = Date.now();
   if (registryCache && now - registryCacheTime < REGISTRY_CACHE_TTL) {
@@ -504,6 +506,11 @@ async function handler(req, res) {
     }
 
     if (req.method === 'POST' && pathname === '/api/refresh-models') {
+      if (refreshState.running) {
+        sendJson(res, 409, { ok: false, error: 'Refresh already in progress', startedAt: refreshState.startedAt });
+        return;
+      }
+
       const scriptPath = join(ROOT_DIR, 'scripts', 'check-models.ps1');
       if (!existsSync(scriptPath)) {
         sendJson(res, 500, { ok: false, error: 'check-models.ps1 not found' });
@@ -516,7 +523,7 @@ async function handler(req, res) {
         return;
       }
 
-      let settled = false;
+      refreshState = { running: true, startedAt: new Date().toISOString(), finishedAt: null, error: null, result: null };
 
       const proc = spawn(psExe, ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, '-UpdateCache', '-Force'], {
         cwd: ROOT_DIR,
@@ -538,18 +545,12 @@ async function handler(req, res) {
 
       proc.on('close', (code) => {
         clearTimeout(timeout);
-        if (settled) return;
-        settled = true;
         if (code !== 0) {
           const lastLines = stderr.trim().split('\n').slice(-10).join('\n');
           const errorMsg = timedOut
             ? `check-models.ps1 timed out after ${REFRESH_TIMEOUT_MS / 1000}s`
             : `check-models.ps1 exited with code ${code}`;
-          sendJson(res, 500, {
-            ok: false,
-            error: errorMsg,
-            details: lastLines || stderr.trim().slice(-500),
-          });
+          refreshState = { running: false, startedAt: refreshState.startedAt, finishedAt: new Date().toISOString(), error: errorMsg, result: null };
           return;
         }
 
@@ -559,20 +560,32 @@ async function handler(req, res) {
         const nvidia = (freshRegistry?.models || []).filter((m) => m.id?.startsWith('nvidia/')).length;
         const generatedAt = freshRegistry?.generated_at || null;
 
-        sendJson(res, 200, {
-          ok: true,
-          total,
-          nvidia,
-          generatedAt,
-          refreshedAt: new Date().toISOString(),
-        });
+        refreshState = {
+          running: false,
+          startedAt: refreshState.startedAt,
+          finishedAt: new Date().toISOString(),
+          error: null,
+          result: { ok: true, total, nvidia, generatedAt, refreshedAt: new Date().toISOString() },
+        };
       });
 
       proc.on('error', (err) => {
         clearTimeout(timeout);
-        if (settled) return;
-        settled = true;
-        sendJson(res, 500, { ok: false, error: `Failed to spawn ${psExe}: ${err.message}` });
+        refreshState = { running: false, startedAt: refreshState.startedAt, finishedAt: new Date().toISOString(), error: `Failed to spawn ${psExe}: ${err.message}`, result: null };
+      });
+
+      // Return immediately — client polls GET /api/refresh-status
+      sendJson(res, 202, { ok: true, message: 'Refresh started', startedAt: refreshState.startedAt });
+      return;
+    }
+
+    if (req.method === 'GET' && pathname === '/api/refresh-status') {
+      sendJson(res, 200, {
+        running: refreshState.running,
+        startedAt: refreshState.startedAt,
+        finishedAt: refreshState.finishedAt,
+        error: refreshState.error,
+        result: refreshState.result,
       });
       return;
     }
