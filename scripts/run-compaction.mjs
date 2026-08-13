@@ -1,17 +1,51 @@
 #!/usr/bin/env node
 
-import { execSync } from "child_process";
+import { execSync, execFileSync } from "child_process";
+import { existsSync } from "fs";
 import { readFile, writeFile, readdir, stat } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CWD = path.resolve(__dirname, "..");
+const isWin = process.platform === "win32";
 const today = new Date();
 const todayStr = formatDate(today);
 
 function warn(msg) {
   console.error(`[compaction] ${msg}`);
+}
+
+// On Windows, .cmd/.bat launchers cannot be exec'd directly via execFileSync
+// (EINVAL/ENOENT). Wrap them through cmd.exe, mirroring the run() helper used
+// across scripts/ (launch.mjs, check-install.mjs safeExec, lib/git-sync.mjs).
+function wrapCmdForExec(cmd, args) {
+  if (isWin && (cmd.endsWith(".cmd") || cmd.endsWith(".bat"))) {
+    return { cmd: "cmd.exe", args: ["/d", "/s", "/c", cmd, ...args] };
+  }
+  return { cmd, args };
+}
+
+// Execute a command with the same semantics as execFileSync, but handling the
+// Windows spaced-.cmd path bug. When a .cmd/.bat path contains a space (e.g.
+// "E:\Glitch AI\glitch-ai\data\node\npm.cmd"), execFileSync passes it as an
+// arg to "cmd.exe /d /s /c" — Node quotes the spaced arg, but /s strips the
+// outer quotes, leaving an unquoted spaced path that cmd.exe misparses.
+// Fix: for spaced .cmd/.bat paths, use execSync with a manually-built command
+// string. execSync wraps the string in "cmd /d /s /c \"...\"" and /s strips
+// execSync's outer quotes, leaving our quoted path intact. For non-spaced and
+// non-.cmd cases, fall through to the normal execFileSync + wrapCmdForExec path.
+function execWrapped(cmd, args, opts) {
+  if (isWin && (cmd.endsWith(".cmd") || cmd.endsWith(".bat")) && cmd.includes(" ")) {
+    // Build a command string for execSync: "cmd" arg1 "arg with space" arg2
+    // execSync runs cmd.exe /d /s /c "<commandString>"; /s strips execSync's
+    // outer quotes, leaving our string intact for cmd.exe to parse.
+    const quoteIfNeeded = (a) => (a.includes(" ") ? `"${a}"` : a);
+    const commandString = `"${cmd}" ${args.map(quoteIfNeeded).join(" ")}`;
+    return execSync(commandString, opts);
+  }
+  const { cmd: wrappedCmd, args: wrappedArgs } = wrapCmdForExec(cmd, args);
+  return execFileSync(wrappedCmd, wrappedArgs, opts);
 }
 
 function formatDate(d) {
@@ -412,6 +446,160 @@ async function checkDataReview() {
   return `✓ Data review: current (last ${formatDate(lastReview)}, ${daysSinceReview}d ago) | ${summaryLine}`;
 }
 
+// --- Step 6c: Memory index health (FTS5) ---
+// Rebuilds glitch-memorycore/plugins/embed-search/memory-search.db when missing or stale (>24h).
+// The DB is gitignored and lives outside protected data/ paths, so it silently disappears
+// on fresh clones, git clean, or submodule resets. This check makes the compaction run
+// self-healing per PM-023. Idempotent: skips all work when the index is healthy and fresh.
+async function checkMemoryIndex() {
+  const embedDir = path.join(CWD, "glitch-memorycore", "plugins", "embed-search");
+  const indexerScript = path.join(embedDir, "index-memory.mjs");
+  const dbPath = path.join(embedDir, "memory-search.db");
+  const nodeModulesPath = path.join(embedDir, "node_modules");
+
+  // Resolve the node binary: prefer bundled portable node, fall back to system node.
+  const bundledNode = isWin
+    ? path.join(CWD, "data", "node", "node.exe")
+    : path.join(CWD, "data", "node", "bin", "node");
+  const nodeBin = existsSync(bundledNode) ? bundledNode : "node";
+
+  // Resolve npm: prefer bundled npm.cmd/bin, fall back to system npm.
+  const bundledNpm = isWin
+    ? path.join(CWD, "data", "node", "npm.cmd")
+    : path.join(CWD, "data", "node", "bin", "npm");
+  const npmBin = existsSync(bundledNpm) ? bundledNpm : (isWin ? "npm.cmd" : "npm");
+
+  const STALE_MS = 24 * 60 * 60 * 1000; // 24h
+
+  try {
+    // 1. Does the indexer script exist?
+    if (!existsSync(indexerScript)) {
+      return "✓ Memory index: N/A (indexer script not found)";
+    }
+
+    // 2. Is the DB present and fresh?
+    let dbExists = false;
+    let dbStale = false;
+    try {
+      const dbStat = await stat(dbPath);
+      dbExists = true;
+      const ageMs = Date.now() - dbStat.mtimeMs;
+      dbStale = ageMs > STALE_MS;
+    } catch {
+      // ENOENT — DB missing
+    }
+
+    // Fast path: DB exists, is fresh, AND node_modules is present — nothing to do.
+    // If node_modules is missing, readIndexChunkCount would throw on require('better-sqlite3'),
+    // so fall through to the rebuild path (which runs npm install first).
+    if (dbExists && !dbStale && existsSync(nodeModulesPath)) {
+      // Read chunk count from the existing DB so the status line is informative.
+      const chunkCount = readIndexChunkCount(dbPath, nodeBin);
+      if (chunkCount !== null) {
+        return `✓ Memory index: OK (${chunkCount} chunks)`;
+      }
+      return "✓ Memory index: OK (DB present, chunk count unavailable)";
+    }
+
+    // 3. Rebuild path — ensure node_modules is installed first.
+    if (!existsSync(nodeModulesPath)) {
+      const installOk = runNpmInstall(npmBin, embedDir);
+      if (!installOk) {
+        return `⚠️ Memory index: rebuild skipped (npm install failed in ${path.relative(CWD, embedDir)})`;
+      }
+    }
+
+    // 4. Run the indexer.
+    const indexOutput = runIndexer(nodeBin, indexerScript, embedDir);
+    if (indexOutput === null) {
+      return "⚠️ Memory index: rebuild failed (indexer exited non-zero)";
+    }
+
+    // 5. Parse chunk counts from indexer output.
+    const chunkMatch = indexOutput.match(/Total chunks:\s+(\d+)/);
+    const chunkCount = chunkMatch ? parseInt(chunkMatch[1], 10) : 0;
+    const newMatch = indexOutput.match(/New chunks:\s+(\d+)/);
+    const newChunks = newMatch ? parseInt(newMatch[1], 10) : 0;
+    const updatedMatch = indexOutput.match(/Updated:\s+(\d+)/);
+    const updatedChunks = updatedMatch ? parseInt(updatedMatch[1], 10) : 0;
+    // Distinguish "rebuilt" (work happened: missing DB or new/updated chunks) from
+    // "refreshed" (DB was stale but no memory files changed — re-scan was a no-op).
+    const didWork = !dbExists || newChunks > 0 || updatedChunks > 0;
+    const reason = !dbExists ? "was missing" : "was stale (>24h)";
+    if (didWork) {
+      return `✓ Memory index: rebuilt (${chunkCount} chunks, ${reason})`;
+    }
+    return `✓ Memory index: refreshed (${chunkCount} total, 0 new, 0 updated)`;
+  } catch (e) {
+    warn(`Memory index check failed: ${e.message}`);
+    return `✗ Memory index: FAILED (${e.message})`;
+  }
+}
+
+// Read the chunk count from an existing FTS5 DB without invoking the full indexer.
+// Returns null if the DB can't be opened or the table is missing.
+function readIndexChunkCount(dbPath, nodeBin) {
+  // Use a tiny inline script so we don't depend on better-sqlite3 in run-compaction.mjs's
+  // own context (it lives in the embed-search folder's node_modules). We spawn the bundled
+  // node with a short script that requires better-sqlite3 from the embed-search folder.
+  const script = `
+    const Database = require('better-sqlite3');
+    try {
+      const db = new Database(${JSON.stringify(dbPath)}, { readonly: true });
+      const count = db.prepare('SELECT COUNT(*) FROM memory_chunks').pluck().get();
+      db.close();
+      process.stdout.write(String(count));
+    } catch (e) {
+      process.stdout.write('ERROR:' + e.message);
+    }
+  `;
+  try {
+    const out = execFileSync(nodeBin, ["-e", script], {
+      cwd: path.dirname(dbPath),
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 10000,
+    });
+    const trimmed = out.trim();
+    if (/^\d+$/.test(trimmed)) return parseInt(trimmed, 10);
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+// Run `npm install` in the embed-search folder. Returns true on success.
+function runNpmInstall(npmBin, embedDir) {
+  try {
+    execWrapped(npmBin, ["install", "--no-audit", "--no-fund"], {
+      cwd: embedDir,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 120000,
+    });
+    return true;
+  } catch (e) {
+    warn(`Memory index: npm install failed: ${e.message}`);
+    return false;
+  }
+}
+
+// Run the indexer. Returns stdout string on success (exit 0), null on failure.
+function runIndexer(nodeBin, indexerScript, embedDir) {
+  try {
+    const out = execWrapped(nodeBin, [indexerScript], {
+      cwd: embedDir,
+      encoding: "utf-8",
+      stdio: ["pipe", "pipe", "pipe"],
+      timeout: 120000,
+    });
+    return out;
+  } catch (e) {
+    warn(`Memory index: indexer failed: ${e.message}`);
+    return null;
+  }
+}
+
 // --- Step 4b: Touch timestamps on all user memory files ---
 async function touchAllTimestamps() {
   const userDir = path.join(CWD, "user");
@@ -483,6 +671,7 @@ async function touchAllTimestamps() {
 async function main() {
   const auditResult = await runDataAudit();
   const dataReviewResult = await checkDataReview();
+  const memoryIndexResult = await checkMemoryIndex();
   const results = {
     timestamp: await updateTimestamp(),
     diary: await checkDiaryStaleness(),
@@ -495,6 +684,7 @@ async function main() {
     dataAudit: auditResult.dataAudit,
     quarantineScan: auditResult.quarantineScan,
     dataReview: dataReviewResult,
+    memoryIndex: memoryIndexResult,
   };
 
   // Split GC result into main line + potential alert
@@ -516,6 +706,7 @@ async function main() {
     results.dataAudit,
     ...results.quarantineScan.split("\n"),
     results.dataReview,
+    results.memoryIndex,
     "",
     "=== Action Required ===",
     "⚠️ Step 6 — Pattern scan: Check scratchpad for 3x+ repeated workflows",
