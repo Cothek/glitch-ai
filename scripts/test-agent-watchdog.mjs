@@ -14,7 +14,7 @@ import assert from 'node:assert';
 import { mkdtempSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseThreshold, isSignalFresh, shouldInjectForSession } from '../.opencode/plugins/agent-watchdog.mjs';
+import { parseThreshold, isSignalFresh, shouldInjectForSession } from '../scripts/lib/agent-watchdog-helpers.mjs';
 
 let passed = 0;
 let failed = 0;

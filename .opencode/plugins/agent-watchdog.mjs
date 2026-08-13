@@ -1,4 +1,4 @@
-// agent-watchdog.js — OpenCode plugin: detects hung sub-agent sessions in real-time
+// agent-watchdog.mjs — OpenCode plugin: detects hung sub-agent sessions in real-time
 // and aborts them so the parent's task() call returns.
 //
 // Patterns followed:
@@ -41,83 +41,16 @@
 //   exists, telling the parent that a sub-agent was aborted and to re-dispatch.
 
 import { writeFileSync, unlinkSync, existsSync, mkdirSync, readFileSync, readdirSync } from 'node:fs';
-import { join, dirname, resolve } from 'node:path';
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { parseThreshold, isSignalFresh, shouldInjectForSession } from '../../scripts/lib/agent-watchdog-helpers.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const REPO_ROOT = resolve(__dirname, '..', '..');
-const ABORT_SCRIPT = resolve(REPO_ROOT, 'scripts', 'abort-agent.mjs');
-
-// --- Pure helpers (exported for testability) ---
-
-/**
- * Parse a threshold (ms) from an env var with a default fallback.
- * Logs a warning if the env var is set but parses to NaN.
- */
-export function parseThreshold(envVar, defaultMs) {
-  const raw = process.env[envVar];
-  if (!raw) return defaultMs;
-  const parsed = parseInt(raw, 10);
-  if (isNaN(parsed)) {
-    console.warn(`[agent-watchdog] ${envVar}="${raw}" is not a valid integer — falling back to ${defaultMs}ms`);
-    return defaultMs;
-  }
-  return parsed;
-}
-
-/**
- * Check whether a signal file is fresh (within ttlMs of detectedAt).
- * detectedAt may be an ISO string or epoch-ms number (schema-unified).
- */
-export function isSignalFresh(signalPath, ttlMs) {
-  try {
-    const raw = readFileSync(signalPath, 'utf-8');
-    const parsed = JSON.parse(raw);
-    const detectedAt = typeof parsed.detectedAt === 'number'
-      ? parsed.detectedAt
-      : new Date(parsed.detectedAt).getTime();
-    if (isNaN(detectedAt)) return false;
-    return (Date.now() - detectedAt) <= ttlMs;
-  } catch {
-    return false;
-  }
-}
-
-/**
- * Decide whether the transform hook should inject a directive for a signal
- * into the current session's message stream.
- *
- * Rules:
- *   - Only PARENT sessions (those that have dispatched task tools) receive
- *     directives. Sub-agents have task:deny and cannot re-dispatch — injecting
- *     would loop or waste tokens (same class as PM-028 mulahazah loop).
- *   - If the parent has recorded children, only inject signals for those
- *     children. If no children are recorded (child tracking may fail because
- *     the task tool output shape doesn't reliably expose the child sessionID),
- *     fall back to injecting for any fresh signal — the parent is the one that
- *     dispatches sub-agents, so any idle signal is likely relevant to it.
- *
- * @param currentSessionID - the session whose message stream is being transformed
- * @param signalSessionID - the session that was detected idle/aborted
- * @param parentSessions - Set of sessionIDs that have called the task tool
- * @param childrenByParent - Map<parentSessionID, Set<childSessionID>>
- */
-export function shouldInjectForSession(currentSessionID, signalSessionID, parentSessions, childrenByParent) {
-  if (!currentSessionID || !signalSessionID) return false;
-  // Only parent sessions receive directives.
-  if (!parentSessions.has(currentSessionID)) return false;
-  // If we have recorded children for this parent, only inject for those children.
-  const children = childrenByParent.get(currentSessionID);
-  if (children && children.size > 0) {
-    if (!children.has(signalSessionID)) return false;
-  }
-  // No recorded children — fall back to injecting for any signal. The parent
-  // is the only session type that dispatches sub-agents, so any idle signal
-  // is likely for a child it dispatched (child tracking is best-effort).
-  return true;
-}
+// --- Thresholds (parsed once at module load) ---
+// parseThreshold/isSignalFresh/shouldInjectForSession live in
+// scripts/lib/agent-watchdog-helpers.mjs so this file has EXACTLY ONE named
+// export (AgentWatchdogPlugin). opencode's plugin loader crashes silently on
+// files with >1 named export (b0aaef8 crash class).
 
 const IDLE_THRESHOLD_MS = parseThreshold('AGENT_IDLE_THRESHOLD_MS', 300_000);
 const AUTO_ABORT_THRESHOLD_MS = parseThreshold('AGENT_AUTO_ABORT_THRESHOLD_MS', 600_000);
@@ -166,6 +99,13 @@ function sweepStaleSignals(dataDir, ttlMs) {
 export const AgentWatchdogPlugin = async ({ directory }) => {
   const dataDir = join(directory, 'data');
 
+  // m5: derive ABORT_SCRIPT from the opencode `directory` param (the project
+  // root opencode was launched with) so dataDir and ABORT_SCRIPT use the same
+  // root. The old code computed REPO_ROOT from the plugin's own path, which
+  // could diverge from `directory` if the plugin were symlinked or relocated.
+  const repoRoot = directory;
+  const ABORT_SCRIPT = join(repoRoot, 'scripts', 'abort-agent.mjs');
+
   try {
     mkdirSync(dataDir, { recursive: true });
   } catch (e) {
@@ -195,6 +135,39 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
   const parentSessions = new Set();
   const childrenByParent = new Map();
 
+  // m1: cache the signal-file list from readdirSync so the transform hot path
+  // doesn't scan the directory on every message. The cache is refreshed by
+  // writeIdleSignal() (when we write a new signal) and invalidated on a short
+  // TTL (5s) so externally-written signals (e.g. from the standalone script)
+  // are still picked up. readdirSync is only called on init + when the TTL
+  // expires.
+  const SIGNAL_LIST_TTL_MS = 5000;
+  let signalFileCache = null; // string[] | null
+  let signalFileCacheTime = 0;
+
+  function getSignalFiles() {
+    const now = Date.now();
+    if (signalFileCache !== null && (now - signalFileCacheTime) < SIGNAL_LIST_TTL_MS) {
+      return signalFileCache;
+    }
+    try {
+      const all = readdirSync(dataDir);
+      signalFileCache = all.filter(
+        (f) => f.startsWith('.agent-idle.') && f.endsWith('.json')
+      );
+      signalFileCacheTime = now;
+    } catch (e) {
+      // dataDir not readable — return empty list.
+      signalFileCache = [];
+      signalFileCacheTime = now;
+    }
+    return signalFileCache;
+  }
+
+  function invalidateSignalFileCache() {
+    signalFileCache = null;
+  }
+
   function toolKey(sessionID, tool, startTime) {
     return `${sessionID}|${tool}|${startTime}`;
   }
@@ -214,6 +187,9 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
         recommendation: `Agent idle >${threshold}s — aborting and re-dispatching`,
       };
       writeFileSync(sessionSignalPath(sessionID), JSON.stringify(payload, null, 2), 'utf-8');
+      // m1: invalidate the signal-file cache so the transform hook sees the
+      // new file immediately rather than waiting for the TTL.
+      invalidateSignalFileCache();
       console.log(`[agent-watchdog] ⚠️ Idle detected (session=${sessionID}, tool=${tool}, idle=${idleSeconds}s)`);
     } catch (e) {
       console.error(`[agent-watchdog] Failed to write idle signal: ${e.message}`);
@@ -224,7 +200,7 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
     try {
       // M4: encoding utf-8 so execFileSync returns strings, not Buffers.
       execFileSync(process.execPath, [ABORT_SCRIPT, sessionID], {
-        cwd: REPO_ROOT,
+        cwd: repoRoot,
         timeout: 20000,
         encoding: 'utf-8',
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -305,9 +281,15 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
         // tool B's entry. Each (sessionID, tool, startTime) is unique.
         const key = toolKey(sessionID, tool, startTime);
         runningTools.set(key, { sessionID, tool, startTime, aborted: false });
-        // Clear any prior aborted flag for this session — a fresh tool start
-        // means the session recovered (but don't delete other tools' entries).
-        abortedSessions.delete(sessionID);
+        // m2: only clear the aborted flag when the new tool is a `task` tool
+        // (parent re-dispatching after a previous child was aborted). For
+        // non-task tools, leave the aborted flag intact — a parent running a
+        // read/webfetch after a child was aborted has NOT recovered the child;
+        // clearing the flag here would let a second abort fire on the same
+        // session prematurely.
+        if (tool === 'task') {
+          abortedSessions.delete(sessionID);
+        }
       } catch (e) {
         console.error(`[agent-watchdog] tool.execute.before failed: ${e.message}`);
       }
@@ -361,13 +343,16 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
 
         // Scan idle signal files — but only inject for children of the current
         // parent session (shouldInjectForSession enforces this).
-        const files = readdirSync(dataDir);
+        // m1: use the cached signal-file list instead of readdirSync on every
+        // transform call. The cache is invalidated when we write/delete a signal
+        // and refreshed on a 5s TTL so externally-written signals are picked up.
+        const files = getSignalFiles();
         for (const file of files) {
-          if (!file.startsWith('.agent-idle.') || !file.endsWith('.json')) continue;
           const fullPath = join(dataDir, file);
 
           if (!isSignalFresh(fullPath, SIGNAL_TTL_MS)) {
             try { unlinkSync(fullPath); } catch (e) { /* best-effort cleanup */ }
+            invalidateSignalFileCache();
             continue;
           }
 
@@ -412,6 +397,7 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
 
           // Delete the signal file after injection so it doesn't re-inject.
           try { unlinkSync(fullPath); } catch (e) { /* best-effort */ }
+          invalidateSignalFileCache();
 
           console.log(`[agent-watchdog] injected idle directive for session ${currentSessionID} (aborted sub-agent ${signalSessionID})`);
           break; // Only inject one directive per transform call.
