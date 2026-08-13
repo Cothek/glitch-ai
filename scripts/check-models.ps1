@@ -856,6 +856,9 @@ function Test-NvidiaFreeEndpoint {
                 # once before falling back to the last-known-good cache entry.
                 if (-not $script:errorZeroRetried) {
                     $script:errorZeroRetried = $true
+                    if (-not $Silent) {
+                        Write-Progress -Activity "NVIDIA free-endpoint detection" -Status "Retrying $ModelId (timeout, 30s)..."
+                    }
                     Start-Sleep -Milliseconds 500
                     $ci--  # re-run this same candidate iteration
                     continue
@@ -993,6 +996,9 @@ function Get-NvidiaBehavioralFreeSet {
         }
 
         $tested = 0
+        if (-not $Silent) {
+            Write-Progress -Activity "NVIDIA free-endpoint detection" -Status "Testing $tested / $($toTest.Count) models" -PercentComplete 0
+        }
         foreach ($m in $toTest) {
             $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
             $testResult = Test-NvidiaFreeEndpoint -ModelId $fullId -ApiKey $ApiKey
@@ -1025,8 +1031,9 @@ function Get-NvidiaBehavioralFreeSet {
             }
 
             $tested++
-            if (-not $Silent -and ($tested % 10 -eq 0)) {
-                Write-Host "    Tested $tested / $($toTest.Count)..." -ForegroundColor DarkGray
+            if (-not $Silent) {
+                $shortName = ($m -split '/')[-1]
+                Write-Progress -Activity "NVIDIA free-endpoint detection" -Status "Testing $tested / $($toTest.Count): $shortName" -PercentComplete ([math]::Round(($tested / $toTest.Count) * 100))
             }
             Start-Sleep -Milliseconds 200
         }
@@ -1040,6 +1047,7 @@ function Get-NvidiaBehavioralFreeSet {
 
         if (-not $Silent) {
             Write-Host "  Behavioral detection complete: $($freeSet.Count) free models ($tested tested)" -ForegroundColor DarkGray
+            Write-Progress -Activity "NVIDIA free-endpoint detection" -Completed
         }
     } elseif (-not $Silent) {
         Write-Host "  Behavioral detection: all models cached, no new tests needed" -ForegroundColor DarkGray
