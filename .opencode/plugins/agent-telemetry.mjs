@@ -50,20 +50,30 @@ function extractChildSessionId(output) {
     || null;
 }
 
-// Extract the agent name from the task tool input. The field has been observed
-// as `agent`, `subagent_type`, and `subagentType` across opencode versions.
+// Extract the agent name from the task tool input. The opencode task tool
+// exposes the agent name as a flat top-level `agent` property (confirmed by
+// dispatch-reflex.js line 108 and stuck-detector.js line 84). The `subagent_type`
+// alias is kept as a fallback for older opencode versions.
 function extractAgentName(input) {
-  return input?.agent || input?.subagent_type || input?.subagentType || 'unknown';
+  if (!input) return 'unknown';
+  return input.agent || input.subagent_type || input.subagent || 'unknown';
 }
 
+// The opencode task tool input does NOT carry the model — the model is resolved
+// internally by opencode based on the agent config (config/opencode-*.json). We
+// return an empty string; the dashboard shows "unknown" for the model column
+// until cost records or a future opencode API exposes the resolved model.
 function extractModel(input) {
-  return input?.model || input?.modelID || '';
+  if (!input) return '';
+  return input.model || input.modelID || '';
 }
 
+// Extract the task description from the task tool input. The opencode task tool
+// exposes the prompt as a flat top-level `prompt` property (confirmed by
+// plan-reflex.js lines 81, 106). The `description` alias is kept as a fallback.
 function extractTaskDescription(input) {
   if (!input) return '';
-  // The task prompt may be under `prompt`, `description`, `task`, or `message`.
-  const text = input?.prompt || input?.description || input?.task || input?.message || '';
+  const text = input.prompt || input.description || '';
   if (typeof text !== 'string') return '';
   // Truncate to keep the event payload reasonable — the dashboard shows this
   // as a one-line summary in the fleet view.
@@ -132,15 +142,24 @@ export const AgentTelemetryPlugin = async ({ directory }) => {
       });
   }
 
-  // Map<parentSessionID|startTime, eventID> — remembers which event id we
-  // assigned at `before` time so the `after` hook can emit a matching
-  // `agent.run.finished` with the same id. The dashboard matches by id.
-  // Keyed by parent session + start time (composite) to avoid collisions
-  // when a parent dispatches multiple sub-agents.
+  // Map<parentSessionID|agent, { eventID, startTime, agent, model, task }> —
+  // remembers which event id we assigned at `before` time so the `after` hook
+  // can emit a matching `agent.run.finished` with the same id. The dashboard
+  // matches by id.
+  //
+  // Keyed by parent session + agent name (composite) to avoid cross-session
+  // mismatches. The parent dispatches sub-agents sequentially (one task() call
+  // blocks until it returns before the next starts), so for a given parent +
+  // agent there is at most one in-flight dispatch at a time.
+  //
+  // Bounded to MAX_DISPATCH_MAP_SIZE entries (FIFO eviction) to prevent
+  // unbounded growth if the after-hook ever fails to fire (e.g., plugin loaded
+  // mid-session, before-hook succeeded but after-hook crashed).
+  const MAX_DISPATCH_MAP_SIZE = 100;
   const dispatchMap = new Map();
 
-  function dispatchKey(parentSessionID, startTime) {
-    return `${parentSessionID}|${startTime}`;
+  function dispatchKey(parentSessionID, agent) {
+    return `${parentSessionID}|${agent}`;
   }
 
   return {
@@ -161,7 +180,16 @@ export const AgentTelemetryPlugin = async ({ directory }) => {
         // child session ID, we'll use that as a secondary key for correlation.
         const eventID = randomUUID();
 
-        dispatchMap.set(dispatchKey(parentSessionID, startTime), {
+        // Evict the oldest entry if the map is full (FIFO — Map preserves
+        // insertion order, so the first entry is the oldest).
+        if (dispatchMap.size >= MAX_DISPATCH_MAP_SIZE) {
+          const oldestKey = dispatchMap.keys().next().value;
+          if (oldestKey !== undefined) {
+            dispatchMap.delete(oldestKey);
+          }
+        }
+
+        dispatchMap.set(dispatchKey(parentSessionID, agent), {
           eventID,
           startTime,
           agent,
@@ -191,45 +219,24 @@ export const AgentTelemetryPlugin = async ({ directory }) => {
         if (input?.tool !== 'task') return;
 
         const parentSessionID = input?.sessionID || 'unknown';
+        const agent = extractAgentName(input);
         const now = Date.now();
 
-        // Find the matching `before` entry. We don't have the exact startTime
-        // here, so we search for the most recent entry for this parent session.
-        // This is safe because the parent dispatches sub-agents sequentially
-        // (one task() call blocks until it returns before the next starts).
-        let key = null;
-        let entry = null;
-        let oldestKey = null;
-        let oldestTime = Infinity;
-        for (const [k, v] of dispatchMap) {
-          if (v.agent === extractAgentName(input) || k.startsWith(`${parentSessionID}|`)) {
-            // Prefer the oldest matching entry (FIFO — the longest-waiting
-            // dispatch is the one completing now).
-            if (v.startTime < oldestTime) {
-              oldestTime = v.startTime;
-              oldestKey = k;
-              entry = v;
-            }
-          }
-        }
-        key = oldestKey;
+        // Find the matching `before` entry by composite key (parent session +
+        // agent name). This avoids cross-session mismatches that the old
+        // OR-based matching caused. The parent dispatches sub-agents
+        // sequentially, so there is at most one in-flight entry per
+        // parent+agent pair.
+        const key = dispatchKey(parentSessionID, agent);
+        const entry = dispatchMap.get(key);
 
         if (!entry) {
           // No matching `before` entry — could happen if the plugin loaded
-          // mid-session or the before-hook failed. Emit a finished event with
-          // a fresh id anyway so the dashboard still gets a completion signal.
-          // The started event will be missing (the dashboard warns but doesn't
-          // crash on a finished-without-started).
-          const eventID = randomUUID();
-          const event = {
-            type: 'agent.run.finished',
-            id: eventID,
-            ts: new Date(now).toISOString(),
-            status: 'completed',
-            elapsedSec: 0,
-            errors: 0,
-          };
-          pushEvents([event]);
+          // mid-session, the before-hook failed, or the entry was evicted.
+          // Skip the finished event rather than emitting with wrong data
+          // (a finished-without-started would leave an orphan on the
+          // dashboard that can never be matched).
+          console.warn(`[agent-telemetry] after: no before-entry for ${key}, skipping finished event`);
           return;
         }
 
