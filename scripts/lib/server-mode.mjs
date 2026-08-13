@@ -145,6 +145,164 @@ process.on('exit', cleanup);
 process.on('SIGINT', () => process.exit(130));
 process.on('SIGTERM', () => process.exit(143));
 
+// ---- Sessions API (port 4191) ----
+// Exposes /sessions and /tokens endpoints reading from the opencode DB.
+// See scripts/opencode-sessions-api.mjs for the server implementation.
+const SESSIONS_API_PORT = 4191;
+
+async function startSessionsApi(ROOT_DIR) {
+  const isWin = process.platform === 'win32';
+  const dataDir = join(ROOT_DIR, 'data');
+  const scriptPath = join(ROOT_DIR, 'scripts', 'opencode-sessions-api.mjs');
+  const pidFilePath = join(dataDir, 'sessions-api.pid');
+
+  if (!existsSync(scriptPath)) {
+    log(DARK_YELLOW, `  Sessions API: script not found at ${scriptPath}`);
+    return;
+  }
+
+  // Skip if port already in use (service already running)
+  const portFree = await checkPort(SESSIONS_API_PORT);
+  if (!portFree) {
+    log(DARK_GREEN, `  Sessions API: already running on port ${SESSIONS_API_PORT}`);
+    return;
+  }
+
+  try {
+    if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
+
+    const args = [scriptPath, '--port', String(SESSIONS_API_PORT)];
+    const proc = spawn('node', args, {
+      cwd: ROOT_DIR,
+      stdio: 'ignore',
+      windowsHide: true,
+      detached: !isWin,
+    });
+
+    proc.on('error', (err) => {
+      log(YELLOW, `  Sessions API failed to start: ${err.message}`);
+    });
+
+    proc.unref();
+    trackProcess(proc);
+
+    try {
+      writeFileSync(pidFilePath, String(proc.pid), 'utf-8');
+    } catch {}
+
+    await new Promise(r => setTimeout(r, 500));
+    // Verify the process actually bound the port. If node:sqlite is unavailable
+    // (or the script crashes on import), the process exits silently and the
+    // port stays free — without this check we'd falsely claim it's listening.
+    const portBound = !(await checkPort(SESSIONS_API_PORT));
+    if (portBound) {
+      log(DARK_GREEN, `  Sessions API: listening on port ${SESSIONS_API_PORT} (PID ${proc.pid})`);
+    } else {
+      log(YELLOW, `  Sessions API: failed to start (process exited or port not bound)`);
+    }
+  } catch (e) {
+    log(YELLOW, `  Sessions API start failed: ${e.message}`);
+  }
+}
+
+// ---- Money dashboard (port 4110) ----
+// Standalone glitch-money control dashboard. Runs in its own visible
+// PowerShell window on Windows (mirrors the model-ui visible_window pattern
+// in plugin-manager.mjs). Falls back to a detached hidden spawn on Unix.
+const MONEY_DASHBOARD_PORT = 4110;
+
+async function startMoneyDashboard(ROOT_DIR) {
+  const isWin = process.platform === 'win32';
+  const dataDir = join(ROOT_DIR, 'data');
+  const moneyDir = process.env.MONEY_DASHBOARD_DIR || join(ROOT_DIR, '..', 'code', 'glitch-money');
+  const serverScript = join(moneyDir, 'dashboard', 'server.mjs');
+  const pidFilePath = join(dataDir, 'money-dashboard.pid');
+
+  if (!existsSync(serverScript)) {
+    log(DARK_YELLOW, `  Money dashboard: server not found at ${serverScript}`);
+    return;
+  }
+
+  // Skip if port already in use (service already running)
+  const portFree = await checkPort(MONEY_DASHBOARD_PORT);
+  if (!portFree) {
+    log(DARK_GREEN, `  Money dashboard: already running on port ${MONEY_DASHBOARD_PORT}`);
+    return;
+  }
+
+  try {
+    if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
+
+    if (isWin) {
+      // Visible PowerShell window pattern (mirrors startPluginVisible in plugin-manager.mjs)
+      const title = `Glitch: money-dashboard (port ${MONEY_DASHBOARD_PORT})`;
+      const ps1Path = join(dataDir, 'money-dashboard-window.ps1');
+      const esc = (s) => s.replace(/'/g, "''");
+
+      // Run node in foreground with -NoExit so the window stays open on error.
+      // Pass GLITCH_AI_ROOT so the dashboard's fleet-db/cost-db can locate the
+      // opencode DB and config files without hardcoded paths.
+      const innerCommand = `& { $host.ui.RawUI.WindowTitle = '${esc(title)}'; Set-Location -LiteralPath '${esc(moneyDir)}'; $env:GLITCH_AI_ROOT = '${esc(ROOT_DIR)}'; node dashboard/server.mjs }`;
+      const ps1Inner = esc(innerCommand);
+      const ps1PidPath = esc(pidFilePath);
+
+      const ps1Content =
+        `$proc = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-Command', '${ps1Inner}')\r\n` +
+        `if ($proc) { $proc.Id | Out-File -FilePath '${ps1PidPath}' -Encoding ascii }\r\n`;
+
+      writeFileSync(ps1Path, ps1Content, 'utf-8');
+
+      const launcher = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path], {
+        cwd: moneyDir,
+        stdio: 'ignore',
+        windowsHide: true,
+        detached: false,
+      });
+      launcher.unref();
+      trackProcess(launcher);
+
+      // Wait briefly for the PID file to appear (mirrors plugin-manager pattern).
+      let realPid = null;
+      const startedAt = Date.now();
+      while (Date.now() - startedAt < 2000) {
+        await new Promise(r => setTimeout(r, 100));
+        if (existsSync(pidFilePath)) {
+          try {
+            const content = readFileSync(pidFilePath, 'utf-8').trim();
+            const parsed = parseInt(content, 10);
+            if (parsed > 0) { realPid = parsed; break; }
+          } catch {}
+        }
+      }
+
+      log(DARK_GREEN, `  Money dashboard: listening on port ${MONEY_DASHBOARD_PORT} (PID ${realPid || launcher.pid})`);
+    } else {
+      // Non-Windows: detached hidden spawn fallback
+      const proc = spawn('node', [serverScript], {
+        cwd: moneyDir,
+        stdio: 'ignore',
+        windowsHide: true,
+        detached: true,
+        env: { ...process.env, GLITCH_AI_ROOT: ROOT_DIR },
+      });
+      proc.on('error', (err) => {
+        log(YELLOW, `  Money dashboard failed to start: ${err.message}`);
+      });
+      proc.unref();
+      trackProcess(proc);
+
+      try {
+        writeFileSync(pidFilePath, String(proc.pid), 'utf-8');
+      } catch {}
+
+      await new Promise(r => setTimeout(r, 500));
+      log(DARK_GREEN, `  Money dashboard: listening on port ${MONEY_DASHBOARD_PORT} (PID ${proc.pid})`);
+    }
+  } catch (e) {
+    log(YELLOW, `  Money dashboard start failed: ${e.message}`);
+  }
+}
+
 /**
  * Launch OpenCode in server (web) mode with all server extras.
  * 
@@ -440,6 +598,12 @@ export async function launchServer(options = {}) {
     log(YELLOW, `  Auth proxy start failed: ${e.message}`);
   }
 
+  // ---- Start Sessions API (port 4191) ----
+  await startSessionsApi(ROOT_DIR);
+
+  // ---- Start Money dashboard (port 4110) ----
+  await startMoneyDashboard(ROOT_DIR);
+
   // ---- Start enabled plugins ----
   log(CYAN, '  Starting enabled plugins...');
   try {
@@ -474,6 +638,8 @@ export async function launchServer(options = {}) {
   if (cloudflareDomain) {
     log(GREEN, `    Model Switcher (tunnel): https://${cloudflareDomain}/models?auth_token=${authToken}`);
   }
+  log(GREEN,   `    Money dashboard:  http://localhost:4110`);
+  log(GREEN,   `    Sessions API:     http://localhost:4191`);
   log(GREEN,   `    Local:  http://localhost:${TARGET_PORT}/${dirSlug}/`);
   log('');
   // Show enabled plugin URLs

@@ -9,7 +9,8 @@
     ".opencode/plugins/stuck-detector.js",
     ".opencode/plugins/mulahazah.js",
     ".opencode/plugins/plan-reflex.js",
-    ".opencode/plugins/agent-watchdog.mjs"
+    ".opencode/plugins/agent-watchdog.mjs",
+    ".opencode/plugins/agent-telemetry.mjs"
   ],
   "instructions": [
     ".opencode/instructions/shared-agent-rules.md",
