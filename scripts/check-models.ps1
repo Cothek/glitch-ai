@@ -647,6 +647,27 @@ function Test-NvidiaFreeFromOpenRouter($nvidiaModelId) {
 $NvidiaFreeCacheFile = "$RootDir\data\nvidia-free-cache.json"
 $NvidiaFreeCacheTTLHours = 24
 
+# FIX 1/FIX 4 helper: classify a behavioral result reason as DEFINITIVE or TRANSIENT.
+# Definitive reasons represent a real free/paid/deprecated verdict and should NOT be
+# re-tested (cache hit). Transient reasons (error_0, error_5xx, unexpected_*) represent
+# network/timeout failures, not a real verdict -- they must be re-tested every run so a
+# poisoned entry can heal, and the registry must label them "unverified" not "budget_paid".
+function Test-BehavioralReasonDefinitive {
+    param([string]$Reason)
+    if (-not $Reason) { return $false }
+    # Definitive: a real verdict was reached.
+    if ($Reason -eq "no_billing_200_free") { return $true }
+    if ($Reason -like "rate_limited_429*") { return $true }
+    if ($Reason -like "billing_required_*") { return $true }
+    if ($Reason -like "deprecated_*") { return $true }
+    # error_0_preserved_free is a preserved known-good entry (FIX 2) -- treat as definitive free.
+    if ($Reason -eq "error_0_preserved_free") { return $true }
+    # error_0_cached_free is a prior-known-good fallback -- treat as definitive free.
+    if ($Reason -eq "error_0_cached_free") { return $true }
+    # Everything else (error_0, error_5xx, unexpected_*) is transient.
+    return $false
+}
+
 function Load-NvidiaFreeCache {
     param([switch]$Force)
     if ($Force) { return $null }
@@ -664,6 +685,14 @@ function Load-NvidiaFreeCache {
 }
 
 function Save-NvidiaFreeCache($results) {
+    <#
+        Bug C: robust .tmp promotion. The old code did Rename-Item -Force against
+        a possibly-existing destination and could leave a stranded .tmp on silent
+        failure. Now: remove destination first, then Move-Item (no -Force on the
+        move -- Move-Item -Force against an existing file throws in PS 5.1), with
+        a Copy-Item fallback and a finally block that always cleans up the .tmp.
+        Returns $true on success, $false on failure.
+    #>
     $cacheDir = Split-Path -Parent $NvidiaFreeCacheFile
     if (-not (Test-Path $cacheDir)) { New-Item -ItemType Directory -Path $cacheDir -Force | Out-Null }
     $data = @{
@@ -673,7 +702,29 @@ function Save-NvidiaFreeCache($results) {
     }
     $tmpFile = "$NvidiaFreeCacheFile.tmp"
     $data | ConvertTo-Json -Depth 4 | Out-File -FilePath $tmpFile -Encoding utf8 -Force
-    Rename-Item -LiteralPath $tmpFile -NewName (Split-Path -Leaf $NvidiaFreeCacheFile) -Force
+
+    $success = $false
+    try {
+        if (Test-Path -LiteralPath $NvidiaFreeCacheFile) {
+            Remove-Item -LiteralPath $NvidiaFreeCacheFile -Force
+        }
+        try {
+            Move-Item -LiteralPath $tmpFile -Destination $NvidiaFreeCacheFile -ErrorAction Stop
+            $success = $true
+        } catch {
+            # Move failed (e.g. lock/permission): fall back to copy-then-delete.
+            Copy-Item -LiteralPath $tmpFile -Destination $NvidiaFreeCacheFile -Force
+            $success = $true
+        }
+    } catch {
+        $success = $false
+    } finally {
+        # Never leave a stale .tmp behind, regardless of outcome.
+        if (Test-Path -LiteralPath $tmpFile) {
+            try { Remove-Item -LiteralPath $tmpFile -Force } catch { }
+        }
+    }
+    return $success
 }
 
 # Behavioral probe: tries the model ID as-is first. If the NVIDIA API returns 404
@@ -695,6 +746,10 @@ function Test-NvidiaFreeEndpoint {
         tested_at = (Get-Date).ToString("o")
     }
 
+    # Bug A: per-call guard so the error_0 retry fires once per Test-NvidiaFreeEndpoint
+    # invocation, not once per process lifetime.
+    $script:errorZeroRetried = $false
+
     $url = "https://integrate.api.nvidia.com/v1/chat/completions"
     $reqHeaders = @{
         "Authorization" = "Bearer $ApiKey"
@@ -714,6 +769,11 @@ function Test-NvidiaFreeEndpoint {
         $tryId = $candidateIds[$ci]
         $isLastCandidate = ($ci -eq ($candidateIds.Count - 1))
 
+        # FIX 3: give the error_0 retry a longer timeout (30s) on the second attempt.
+        # Free NVIDIA endpoints are slower and rate-limited; glm-5.2 times out at 15s
+        # but may respond within 30s. First attempt stays at 15s to keep fast models fast.
+        $timeoutSec = if ($script:errorZeroRetried) { 30 } else { 15 }
+
         $bodyObj = @{
             model = $tryId
             messages = @(@{ role = "user"; content = "ping" })
@@ -722,7 +782,7 @@ function Test-NvidiaFreeEndpoint {
         $body = $bodyObj | ConvertTo-Json -Depth 3
 
         try {
-            $response = Invoke-WebRequest -Uri $url -Method Post -Body $body -Headers $reqHeaders -TimeoutSec 15 -UseBasicParsing -ErrorAction Stop
+            $response = Invoke-WebRequest -Uri $url -Method Post -Body $body -Headers $reqHeaders -TimeoutSec $timeoutSec -UseBasicParsing -ErrorAction Stop
             $result.statusCode = [int]$response.StatusCode
 
             if ($response.Headers.ContainsKey("X-RateLimit-Limit")) {
@@ -790,7 +850,46 @@ function Test-NvidiaFreeEndpoint {
                 $result.reason = "deprecated_404"
                 $result.model = $tryId
                 return $result
-            } elseif ($statusCode -ge 500 -or $statusCode -eq 0) {
+            } elseif ($statusCode -eq 0) {
+                # Bug A: error_0 is a transient network timeout/connection failure,
+                # not a definitive "not free" signal. Retry the same effective ID
+                # once before falling back to the last-known-good cache entry.
+                if (-not $script:errorZeroRetried) {
+                    $script:errorZeroRetried = $true
+                    Start-Sleep -Milliseconds 500
+                    $ci--  # re-run this same candidate iteration
+                    continue
+                }
+                # Still error_0 after retry: fall back to last-known-good cache.
+                # Bug A round-2: Load-NvidiaFreeCache respects the 24h TTL and returns
+                # $null for a stale cache, so during a -Force refresh (which runs when
+                # the cache is often stale) the fallback found no prior entry and kept
+                # error_0/isFree=false. Read the cache FILE directly, bypassing the
+                # TTL (mirror the Bug B pattern at the UseCacheOnly stale-cache block).
+                $cachedFree = $false
+                if (Test-Path $NvidiaFreeCacheFile) {
+                    try {
+                        $cached = Get-Content $NvidiaFreeCacheFile -Raw | ConvertFrom-Json
+                        if ($cached -and $cached.results) {
+                            $cachedEntry = $null
+                            foreach ($prop in $cached.results.PSObject.Properties) {
+                                if ($prop.Name -eq $ModelId) { $cachedEntry = $prop.Value; break }
+                            }
+                            if ($cachedEntry -and $cachedEntry.isFree -eq $true) { $cachedFree = $true }
+                        }
+                    } catch { }
+                }
+                if ($cachedFree) {
+                    $result.isFree = $true
+                    $result.reason = "error_0_cached_free"
+                    $result.model = $tryId
+                } else {
+                    $result.isFree = $false
+                    $result.reason = "error_0"
+                    $result.model = $tryId
+                }
+                return $result
+            } elseif ($statusCode -ge 500) {
                 $result.isFree = $false
                 $result.reason = "error_$statusCode"
                 $result.model = $tryId
@@ -824,6 +923,8 @@ function Get-NvidiaBehavioralFreeSet {
             if ($entry.isFree -eq $true) {
                 $freeSet[$prop.Name] = $true
             }
+            # FIX 4b: record the behavioral reason for registry tier honesty.
+            $script:behavioralReasons[$prop.Name] = [string]$entry.reason
         }
         if (-not $Silent) {
             Write-Host "  NVIDIA behavioral cache: $($freeSet.Count) free models (cached)" -ForegroundColor DarkGray
@@ -831,7 +932,30 @@ function Get-NvidiaBehavioralFreeSet {
         if ($UseCacheOnly) { return $freeSet }
     }
 
-    if ($UseCacheOnly) { return $freeSet }
+    # Bug B: when UseCacheOnly is set (launch path with -SkipNvidiaFreeCheck) and the
+    # cache is stale or missing, returning an empty set drops ALL NVIDIA-only-free
+    # models. A stale 24h-old result is better than no result. Fall back to reading
+    # the cache file directly (bypass the TTL) before giving up.
+    if ($UseCacheOnly) {
+        $staleCache = $null
+        if (Test-Path $NvidiaFreeCacheFile) {
+            try { $staleCache = Get-Content $NvidiaFreeCacheFile -Raw | ConvertFrom-Json } catch { $staleCache = $null }
+        }
+        if ($staleCache -and $staleCache.results) {
+            foreach ($prop in $staleCache.results.PSObject.Properties) {
+                $entry = $prop.Value
+                if ($entry.isFree -eq $true) {
+                    $freeSet[$prop.Name] = $true
+                }
+                # FIX 4b: record the behavioral reason for registry tier honesty.
+                $script:behavioralReasons[$prop.Name] = [string]$entry.reason
+            }
+            if (-not $Silent) {
+                Write-Host "  NVIDIA behavioral cache: $($freeSet.Count) free models (STALE - cache past TTL, using last-known-good)" -ForegroundColor Yellow
+            }
+        }
+        return $freeSet
+    }
     if (-not $ApiKey) {
         if (-not $Silent) {
             Write-Host "  NVIDIA behavioral detection: no API key, skipping" -ForegroundColor DarkGray
@@ -849,8 +973,17 @@ function Get-NvidiaBehavioralFreeSet {
     $toTest = @()
     foreach ($m in $FilteredModels) {
         $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
+        # FIX 1: skip only models with a DEFINITIVE cached result. Transient results
+        # (error_0, error_5xx, unexpected_*) must be re-tested every run so a poisoned
+        # entry can heal. Previously ANY cached entry was skipped, which locked a
+        # flaky model (e.g. glm-5.2) out of re-testing forever after one timeout.
         if (-not $results.ContainsKey($fullId)) {
             $toTest += $m
+        } else {
+            $cachedReason = [string]$results[$fullId].reason
+            if (-not (Test-BehavioralReasonDefinitive $cachedReason)) {
+                $toTest += $m
+            }
         }
     }
 
@@ -863,10 +996,34 @@ function Get-NvidiaBehavioralFreeSet {
         foreach ($m in $toTest) {
             $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
             $testResult = Test-NvidiaFreeEndpoint -ModelId $fullId -ApiKey $ApiKey
-            $results[$fullId] = $testResult
-            if ($testResult.isFree) {
+
+            # FIX 2: cache-poisoning guard. If the NEW result is transient (error_0 /
+            # error_* / unexpected_*) AND the PRIOR cached entry (seeded into $results
+            # from the cache at lines 962-967) was isFree=true, PRESERVE the prior
+            # entry instead of overwriting it with the transient failure. This
+            # prevents a single timeout from destroying a known-good free entry.
+            $newReason = [string]$testResult.reason
+            $priorEntry = $null
+            if ($results.ContainsKey($fullId)) { $priorEntry = $results[$fullId] }
+
+            if (-not (Test-BehavioralReasonDefinitive $newReason) -and $priorEntry -and $priorEntry.isFree -eq $true) {
+                # Preserve: keep isFree=true, mark the reason so it is visible in the cache.
+                $priorEntry.reason = "error_0_preserved_free"
+                $priorEntry.tested_at = $testResult.tested_at
+                $results[$fullId] = $priorEntry
                 $freeSet[$fullId] = $true
+                # FIX 4b: record the FINAL (preserved) reason.
+                $script:behavioralReasons[$fullId] = "error_0_preserved_free"
+            } else {
+                # Normal path: overwrite with the fresh result.
+                $results[$fullId] = $testResult
+                if ($testResult.isFree) {
+                    $freeSet[$fullId] = $true
+                }
+                # FIX 4b: record the FINAL reason.
+                $script:behavioralReasons[$fullId] = $newReason
             }
+
             $tested++
             if (-not $Silent -and ($tested % 10 -eq 0)) {
                 Write-Host "    Tested $tested / $($toTest.Count)..." -ForegroundColor DarkGray
@@ -874,7 +1031,12 @@ function Get-NvidiaBehavioralFreeSet {
             Start-Sleep -Milliseconds 200
         }
 
-        Save-NvidiaFreeCache $results
+        # Bug C fix made Save-NvidiaFreeCache return $success (bool). A BARE call
+        # emits that bool to this function's output stream, where it pollutes the
+        # caller's $script:behavioralFreeSet (becomes @($true, $freeSet)) and breaks
+        # .ContainsKey() with a Boolean member-enumeration error on every model.
+        # Absorb the return value so it never reaches the pipeline.
+        $null = Save-NvidiaFreeCache $results
 
         if (-not $Silent) {
             Write-Host "  Behavioral detection complete: $($freeSet.Count) free models ($tested tested)" -ForegroundColor DarkGray
@@ -887,6 +1049,10 @@ function Get-NvidiaBehavioralFreeSet {
 }
 
 $script:behavioralFreeSet = $null
+# FIX 4a: map fullId -> behavioral reason string, populated by Get-NvidiaBehavioralFreeSet.
+# Used by the registry build loop to label transient-error models "unverified" instead
+# of the OpenRouter-derived tier (which would falsely call a timeout "budget_paid").
+$script:behavioralReasons = @{}
 
 function Test-NvidiaFreeCombined($nvidiaModelId) {
     if (Test-NvidiaFreeFromOpenRouter $nvidiaModelId) { return $true }
@@ -1191,6 +1357,15 @@ if ($nvidiaModels -ne $null) {
             # tier = "free" if OpenRouter confirms free; otherwise use OpenRouter pricing tier
             $costTier = Get-CostTier $p $c
             if ($isFree) { $costTier = "free" }
+            # FIX 4c: if not free AND the behavioral reason is transient (error_0 /
+            # error_* / unexpected_*), the model is UNVERIFIED, not "budget_paid".
+            # A transient timeout must not be mislabeled as a definitive paid tier.
+            if (-not $isFree) {
+                $bhReason = [string]$script:behavioralReasons[$fullId]
+                if (-not (Test-BehavioralReasonDefinitive $bhReason) -and $bhReason -ne "") {
+                    $costTier = "unverified"
+                }
+            }
             $registryModels += @{
                 id = $fullId; source = "nvidia"; provider = "nvidia"
                 pricing = @{ prompt = $p; completion = $c }
@@ -1203,6 +1378,15 @@ if ($nvidiaModels -ne $null) {
             # No OpenRouter match — tier from OpenRouter free check only
             $costTier = "unknown"
             if ($isFree) { $costTier = "free" }
+            # FIX 4c: if not free AND the behavioral reason is transient, label
+            # "unverified" instead of "unknown" to signal the probe failed (not
+            # that the model is genuinely paid/unknown).
+            if (-not $isFree) {
+                $bhReason = [string]$script:behavioralReasons[$fullId]
+                if (-not (Test-BehavioralReasonDefinitive $bhReason) -and $bhReason -ne "") {
+                    $costTier = "unverified"
+                }
+            }
             $registryModels += @{
                 id = $fullId; source = "nvidia"; provider = "nvidia"
                 pricing = $null
