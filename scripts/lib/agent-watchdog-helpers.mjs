@@ -8,6 +8,86 @@
 //   - scripts/test-agent-watchdog.mjs (the verification harness)
 
 import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+import { createRequire } from 'node:module';
+
+const require = createRequire(import.meta.url);
+
+// Lazily load node:sqlite (built-in on Node 22.5+). Guarded so the helper
+// module doesn't crash at load time on older Node — the function below
+// returns { alive: null } if the import fails.
+let DatabaseSync = null;
+try {
+  DatabaseSync = require('node:sqlite').DatabaseSync;
+} catch {
+  // ADVISORY-7: node:sqlite unavailable — auto-abort degrades to signal-only
+  // mode (liveness checks always return alive:null → fail-closed on abort).
+  // Warn once so the operator knows auto-abort is disabled, not silently broken.
+  console.warn('[agent-watchdog] node:sqlite unavailable — auto-abort disabled, signal-only mode');
+}
+
+/**
+ * Locate the opencode SQLite DB. Mirrors abort-agent.mjs's DEFAULT_DB.
+ * Allows override via OPENCODE_DB_PATH env var (used by tests).
+ */
+function defaultDbPath() {
+  if (process.env.OPENCODE_DB_PATH) return process.env.OPENCODE_DB_PATH;
+  return join(homedir(), '.local', 'share', 'opencode', 'opencode.db');
+}
+
+/**
+ * Check whether a session still has a tool in the "running" state by querying
+ * the opencode SQLite DB directly. Reuses the exact query pattern from
+ * abort-agent.mjs's verifyStopped(): SELECT from part WHERE session_id = ? AND
+ * json_extract(data, '$.state.status') = 'running'.
+ *
+ * This is the liveness signal for the watchdog: if the DB shows no running
+ * parts for a session, the session is either dead (aborted externally, user
+ * cancel, escape key) or the tool already completed — either way the watchdog
+ * must NOT signal or abort it (false-positive prevention).
+ *
+ * Returns:
+ *   { alive: true }  — session has a running tool part (genuinely active)
+ *   { alive: false } — no running parts (dead or completed)
+ *   { alive: null, error: string } — DB check unreliable (DB busy/missing/schema
+ *     change). Caller must treat null as "do NOT abort" (fail-closed on abort)
+ *     but MAY write a signal for visibility.
+ *
+ * @param sessionID - the session to check
+ * @param dbPath - optional DB path override (used by tests)
+ */
+export function isSessionToolRunning(sessionID, dbPath) {
+  if (!DatabaseSync) {
+    return { alive: null, error: 'node:sqlite unavailable' };
+  }
+  const path = dbPath || defaultDbPath();
+  let db;
+  try {
+    db = new DatabaseSync(path, { readonly: true });
+  } catch (e) {
+    return { alive: null, error: `DB open failed: ${e.message}` };
+  }
+  try {
+    const row = db.prepare(
+      `SELECT data FROM part WHERE session_id = ? AND json_extract(data, '$.state.status') = 'running' ORDER BY time_updated DESC LIMIT 1`
+    ).get(sessionID);
+    db.close();
+    if (!row) return { alive: false };
+    try {
+      const d = JSON.parse(row.data);
+      if (d?.state?.status === 'running') return { alive: true, tool: d.tool ?? 'unknown' };
+      return { alive: false };
+    } catch (e) {
+      // Malformed part data — can't confirm liveness, treat as not-alive
+      // (safer than aborting based on corrupt data).
+      return { alive: false, error: `Malformed part data: ${e.message}` };
+    }
+  } catch (e) {
+    try { db.close(); } catch { /* best-effort */ }
+    return { alive: null, error: e.message };
+  }
+}
 
 /**
  * Parse a threshold (ms) from an env var with a default fallback.

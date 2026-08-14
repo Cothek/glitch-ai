@@ -11,10 +11,10 @@
 // (or: data\node\node.exe scripts/test-agent-watchdog.mjs)
 
 import assert from 'node:assert';
-import { mkdtempSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseThreshold, isSignalFresh, shouldInjectForSession } from '../scripts/lib/agent-watchdog-helpers.mjs';
+import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning } from '../scripts/lib/agent-watchdog-helpers.mjs';
 
 let passed = 0;
 let failed = 0;
@@ -322,6 +322,143 @@ test('recommendation text with 300s threshold', () => {
   const threshold = 300;
   const recommendation = `Agent idle >${threshold}s — aborting and re-dispatching`;
   assert.ok(recommendation.includes('300s'), 'Recommendation must include 300s');
+});
+
+// ============================================================
+console.log('\n7. MAJOR-2 — isSessionToolRunning (DB liveness check):');
+// ============================================================
+// isSessionToolRunning queries the opencode SQLite DB to verify a session
+// still has a tool in the "running" state. It gates abort decisions, so it
+// must be tested directly. We create temp SQLite DBs matching the real
+// `part` table schema (session_id + data columns with json_extract on
+// $.state.status = 'running').
+
+// Helper: create a temp SQLite DB with the part table and insert rows.
+// Returns the DB file path. Caller must clean up the temp dir.
+function createTestDb(rows) {
+  const { DatabaseSync } = createRequireFromNodeSqlite();
+  if (!DatabaseSync) return null;
+  const tmpDir = mkdtempSync(join(tmpdir(), 'watchdog-db-test-'));
+  const dbPath = join(tmpDir, 'opencode.db');
+  const db = new DatabaseSync(dbPath);
+  db.exec(`CREATE TABLE part (id TEXT PRIMARY KEY, session_id TEXT, data TEXT, time_updated INTEGER)`);
+  for (const r of rows) {
+    db.prepare(`INSERT INTO part (id, session_id, data, time_updated) VALUES (?, ?, ?, ?)`).run(
+      r.id, r.session_id, r.data, r.time_updated ?? Date.now()
+    );
+  }
+  db.close();
+  return dbPath;
+}
+
+// Lazy require of node:sqlite via createRequire (mirrors the helpers module).
+import { createRequire } from 'node:module';
+function createRequireFromNodeSqlite() {
+  const req = createRequire(import.meta.url);
+  try {
+    return { DatabaseSync: req('node:sqlite').DatabaseSync };
+  } catch {
+    return { DatabaseSync: null };
+  }
+}
+
+// Helper: clean up a temp DB dir.
+function cleanupDb(dbPath) {
+  if (!dbPath) return;
+  try { rmSync(join(dbPath, '..'), { recursive: true, force: true }); } catch { /* best-effort */ }
+}
+
+test('session with a running part → alive: true', () => {
+  const dbPath = createTestDb([
+    { id: 'p1', session_id: 'ses_running', data: JSON.stringify({ state: { status: 'running' }, tool: 'bash' }) },
+  ]);
+  if (!dbPath) { console.log('    (skipped — node:sqlite unavailable on this Node)'); return; }
+  try {
+    const result = isSessionToolRunning('ses_running', dbPath);
+    assert.strictEqual(result.alive, true, 'Session with a running part must be alive');
+    assert.strictEqual(result.tool, 'bash', 'Tool name must be extracted from part data');
+  } finally { cleanupDb(dbPath); }
+});
+
+test('session with no running parts → alive: false', () => {
+  const dbPath = createTestDb([
+    { id: 'p1', session_id: 'ses_done', data: JSON.stringify({ state: { status: 'completed' }, tool: 'bash' }) },
+    { id: 'p2', session_id: 'ses_done', data: JSON.stringify({ state: { status: 'error' }, tool: 'read' }) },
+  ]);
+  if (!dbPath) { console.log('    (skipped — node:sqlite unavailable on this Node)'); return; }
+  try {
+    const result = isSessionToolRunning('ses_done', dbPath);
+    assert.strictEqual(result.alive, false, 'Session with no running parts must be not-alive');
+  } finally { cleanupDb(dbPath); }
+});
+
+test('non-existent DB file → alive: null (with error)', () => {
+  const tmpDir = mkdtempSync(join(tmpdir(), 'watchdog-db-test-'));
+  const nonexistentPath = join(tmpDir, 'does-not-exist.db');
+  try {
+    const result = isSessionToolRunning('ses_any', nonexistentPath);
+    assert.strictEqual(result.alive, null, 'Non-existent DB must return alive:null');
+    assert.ok(result.error, 'Non-existent DB must include an error message');
+    // node:sqlite may create the file on open (readonly doesn't prevent
+    // creation on some platforms), so the error may be "no such table: part"
+    // rather than "DB open failed". Either way, alive:null + error is correct.
+    assert.ok(
+      result.error.includes('DB open failed') || result.error.includes('no such table'),
+      `Error must mention DB open failure or missing table, got: ${result.error}`
+    );
+  } finally { try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ } }
+});
+
+test('malformed part data → handled without crash (alive:false or null, no throw)', () => {
+  const dbPath = createTestDb([
+    { id: 'p1', session_id: 'ses_malformed', data: 'not valid json{{{' },
+  ]);
+  if (!dbPath) { console.log('    (skipped — node:sqlite unavailable on this Node)'); return; }
+  try {
+    // Must NOT throw — the function catches JSON.parse errors internally.
+    const result = isSessionToolRunning('ses_malformed', dbPath);
+    // Malformed data that matches the WHERE clause (json_extract returns NULL
+    // for invalid JSON, so the row won't match 'running') → alive:false.
+    // If json_extract somehow matched, the inner try/catch returns alive:false
+    // with an error. Either way, no throw.
+    assert.ok(result.alive === false || result.alive === null, `Malformed data must not crash, got alive=${result.alive}`);
+  } finally { cleanupDb(dbPath); }
+});
+
+test('OPENCODE_DB_PATH env override → uses custom path', () => {
+  const dbPath = createTestDb([
+    { id: 'p1', session_id: 'ses_env', data: JSON.stringify({ state: { status: 'running' }, tool: 'task' }) },
+  ]);
+  if (!dbPath) { console.log('    (skipped — node:sqlite unavailable on this Node)'); return; }
+  try {
+    const prev = process.env.OPENCODE_DB_PATH;
+    process.env.OPENCODE_DB_PATH = dbPath;
+    const result = isSessionToolRunning('ses_env'); // no dbPath arg — uses env
+    process.env.OPENCODE_DB_PATH = prev;
+    assert.strictEqual(result.alive, true, 'OPENCODE_DB_PATH env must be used as the DB path');
+    assert.strictEqual(result.tool, 'task', 'Tool must be extracted from the env-path DB');
+  } finally { cleanupDb(dbPath); }
+});
+
+test('dbPath parameter passed explicitly → uses that path (not env)', () => {
+  const dbPathExplicit = createTestDb([
+    { id: 'p1', session_id: 'ses_explicit', data: JSON.stringify({ state: { status: 'running' }, tool: 'bash' }) },
+  ]);
+  // Set env to a DIFFERENT (non-existent) path to prove dbPath wins over env.
+  const tmpDirEnv = mkdtempSync(join(tmpdir(), 'watchdog-db-test-'));
+  const envPath = join(tmpDirEnv, 'env-wrong.db');
+  const prev = process.env.OPENCODE_DB_PATH;
+  process.env.OPENCODE_DB_PATH = envPath;
+  try {
+    if (!dbPathExplicit) { console.log('    (skipped — node:sqlite unavailable on this Node)'); return; }
+    const result = isSessionToolRunning('ses_explicit', dbPathExplicit);
+    assert.strictEqual(result.alive, true, 'Explicit dbPath must be used even when env points elsewhere');
+    assert.strictEqual(result.tool, 'bash', 'Tool from explicit-path DB');
+  } finally {
+    process.env.OPENCODE_DB_PATH = prev;
+    cleanupDb(dbPathExplicit);
+    try { rmSync(tmpDirEnv, { recursive: true, force: true }); } catch { /* best-effort */ }
+  }
 });
 
 // ============================================================

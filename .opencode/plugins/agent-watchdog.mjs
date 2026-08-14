@@ -44,7 +44,7 @@ import { writeFileSync, unlinkSync, existsSync, mkdirSync, readFileSync, readdir
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { parseThreshold, isSignalFresh, shouldInjectForSession } from '../../scripts/lib/agent-watchdog-helpers.mjs';
+import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning } from '../../scripts/lib/agent-watchdog-helpers.mjs';
 
 // --- Thresholds (parsed once at module load) ---
 // parseThreshold/isSignalFresh/shouldInjectForSession live in
@@ -123,10 +123,8 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
   // M2: Map keyed by composite key `${sessionID}|${tool}|${startTime}` to avoid
   // the race where tool A's after-hook deletes tool B's entry (overlapping or
   // delayed aborts). The after-hook only deletes if the tool name matches.
-  // runningTools: Map<compositeKey, { sessionID, tool, startTime, aborted }>
+  // runningTools: Map<compositeKey, { sessionID, tool, startTime, aborted, signaled }>
   const runningTools = new Map();
-  // Track which sessions we've already aborted to avoid repeat aborts.
-  const abortedSessions = new Set();
 
   // M3: Track parent sessions (those that have called the task tool) and their
   // children. Only parent sessions receive transform directives; only signals
@@ -176,7 +174,7 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
     return join(dataDir, `.agent-idle.${sessionID}.json`);
   }
 
-  function writeIdleSignal(sessionID, tool, idleSeconds, threshold) {
+  function writeIdleSignal(sessionID, tool, idleSeconds, threshold, aborted) {
     try {
       const payload = {
         detectedAt: new Date().toISOString(),
@@ -184,15 +182,42 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
         tool,
         idleSeconds,
         threshold,
-        recommendation: `Agent idle >${threshold}s — aborting and re-dispatching`,
+        aborted: aborted === true,
+        recommendation: aborted
+          ? `Agent idle >${threshold}s — aborting and re-dispatching`
+          : `Agent idle >${threshold}s — idle signal only (no auto-abort)`,
       };
       writeFileSync(sessionSignalPath(sessionID), JSON.stringify(payload, null, 2), 'utf-8');
       // m1: invalidate the signal-file cache so the transform hook sees the
       // new file immediately rather than waiting for the TTL.
       invalidateSignalFileCache();
-      console.log(`[agent-watchdog] ⚠️ Idle detected (session=${sessionID}, tool=${tool}, idle=${idleSeconds}s)`);
+      console.log(`[agent-watchdog] ⚠️ Idle detected (session=${sessionID}, tool=${tool}, idle=${idleSeconds}s, aborted=${aborted === true})`);
     } catch (e) {
       console.error(`[agent-watchdog] Failed to write idle signal: ${e.message}`);
+    }
+  }
+
+  // MAJOR-1: Update the `aborted` field of an existing signal file with the
+  // ACTUAL abort outcome. Called after abortSession() returns so the signal
+  // honestly reflects whether the abort succeeded — the transform hook's
+  // directive text depends on this value. Preserves the original detectedAt
+  // (the first-detection timestamp) so signal freshness is measured from when
+  // the hang was first noticed, not when the abort completed.
+  function updateSignalAborted(sessionID, aborted) {
+    const signalPath = sessionSignalPath(sessionID);
+    try {
+      const raw = readFileSync(signalPath, 'utf-8');
+      const parsed = JSON.parse(raw);
+      parsed.aborted = aborted === true;
+      parsed.recommendation = aborted
+        ? `Agent idle >${parsed.threshold}s — aborting and re-dispatching`
+        : `Agent idle >${parsed.threshold}s — idle signal only (no auto-abort)`;
+      writeFileSync(signalPath, JSON.stringify(parsed, null, 2), 'utf-8');
+      invalidateSignalFileCache();
+    } catch (e) {
+      // Signal file may have been consumed by the transform hook already —
+      // that's fine, the directive was already injected with the initial
+      // (honest) aborted=false value.
     }
   }
 
@@ -229,12 +254,27 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
       const threshold = isTaskTool ? IDLE_THRESHOLD_MS : AUTO_ABORT_THRESHOLD_MS;
 
       if (idleMs < threshold) continue;
-      if (entry.aborted) continue; // Already aborted, skip.
+      if (entry.aborted) continue; // Already aborted successfully, skip.
 
-      // Write the signal file for visibility (always, on first detection).
-      if (!existsSync(sessionSignalPath(entry.sessionID))) {
-        writeIdleSignal(entry.sessionID, entry.tool, idleSeconds, threshold / 1000);
+      // Fix 1: Liveness check — verify the session is still actually alive
+      // and the tool is still running BEFORE signaling or aborting. This
+      // prevents false positives on sessions that were aborted externally
+      // (user cancel, parent cancel cascade, escape key) — the after-hook
+      // never fires for those, so the runningTools entry lingers forever.
+      // Query the opencode SQLite DB (same pattern as abort-agent.mjs
+      // verifyStopped). If the DB check is unreliable (alive === null),
+      // fail-closed on abort: do NOT abort, but MAY write a signal.
+      const liveness = isSessionToolRunning(entry.sessionID);
+      if (liveness.alive === false) {
+        // Session is dead or tool already completed — remove the stale entry
+        // (Fix 2) and skip. Do NOT write a signal for a dead session.
+        runningTools.delete(key);
+        console.log(`[agent-watchdog] Session ${entry.sessionID} is not running (liveness check) — removed stale entry (tool=${entry.tool}, idle=${idleSeconds}s)`);
+        continue;
       }
+      // liveness.alive === null: DB check unreliable. Fail-closed on abort
+      // (do NOT abort without positive liveness confirmation), but allow
+      // signal-write for visibility.
 
       // Decide whether to auto-abort:
       // - task tool at IDLE_THRESHOLD → auto-abort (primary target).
@@ -245,13 +285,62 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
         ? idleMs >= IDLE_THRESHOLD_MS
         : (idleMs >= AUTO_ABORT_THRESHOLD_MS && !PARENT_SAFE_TOOLS.has(entry.tool));
 
-      if (!shouldAutoAbort) continue;
+      // Fix 2: If the DB liveness check was unreliable, do NOT auto-abort
+      // even if the threshold says we should — fail-closed on abort.
+      const willAbort = shouldAutoAbort && liveness.alive === true;
+
+      // MAJOR-1: Write the signal file for visibility (always, on first
+      // detection). The `aborted` field is ALWAYS false at this point — we
+      // have NOT attempted the abort yet. If an abort will be performed,
+      // updateSignalAborted() rewrites the field with the ACTUAL outcome
+      // after the attempt. This prevents the signal from permanently claiming
+      // "aborted: true" when the abort actually failed (server unreachable,
+      // auth failure, session not found) — the exact false claim this fix
+      // was meant to prevent.
+      if (!existsSync(sessionSignalPath(entry.sessionID))) {
+        writeIdleSignal(entry.sessionID, entry.tool, idleSeconds, threshold / 1000, false);
+      }
+
+      // MINOR-4: Only set signaled=true for signal-only cases (no abort
+      // needed). For abort cases, signaled stays false until the abort
+      // SUCCEEDS — a failed abort gets retried on the next 30s poll. This
+      // prevents a transient abort failure from permanently leaving the
+      // session running. The signal file already exists (written above) so
+      // re-processing on the next poll won't re-write it (the existsSync
+      // guard above prevents duplicate signals).
+      if (!shouldAutoAbort) {
+        entry.signaled = true;
+        continue;
+      }
+
+      if (!willAbort) {
+        // Liveness check was unreliable (alive === null) — fail-closed.
+        // Signal-only: mark signaled so we don't re-flag, but don't abort.
+        entry.signaled = true;
+        console.warn(`[agent-watchdog] Skipping auto-abort for ${entry.sessionID} (tool=${entry.tool}, idle=${idleSeconds}s) — liveness check unreliable, fail-closed`);
+        continue;
+      }
 
       console.log(`[agent-watchdog] Auto-aborting session ${entry.sessionID} (tool=${entry.tool}, idle=${idleSeconds}s, threshold=${threshold / 1000}s)`);
       const aborted = abortSession(entry.sessionID);
       entry.aborted = aborted;
+
       if (aborted) {
-        abortedSessions.add(entry.sessionID);
+        // MAJOR-1: Rewrite the signal file with the actual outcome so the
+        // transform hook's directive text is honest ("has been aborted").
+        updateSignalAborted(entry.sessionID, true);
+        // MINOR-4: Only mark signaled after a SUCCESSFUL abort — prevents
+        // re-flagging on every poll while keeping the entry eligible for
+        // retry if the abort had failed.
+        entry.signaled = true;
+      } else {
+        // MAJOR-1: Abort failed — rewrite the signal with aborted=false so
+        // the transform hook does NOT claim the session was aborted.
+        updateSignalAborted(entry.sessionID, false);
+        // MINOR-4: Leave signaled=false so the next poll retries the abort.
+        // The signal file already exists (with aborted=false) so the
+        // existsSync guard prevents duplicate signal writes on retry.
+        console.warn(`[agent-watchdog] Abort failed for ${entry.sessionID} — will retry on next poll`);
       }
     }
   }
@@ -280,16 +369,15 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
         // M2: Composite key prevents the race where tool A's after-hook deletes
         // tool B's entry. Each (sessionID, tool, startTime) is unique.
         const key = toolKey(sessionID, tool, startTime);
-        runningTools.set(key, { sessionID, tool, startTime, aborted: false });
+        runningTools.set(key, { sessionID, tool, startTime, aborted: false, signaled: false });
         // m2: only clear the aborted flag when the new tool is a `task` tool
         // (parent re-dispatching after a previous child was aborted). For
         // non-task tools, leave the aborted flag intact — a parent running a
         // read/webfetch after a child was aborted has NOT recovered the child;
         // clearing the flag here would let a second abort fire on the same
         // session prematurely.
-        if (tool === 'task') {
-          abortedSessions.delete(sessionID);
-        }
+        // (MINOR-3: the dead abortedSessions Set was removed; entry.aborted on
+        // the composite-keyed entry already prevents duplicate aborts per-entry.)
       } catch (e) {
         console.error(`[agent-watchdog] tool.execute.before failed: ${e.message}`);
       }
@@ -381,10 +469,39 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
           // standalone script signal. Fall back to 'unknown'.
           const toolName = signal.tool ?? 'unknown';
 
-          const directive =
-            `⚠️ AGENT IDLE DETECTED: sub-agent session ${signalSessionID} was silent >${signal.threshold}s ` +
-            `(tool: ${toolName}) and has been aborted. ` +
-            `If you were waiting on it, re-dispatch the task fresh.`;
+          // Fix 3: Honest directive text. The signal payload now carries an
+          // `aborted` boolean (recorded at signal-write time). If the signal
+          // is signal-only (PARENT_SAFE_TOOLS or liveness-unreliable fail-closed
+          // or no abort performed), the directive must NOT claim the session
+          // was aborted. Also: if the signal sessionID is the same as the
+          // receiving session (currentSessionID === signalSessionID), the
+          // parent's OWN tool was flagged — phrase it as "your own session's
+          // tool was idle", never "sub-agent ... aborted."
+          const wasAborted = signal.aborted === true;
+          const isOwnSession = signalSessionID === currentSessionID;
+
+          let directive;
+          if (wasAborted && !isOwnSession) {
+            directive =
+              `⚠️ AGENT IDLE DETECTED: sub-agent session ${signalSessionID} was silent >${signal.threshold}s ` +
+              `(tool: ${toolName}) and has been aborted. ` +
+              `If you were waiting on it, re-dispatch the task fresh.`;
+          } else if (wasAborted && isOwnSession) {
+            directive =
+              `⚠️ AGENT IDLE DETECTED: your own session's tool was silent >${signal.threshold}s ` +
+              `(tool: ${toolName}) and has been aborted. ` +
+              `Review manually if it matters.`;
+          } else if (isOwnSession) {
+            directive =
+              `⚠️ AGENT IDLE DETECTED: your own session's tool was silent >${signal.threshold}s ` +
+              `(tool: ${toolName}) — idle signal only, session NOT aborted ` +
+              `(safe tool / no abort performed). Review manually if it matters.`;
+          } else {
+            directive =
+              `⚠️ AGENT IDLE DETECTED: sub-agent session ${signalSessionID} was silent >${signal.threshold}s ` +
+              `(tool: ${toolName}) — idle signal only, session NOT aborted ` +
+              `(safe tool / no abort performed). Review manually if it matters.`;
+          }
 
           lastMessage.parts.push({
             id: `prt_${randomUUID()}`,
@@ -399,7 +516,7 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
           try { unlinkSync(fullPath); } catch (e) { /* best-effort */ }
           invalidateSignalFileCache();
 
-          console.log(`[agent-watchdog] injected idle directive for session ${currentSessionID} (aborted sub-agent ${signalSessionID})`);
+          console.log(`[agent-watchdog] injected idle directive for session ${currentSessionID} (signal session ${signalSessionID}, aborted=${wasAborted}, own=${isOwnSession})`);
           break; // Only inject one directive per transform call.
         }
       } catch (e) {
