@@ -33,7 +33,9 @@ let configCache = null;
 let configCacheTime = 0;
 const CONFIG_CACHE_TTL = 5_000; // 5 seconds
 
-let refreshState = { running: false, startedAt: null, finishedAt: null, error: null, result: null };
+let refreshState = { running: false, startedAt: null, finishedAt: null, error: null, result: null, output: null };
+let refreshStdout = '';
+let refreshStderr = '';
 
 function getRegistry() {
   const now = Date.now();
@@ -184,7 +186,7 @@ function restartOpenCode() {
       const logMsg = `[${new Date().toISOString()}] Killing opencode PID ${pid}...\n`;
       writeFileSync(logPath, logMsg, 'utf-8');
       if (process.platform === 'win32') {
-        const killProc = spawn('taskkill', ['/PID', String(pid), '/F'], { stdio: ['ignore', 'pipe', 'pipe'] });
+        const killProc = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: ['ignore', 'pipe', 'pipe'] });
         let stdout = '', stderr = '';
         killProc.stdout.on('data', (d) => { stdout += d.toString(); });
         killProc.stderr.on('data', (d) => { stderr += d.toString(); });
@@ -538,10 +540,10 @@ async function handler(req, res) {
         return;
       }
 
-      let stdout = '';
-      let stderr = '';
-      proc.stdout.on('data', (d) => { stdout += d.toString(); });
-      proc.stderr.on('data', (d) => { stderr += d.toString(); });
+      refreshStdout = '';
+      refreshStderr = '';
+      proc.stdout.on('data', (d) => { refreshStdout += d.toString(); });
+      proc.stderr.on('data', (d) => { refreshStderr += d.toString(); });
 
       const REFRESH_TIMEOUT_MS = 600_000;
       let timedOut = false;
@@ -553,7 +555,7 @@ async function handler(req, res) {
       proc.on('close', (code) => {
         clearTimeout(timeout);
         if (code !== 0) {
-          const lastLines = stderr.trim().split('\n').slice(-10).join('\n');
+          const lastLines = refreshStderr.trim().split('\n').slice(-10).join('\n');
           const errorMsg = timedOut
             ? `check-models.ps1 timed out after ${REFRESH_TIMEOUT_MS / 1000}s`
             : `check-models.ps1 exited with code ${code}`;
@@ -587,12 +589,16 @@ async function handler(req, res) {
     }
 
     if (req.method === 'GET' && pathname === '/api/refresh-status') {
+      // Extract last non-empty line from stdout for client display
+      const outputLines = refreshStdout.trim().split('\n').filter(l => l.trim());
+      const lastLine = outputLines.length > 0 ? outputLines[outputLines.length - 1] : '';
       sendJson(res, 200, {
         running: refreshState.running,
         startedAt: refreshState.startedAt,
         finishedAt: refreshState.finishedAt,
         error: refreshState.error,
         result: refreshState.result,
+        output: lastLine,
       });
       return;
     }
