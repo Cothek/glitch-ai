@@ -626,7 +626,7 @@ function Test-NvidiaFreeFromOpenRouter($nvidiaModelId) {
     return $freeSet.ContainsKey($normalized)
 }
 
-# --- NVIDIA behavioral free-endpoint detection ---
+# --- Checking NVIDIA free models ---
 # Classification rationale (Troy, 2026-08-10): Troy's NVIDIA API key has NO billing
 # attached (free tier only, no credits, no payment method). Therefore a 200 response
 # from the chat completions API means the model is served without payment = FREE.
@@ -857,7 +857,7 @@ function Test-NvidiaFreeEndpoint {
                 if (-not $script:errorZeroRetried) {
                     $script:errorZeroRetried = $true
                     if (-not $Silent) {
-                        Write-Progress -Activity "NVIDIA free-endpoint detection" -Status "Retrying $ModelId (timeout, 30s)..."
+                        Write-Progress -Activity "Checking NVIDIA free models" -Status "Retrying $ModelId (timeout, 30s)..."
                     }
                     Start-Sleep -Milliseconds 500
                     $ci--  # re-run this same candidate iteration
@@ -930,7 +930,7 @@ function Get-NvidiaBehavioralFreeSet {
             $script:behavioralReasons[$prop.Name] = [string]$entry.reason
         }
         if (-not $Silent) {
-            Write-Host "  NVIDIA behavioral cache: $($freeSet.Count) free models (cached)" -ForegroundColor DarkGray
+            Write-Host "  NVIDIA free-model cache: $($freeSet.Count) free models (cached)" -ForegroundColor DarkGray
         }
         if ($UseCacheOnly) { return $freeSet }
     }
@@ -954,19 +954,19 @@ function Get-NvidiaBehavioralFreeSet {
                 $script:behavioralReasons[$prop.Name] = [string]$entry.reason
             }
             if (-not $Silent) {
-                Write-Host "  NVIDIA behavioral cache: $($freeSet.Count) free models (STALE - cache past TTL, using last-known-good)" -ForegroundColor Yellow
+                Write-Host "  NVIDIA free-model cache: $($freeSet.Count) free models (STALE - cache past TTL, using last-known-good)" -ForegroundColor Yellow
             }
             return $freeSet
         }
         # No cache file exists at all — fall through to probe instead of returning empty.
         # First launch on a fresh machine needs the probe to build the initial cache.
         if (-not $Silent) {
-            Write-Host "  NVIDIA behavioral cache: not found, running probe (first launch)..." -ForegroundColor Yellow
+            Write-Host "  NVIDIA free-model cache: not found, running probe (first launch)..." -ForegroundColor Yellow
         }
     }
     if (-not $ApiKey) {
         if (-not $Silent) {
-            Write-Host "  NVIDIA behavioral detection: no API key, skipping" -ForegroundColor DarkGray
+            Write-Host "  NVIDIA free-model check: no API key, skipping" -ForegroundColor DarkGray
         }
         return $freeSet
     }
@@ -997,12 +997,12 @@ function Get-NvidiaBehavioralFreeSet {
 
     if ($toTest.Count -gt 0) {
         if (-not $Silent) {
-            Write-Host "  Behavioral free detection: testing $($toTest.Count) models..." -ForegroundColor Cyan
+            Write-Host "  Checking NVIDIA free models: testing $($toTest.Count) models..." -ForegroundColor Cyan
         }
 
         $tested = 0
         if (-not $Silent) {
-            Write-Progress -Activity "NVIDIA free-endpoint detection" -Status "Testing $tested / $($toTest.Count) models" -PercentComplete 0
+            Write-Progress -Activity "Checking NVIDIA free models" -Status "Testing $tested / $($toTest.Count) models" -PercentComplete 0
         }
         foreach ($m in $toTest) {
             $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
@@ -1038,7 +1038,7 @@ function Get-NvidiaBehavioralFreeSet {
             $tested++
             if (-not $Silent) {
                 $shortName = ($m -split '/')[-1]
-                Write-Progress -Activity "NVIDIA free-endpoint detection" -Status "Testing $tested / $($toTest.Count): $shortName" -PercentComplete ([math]::Round(($tested / $toTest.Count) * 100))
+                Write-Progress -Activity "Checking NVIDIA free models" -Status "Testing $tested / $($toTest.Count): $shortName" -PercentComplete ([math]::Round(($tested / $toTest.Count) * 100))
             }
             Start-Sleep -Milliseconds 200
         }
@@ -1051,11 +1051,11 @@ function Get-NvidiaBehavioralFreeSet {
         $null = Save-NvidiaFreeCache $results
 
         if (-not $Silent) {
-            Write-Host "  Behavioral detection complete: $($freeSet.Count) free models ($tested tested)" -ForegroundColor DarkGray
-            Write-Progress -Activity "NVIDIA free-endpoint detection" -Completed
+            Write-Host "  Checking NVIDIA free models: complete ($($freeSet.Count) free, $tested tested)" -ForegroundColor DarkGray
+            Write-Progress -Activity "Checking NVIDIA free models" -Completed
         }
     } elseif (-not $Silent) {
-        Write-Host "  Behavioral detection: all models cached, no new tests needed" -ForegroundColor DarkGray
+        Write-Host "  Checking NVIDIA free models: all cached, no new tests needed" -ForegroundColor DarkGray
     }
 
     return $freeSet
@@ -1210,7 +1210,7 @@ if ($nvidiaModels -ne $null) {
   # Filter to keep only useful models
   $filteredModels = Filter-NvidiaModels $nvidiaModels
 
-    # Compute behavioral free set (loads from cache or runs HTTP probes).
+    # Compute NVIDIA free model set (loads from cache or runs HTTP probes).
     # Combined with OpenRouter pricing: either source saying free -> model is free.
     $nvidiaApiKey = Get-NvidiaApiKey
     $useCacheOnly = $SkipNvidiaFreeCheck
@@ -1219,7 +1219,7 @@ if ($nvidiaModels -ne $null) {
     # Determine free status from OpenRouter pricing + behavioral detection.
     # OpenRouter is fast (already fetched). Behavioral catches NVIDIA-only free endpoints.
     if (-not $Silent) {
-        Write-Host " Checking NVIDIA free status (OpenRouter + behavioral)..." -ForegroundColor Cyan
+        Write-Host " Checking NVIDIA free status (OpenRouter + NVIDIA API)..." -ForegroundColor Cyan
     }
     $confirmedFreeCount = 0
     $skippedCount = 0
