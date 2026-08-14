@@ -614,7 +614,10 @@
             <p class="glitch-page-header__desc">Browse and manage agent model assignments. Changes are staged until you apply them.</p>
           </div>
           <div class="header-buttons gl-flex gl-gap-3" style="align-items: flex-start;">
-            <button class="gl-btn gl-btn--secondary gl-btn--md" id="btn-refresh-models">&#8635; Refresh Models</button>
+            <div style="display: flex; flex-direction: column; gap: 4px;">
+              <button class="gl-btn gl-btn--secondary gl-btn--md" id="btn-refresh-models">&#8635; Refresh Models</button>
+              <div id="refresh-progress" class="gl-text-xs gl-text-muted gl-mt-2" style="min-height: 18px; font-family: monospace;"></div>
+            </div>
             <button class="gl-btn gl-btn--secondary gl-btn--md" id="btn-rollback" disabled>&#8634; Rollback</button>
             <div class="restart-dropdown" style="position: relative;">
               <div class="restart-split-group">
@@ -1413,6 +1416,8 @@
             clearInterval(pollInterval);
             btn.disabled = false;
             btn.innerHTML = originalText;
+            const progressEl = document.getElementById('refresh-progress');
+            if (progressEl) { progressEl.textContent = ''; }
             showToast('Refresh timed out — try again', 'warning');
             return;
           }
@@ -1420,11 +1425,19 @@
             const status = await api('refresh-status');
             if (status.running) {
               const elapsed = status.startedAt ? Math.round((Date.now() - new Date(status.startedAt).getTime()) / 1000) : 0;
-              btn.innerHTML = '<span class="gl-spinner gl-spinner--sm" style="display:inline-block;vertical-align:middle;margin-right:4px;border-color:var(--glitch-text-secondary);border-top-color:transparent;"></span> Refreshing... (' + elapsed + 's)';
+              const remaining = Math.max(0, 360 - elapsed);
+              btn.innerHTML = '<span class="gl-spinner gl-spinner--sm" style="display:inline-block;vertical-align:middle;margin-right:4px;border-color:var(--glitch-text-secondary);border-top-color:transparent;"></span> Refreshing... (' + remaining + 's left)';
+              // Show latest script output line
+              const progressEl = document.getElementById('refresh-progress');
+              if (progressEl && status.output) {
+                progressEl.textContent = status.output;
+              }
             } else {
               clearInterval(pollInterval);
               btn.disabled = false;
               btn.innerHTML = originalText;
+              const progressEl = document.getElementById('refresh-progress');
+              if (progressEl) { progressEl.textContent = ''; }
               if (status.error) {
                 showToast('Refresh failed: ' + status.error, 'error');
               } else if (status.result && status.result.ok) {
@@ -1442,6 +1455,8 @@
         showToast('Failed to start refresh: ' + err.message, 'error');
         btn.disabled = false;
         btn.innerHTML = originalText;
+        const progressEl = document.getElementById('refresh-progress');
+        if (progressEl) { progressEl.textContent = ''; }
       }
     }
 
