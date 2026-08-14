@@ -610,13 +610,25 @@ async function main() {
   }
 
   // ---- Launch Server with restart loop ----
-  const { launchServer } = await import('./lib/server-mode.mjs');
+  const { launchServer, cleanupServices } = await import('./lib/server-mode.mjs');
 
   let shouldRestart = true;
+  let firstIteration = true;
   while (shouldRestart) {
     // Log restart loop iteration
     const loopLogPath = join(ROOT_DIR, 'data', 'restart-loop.log');
     writeFileSync(loopLogPath, `[${new Date().toISOString()}] Entered restart loop\n`, 'utf-8');
+
+    // Tear down old services before relaunching (skip on first iteration —
+    // nothing to clean up on a fresh start). This kills the old auth-proxy,
+    // cloudflared, and money-dashboard via their pid files so the new
+    // launchServer() doesn't hit port conflicts from orphaned processes.
+    if (!firstIteration) {
+      log(CYAN, '  Cleaning up old services before restart...');
+      cleanupServices();
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    firstIteration = false;
 
     await launchServer({ OpenCodeBin, ROOT_DIR, HandyBin });
 

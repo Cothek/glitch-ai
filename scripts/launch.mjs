@@ -830,7 +830,23 @@ async function main() {
 
   // ---- Launch with restart loop ----
   let shouldRestart = true;
+  let firstIteration = true;
   while (shouldRestart) {
+    // Tear down old services before relaunching (skip on first iteration —
+    // nothing to clean up on a fresh start). In web mode this kills the old
+    // auth-proxy, cloudflared, and money-dashboard via their pid files so the
+    // new launchServer() doesn't hit port conflicts from orphaned processes.
+    // In TUI mode there are no visible-window services, so this is a no-op.
+    if (!firstIteration) {
+      if (isServe) {
+        const { cleanupServices } = await import('./lib/server-mode.mjs');
+        log(CYAN, '  Cleaning up old services before restart...');
+        cleanupServices();
+        await new Promise(r => setTimeout(r, 1000));
+      }
+    }
+    firstIteration = false;
+
     if (isServe) {
       // Server (web) mode
       const { launchServer } = await import('./lib/server-mode.mjs');

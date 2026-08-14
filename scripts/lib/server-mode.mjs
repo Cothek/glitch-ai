@@ -429,6 +429,10 @@ async function startMoneyDashboard(ROOT_DIR) {
  * @param {string} [options.FixPathsMjs] - Path fixer script path (derived if not set)
  * @param {boolean} [options.skipBootstrap=false] - Skip OpenCode download bootstrap
  */
+export function cleanupServices() {
+  cleanup();
+}
+
 export async function launchServer(options = {}) {
   const {
     OpenCodeBin,
@@ -497,6 +501,17 @@ export async function launchServer(options = {}) {
     }
   }
 
+  // Map port numbers to their pid-file names so checkAndClearPort can
+  // recognize an orphaned auth-proxy or cloudflared even when the process
+  // name is generic ('node' on Windows). Without this, a restart leaves the
+  // old auth-proxy holding port 4100, and since 'node' is in the GENERIC set
+  // (default-N kill), non-interactive callers skip it → process.exit(1) kills
+  // the entire Glitch process.
+  const PORT_PID_FILE_MAP = {
+    [TARGET_PORT]: null,           // opencode — already GLITCH_SPECIFIC
+    [AUTH_PROXY_PORT]: 'auth-proxy.pid',
+  };
+
   async function checkAndClearPort(port) {
     const free = await checkPort(port);
     if (free) {
@@ -507,8 +522,27 @@ export async function launchServer(options = {}) {
     const pid = getPortPid(port);
     const name = getProcessName(pid);
 
-    if (pid && name && ALL_KNOWN_PROCESS_NAMES.has(name)) {
-      const isGlitchSpecific = GLITCH_SPECIFIC_PROCESS_NAMES.has(name);
+    // Check if this port's PID matches a known Glitch service pid file.
+    // If so, treat it as Glitch-specific (auto-kill in non-interactive mode)
+    // even if the process name is generic ('node'). This is the key fix for
+    // the restart port-conflict cascade: the old auth-proxy runs as 'node'
+    // and would otherwise be skipped in non-interactive mode.
+    let isGlitchServiceByPidFile = false;
+    const pidFileName = PORT_PID_FILE_MAP[port];
+    if (pidFileName && rootDirRef) {
+      const pidFilePath = join(rootDirRef, 'data', pidFileName);
+      if (existsSync(pidFilePath)) {
+        try {
+          const filePid = parseInt(readFileSync(pidFilePath, 'utf-8').trim(), 10);
+          if (filePid > 0 && filePid === pid) {
+            isGlitchServiceByPidFile = true;
+          }
+        } catch {}
+      }
+    }
+
+    if (pid && name && (ALL_KNOWN_PROCESS_NAMES.has(name) || isGlitchServiceByPidFile)) {
+      const isGlitchSpecific = GLITCH_SPECIFIC_PROCESS_NAMES.has(name) || isGlitchServiceByPidFile;
       log(YELLOW, `  Port ${port} is held by ${name} (PID ${pid}) — likely an orphaned Glitch process.`);
 
       // Decide whether to kill. Two gates:
@@ -518,6 +552,8 @@ export async function launchServer(options = {}) {
       //      cloudflared) default to YES (empty answer kills). Generic names
       //      (node, powershell, pwsh) default to NO — require explicit 'y'/'yes'
       //      so we never kill the user's own node server by accident.
+      //      EXCEPTION: if the PID matches a known Glitch pid file (e.g.
+      //      auth-proxy.pid), treat as Glitch-specific regardless of name.
       let shouldKill;
       if (process.stdin.isTTY) {
         const hint = isGlitchSpecific ? '[Y/n]' : '[y/N]';
@@ -540,7 +576,9 @@ export async function launchServer(options = {}) {
             execFileSync('kill', [String(pid)], { stdio: 'ignore', timeout: 5000 });
           }
         } catch {}
-        await new Promise(r => setTimeout(r, 500));
+        // Wait 2000ms for TIME_WAIT sockets to clear (was 500ms — too short
+        // for Windows TCP stack to release the port after taskkill).
+        await new Promise(r => setTimeout(r, 2000));
         const nowFree = await checkPort(port);
         if (nowFree) {
           log(GREEN, `  Port ${port} freed (killed PID ${pid}).`);
@@ -565,10 +603,27 @@ export async function launchServer(options = {}) {
     return false;
   }
 
-  const targetOk = await checkAndClearPort(TARGET_PORT);
+  // Retry-and-wait wrapper: retry checkAndClearPort up to 3 times with 2s
+  // sleep between attempts. This replaces the old process.exit(1) on first
+  // failure, which killed the entire Glitch process during a restart when the
+  // port was still in TIME_WAIT or held by an orphaned service that hadn't
+  // fully released yet.
+  async function checkAndClearPortWithRetry(port, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const ok = await checkAndClearPort(port);
+      if (ok) return true;
+      if (attempt < maxRetries) {
+        log(YELLOW, `  Retrying port ${port} check (attempt ${attempt + 1}/${maxRetries}) in 2s...`);
+        await new Promise(r => setTimeout(r, 2000));
+      }
+    }
+    return false;
+  }
+
+  const targetOk = await checkAndClearPortWithRetry(TARGET_PORT);
   if (!targetOk) process.exit(1);
 
-  const authProxyOk = await checkAndClearPort(AUTH_PROXY_PORT);
+  const authProxyOk = await checkAndClearPortWithRetry(AUTH_PROXY_PORT);
   if (!authProxyOk) process.exit(1);
 
   // ---- Cloudflare Tunnel status check + auto-setup ----
