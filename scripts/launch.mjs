@@ -844,14 +844,23 @@ async function main() {
         const _ocStart = Date.now();
         const result = await superviseOpenCodeTUI({ bin: OpenCodeBin, args: [], rootDir: ROOT_DIR, env: process.env });
         const _ocElapsed = (Date.now() - _ocStart) / 1000;
-        if (result.code !== 0) {
+
+        // Check for restart flag FIRST — if set, consume it and loop back regardless of exit code.
+        // taskkill /T /F produces exit code 1, which would otherwise be treated as fatal.
+        const restartFlagEarly = join(ROOT_DIR, 'data', '.restart-flag');
+        if (existsSync(restartFlagEarly)) {
+          // Don't consume here — let the main restart-flag check below handle it.
+          // Just skip the fatal-exit path so the loop continues.
+          log(DARK_YELLOW, `  OpenCode exited (code ${result.code}) — restart flag set, continuing...`);
+        } else if (result.code !== 0) {
           log(RED, `  OpenCode exited with error (code ${result.code})`);
           process.exit(result.code);
         }
+
         // Silent-crash guard: opencode exited code 0 in under 5 seconds.
         // A healthy TUI session lasts minutes/hours; sub-5s exit-0 means opencode
         // crashed before rendering (e.g. a broken release or a fatal plugin load).
-        if (_ocElapsed < 5) {
+        if (_ocElapsed < 5 && result.code === 0) {
           log(RED, '');
           log(RED, '  ⚠ OpenCode exited immediately (code 0, ~' + _ocElapsed.toFixed(1) + 's).');
           log(RED, '    This usually means opencode crashed silently before rendering the TUI.');
