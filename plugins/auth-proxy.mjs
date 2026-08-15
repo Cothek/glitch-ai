@@ -103,7 +103,57 @@ function withAuthCookie(upstreamHeaders) {
 }
 
 const server = http.createServer((req, res) => {
-  // ---- Authentication gate ----
+  // ---- Route /money to glitch-money dashboard (port 4110) ----
+  // The money dashboard has its own token auth (glitch_dash cookie / Bearer).
+  // The proxy does NOT gate /money requests — the dashboard serves its login
+  // page publicly and protects /api/* with its own token. This mirrors the
+  // dashboard server's own auth model (page shell public, /api/* gated).
+  if (req.url && (req.url === '/money' || req.url.startsWith('/money/') || req.url.startsWith('/money?'))) {
+    // Normalize /money -> /money/ so relative asset URLs (styles.css) resolve correctly
+    if (req.url === '/money' || req.url.startsWith('/money?')) {
+      const queryIndex = req.url.indexOf('?');
+      const query = queryIndex >= 0 ? req.url.slice(queryIndex) : '';
+      res.writeHead(301, { Location: `/money/${query}` });
+      res.end();
+      return;
+    }
+    const moneyUpstream = new URL('http://localhost:4110');
+    let targetPath = req.url.replace('/money', '') || '/';
+    // Strip auth_token from forwarded URL
+    try {
+      const parsed = new URL(targetPath, 'http://localhost');
+      parsed.searchParams.delete('auth_token');
+      targetPath = parsed.pathname + parsed.search;
+    } catch {}
+    const options = {
+      hostname: moneyUpstream.hostname,
+      port: moneyUpstream.port,
+      path: targetPath,
+      method: req.method,
+      headers: {
+        ...(Object.fromEntries(
+          Object.entries(req.headers)
+            .filter(([key]) => !['host', 'authorization'].includes(key.toLowerCase()))
+        )),
+        host: moneyUpstream.host,
+      },
+    };
+    const proxyReq = http.request(options, (proxyRes) => {
+      res.writeHead(proxyRes.statusCode, proxyRes.headers);
+      proxyRes.pipe(res);
+    });
+    proxyReq.on('error', (err) => {
+      console.error(`Money dashboard proxy error for ${req.method} ${req.url}:`, err.message);
+      if (!res.headersSent) {
+        res.writeHead(502, { 'Content-Type': 'text/plain' });
+        res.end('Money dashboard server unavailable');
+      }
+    });
+    req.pipe(proxyReq);
+    return;
+  }
+
+  // ---- Authentication gate (applies to all paths except /money above) ----
   if (!isAuthenticated(req)) {
     res.writeHead(401, {
       'WWW-Authenticate': 'Basic realm="Glitch AI", charset="UTF-8"',
@@ -118,7 +168,7 @@ const server = http.createServer((req, res) => {
   // cannot set the cookie once at the top — it must be merged per branch.)
 
   // ---- Route /models to model UI server (port 4104) ----
-  if (req.url && req.url.startsWith('/models')) {
+  if (req.url && (req.url === '/models' || req.url.startsWith('/models/') || req.url.startsWith('/models?'))) {
     const modelUIUpstream = new URL('http://localhost:4104');
     let targetPath = req.url.replace('/models', '') || '/';
     // Strip auth_token from forwarded URL
@@ -187,52 +237,6 @@ const server = http.createServer((req, res) => {
       if (!res.headersSent) {
         res.writeHead(502, { 'Content-Type': 'text/plain' });
         res.end('Model UI asset server unavailable');
-      }
-    });
-    req.pipe(proxyReq);
-    return;
-  }
-
-  // ---- Route /money to glitch-money dashboard (port 4110) ----
-  if (req.url && req.url.startsWith('/money')) {
-    // Normalize /money -> /money/ so relative asset URLs (styles.css) resolve correctly
-    if (req.url === '/money' || req.url.startsWith('/money?')) {
-      const queryIndex = req.url.indexOf('?');
-      const query = queryIndex >= 0 ? req.url.slice(queryIndex) : '';
-      res.writeHead(301, { Location: `/money/${query}` });
-      res.end();
-      return;
-    }
-    const moneyUpstream = new URL('http://localhost:4110');
-    let targetPath = req.url.replace('/money', '') || '/';
-    // Strip auth_token from forwarded URL
-    try {
-      const parsed = new URL(targetPath, 'http://localhost');
-      parsed.searchParams.delete('auth_token');
-      targetPath = parsed.pathname + parsed.search;
-    } catch {}
-    const options = {
-      hostname: moneyUpstream.hostname,
-      port: moneyUpstream.port,
-      path: targetPath,
-      method: req.method,
-      headers: {
-        ...(Object.fromEntries(
-          Object.entries(req.headers)
-            .filter(([key]) => !['host', 'authorization'].includes(key.toLowerCase()))
-        )),
-        host: moneyUpstream.host,
-      },
-    };
-    const proxyReq = http.request(options, (proxyRes) => {
-      res.writeHead(proxyRes.statusCode, withAuthCookie(proxyRes.headers));
-      proxyRes.pipe(res);
-    });
-    proxyReq.on('error', (err) => {
-      console.error(`Money dashboard proxy error for ${req.method} ${req.url}:`, err.message);
-      if (!res.headersSent) {
-        res.writeHead(502, { 'Content-Type': 'text/plain' });
-        res.end('Money dashboard server unavailable');
       }
     });
     req.pipe(proxyReq);
