@@ -280,15 +280,28 @@ async function startSessionsApi(ROOT_DIR) {
 // The user can see and close each service window; PID files let cleanup()
 // kill orphans on Ctrl+C. Unix callers fall back to a detached hidden spawn.
 //
+// Two modes:
+//   1. Direct mode (serviceExe provided): the PS1 script runs inside the
+//      visible window and starts the service directly via Start-Process
+//      -PassThru -NoNewWindow. The PID written to the pid file IS the real
+//      service PID (node.exe, cloudflared.exe, etc.). The visible window is
+//      spawned directly from Node (no outer launcher).
+//   2. Legacy mode (serviceExe NOT provided): an outer launcher PS1 starts a
+//      visible window running innerCommand. The pid file holds the PowerShell
+//      window PID (not the real service PID). Kept for backward compatibility.
+//
 // @param {Object} opts
-// @param {string} opts.ROOT_DIR     - Project root (data/ lives here).
-// @param {string} opts.title        - Window title (also shown in logs).
-// @param {string} opts.ps1FileName  - File name written under data/ (e.g. 'cloudflared-window.ps1').
-// @param {string} opts.pidFileName  - File name written under data/ (e.g. 'cloudflared.pid').
-// @param {string} opts.cwd          - Working directory for the inner command.
-// @param {string} opts.innerCommand - PowerShell command string run inside the window.
-// @returns {Promise<number|null>}   - Real PID read from the pid file, or null on timeout.
-async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, cwd, innerCommand }) {
+// @param {string} opts.ROOT_DIR       - Project root (data/ lives here).
+// @param {string} opts.title          - Window title (also shown in logs).
+// @param {string} opts.ps1FileName    - File name written under data/ (e.g. 'cloudflared-window.ps1').
+// @param {string} opts.pidFileName    - File name written under data/ (e.g. 'cloudflared.pid').
+// @param {string} opts.cwd            - Working directory for the inner command.
+// @param {string} opts.innerCommand   - PowerShell command string (legacy mode only).
+// @param {string} [opts.serviceExe]   - Service executable path (direct mode).
+// @param {string[]} [opts.serviceArgs] - Arguments for the service (direct mode).
+// @param {string} [opts.setupCommand] - PowerShell commands run before the service (e.g. env vars).
+// @returns {Promise<number|null>}     - Real PID read from the pid file, or null on timeout.
+async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, cwd, innerCommand, serviceExe, serviceArgs, setupCommand }) {
   const dataDir = join(ROOT_DIR, 'data');
   if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
 
@@ -296,40 +309,55 @@ async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, c
   const pidFilePath = join(dataDir, pidFileName);
   const esc = (s) => s.replace(/'/g, "''");
 
-  // Wrap the caller's inner command with a title setter + Set-Location so the
-  // window is labeled and starts in the right directory. -NoExit keeps the
-  // window open on error so the user can read the message before closing.
-  const wrapped = `& { $host.ui.RawUI.WindowTitle = '${esc(title)}'; Set-Location -LiteralPath '${esc(cwd)}'; ${innerCommand} }`;
-  const ps1Inner = esc(wrapped);
-  const ps1PidPath = esc(pidFilePath);
+  let ps1Content;
+  let directSpawn;
 
-  const ps1Content =
-    `$proc = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-Command', '${ps1Inner}')\r\n` +
-    `if ($proc) { $proc.Id | Out-File -FilePath '${ps1PidPath}' -Encoding ascii }\r\n`;
+  if (serviceExe) {
+    const argsArray = (serviceArgs || []).map(a => `'${esc(a)}'`).join(',');
+    const setup = setupCommand ? `${setupCommand}\r\n` : '';
+    ps1Content =
+      `$host.ui.RawUI.WindowTitle = '${esc(title)}'\r\n` +
+      `Set-Location -LiteralPath '${esc(cwd)}'\r\n` +
+      `${setup}` +
+      `$__child = Start-Process -FilePath '${esc(serviceExe)}' -ArgumentList @(${argsArray}) -PassThru -NoNewWindow\r\n` +
+      `$__child.Id | Out-File -FilePath '${esc(pidFilePath)}' -Encoding ascii\r\n` +
+      `Wait-Process -Id $__child.Id\r\n`;
+    directSpawn = true;
+  } else {
+    const wrapped = `& { $host.ui.RawUI.WindowTitle = '${esc(title)}'; Set-Location -LiteralPath '${esc(cwd)}'; ${innerCommand} }`;
+    const ps1Inner = esc(wrapped);
+    const ps1PidPath = esc(pidFilePath);
+    ps1Content =
+      `$proc = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-Command', '${ps1Inner}')\r\n` +
+      `if ($proc) { $proc.Id | Out-File -FilePath '${ps1PidPath}' -Encoding ascii }\r\n`;
+    directSpawn = false;
+  }
 
   writeFileSync(ps1Path, ps1Content, 'utf-8');
 
-  const launcher = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path], {
-    cwd,
-    stdio: 'ignore',
-    windowsHide: true,
-    detached: false,
-  });
+  const launcher = directSpawn
+    ? spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-WindowStyle', 'Normal', '-File', ps1Path], {
+        cwd,
+        stdio: 'ignore',
+        windowsHide: false,
+        detached: false,
+      })
+    : spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path], {
+        cwd,
+        stdio: 'ignore',
+        windowsHide: true,
+        detached: false,
+      });
   launcher.unref();
   trackProcess(launcher);
 
-  // Track launcher failure so the wait loop can bail early instead of spinning
-  // the full 2s after the launcher has already exited (mirrors plugin-manager
-  // startPluginVisible). Without this, a launcher that dies immediately (e.g.
-  // powershell.exe not on PATH) leaves us waiting for a pid file that will
-  // never appear.
   let launcherFailed = false;
   launcher.on('exit', () => { launcherFailed = true; });
 
-  // Wait up to 2s for the PID file to appear (mirrors plugin-manager pattern).
   let realPid = null;
   const startedAt = Date.now();
-  while (Date.now() - startedAt < 2000) {
+  const retryMs = directSpawn ? 3000 : 2000;
+  while (Date.now() - startedAt < retryMs) {
     await new Promise(r => setTimeout(r, 100));
     if (existsSync(pidFilePath)) {
       try {
@@ -338,7 +366,6 @@ async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, c
         if (parsed > 0) { realPid = parsed; break; }
       } catch {}
     }
-    // Launcher died and no pid file appeared — nothing to wait for.
     if (launcherFailed && !existsSync(pidFilePath)) break;
   }
 
@@ -374,14 +401,15 @@ async function startMoneyDashboard(ROOT_DIR) {
     if (isWin) {
       // Pass GLITCH_AI_ROOT so the dashboard's fleet-db/cost-db can locate the
       // opencode DB and config files without hardcoded paths.
-      const innerCommand = `$env:GLITCH_AI_ROOT = '${ROOT_DIR.replace(/'/g, "''")}'; node dashboard/server.mjs --force-seed`;
       const realPid = await startVisibleWindow({
         ROOT_DIR,
         title: `Glitch: money-dashboard (port ${MONEY_DASHBOARD_PORT})`,
         ps1FileName: 'money-dashboard-window.ps1',
         pidFileName: 'money-dashboard.pid',
         cwd: moneyDir,
-        innerCommand,
+        serviceExe: 'node',
+        serviceArgs: [serverScript, '--force-seed'],
+        setupCommand: `$env:GLITCH_AI_ROOT = '${ROOT_DIR.replace(/'/g, "''")}'`,
       });
       log(DARK_GREEN, `  Money dashboard: listening on port ${MONEY_DASHBOARD_PORT} (PID ${realPid || 'unknown'})`);
     } else {
@@ -807,14 +835,16 @@ export async function launchServer(options = {}) {
     log(CYAN, '  Starting Cloudflare Tunnel...');
     if (isWin) {
       // Visible window so the user can see/close the tunnel process.
-      const innerCommand = `& '${CLOUDFLARED_BIN.replace(/'/g, "''")}' tunnel --config '${CLOUDFLARED_CONFIG.replace(/'/g, "''")}' run`;
+      const cfInnerCommand = `& '${CLOUDFLARED_BIN.replace(/'/g, "''")}' tunnel --config '${CLOUDFLARED_CONFIG.replace(/'/g, "''")}' run`;
       const cfPid = await startVisibleWindow({
         ROOT_DIR,
         title: 'Glitch: cloudflare-tunnel',
         ps1FileName: 'cloudflared-window.ps1',
         pidFileName: 'cloudflared.pid',
         cwd: ROOT_DIR,
-        innerCommand,
+        innerCommand: cfInnerCommand,
+        serviceExe: CLOUDFLARED_BIN,
+        serviceArgs: ['tunnel', '--config', CLOUDFLARED_CONFIG, 'run'],
       });
       await new Promise(r => setTimeout(r, 2000));
       if (cloudflareDomain) {
@@ -868,14 +898,16 @@ export async function launchServer(options = {}) {
   try {
     if (isWin) {
       // Visible window so the user can see/close the auth proxy process.
-      const innerCommand = `node '${AUTH_PROXY.replace(/'/g, "''")}' ${AUTH_PROXY_PORT} http://localhost:${TARGET_PORT}`;
+      const apInnerCommand = `node '${AUTH_PROXY.replace(/'/g, "''")}' ${AUTH_PROXY_PORT} http://localhost:${TARGET_PORT}`;
       const apPid = await startVisibleWindow({
         ROOT_DIR,
         title: `Glitch: auth-proxy (port ${AUTH_PROXY_PORT})`,
         ps1FileName: 'auth-proxy-window.ps1',
         pidFileName: 'auth-proxy.pid',
         cwd: ROOT_DIR,
-        innerCommand,
+        innerCommand: apInnerCommand,
+        serviceExe: 'node',
+        serviceArgs: [AUTH_PROXY, String(AUTH_PROXY_PORT), `http://localhost:${TARGET_PORT}`],
       });
       await new Promise(r => setTimeout(r, 1000));
       log(DARK_GREEN, `  Auth proxy listening (PID ${apPid || 'unknown'})`);

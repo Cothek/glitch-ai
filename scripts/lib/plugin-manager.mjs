@@ -245,8 +245,9 @@ export async function startPlugin(pluginName) {
 
 /**
  * Start a plugin in its own visible console window (Windows only).
- * Generates a PS1 launcher that opens a normal PowerShell window running the
- * plugin's start_command in foreground. The real server PID is written to
+ * Generates a PS1 script that opens a normal PowerShell window, starts the
+ * plugin's service directly via Start-Process -PassThru -NoNewWindow, captures
+ * the REAL child PID (not the window PID), and writes it to
  * data/plugin-<name>.pid so stopPlugin can kill it by PID.
  */
 async function startPluginVisible(pluginName, manifest) {
@@ -256,7 +257,6 @@ async function startPluginVisible(pluginName, manifest) {
   const parts = manifest.start_command.split(' ');
   const cmd = parts[0];
   const args = parts.slice(1);
-  const cmdStr = args.length > 0 ? `& ${cmd} ${args.join(' ')}` : `& ${cmd}`;
 
   const portTag = manifest.port ? ` (port ${manifest.port})` : '';
   const title = `Glitch: ${pluginName}${portTag}`;
@@ -266,21 +266,25 @@ async function startPluginVisible(pluginName, manifest) {
 
   const esc = (s) => s.replace(/'/g, "''");
 
-  const innerCommand = `& { $host.ui.RawUI.WindowTitle = '${esc(title)}'; Set-Location -LiteralPath '${esc(ROOT_DIR)}'; ${cmdStr} }`;
-  const ps1Inner = esc(innerCommand);
-  const ps1PidPath = esc(pidFilePath);
-
+  const argsArray = args.map(a => `'${esc(a)}'`).join(',');
   const ps1Content =
-    `$proc = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-Command', '${ps1Inner}')\r\n` +
-    `if ($proc) { $proc.Id | Out-File -FilePath '${ps1PidPath}' -Encoding ascii }\r\n`;
+    `$host.ui.RawUI.WindowTitle = '${esc(title)}'\r\n` +
+    `Set-Location -LiteralPath '${esc(ROOT_DIR)}'\r\n` +
+    `$__child = Start-Process -FilePath '${esc(cmd)}' -ArgumentList @(${argsArray}) -PassThru -NoNewWindow\r\n` +
+    `$__child.Id | Out-File -FilePath '${esc(pidFilePath)}' -Encoding ascii\r\n` +
+    `Wait-Process -Id $__child.Id\r\n`;
 
   try {
     writeFileSync(ps1Path, ps1Content, 'utf-8');
 
-    const launcher = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path], {
+    const launcher = spawn('powershell.exe', [
+      '-NoProfile', '-ExecutionPolicy', 'Bypass',
+      '-NoExit', '-WindowStyle', 'Normal',
+      '-File', ps1Path,
+    ], {
       cwd: ROOT_DIR,
       stdio: 'ignore',
-      windowsHide: true,
+      windowsHide: false,
       detached: false,
     });
     launcher.unref();
