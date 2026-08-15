@@ -11,6 +11,8 @@
 //   1. tool_repetition: 3+ same tool (excluding progress tools) with >75%-similar
 //      args in last 8. Excluded: edit, write, bash, read, glob, grep, task,
 //      todowrite, skill, question (these are genuine progress or have dedicated rules).
+//      webfetch uses exact-URL matching (different URL = never similar) and a
+//      raised threshold of 5, so bulk sweeps over distinct URLs never trip it.
 //   2. error_cascade: 3+ consecutive errors (invalid counts as an error)
 //   3. command_repetition: same bash command 2+ times in last 8 (first 60 chars)
 //   4. readonly_repetition: 6+ CONSECUTIVE same readonly tool (read/glob/grep)
@@ -21,6 +23,7 @@
 // Similarity:
 //   - read/glob: exact match on filePath (different files = never similar)
 //   - grep: exact match on pattern
+//   - webfetch: exact match on url (different URLs = never similar; format ignored)
 //   - task: fingerprint on subagent_type + description (or first 40 chars of prompt)
 //   - generic: JSON.stringify(args).slice(0,80), threshold >0.75
 //
@@ -80,6 +83,14 @@ function toolFingerprint(tool, args) {
   if (tool === "grep") {
     return args.pattern || "";
   }
+  if (tool === "webfetch") {
+    // URL-only fingerprint: the `format` param is intentionally ignored so that
+    // the same endpoint fetched with a different representation is still
+    // recognized as a repeat. Different URLs must NEVER look similar (see
+    // fingerprintsMatch) — this is what kills bulk-sweep false positives where
+    // many distinct URLs share a long common prefix (e.g. RDAP domain checks).
+    return args.url || "";
+  }
   if (tool === "task") {
     const subagent = args.subagent_type || args.subagent || "";
     const desc = args.description || "";
@@ -88,6 +99,12 @@ function toolFingerprint(tool, args) {
   }
   return genericFingerprint(args);
 }
+
+// Tools whose fingerprints use EXACT-match semantics (different fingerprint =
+// never similar), mirroring the readonly exact-match fix from 2026-08-09.
+// webfetch joins this set: a URL is the natural identity of a fetch, and
+// Levenshtein over URL strings produces false positives on shared prefixes.
+const EXACT_FINGERPRINT_TOOLS = new Set(["read", "glob", "grep", "webfetch"]);
 
 function readonlyFingerprintsMatch(tool, fp1, fp2) {
   if (!fp1 && !fp2) return true;
@@ -112,6 +129,16 @@ const PROGRESS_TOOLS = new Set([
 ]);
 
 const READONLY_TOOLS = new Set(["read", "glob", "grep"]);
+
+// Per-tool tool_repetition thresholds. Fetch-like tools (webfetch) tolerate
+// small same-endpoint repeats within a batched sweep, so their threshold is
+// raised from the default 3 to 5. Other tools keep the default. This does NOT
+// weaken detection for genuine loops: 5+ identical-URL fetches in 8 calls is
+// still a tight loop; a bulk sweep over distinct URLs never reaches the count
+// on a single fingerprint anyway (exact-match makes different URLs dissimilar).
+const TOOL_REPETITION_THRESHOLDS = {
+  webfetch: 5,
+};
 
 function detectStuck(history, options = {}) {
   const STUCK_THRESHOLD = options.STUCK_THRESHOLD ?? 3;
@@ -152,14 +179,19 @@ function detectStuck(history, options = {}) {
   }
 
   for (const [tool, count] of Object.entries(toolCounts)) {
-    if (count < STUCK_THRESHOLD) continue;
+    const threshold = TOOL_REPETITION_THRESHOLDS[tool] ?? STUCK_THRESHOLD;
+    if (count < threshold) continue;
     const fps = toolFps[tool] || [];
-    if (fps.length < STUCK_THRESHOLD) continue;
+    if (fps.length < threshold) continue;
 
+    const useExact = EXACT_FINGERPRINT_TOOLS.has(tool);
     let similarCount = 0;
     for (let i = 0; i < fps.length; i++) {
       for (let j = i + 1; j < fps.length; j++) {
-        if (genericSimilar(fps[i], fps[j], GENERIC_SIMILARITY_THRESHOLD)) similarCount++;
+        const similar = useExact
+          ? readonlyFingerprintsMatch(tool, fps[i], fps[j])
+          : genericSimilar(fps[i], fps[j], GENERIC_SIMILARITY_THRESHOLD);
+        if (similar) similarCount++;
       }
     }
     if (similarCount >= 1) {

@@ -104,6 +104,82 @@ test("3 different webfetch calls with different URLs \u2192 no tool_repetition",
 });
 
 // ============================================================
+console.log("\nWEBFETCH exact-URL tests (RDAP sweep pattern):");
+// ============================================================
+
+// (a) Repeated SAME URL webfetch calls in a row → still flagged as tool_repetition.
+//     Exact-match fingerprinting means identical URLs ARE similar, so a genuine
+//     stuck loop repeating the same endpoint is still caught (threshold 5).
+test("5 identical-URL webfetch calls in a row \u2192 tool_repetition (genuine loop)", () => {
+  const history = padHistory([
+    entry("webfetch", { url: "https://rdap.verisign.com/com/v1/domain/scoutforge.com" }),
+    entry("webfetch", { url: "https://rdap.verisign.com/com/v1/domain/scoutforge.com" }),
+    entry("webfetch", { url: "https://rdap.verisign.com/com/v1/domain/scoutforge.com" }),
+    entry("webfetch", { url: "https://rdap.verisign.com/com/v1/domain/scoutforge.com" }),
+    entry("webfetch", { url: "https://rdap.verisign.com/com/v1/domain/scoutforge.com" }),
+  ]);
+  const result = detectStuck(history);
+  assert.notStrictEqual(result, null, "Expected a signal for genuine same-URL loop, got null");
+  assert.strictEqual(result.type, "tool_repetition");
+  assert.strictEqual(result.tool, "webfetch");
+});
+
+// (b) Distinct-URL webfetch burst (RDAP sweep pattern: many different URLs sharing
+//     a long common prefix) → NOT flagged. This is the core false-positive fix:
+//     exact-match makes different URLs never similar, so a bulk sweep over
+//     distinct domains never trips tool_repetition regardless of count.
+test("8 distinct-URL webfetch calls sharing common prefix (RDAP sweep) \u2192 no tool_repetition", () => {
+  const domains = [
+    "scoutforge.com", "playforge.com", "swarmline.com", "verdictforge.com",
+    "opsforge.com", "scoutworks.com", "playworks.com", "opsworks.com",
+  ];
+  const history = domains.map(d =>
+    entry("webfetch", { url: `https://rdap.verisign.com/com/v1/domain/${d}` })
+  );
+  const result = detectStuck(history);
+  assert.strictEqual(result, null, `Expected null for distinct-URL sweep, got: ${JSON.stringify(result)}`);
+});
+
+// (c) Same URL with different format param → treated as similar (still flagged
+//     when repeated 5+ times). The format param is intentionally ignored in the
+//     fingerprint, so the same endpoint fetched with different representations is
+//     still recognized as a repeat.
+test("5 same-URL webfetch with different format param \u2192 tool_repetition (format ignored)", () => {
+  const history = padHistory([
+    entry("webfetch", { url: "https://example.com/api/data", format: "markdown" }),
+    entry("webfetch", { url: "https://example.com/api/data", format: "text" }),
+    entry("webfetch", { url: "https://example.com/api/data", format: "html" }),
+    entry("webfetch", { url: "https://example.com/api/data", format: "markdown" }),
+    entry("webfetch", { url: "https://example.com/api/data", format: "text" }),
+  ]);
+  const result = detectStuck(history);
+  assert.notStrictEqual(result, null, "Expected a signal (format ignored, same URL = similar), got null");
+  assert.strictEqual(result.type, "tool_repetition");
+  assert.strictEqual(result.tool, "webfetch");
+});
+
+// (d) Mixed: some identical + some distinct URLs in the same window. 5 identical
+//     + 3 distinct = the 5 identical ones are similar to each other (exact match),
+//     so tool_repetition fires on the identical cluster. Confirms exact-match
+//     doesn't accidentally suppress genuine repeats hidden among distinct calls.
+test("5 identical + 3 distinct webfetch in window \u2192 tool_repetition (identical cluster fires)", () => {
+  const history = padHistory([
+    entry("webfetch", { url: "https://rdap.verisign.com/com/v1/domain/scoutforge.com" }),
+    entry("webfetch", { url: "https://rdap.verisign.com/com/v1/domain/playforge.com" }),
+    entry("webfetch", { url: "https://example.com/api/data" }),
+    entry("webfetch", { url: "https://example.com/api/data" }),
+    entry("webfetch", { url: "https://example.com/api/data" }),
+    entry("webfetch", { url: "https://example.com/api/data" }),
+    entry("webfetch", { url: "https://example.com/api/data" }),
+    entry("webfetch", { url: "https://rdap.verisign.com/com/v1/domain/opsforge.com" }),
+  ]);
+  const result = detectStuck(history);
+  assert.notStrictEqual(result, null, "Expected a signal for the 5 identical-URL cluster, got null");
+  assert.strictEqual(result.type, "tool_repetition");
+  assert.strictEqual(result.tool, "webfetch");
+});
+
+// ============================================================
 console.log("\nGENUINE detection tests (must fire):");
 // ============================================================
 
@@ -129,8 +205,10 @@ test("6 consecutive globs of SAME pattern \u2192 readonly_repetition", () => {
   assert.strictEqual(result.tool, "glob");
 });
 
-test("3+ identical webfetch with identical URL \u2192 tool_repetition", () => {
+test("5+ identical webfetch with identical URL \u2192 tool_repetition", () => {
   const history = padHistory([
+    entry("webfetch", { url: "https://example.com/api/data" }),
+    entry("webfetch", { url: "https://example.com/api/data" }),
     entry("webfetch", { url: "https://example.com/api/data" }),
     entry("webfetch", { url: "https://example.com/api/data" }),
     entry("webfetch", { url: "https://example.com/api/data" }),
@@ -263,17 +341,18 @@ test("exactly 2 identical bash commands \u2192 no command_repetition (gate: >= 3
   assert.strictEqual(result, null, `Expected null (2 identical bash calls below gate), got: ${JSON.stringify(result)}`);
 });
 
-// Test B: tool_repetition boundary at exactly 3 similar calls.
-// webfetch is NOT in the excluded-tools list, so 3 identical webfetch calls in the
-// last 8 must fire tool_repetition (count=3). Companion: exactly 2 identical webfetch
-// calls must NOT fire (count < 3).
-test("exactly 3 identical webfetch calls \u2192 tool_repetition fires (count=3)", () => {
+// Test B: tool_repetition boundary at exactly 5 similar webfetch calls.
+// webfetch is NOT in the excluded-tools list and uses a raised threshold of 5
+// (TOOL_REPETITION_THRESHOLDS), so 5 identical-URL webfetch calls in the
+// last 8 must fire tool_repetition (count=5). Companion: exactly 4 identical
+// webfetch calls must NOT fire (count < 5).
+test("exactly 5 identical webfetch calls \u2192 tool_repetition fires (count=5)", () => {
   const history = padHistory([
     entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\a.ts" }),
     entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\b.ts" }),
     entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\c.ts" }),
-    entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\d.ts" }),
-    entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\e.ts" }),
+    entry("webfetch", { url: "https://example.com/api/data" }),
+    entry("webfetch", { url: "https://example.com/api/data" }),
     entry("webfetch", { url: "https://example.com/api/data" }),
     entry("webfetch", { url: "https://example.com/api/data" }),
     entry("webfetch", { url: "https://example.com/api/data" }),
@@ -284,19 +363,19 @@ test("exactly 3 identical webfetch calls \u2192 tool_repetition fires (count=3)"
   assert.strictEqual(result.tool, "webfetch");
 });
 
-test("exactly 2 identical webfetch calls \u2192 no tool_repetition (count < 3)", () => {
+test("exactly 4 identical webfetch calls \u2192 no tool_repetition (count < 5)", () => {
   const history = padHistory([
     entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\a.ts" }),
     entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\b.ts" }),
     entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\c.ts" }),
     entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\d.ts" }),
-    entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\e.ts" }),
-    entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\f.ts" }),
+    entry("webfetch", { url: "https://example.com/api/data" }),
+    entry("webfetch", { url: "https://example.com/api/data" }),
     entry("webfetch", { url: "https://example.com/api/data" }),
     entry("webfetch", { url: "https://example.com/api/data" }),
   ]);
   const result = detectStuck(history);
-  assert.strictEqual(result, null, `Expected null (2 webfetch below threshold), got: ${JSON.stringify(result)}`);
+  assert.strictEqual(result, null, `Expected null (4 webfetch below raised threshold), got: ${JSON.stringify(result)}`);
 });
 
 // Test C: same-file read loop with varying offset/limit must still fire readonly_repetition.
