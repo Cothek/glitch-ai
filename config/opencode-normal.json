@@ -422,6 +422,48 @@
         "task": "deny"
       },
       "temperature": 0.2
+    },
+    "scout": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "mode": "subagent",
+      "description": "Demand researcher for the money operation. Read-only by construction: webfetch/websearch/read/glob/grep ONLY. Never writes files, never runs bash, never touches credentials. Returns structured play proposals.",
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "write": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "deny",
+        "todowrite": "allow",
+        "task": "deny",
+        "skill": "allow"
+      },
+      "temperature": 0.2
+    },
+    "validator": {
+      "model": "opencode/deepseek-v4-flash-free",
+      "mode": "subagent",
+      "description": "Market validator for the money operation. Builds a landing page + waitlist for an approved play using read/write/edit/webfetch/websearch. No bash, no task, no credentials. Output goes to the business dir only.",
+      "permission": {
+        "read": "allow",
+        "edit": "allow",
+        "write": "allow",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "deny",
+        "todowrite": "allow",
+        "task": "deny",
+        "skill": "allow"
+      },
+      "temperature": 0.2
     }
   },
   "attachment": {
