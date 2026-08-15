@@ -374,7 +374,7 @@ async function startMoneyDashboard(ROOT_DIR) {
     if (isWin) {
       // Pass GLITCH_AI_ROOT so the dashboard's fleet-db/cost-db can locate the
       // opencode DB and config files without hardcoded paths.
-      const innerCommand = `$env:GLITCH_AI_ROOT = '${ROOT_DIR.replace(/'/g, "''")}'; node dashboard/server.mjs`;
+      const innerCommand = `$env:GLITCH_AI_ROOT = '${ROOT_DIR.replace(/'/g, "''")}'; node dashboard/server.mjs --force-seed`;
       const realPid = await startVisibleWindow({
         ROOT_DIR,
         title: `Glitch: money-dashboard (port ${MONEY_DASHBOARD_PORT})`,
@@ -387,7 +387,7 @@ async function startMoneyDashboard(ROOT_DIR) {
     } else {
       // Non-Windows: detached hidden spawn fallback
       if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
-      const proc = spawn('node', [serverScript], {
+      const proc = spawn('node', [serverScript, '--force-seed'], {
         cwd: moneyDir,
         stdio: 'ignore',
         windowsHide: true,
