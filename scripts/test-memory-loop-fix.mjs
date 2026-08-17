@@ -8,7 +8,7 @@
 // Run: node scripts/test-memory-loop-fix.mjs
 // Exit: 0 if all assertions pass, 1 if any fail.
 
-import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync } from "fs";
+import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync, statSync, chmodSync } from "fs";
 import { tmpdir } from "os";
 import { join } from "path";
 import { pathToFileURL } from "url";
@@ -549,6 +549,218 @@ async function testStuckDetectorDeniedTaskDispatch() {
 }
 
 // ---------------------------------------------------------------------------
+// Test 12: FIX A — observations.jsonl growth cap truncates to last 1000 lines
+// ---------------------------------------------------------------------------
+async function testObservationsGrowthCap() {
+  await withTempDir(async (tmp) => {
+    section("FIX A: observations.jsonl truncates to last 1000 lines when >5MB");
+    const dataDir = join(tmp, "data");
+    const mulahazahDir = join(dataDir, "mulahazah");
+    mkdirSync(mulahazahDir, { recursive: true });
+    const observationsFile = join(mulahazahDir, "observations.jsonl");
+
+    const line = JSON.stringify({ ts: new Date().toISOString(), tool: "read", sessionID: "old" }) + "\n";
+    const lineSize = Buffer.byteLength(line, "utf8");
+    const targetBytes = 5 * 1024 * 1024 + 1024;
+    const lineCount = Math.ceil(targetBytes / lineSize);
+    const chunk = line.repeat(200);
+    const chunks = Math.ceil(lineCount / 200);
+    let written = "";
+    for (let i = 0; i < chunks; i++) written += chunk;
+    writeFileSync(observationsFile, written, "utf8");
+
+    const preSize = statSync(observationsFile).size;
+    assert(
+      "precondition: observations file exceeds 5MB",
+      preSize > 5 * 1024 * 1024,
+      `file size was ${preSize} bytes`
+    );
+
+    const plugin = await MulahazahPlugin({ directory: tmp });
+    const sid = newSessionID("cap");
+    await plugin["tool.execute.after"](
+      { tool: "read", sessionID: sid, args: { filePath: "/tmp/x" } },
+      { result: "ok" }
+    );
+
+    await settleIO();
+
+    const postSize = statSync(observationsFile).size;
+    const content = readFileSync(observationsFile, "utf8");
+    const lines = content.split("\n").filter((l) => l.length > 0);
+
+    assert(
+      "file truncated to exactly 1000 lines",
+      lines.length === 1000,
+      `got ${lines.length} lines`
+    );
+
+    assert(
+      "file size is now under 5MB",
+      postSize < 5 * 1024 * 1024,
+      `file size was ${postSize} bytes`
+    );
+
+    const lastLine = JSON.parse(lines[lines.length - 1]);
+    assert(
+      "newest entry is preserved (last line is from this session)",
+      lastLine.sessionID === sid,
+      `last line sessionID was ${lastLine.sessionID}`
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Test 13: FIX A — truncation failure does not break the append path
+// ---------------------------------------------------------------------------
+async function testObservationsTruncationFailureResilience() {
+  await withTempDir(async (tmp) => {
+    section("FIX A: truncation failure does not break append path (no throw)");
+    const dataDir = join(tmp, "data");
+    const mulahazahDir = join(dataDir, "mulahazah");
+    mkdirSync(mulahazahDir, { recursive: true });
+    const observationsFile = join(mulahazahDir, "observations.jsonl");
+
+    rmSync(observationsFile, { force: true });
+    mkdirSync(observationsFile, { recursive: true });
+    assert(
+      "precondition: observations.jsonl is a directory (not a file)",
+      statSync(observationsFile).isDirectory()
+    );
+
+    const plugin = await MulahazahPlugin({ directory: tmp });
+    const sid = newSessionID("resilient");
+
+    let threw = false;
+    try {
+      await plugin["tool.execute.after"](
+        { tool: "read", sessionID: sid, args: { filePath: "/tmp/x" } },
+        { result: "ok" }
+      );
+    } catch (err) {
+      threw = true;
+    }
+
+    assert(
+      "tool.execute.after did not throw when observations path is a directory",
+      !threw,
+      "appendObservation should swallow errors via try/catch"
+    );
+
+    await settleIO();
+
+    assert(
+      "plugin continued to function (session state was updated)",
+      true,
+      "reaching this point proves no crash"
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Test 14: FIX B — during cooldown, saveState is NOT called
+// ---------------------------------------------------------------------------
+async function testCooldownNoSaveState() {
+  await withTempDir(async (tmp) => {
+    section("FIX B: during cooldown, saveState is NOT called (state.json unchanged)");
+    const plugin = await MulahazahPlugin({ directory: tmp });
+    const sid = newSessionID("cooldown");
+    const dataDir = join(tmp, "data");
+    const stateFile = join(dataDir, "mulahazah", "state.json");
+    const flagPath = join(dataDir, `MEMORY_TRIGGER_FLAG.${sid}`);
+
+    await plugin["tool.execute.after"](
+      { tool: "task", sessionID: sid, args: { prompt: "delegate" } },
+      { result: "ok" }
+    );
+    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 49);
+
+    assert(
+      "precondition: trigger fired (flag exists)",
+      existsSync(flagPath)
+    );
+
+    await settleIO();
+
+    const stateAfterTrigger = readFileSync(stateFile, "utf8");
+    const parsedTrigger = JSON.parse(stateAfterTrigger);
+    assert(
+      "precondition: state.json shows toolCallCount=0 after trigger reset",
+      parsedTrigger[sid]?.toolCallCount === 0,
+      `got toolCallCount=${parsedTrigger[sid]?.toolCallCount}`
+    );
+
+    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 15);
+    await settleIO();
+
+    const stateAfterCooldown = readFileSync(stateFile, "utf8");
+
+    assert(
+      "state.json is unchanged during cooldown (saveState not called)",
+      stateAfterCooldown === stateAfterTrigger,
+      "state.json was rewritten during cooldown — saveState churn not fixed"
+    );
+
+    const parsedCooldown = JSON.parse(stateAfterCooldown);
+    assert(
+      "state.json still shows toolCallCount=0 (in-memory counter incremented but not persisted)",
+      parsedCooldown[sid]?.toolCallCount === 0,
+      `got toolCallCount=${parsedCooldown[sid]?.toolCallCount}`
+    );
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Test 15: FIX B — after cooldown expires, accumulated count triggers threshold
+// ---------------------------------------------------------------------------
+async function testCooldownExpiryAccumulatedCount() {
+  await withTempDir(async (tmp) => {
+    section("FIX B: after cooldown expires, accumulated count triggers threshold");
+    const dataDir = join(tmp, "data");
+    const mulahazahDir = join(dataDir, "mulahazah");
+    mkdirSync(mulahazahDir, { recursive: true });
+    const stateFile = join(mulahazahDir, "state.json");
+    const sid = newSessionID("expiry");
+
+    const preState = {
+      [sid]: {
+        toolCallCount: 45,
+        toolCounts: { read: 45 },
+        lastTriggerTime: Date.now() - 6 * 60 * 1000,
+        sessionStartTime: Date.now() - 10 * 60 * 1000,
+        isDispatcher: true,
+      },
+    };
+    writeFileSync(stateFile, JSON.stringify(preState), "utf8");
+
+    const plugin = await MulahazahPlugin({ directory: tmp });
+    const flagPath = join(dataDir, `MEMORY_TRIGGER_FLAG.${sid}`);
+
+    assert(
+      "precondition: no flag before threshold",
+      !existsSync(flagPath)
+    );
+
+    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 5);
+
+    assert(
+      "flag file exists after 5 more calls (45 + 5 = 50, threshold fires)",
+      existsSync(flagPath),
+      `expected ${flagPath}`
+    );
+
+    if (existsSync(flagPath)) {
+      const content = readFileSync(flagPath, "utf8");
+      assert(
+        "flag content mentions 50 tool calls (accumulated count included)",
+        /50 tool calls/i.test(content),
+        `content was: ${content.slice(0, 200)}`
+      );
+    }
+  });
+}
+
+// ---------------------------------------------------------------------------
 // Run all tests
 // ---------------------------------------------------------------------------
 console.log("Memory-loop-fix verification harness");
@@ -568,6 +780,10 @@ try {
   await testStuckDetectorTransformInjects();
   await testPerSessionIsolation();
   await testStuckDetectorDeniedTaskDispatch();
+  await testObservationsGrowthCap();
+  await testObservationsTruncationFailureResilience();
+  await testCooldownNoSaveState();
+  await testCooldownExpiryAccumulatedCount();
 } catch (err) {
   console.error("\nFATAL: harness threw an unexpected error:");
   console.error(err);

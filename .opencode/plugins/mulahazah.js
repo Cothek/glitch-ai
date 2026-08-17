@@ -53,7 +53,7 @@
 // Install: Add to .opencode/opencode.json:
 //   "plugin": [".opencode/plugins/mulahazah.js"]
 
-import { promises as fs } from "fs";
+import { promises as fs, readFileSync, writeFileSync, statSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 
@@ -61,6 +61,8 @@ const TOOL_CALL_THRESHOLD = 50;
 const TIME_THRESHOLD_MS = 30 * 60 * 1000;
 const COOLDOWN_MS = 5 * 60 * 1000;
 const STALE_RESET_MS = 24 * 60 * 60 * 1000;
+const OBSERVATIONS_MAX_BYTES = 5 * 1024 * 1024;
+const OBSERVATIONS_MAX_LINES = 1000;
 
 const TRIGGER_PHRASES = [
   "remember that",
@@ -219,6 +221,18 @@ export const MulahazahPlugin = async ({ directory }) => {
         sessionID: sessionID || "unknown",
       };
       await fs.appendFile(observationsFile, JSON.stringify(entry) + "\n", "utf8");
+      // Note: fire-and-forget appendObservation calls can interleave here; truncation is best-effort (observation log is approximate heuristic data, not authoritative).
+      try {
+        const stat = statSync(observationsFile);
+        if (stat.size > OBSERVATIONS_MAX_BYTES) {
+          const content = readFileSync(observationsFile, "utf8");
+          const lines = content.split("\n").filter((l) => l.length > 0);
+          const kept = lines.slice(-OBSERVATIONS_MAX_LINES);
+          writeFileSync(observationsFile, kept.join("\n") + "\n", "utf8");
+        }
+      } catch (truncateErr) {
+        console.error(`[mulahazah] Failed to truncate observations: ${truncateErr.message}`);
+      }
     } catch (err) {
       console.error(`[mulahazah] Failed to append observation: ${err.message}`);
     }
@@ -430,8 +444,8 @@ export const MulahazahPlugin = async ({ directory }) => {
         }
       }
 
+      // Note: counters persist only on next trigger or every-10th-call save; cooldown-window increments are in-memory only (acceptable — heuristic data).
       if (!isCooldownElapsed(ss)) {
-        await saveState();
         return;
       }
 
