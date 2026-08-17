@@ -172,8 +172,9 @@ function killPidFromFile(pidFileName, expectedNames) {
   if (!rootDirRef) return;
   const pidFile = join(rootDirRef, 'data', pidFileName);
   if (!existsSync(pidFile)) return;
+  let pid = 0;
   try {
-    const pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+    pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
     if (pid > 0 && process.platform === 'win32') {
       // Guard against recycled PIDs: only kill if the process is alive AND its
       // name matches one of the expected services. A stale pid file pointing
@@ -187,9 +188,18 @@ function killPidFromFile(pidFileName, expectedNames) {
       }
     }
   } catch {}
-  // Intentionally do NOT delete the pid file: the visible window may still be
-  // open if the user closed it manually, and stale files are harmless (they
-  // get overwritten on next launch).
+  // Delete the pid file when the recorded process is confirmed dead (or the
+  // pid was invalid). This prevents stale reads in startVisibleWindow's
+  // read-back loop, which would otherwise log the old PID as the new service's
+  // PID (PM-NNN: Cloudflare tunnel failure from stale pid read + duplicate
+  // connector). We only delete when the process is NOT alive — if it's still
+  // running and we didn't kill it (name mismatch / recycled PID), leave the
+  // file alone so the caller can investigate.
+  try {
+    if (pid <= 0 || !isProcessAlive(pid)) {
+      unlinkSync(pidFile);
+    }
+  } catch {}
 }
 
 function cleanup() {
@@ -357,10 +367,25 @@ async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, c
   let realPid = null;
   const startedAt = Date.now();
   const retryMs = directSpawn ? 3000 : 2000;
+  // Record the pid file's mtime BEFORE spawning so we can detect a fresh write
+  // from the child. Without this guard, the read-back loop reads a pre-existing
+  // stale pid file (e.g. from a previous session) and returns the OLD pid as
+  // if it were the new service's PID (PM-NNN: Cloudflare tunnel failure from
+  // stale pid read + duplicate connector).
+  let initialMtimeMs = 0;
+  try {
+    if (existsSync(pidFilePath)) {
+      initialMtimeMs = statSync(pidFilePath).mtimeMs;
+    }
+  } catch {}
   while (Date.now() - startedAt < retryMs) {
     await new Promise(r => setTimeout(r, 100));
     if (existsSync(pidFilePath)) {
       try {
+        const stat = statSync(pidFilePath);
+        // Only accept the pid if the file was written AFTER we started spawning.
+        // This ensures we read the child's write, not a pre-existing stale value.
+        if (stat.mtimeMs <= initialMtimeMs) continue;
         const content = readFileSync(pidFilePath, 'utf-8').trim();
         const parsed = parseInt(content, 10);
         if (parsed > 0) { realPid = parsed; break; }
@@ -832,38 +857,62 @@ export async function launchServer(options = {}) {
 
   // ---- Start Cloudflare Tunnel ----
   if (cloudflareOk) {
-    log(CYAN, '  Starting Cloudflare Tunnel...');
+    // Skip-if-alive: if cloudflared.pid points to a live cloudflared.exe,
+    // reuse it instead of spawning a duplicate. Two connectors break the
+    // tunnel (documented 2026-08-15 failure mode: duplicates tolerated,
+    // non-graceful kill breaks the tunnel).
+    let existingCfPid = null;
     if (isWin) {
-      // Visible window so the user can see/close the tunnel process.
-      const cfInnerCommand = `& '${CLOUDFLARED_BIN.replace(/'/g, "''")}' tunnel --config '${CLOUDFLARED_CONFIG.replace(/'/g, "''")}' run`;
-      const cfPid = await startVisibleWindow({
-        ROOT_DIR,
-        title: 'Glitch: cloudflare-tunnel',
-        ps1FileName: 'cloudflared-window.ps1',
-        pidFileName: 'cloudflared.pid',
-        cwd: ROOT_DIR,
-        innerCommand: cfInnerCommand,
-        serviceExe: CLOUDFLARED_BIN,
-        serviceArgs: ['tunnel', '--config', CLOUDFLARED_CONFIG, 'run'],
-      });
-      await new Promise(r => setTimeout(r, 2000));
-      if (cloudflareDomain) {
-        log(GREEN, `  Tunnel running: https://${cloudflareDomain} (PID ${cfPid || 'unknown'})`);
+      const cfPidFile = join(ROOT_DIR, 'data', 'cloudflared.pid');
+      if (existsSync(cfPidFile)) {
+        try {
+          const pid = parseInt(readFileSync(cfPidFile, 'utf-8').trim(), 10);
+          if (pid > 0 && isProcessAlive(pid) && getProcessName(pid) === 'cloudflared') {
+            existingCfPid = pid;
+          }
+        } catch {}
       }
-    } else {
-      // Unix: detached hidden spawn fallback
-      const cfProc = spawn(CLOUDFLARED_BIN, ['tunnel', '--config', CLOUDFLARED_CONFIG, 'run'], {
-        stdio: 'ignore',
-        windowsHide: true,
-        detached: true,
-      });
-      cfProc.on('error', () => { cloudflareOk = false; });
-      cfProc.unref();
-      trackProcess(cfProc);
-      try { writeFileSync(join(ROOT_DIR, 'data', 'cloudflared.pid'), String(cfProc.pid), 'utf-8'); } catch {}
-      await new Promise(r => setTimeout(r, 2000));
+    }
+    if (existingCfPid !== null) {
+      log(DARK_GREEN, `  Cloudflare Tunnel: already running (PID ${existingCfPid})`);
       if (cloudflareDomain) {
-        log(GREEN, `  Tunnel running: https://${cloudflareDomain} (PID ${cfProc.pid})`);
+        log(GREEN, `  Tunnel running: https://${cloudflareDomain} (PID ${existingCfPid})`);
+      }
+      cloudflareOk = false; // skip the spawn below
+    } else {
+      log(CYAN, '  Starting Cloudflare Tunnel...');
+      if (isWin) {
+        // Visible window so the user can see/close the tunnel process.
+        const cfInnerCommand = `& '${CLOUDFLARED_BIN.replace(/'/g, "''")}' tunnel --config '${CLOUDFLARED_CONFIG.replace(/'/g, "''")}' run`;
+        const cfPid = await startVisibleWindow({
+          ROOT_DIR,
+          title: 'Glitch: cloudflare-tunnel',
+          ps1FileName: 'cloudflared-window.ps1',
+          pidFileName: 'cloudflared.pid',
+          cwd: ROOT_DIR,
+          innerCommand: cfInnerCommand,
+          serviceExe: CLOUDFLARED_BIN,
+          serviceArgs: ['tunnel', '--config', CLOUDFLARED_CONFIG, 'run'],
+        });
+        await new Promise(r => setTimeout(r, 2000));
+        if (cloudflareDomain) {
+          log(GREEN, `  Tunnel running: https://${cloudflareDomain} (PID ${cfPid || 'unknown'})`);
+        }
+      } else {
+        // Unix: detached hidden spawn fallback
+        const cfProc = spawn(CLOUDFLARED_BIN, ['tunnel', '--config', CLOUDFLARED_CONFIG, 'run'], {
+          stdio: 'ignore',
+          windowsHide: true,
+          detached: true,
+        });
+        cfProc.on('error', () => { cloudflareOk = false; });
+        cfProc.unref();
+        trackProcess(cfProc);
+        try { writeFileSync(join(ROOT_DIR, 'data', 'cloudflared.pid'), String(cfProc.pid), 'utf-8'); } catch {}
+        await new Promise(r => setTimeout(r, 2000));
+        if (cloudflareDomain) {
+          log(GREEN, `  Tunnel running: https://${cloudflareDomain} (PID ${cfProc.pid})`);
+        }
       }
     }
   }
