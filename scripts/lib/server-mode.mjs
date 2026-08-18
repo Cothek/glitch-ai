@@ -323,7 +323,17 @@ async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, c
   let directSpawn;
 
   if (serviceExe) {
-    const argsArray = (serviceArgs || []).map(a => `'${esc(a)}'`).join(',');
+    // PS 5.1 Start-Process -ArgumentList joins array elements with spaces and
+    // does NOT re-quote them. Any arg containing a space (e.g. a path under
+    // "E:\Glitch AI\") gets split into multiple command-line tokens, the spawned
+    // process fails to find its file and exits immediately (cloudflared:
+    // "open E:\Glitch: The system cannot find the file specified"). Wrap
+    // space-containing args in literal double quotes so the joined command line
+    // preserves the spaces (PM-037: tunnel/auth-proxy/money died on spaced paths).
+    const argsArray = (serviceArgs || []).map(a => {
+      const needsQuote = a.includes(' ');
+      return needsQuote ? `'"${esc(a)}"'` : `'${esc(a)}'`;
+    }).join(',');
     const setup = setupCommand ? `${setupCommand}\r\n` : '';
     ps1Content =
       `$host.ui.RawUI.WindowTitle = '${esc(title)}'\r\n` +
@@ -336,9 +346,12 @@ async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, c
   } else {
     const wrapped = `& { $host.ui.RawUI.WindowTitle = '${esc(title)}'; Set-Location -LiteralPath '${esc(cwd)}'; ${innerCommand} }`;
     const ps1Inner = esc(wrapped);
+    // Same space-quoting fix as the direct branch: the -Command value must be a
+    // single command-line token, so wrap it in literal double quotes.
+    const ps1CmdValue = `'"${ps1Inner}"'`;
     const ps1PidPath = esc(pidFilePath);
     ps1Content =
-      `$proc = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-Command', '${ps1Inner}')\r\n` +
+      `$proc = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-Command', ${ps1CmdValue})\r\n` +
       `if ($proc) { $proc.Id | Out-File -FilePath '${ps1PidPath}' -Encoding ascii }\r\n`;
     directSpawn = false;
   }

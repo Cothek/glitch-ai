@@ -266,7 +266,16 @@ async function startPluginVisible(pluginName, manifest) {
 
   const esc = (s) => s.replace(/'/g, "''");
 
-  const argsArray = args.map(a => `'${esc(a)}'`).join(',');
+  // PS 5.1 Start-Process -ArgumentList joins array elements with spaces and
+  // does NOT re-quote them. Any arg containing a space (e.g. a path under
+  // "E:\Glitch AI\") gets split into multiple command-line tokens, the spawned
+  // process fails to find its file and exits immediately. Wrap space-containing
+  // args in literal double quotes so the joined command line preserves the
+  // spaces (mirrors the fix in server-mode.mjs startVisibleWindow, PM-037).
+  const argsArray = args.map(a => {
+    const needsQuote = a.includes(' ');
+    return needsQuote ? `'"${esc(a)}"'` : `'${esc(a)}'`;
+  }).join(',');
   const ps1Content =
     `$host.ui.RawUI.WindowTitle = '${esc(title)}'\r\n` +
     `Set-Location -LiteralPath '${esc(ROOT_DIR)}'\r\n` +
