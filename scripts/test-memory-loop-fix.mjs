@@ -133,11 +133,11 @@ async function runTransform(plugin, sessionID) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: mulahazah — dispatcher session triggers flag at 50 calls
+// Test 1: mulahazah — dispatcher session triggers flag at 200 calls
 // ---------------------------------------------------------------------------
 async function testMulahazahDispatcher() {
   await withTempDir(async (tmp) => {
-    section("mulahazah: dispatcher session triggers flag at 50 calls");
+    section("mulahazah: dispatcher session triggers flag at 200 calls");
     const plugin = await MulahazahPlugin({ directory: tmp });
     const sid = newSessionID("dispatcher");
     const dataDir = join(tmp, "data");
@@ -149,11 +149,11 @@ async function testMulahazahDispatcher() {
       { result: "ok" }
     );
 
-    // Drive 49 more read calls (total 50 including the task call)
-    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 49);
+    // Drive 199 more read calls (total 200 including the task call)
+    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 199);
 
     assert(
-      "flag file exists after 50 calls (dispatcher)",
+      "flag file exists after 200 calls (dispatcher)",
       existsSync(flagPath),
       `expected ${flagPath} to exist`
     );
@@ -673,7 +673,7 @@ async function testCooldownNoSaveState() {
       { tool: "task", sessionID: sid, args: { prompt: "delegate" } },
       { result: "ok" }
     );
-    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 49);
+    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 199);
 
     assert(
       "precondition: trigger fired (flag exists)",
@@ -724,8 +724,8 @@ async function testCooldownExpiryAccumulatedCount() {
 
     const preState = {
       [sid]: {
-        toolCallCount: 45,
-        toolCounts: { read: 45 },
+        toolCallCount: 195,
+        toolCounts: { read: 195 },
         lastTriggerTime: Date.now() - 6 * 60 * 1000,
         sessionStartTime: Date.now() - 10 * 60 * 1000,
         isDispatcher: true,
@@ -744,7 +744,7 @@ async function testCooldownExpiryAccumulatedCount() {
     await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 5);
 
     assert(
-      "flag file exists after 5 more calls (45 + 5 = 50, threshold fires)",
+      "flag file exists after 5 more calls (195 + 5 = 200, threshold fires)",
       existsSync(flagPath),
       `expected ${flagPath}`
     );
@@ -752,8 +752,8 @@ async function testCooldownExpiryAccumulatedCount() {
     if (existsSync(flagPath)) {
       const content = readFileSync(flagPath, "utf8");
       assert(
-        "flag content mentions 50 tool calls (accumulated count included)",
-        /50 tool calls/i.test(content),
+        "flag content mentions 200 tool calls (accumulated count included)",
+        /200 tool calls/i.test(content),
         `content was: ${content.slice(0, 200)}`
       );
     }

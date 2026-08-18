@@ -2,7 +2,7 @@
 
 import { execSync, execFileSync } from "child_process";
 import { existsSync } from "fs";
-import { readFile, writeFile, readdir, stat } from "fs/promises";
+import { readFile, writeFile, readdir, stat, rename } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -59,6 +59,44 @@ function daysSince(d) {
   const now = Date.now();
   const then = d.getTime();
   return Math.floor((now - then) / 86400000);
+}
+
+// --- Heavy-check throttling (2026-08-18) ---
+// The expensive checks (image GC, data audit, data review, memory index) spawn
+// node subprocesses. They ran on EVERY compaction (~13-24x/day), wasting tokens
+// and CPU. They now run at most once per 24h, tracked in data/last-heavy-check.json.
+const HEAVY_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000;
+const heavyCheckStateFile = path.join(CWD, "data", "last-heavy-check.json");
+
+async function shouldRunHeavyChecks() {
+  try {
+    const raw = await readFile(heavyCheckStateFile, "utf-8");
+    const parsed = JSON.parse(raw);
+    if (parsed && typeof parsed.lastRun === "number") {
+      const ageMs = Date.now() - parsed.lastRun;
+      if (ageMs < HEAVY_CHECK_INTERVAL_MS) {
+        return { due: false, lastRun: parsed.lastRun };
+      }
+    }
+  } catch (e) {
+    // ENOENT or parse error — first run, heavy checks are due
+  }
+  return { due: true, lastRun: null };
+}
+
+async function markHeavyChecksRun() {
+  try {
+    const tmpFile = heavyCheckStateFile + ".tmp";
+    await writeFile(tmpFile, JSON.stringify({ lastRun: Date.now() }, null, 2), "utf-8");
+    await rename(tmpFile, heavyCheckStateFile);
+  } catch (e) {
+    warn(`Failed to save heavy-check state: ${e.message}`);
+  }
+}
+
+function heavySkipMessage(name, lastRun) {
+  const hoursAgo = lastRun ? Math.floor((Date.now() - lastRun) / 3600000) : null;
+  return `✓ ${name}: skipped (heavy checks ran ${hoursAgo !== null ? `${hoursAgo}h ago` : "recently"})`;
 }
 
 // --- Step 1: Update timestamp in current-session.md ---
@@ -155,7 +193,8 @@ async function checkCurriculum() {
 }
 
 // --- Step 5: Image GC (opencode DB) ---
-async function checkImageGC() {
+async function checkImageGC(heavyDue, lastHeavyRun) {
+  if (!heavyDue) return heavySkipMessage("Image GC", lastHeavyRun);
   const scriptPath = path.join(CWD, "scripts", "cleanup-opencode-images.mjs");
   try {
     await stat(scriptPath);
@@ -363,7 +402,10 @@ function humanSizeCompact(bytes) {
 }
 
 // --- Step 6: Audit data/ directory (single --json call covers both gate + report) ---
-async function runDataAudit() {
+async function runDataAudit(heavyDue, lastHeavyRun) {
+  if (!heavyDue) {
+    return { dataAudit: heavySkipMessage("Data audit", lastHeavyRun), quarantineScan: heavySkipMessage("Quarantine scan", lastHeavyRun) };
+  }
   const scriptPath = path.join(CWD, "scripts", "audit-data.mjs");
   try {
     await stat(scriptPath);
@@ -402,7 +444,8 @@ async function runDataAudit() {
 }
 
 // --- Step 6b: Monthly data/ review check ---
-async function checkDataReview() {
+async function checkDataReview(heavyDue, lastHeavyRun) {
+  if (!heavyDue) return heavySkipMessage("Data review", lastHeavyRun);
   const reviewScript = path.join(CWD, "scripts", "audit-data-review.mjs");
   try {
     await stat(reviewScript);
@@ -451,7 +494,8 @@ async function checkDataReview() {
 // The DB is gitignored and lives outside protected data/ paths, so it silently disappears
 // on fresh clones, git clean, or submodule resets. This check makes the compaction run
 // self-healing per PM-023. Idempotent: skips all work when the index is healthy and fresh.
-async function checkMemoryIndex() {
+async function checkMemoryIndex(heavyDue, lastHeavyRun) {
+  if (!heavyDue) return heavySkipMessage("Memory index", lastHeavyRun);
   const embedDir = path.join(CWD, "glitch-memorycore", "plugins", "embed-search");
   const indexerScript = path.join(embedDir, "index-memory.mjs");
   const dbPath = path.join(embedDir, "memory-search.db");
@@ -669,14 +713,18 @@ async function touchAllTimestamps() {
 
 // --- Main ---
 async function main() {
-  const auditResult = await runDataAudit();
-  const dataReviewResult = await checkDataReview();
-  const memoryIndexResult = await checkMemoryIndex();
+  const { due: heavyDue, lastRun: lastHeavyRun } = await shouldRunHeavyChecks();
+  const auditResult = await runDataAudit(heavyDue, lastHeavyRun);
+  const dataReviewResult = await checkDataReview(heavyDue, lastHeavyRun);
+  const memoryIndexResult = await checkMemoryIndex(heavyDue, lastHeavyRun);
+  if (heavyDue) {
+    await markHeavyChecksRun();
+  }
   const results = {
     timestamp: await updateTimestamp(),
     diary: await checkDiaryStaleness(),
     curriculum: await checkCurriculum(),
-    gc: await checkImageGC(),
+    gc: await checkImageGC(heavyDue, lastHeavyRun),
     git: await checkGit(),
     touches: await touchAllTimestamps(),
     staleness: await checkMemoryStaleness(),

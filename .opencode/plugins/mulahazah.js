@@ -41,9 +41,14 @@
 //   data/MEMORY_TRIGGER_FLAG.<sessionID> — short text summary, deleted after dispatch
 //
 // Thresholds (hardcoded):
-//   50 tool calls OR 30 minutes rolling window → fire trigger (per session)
+//   200 tool calls OR 4 hours rolling window → fire trigger (per session)
 //   5 minute cooldown between triggers (per session)
 //   24 hour stale reset per session entry
+//
+// NOTE (2026-08-18): thresholds raised from 50 calls / 30 min to 200 calls /
+// 4 hours to cut @memory dispatch frequency (~19/day → ~3-5/day). Trigger
+// phrases still fire immediately — preferences/decisions are captured in
+// real time; only routine session observations are batched.
 //
 // Trigger phrases (case-insensitive scan of input.args):
 //   "remember that", "i prefer", "from now on", "always do", "never do",
@@ -57,8 +62,8 @@ import { promises as fs, readFileSync, writeFileSync, statSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
 
-const TOOL_CALL_THRESHOLD = 50;
-const TIME_THRESHOLD_MS = 30 * 60 * 1000;
+const TOOL_CALL_THRESHOLD = 200;
+const TIME_THRESHOLD_MS = 4 * 60 * 60 * 1000;
 const COOLDOWN_MS = 5 * 60 * 1000;
 const STALE_RESET_MS = 24 * 60 * 60 * 1000;
 const OBSERVATIONS_MAX_BYTES = 5 * 1024 * 1024;
