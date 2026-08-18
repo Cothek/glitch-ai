@@ -219,14 +219,65 @@ test("5+ identical webfetch with identical URL \u2192 tool_repetition", () => {
   assert.strictEqual(result.tool, "webfetch");
 });
 
-test("3+ identical bash command \u2192 command_repetition", () => {
+test("5+ identical bash command \u2192 command_repetition", () => {
   const history = padHistory([
+    entry("bash", { command: "git status" }),
+    entry("bash", { command: "git status" }),
     entry("bash", { command: "git status" }),
     entry("bash", { command: "git status" }),
     entry("bash", { command: "git status" }),
   ]);
   const result = detectStuck(history);
   assert.notStrictEqual(result, null, "Expected a signal, got null");
+  assert.strictEqual(result.type, "command_repetition");
+});
+
+test("4 identical bash commands \u2192 no command_repetition (threshold 5)", () => {
+  const history = padHistory([
+    entry("bash", { command: "npm test" }),
+    entry("bash", { command: "npm test" }),
+    entry("bash", { command: "npm test" }),
+    entry("bash", { command: "npm test" }),
+  ]);
+  const result = detectStuck(history);
+  assert.strictEqual(result, null, `Expected null (4 repeats below threshold 5), got: ${JSON.stringify(result)}`);
+});
+
+test("5+ identical Get-Date clock commands \u2192 no command_repetition (clock excluded)", () => {
+  const history = padHistory([
+    entry("bash", { command: "Get-Date -Format \"yyyy-MM-ddTHH:mm:ssZ\"" }),
+    entry("bash", { command: "Get-Date -Format \"yyyy-MM-ddTHH:mm:ssZ\"" }),
+    entry("bash", { command: "Get-Date -Format \"yyyy-MM-ddTHH:mm:ssZ\"" }),
+    entry("bash", { command: "Get-Date -Format \"yyyy-MM-ddTHH:mm:ssZ\"" }),
+    entry("bash", { command: "Get-Date -Format \"yyyy-MM-ddTHH:mm:ssZ\"" }),
+  ]);
+  const result = detectStuck(history);
+  assert.strictEqual(result, null, `Expected null (clock command excluded), got: ${JSON.stringify(result)}`);
+});
+
+test("5+ identical DateTimeOffset conversion commands \u2192 no command_repetition (clock excluded)", () => {
+  const history = padHistory([
+    entry("bash", { command: "$start = [DateTimeOffset]::FromUnixTimeMilliseconds(1787021476896); $start.ToString()" }),
+    entry("bash", { command: "$start = [DateTimeOffset]::FromUnixTimeMilliseconds(1787021476896); $start.ToString()" }),
+    entry("bash", { command: "$start = [DateTimeOffset]::FromUnixTimeMilliseconds(1787021476896); $start.ToString()" }),
+    entry("bash", { command: "$start = [DateTimeOffset]::FromUnixTimeMilliseconds(1787021476896); $start.ToString()" }),
+    entry("bash", { command: "$start = [DateTimeOffset]::FromUnixTimeMilliseconds(1787021476896); $start.ToString()" }),
+  ]);
+  const result = detectStuck(history);
+  assert.strictEqual(result, null, `Expected null (clock conversion excluded), got: ${JSON.stringify(result)}`);
+});
+
+test("5+ identical non-clock bash commands mixed with clock commands \u2192 command_repetition fires", () => {
+  const history = padHistory([
+    entry("bash", { command: "Get-Date -Format \"HH:mm\"" }),
+    entry("bash", { command: "npm test" }),
+    entry("bash", { command: "npm test" }),
+    entry("bash", { command: "npm test" }),
+    entry("bash", { command: "npm test" }),
+    entry("bash", { command: "npm test" }),
+  ]);
+  const result = detectStuck(history);
+  assert.notStrictEqual(result, null, "Expected a signal (non-clock repeats still fire), got null");
   assert.strictEqual(result.type, "command_repetition");
 });
 
@@ -326,10 +377,9 @@ console.log("\nBOUNDARY tests (reviewer MINOR-2):");
 // ============================================================
 
 // Test A: exactly 2 identical bash commands must NOT fire command_repetition.
-// The plugin gates command_repetition on bashCommands.length >= 3, so 2 identical
-// bash calls are treated as non-stuck (could be a legit re-run). Only 3+ bash calls
-// in the window with a 2+ repeated command fires.
-test("exactly 2 identical bash commands \u2192 no command_repetition (gate: >= 3 bash calls)", () => {
+// The plugin gates command_repetition on bashCommands.length >= 5 AND count >= 5,
+// so 2 identical bash calls are treated as non-stuck (could be a legit re-run).
+test("exactly 2 identical bash commands \u2192 no command_repetition (gate: >= 5 bash calls)", () => {
   const history = padHistory([
     entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\a.ts" }),
     entry("read", { filePath: "E:\\Glitch AI\\glitch-ai\\src\\b.ts" }),

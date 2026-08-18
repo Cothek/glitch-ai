@@ -14,7 +14,10 @@
 //      webfetch uses exact-URL matching (different URL = never similar) and a
 //      raised threshold of 5, so bulk sweeps over distinct URLs never trip it.
 //   2. error_cascade: 3+ consecutive errors (invalid counts as an error)
-//   3. command_repetition: same bash command 2+ times in last 8 (first 60 chars)
+//   3. command_repetition: same bash command 5+ times in last 8 (first 60 chars).
+//      Clock/time commands (Get-Date, date, time, w32tm, DateTimeOffset, etc.)
+//      are EXCLUDED — checking the time is a legitimate, common operation
+//      (time intelligence, timestamp conversion), not a stuck loop.
 //   4. readonly_repetition: 6+ CONSECUTIVE same readonly tool (read/glob/grep)
 //      with IDENTICAL fingerprints (filePath for read/glob, pattern for grep).
 //      Different files/patterns NEVER count as similar.
@@ -119,6 +122,22 @@ function genericSimilar(a, b, threshold) {
   const maxLen = Math.max(a.length, b.length);
   if (maxLen === 0) return true;
   return (1 - levenshtein(a, b) / maxLen) > threshold;
+}
+
+// Clock/time commands are legitimate, common operations (time intelligence,
+// timestamp conversion, elapsed-time checks). Repeating them is NOT a stuck
+// loop — exclude them from command_repetition detection. Covers:
+//   - PowerShell: Get-Date, [DateTimeOffset]::, [DateTime]::, .ToUniversalTime()
+//   - Unix/CMD:   date, time, w32tm, hwclock, timedatectl, ntpdate
+function isClockCommand(cmd) {
+  if (typeof cmd !== "string") return false;
+  const trimmed = cmd.trim();
+  // Standalone clock-read commands (PowerShell / Unix / Windows CMD)
+  if (/^(Get-Date|date|time|w32tm|hwclock|timedatectl|ntpdate)(\s|$)/i.test(trimmed)) return true;
+  // PowerShell timestamp conversion / formatting (bare Get-Date covers
+  // mid-command usage like `$now = Get-Date`)
+  if (/\[DateTimeOffset\]|\[DateTime\]|Get-Date|\.ToUniversalTime\(|\.ToLocalTime\(|GetSystemTime|GetTickCount/i.test(trimmed)) return true;
+  return false;
 }
 
 // --- Exported pure detection function ---
@@ -237,17 +256,23 @@ function detectStuck(history, options = {}) {
     };
   }
 
-  // Check 3: command_repetition — same bash command 2+ times
+  // Check 3: command_repetition — same bash command 5+ times.
+  // Clock/time commands are excluded (isClockCommand) — reading the clock is a
+  // legitimate, common operation (time intelligence, timestamp conversion,
+  // elapsed-time checks), NOT a stuck loop. Threshold raised from 2 to 5
+  // (2026-08-18) because 2 repeats of any command is too tight — legitimate
+  // re-runs (e.g. re-checking a file after an edit) tripped it constantly.
   const bashCommands = recent.filter(e => e.tool === "bash");
-  if (bashCommands.length >= 3) {
+  if (bashCommands.length >= 5) {
     const cmdTexts = bashCommands.map(e => (e.args || {}).command || "");
     const cmdCounts = {};
     for (const cmd of cmdTexts) {
+      if (isClockCommand(cmd)) continue;
       const shortCmd = cmd.slice(0, 60);
       cmdCounts[shortCmd] = (cmdCounts[shortCmd] || 0) + 1;
     }
     for (const [cmd, count] of Object.entries(cmdCounts)) {
-      if (count >= 2 && cmd.length > 5) {
+      if (count >= 5 && cmd.length > 5) {
         return {
           type: "command_repetition",
           command: cmd.slice(0, 80),

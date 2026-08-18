@@ -42,6 +42,9 @@
 //
 // Thresholds (hardcoded):
 //   200 tool calls OR 4 hours rolling window → fire trigger (per session)
+//   Time threshold requires MINIMUM ACTIVITY: at least 20 tool calls must have
+//   happened in the window, otherwise an idle-but-long-lived session would
+//   trigger a memory dispatch every 4 hours with nothing to record.
 //   5 minute cooldown between triggers (per session)
 //   24 hour stale reset per session entry
 //
@@ -49,6 +52,8 @@
 // 4 hours to cut @memory dispatch frequency (~19/day → ~3-5/day). Trigger
 // phrases still fire immediately — preferences/decisions are captured in
 // real time; only routine session observations are batched.
+// NOTE (2026-08-18): time threshold now gated on TIME_THRESHOLD_MIN_CALLS (20)
+// — a session with 1 tool call in 4h38m (observed live) must NOT fire.
 //
 // Trigger phrases (case-insensitive scan of input.args):
 //   "remember that", "i prefer", "from now on", "always do", "never do",
@@ -64,6 +69,10 @@ import { randomUUID } from "crypto";
 
 const TOOL_CALL_THRESHOLD = 200;
 const TIME_THRESHOLD_MS = 4 * 60 * 60 * 1000;
+// Minimum tool calls required for the TIME threshold to fire. Prevents idle
+// long-lived sessions (e.g. 1 call in 4h38m) from triggering memory dispatches
+// every 4 hours with nothing to record.
+const TIME_THRESHOLD_MIN_CALLS = 20;
 const COOLDOWN_MS = 5 * 60 * 1000;
 const STALE_RESET_MS = 24 * 60 * 60 * 1000;
 const OBSERVATIONS_MAX_BYTES = 5 * 1024 * 1024;
@@ -466,7 +475,10 @@ export const MulahazahPlugin = async ({ directory }) => {
       const anchor = ss.lastTriggerTime ?? ss.sessionStartTime;
       const elapsed = Date.now() - anchor;
       const hitCallThreshold = ss.toolCallCount >= TOOL_CALL_THRESHOLD;
-      const hitTimeThreshold = elapsed >= TIME_THRESHOLD_MS;
+      // Time threshold requires minimum activity — an idle session (few tool
+      // calls over many hours) should NOT trigger a memory dispatch. Only
+      // fire on elapsed time when there's been meaningful work.
+      const hitTimeThreshold = elapsed >= TIME_THRESHOLD_MS && ss.toolCallCount >= TIME_THRESHOLD_MIN_CALLS;
 
       if (hitCallThreshold || hitTimeThreshold) {
         await fireTrigger(sessionID, buildThresholdSummary(ss));
