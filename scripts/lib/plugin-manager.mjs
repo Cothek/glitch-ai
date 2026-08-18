@@ -31,7 +31,7 @@ const __dirname = dirname(__filename);
 const ROOT_DIR = resolve(__dirname, '..', '..');
 const PLUGIN_REGISTRY_PATH = join(ROOT_DIR, 'user', 'plugins.json');
 const PLUGINS_DIR = join(ROOT_DIR, 'plugins');
-const VISIBLE_WINDOW_PID_RETRY_MS = 2000;
+const VISIBLE_WINDOW_PID_RETRY_MS = 5000;
 
 // Active plugin processes: Map<name, ChildProcess>
 const activePlugins = new Map();
@@ -245,10 +245,13 @@ export async function startPlugin(pluginName) {
 
 /**
  * Start a plugin in its own visible console window (Windows only).
- * Generates a PS1 script that opens a normal PowerShell window, starts the
- * plugin's service directly via Start-Process -PassThru -NoNewWindow, captures
- * the REAL child PID (not the window PID), and writes it to
- * data/plugin-<name>.pid so stopPlugin can kill it by PID.
+ * Two-stage design: a hidden outer launcher PS1 opens a NEW visible PowerShell
+ * window (Start-Process -WindowStyle Normal) running an inner PS1 that starts
+ * the plugin's service via Start-Process -PassThru -NoNewWindow, captures the
+ * REAL child PID (not the window PID), and writes it to data/plugin-<name>.pid
+ * so stopPlugin can kill it by PID. The two-stage design is required because
+ * Node's spawn with windowsHide:false inherits the parent console instead of
+ * creating a new window (regression from cb70edc direct mode).
  */
 async function startPluginVisible(pluginName, manifest) {
   const dataDir = join(ROOT_DIR, 'data');
@@ -276,32 +279,49 @@ async function startPluginVisible(pluginName, manifest) {
     const needsQuote = a.includes(' ');
     return needsQuote ? `'"${esc(a)}"'` : `'${esc(a)}'`;
   }).join(',');
-  const ps1Content =
+  // Inner script runs INSIDE the visible window: starts the plugin service with
+  // -NoNewWindow (shares the window), writes the REAL service PID, waits.
+  // The outer launcher (below) opens a NEW visible PowerShell window running
+  // this inner script via Start-Process -WindowStyle Normal.
+  const innerPs1Path = join(dataDir, `plugin-${pluginName}-inner.ps1`);
+  const innerContent =
     `$host.ui.RawUI.WindowTitle = '${esc(title)}'\r\n` +
     `Set-Location -LiteralPath '${esc(ROOT_DIR)}'\r\n` +
     `$__child = Start-Process -FilePath '${esc(cmd)}' -ArgumentList @(${argsArray}) -PassThru -NoNewWindow\r\n` +
     `$__child.Id | Out-File -FilePath '${esc(pidFilePath)}' -Encoding ascii\r\n` +
     `Wait-Process -Id $__child.Id\r\n`;
+  writeFileSync(innerPs1Path, innerContent, 'utf-8');
+  // Same space-quoting fix as the direct service args: PS 5.1 Start-Process
+  // -ArgumentList joins array elements WITHOUT re-quoting, so the inner PS1
+  // path (which lives under a spaced ROOT_DIR like "E:\Glitch AI\") must be
+  // wrapped in literal double quotes that survive the join. Without this the
+  // joined command line becomes "-File E:\Glitch AI\..." and powershell fails
+  // to find "E:\Glitch" → the visible window opens, errors, closes instantly.
+  const innerPathArg = `'"${esc(innerPs1Path)}"'`;
+  // Outer launcher (hidden): opens a NEW visible PowerShell window running the
+  // inner script. Start-Process powershell -WindowStyle Normal creates a fresh
+  // console window (CREATE_NEW_CONSOLE), unlike Node's spawn which inherits the
+  // parent console when windowsHide:false (regression from cb70edc direct mode:
+  // services ran but no separate window appeared).
+  const ps1Content =
+    `$__win = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-File', ${innerPathArg})\r\n` +
+    `if ($__win) { $__win.Id | Out-File -FilePath '${esc(pidFilePath)}.window' -Encoding ascii }\r\n`;
 
   try {
     writeFileSync(ps1Path, ps1Content, 'utf-8');
 
     const launcher = spawn('powershell.exe', [
       '-NoProfile', '-ExecutionPolicy', 'Bypass',
-      '-NoExit', '-WindowStyle', 'Normal',
       '-File', ps1Path,
     ], {
       cwd: ROOT_DIR,
       stdio: 'ignore',
-      windowsHide: false,
+      windowsHide: true,
       detached: false,
     });
     launcher.unref();
     launcher._visibleWindow = true;
     activePlugins.set(pluginName, launcher);
-
-    let launcherFailed = false;
-    launcher.on('exit', () => { launcherFailed = true; });
 
     let realPid = null;
     const startedAt = Date.now();
@@ -314,19 +334,27 @@ async function startPluginVisible(pluginName, manifest) {
           if (parsed > 0) { realPid = parsed; break; }
         } catch {}
       }
-      if (launcherFailed && !existsSync(pidFilePath)) break;
+      // NOTE: no early break on launcher exit here — the outer launcher exits
+      // quickly after opening the visible window (two-stage design), so
+      // launcherFailed fires BEFORE the inner script writes the real pid file.
+      // We wait the full retry window for the pid file instead.
     }
 
-    if (!realPid && launcherFailed) {
+    if (!realPid) {
+      // The outer launcher exits quickly after opening the window (two-stage
+      // design), so launcherFailed alone is NOT a failure signal. Only fail if
+      // the inner script never wrote the real pid file within the retry window.
       try { unlinkSync(ps1Path); } catch {}
+      try { unlinkSync(innerPs1Path); } catch {}
       try { unlinkSync(pidFilePath); } catch {}
       activePlugins.delete(pluginName);
-      return { success: false, error: `Launcher exited before creating the visible window for "${pluginName}"` };
+      return { success: false, error: `Visible window for "${pluginName}" did not report a service PID within ${VISIBLE_WINDOW_PID_RETRY_MS}ms` };
     }
 
     return { success: true, pid: realPid || launcher.pid };
   } catch (err) {
     try { unlinkSync(ps1Path); } catch {}
+    try { unlinkSync(innerPs1Path); } catch {}
     try { unlinkSync(pidFilePath); } catch {}
     return { success: false, error: err.message };
   }

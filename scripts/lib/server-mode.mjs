@@ -291,11 +291,13 @@ async function startSessionsApi(ROOT_DIR) {
 // kill orphans on Ctrl+C. Unix callers fall back to a detached hidden spawn.
 //
 // Two modes:
-//   1. Direct mode (serviceExe provided): the PS1 script runs inside the
-//      visible window and starts the service directly via Start-Process
-//      -PassThru -NoNewWindow. The PID written to the pid file IS the real
-//      service PID (node.exe, cloudflared.exe, etc.). The visible window is
-//      spawned directly from Node (no outer launcher).
+//   1. Direct mode (serviceExe provided): a hidden outer launcher PS1 opens a
+//      NEW visible PowerShell window (Start-Process -WindowStyle Normal) running
+//      an inner PS1 that starts the service via Start-Process -PassThru
+//      -NoNewWindow. The PID written to the pid file IS the real service PID
+//      (node.exe, cloudflared.exe, etc.). The two-stage design is required
+//      because Node's spawn with windowsHide:false inherits the parent console
+//      instead of creating a new window (regression from cb70edc direct mode).
 //   2. Legacy mode (serviceExe NOT provided): an outer launcher PS1 starts a
 //      visible window running innerCommand. The pid file holds the PowerShell
 //      window PID (not the real service PID). Kept for backward compatibility.
@@ -335,13 +337,34 @@ async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, c
       return needsQuote ? `'"${esc(a)}"'` : `'${esc(a)}'`;
     }).join(',');
     const setup = setupCommand ? `${setupCommand}\r\n` : '';
-    ps1Content =
+    // Inner script runs INSIDE the visible window: starts the service with
+    // -NoNewWindow (shares the window), writes the REAL service PID, waits.
+    // The outer launcher (below) opens a NEW visible PowerShell window running
+    // this inner script via Start-Process -WindowStyle Normal.
+    const innerPs1Path = join(dataDir, ps1FileName.replace(/\.ps1$/i, '-inner.ps1'));
+    const innerContent =
       `$host.ui.RawUI.WindowTitle = '${esc(title)}'\r\n` +
       `Set-Location -LiteralPath '${esc(cwd)}'\r\n` +
       `${setup}` +
       `$__child = Start-Process -FilePath '${esc(serviceExe)}' -ArgumentList @(${argsArray}) -PassThru -NoNewWindow\r\n` +
       `$__child.Id | Out-File -FilePath '${esc(pidFilePath)}' -Encoding ascii\r\n` +
       `Wait-Process -Id $__child.Id\r\n`;
+    writeFileSync(innerPs1Path, innerContent, 'utf-8');
+    // Same space-quoting fix as the direct service args: PS 5.1 Start-Process
+    // -ArgumentList joins array elements WITHOUT re-quoting, so the inner PS1
+    // path (which lives under a spaced ROOT_DIR like "E:\Glitch AI\") must be
+    // wrapped in literal double quotes that survive the join. Without this the
+    // joined command line becomes "-File E:\Glitch AI\..." and powershell fails
+    // to find "E:\Glitch" → the visible window opens, errors, closes instantly.
+    const innerPathArg = `'"${esc(innerPs1Path)}"'`;
+    // Outer launcher (hidden): opens a NEW visible PowerShell window running the
+    // inner script. Start-Process powershell -WindowStyle Normal creates a fresh
+    // console window (CREATE_NEW_CONSOLE), unlike Node's spawn which inherits the
+    // parent console when windowsHide:false (regression from cb70edc direct mode:
+    // services ran but no separate window appeared).
+    ps1Content =
+      `$__win = Start-Process powershell.exe -WindowStyle Normal -PassThru -ArgumentList @('-NoExit','-ExecutionPolicy','Bypass','-File', ${innerPathArg})\r\n` +
+      `if ($__win) { $__win.Id | Out-File -FilePath '${esc(pidFilePath)}.window' -Encoding ascii }\r\n`;
     directSpawn = true;
   } else {
     const wrapped = `& { $host.ui.RawUI.WindowTitle = '${esc(title)}'; Set-Location -LiteralPath '${esc(cwd)}'; ${innerCommand} }`;
@@ -358,19 +381,12 @@ async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, c
 
   writeFileSync(ps1Path, ps1Content, 'utf-8');
 
-  const launcher = directSpawn
-    ? spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-NoExit', '-WindowStyle', 'Normal', '-File', ps1Path], {
-        cwd,
-        stdio: 'ignore',
-        windowsHide: false,
-        detached: false,
-      })
-    : spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path], {
-        cwd,
-        stdio: 'ignore',
-        windowsHide: true,
-        detached: false,
-      });
+  const launcher = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path], {
+    cwd,
+    stdio: 'ignore',
+    windowsHide: true,
+    detached: false,
+  });
   launcher.unref();
   trackProcess(launcher);
 
@@ -379,7 +395,7 @@ async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, c
 
   let realPid = null;
   const startedAt = Date.now();
-  const retryMs = directSpawn ? 3000 : 2000;
+  const retryMs = directSpawn ? 5000 : 2000;
   // Record the pid file's mtime BEFORE spawning so we can detect a fresh write
   // from the child. Without this guard, the read-back loop reads a pre-existing
   // stale pid file (e.g. from a previous session) and returns the OLD pid as
@@ -404,7 +420,11 @@ async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, c
         if (parsed > 0) { realPid = parsed; break; }
       } catch {}
     }
-    if (launcherFailed && !existsSync(pidFilePath)) break;
+    // Legacy mode: the launcher IS the visible window and stays alive; if it
+    // exits before writing the pid file, the window failed to open.
+    // Direct mode: the outer launcher exits quickly after opening the window;
+    // the inner script writes the real pid file, so don't break on launcher exit.
+    if (!directSpawn && launcherFailed && !existsSync(pidFilePath)) break;
   }
 
   return realPid;
