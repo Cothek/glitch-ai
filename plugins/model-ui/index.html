@@ -564,29 +564,251 @@
       border-left: none;
     }
 
-    /* Mobile: stack header below title, full-width buttons */
+    /* Mobile: checkbox beside agent name, model details below */
     @media (max-width: 767px) {
+      /* Header and description cover full width, buttons underneath */
       .page-header-row {
         flex-direction: column !important;
-        gap: 8px;
+        gap: 12px !important;
       }
+      .page-header-text {
+        width: 100% !important;
+      }
+      .glitch-page-header__title {
+        font-size: var(--glitch-text-2xl) !important;
+        line-height: 1.2 !important;
+      }
+      .glitch-page-header__desc {
+        font-size: var(--glitch-text-sm) !important;
+        line-height: 1.5 !important;
+        margin-top: 4px !important;
+      }
+
+      /* Agent list: checkbox beside agent name, model details below */
+      #agent-table thead tr {
+        position: absolute;
+        top: -9999px;
+        left: -9999px;
+      }
+      #agent-table tbody tr {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        align-items: center !important;
+        padding: 10px 12px !important;
+        border-bottom: 1px solid var(--glitch-border) !important;
+        min-height: auto !important;
+        height: auto !important;
+      }
+      #agent-table tbody tr td {
+        border: none !important;
+        padding: 0 !important;
+        background: none !important;
+      }
+      /* Checkbox cell - fixed width, inline */
+      #agent-table tbody tr td:first-child {
+        width: 32px !important;
+        flex-shrink: 0 !important;
+        padding-right: 8px !important;
+        display: flex !important;
+        align-items: center !important;
+      }
+      /* Agent name cell - inline with checkbox */
+      #agent-table tbody tr td:nth-child(2) {
+        flex: 1 1 auto !important;
+        min-width: 0 !important;
+        margin-bottom: 0 !important;
+        padding-right: 8px !important;
+      }
+      #agent-table tbody tr td:nth-child(2) .agent-name {
+        color: var(--glitch-accent) !important;
+        font-weight: var(--glitch-font-semibold) !important;
+        font-size: var(--glitch-text-sm) !important;
+        display: inline !important;
+        margin-bottom: 0 !important;
+      }
+      /* Model details - full width below */
+      #agent-table tbody tr td:nth-child(3) {
+        flex: 1 1 100% !important;
+        width: 100% !important;
+        margin-top: 6px !important;
+        padding-left: 40px !important;
+      }
+      #agent-table tbody tr td:nth-child(3) .model-line {
+        font-size: var(--glitch-text-xs) !important;
+        width: 100% !important;
+        line-height: 1.4 !important;
+      }
+      #agent-table tbody tr td:nth-child(3) .model-name {
+        font-size: var(--glitch-text-xs) !important;
+        font-weight: var(--glitch-font-medium) !important;
+        white-space: normal !important;
+        width: 100% !important;
+        display: block !important;
+        margin-bottom: 2px !important;
+      }
+      #agent-table tbody tr td:nth-child(3) .model-id {
+        font-size: 9px !important;
+        color: var(--glitch-text-muted) !important;
+        display: block !important;
+        margin-bottom: 3px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+      #agent-table tbody tr td:nth-child(3) .gl-badge {
+        font-size: 9px !important;
+        padding: 1px 4px !important;
+        margin-right: 3px !important;
+        margin-bottom: 2px !important;
+      }
+      #agent-table tbody tr td:nth-child(3) .ctx-badge {
+        font-size: 9px !important;
+        color: var(--glitch-text-secondary) !important;
+      }
+      #agent-table tbody tr td:nth-child(3) .model-sep {
+        display: none !important;
+      }
+      #agent-table tbody tr td:nth-child(3) .model-pending {
+        font-size: 9px !important;
+        display: block !important;
+        margin-top: 2px !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+      }
+
+      /* Header buttons layout */
       .header-buttons {
-        width: 100%;
-        display: flex;
+        width: 100% !important;
+        flex-direction: column !important;
+        gap: 8px !important;
+      }
+      .header-buttons > * {
+        width: 100% !important;
+        margin-bottom: 0 !important;
       }
       .header-buttons > button,
       .header-buttons > .restart-dropdown {
-        flex: 1;
+        width: 100% !important;
       }
-      .header-buttons > .restart-dropdown {
-        min-width: 0;
-      }
+      /* Restart button split: left = Apply & Restart (enables when changes), right = dropdown toggle (always enabled) */
       .restart-split-group {
-        width: 100%;
+        flex-direction: row !important;
+        gap: 4px !important;
+        width: 100% !important;
       }
       .restart-split-left {
-        flex: 1;
-        min-width: 0;
+        flex: 1 !important;
+        width: 50% !important;
+        margin: 0 !important;
+        white-space: nowrap !important;
+      }
+      .restart-split-right {
+        flex: 1 !important;
+        width: 50% !important;
+        margin: 0 !important;
+        white-space: nowrap !important;
+      }
+      .restart-split-left:not(:disabled) {
+        color: var(--glitch-accent) !important;
+        font-weight: var(--glitch-font-semibold) !important;
+      }
+      .restart-split-divider {
+        display: none !important;
+      }
+    }
+
+    /* Desktop: improved 2-column layout with red agent names */
+    @media (min-width: 768px) {
+      #agent-table thead tr {
+        background-color: var(--glitch-bg-surface) !important;
+      }
+      #agent-table thead th {
+        padding: var(--glitch-space-3) var(--glitch-space-4) !important;
+        border-bottom: 1px solid var(--glitch-border) !important;
+        color: var(--glitch-text-secondary) !important;
+        font-size: var(--glitch-text-xs) !important;
+        font-weight: var(--glitch-font-medium) !important;
+        text-transform: uppercase !important;
+        letter-spacing: var(--glitch-tracking-wider) !important;
+      }
+      #agent-table tbody tr {
+        border-bottom: 1px solid var(--glitch-border) !important;
+        transition: background-color var(--glitch-transition-fast) !important;
+      }
+      #agent-table tbody tr:hover {
+        background-color: var(--glitch-bg-hover) !important;
+      }
+      #agent-table tbody td {
+        padding: var(--glitch-space-2) var(--glitch-space-4) !important;
+        vertical-align: middle !important;
+      }
+      /* Agent name column - red color, compact width */
+      #agent-table tbody td.col-agent {
+        width: 15% !important;
+        padding-right: var(--glitch-space-3) !important;
+        white-space: nowrap !important;
+      }
+      #agent-table tbody td.col-agent .agent-name {
+        color: var(--glitch-accent) !important;
+        font-weight: var(--glitch-font-semibold) !important;
+        font-size: var(--glitch-text-sm) !important;
+        display: block !important;
+      }
+      /* Model details column - full width, no wrapping */
+      #agent-table tbody td:last-child {
+        width: 85% !important;
+      }
+      #agent-table tbody td:last-child .model-line {
+        font-size: var(--glitch-text-sm) !important;
+        display: flex !important;
+        align-items: center !important;
+        flex-wrap: nowrap !important;
+        gap: 6px !important;
+        width: 100% !important;
+        overflow: hidden !important;
+      }
+      #agent-table tbody td:last-child .model-name {
+        font-size: var(--glitch-text-sm) !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+      }
+      #agent-table tbody td:last-child .model-id {
+        font-size: var(--glitch-text-xs) !important;
+        color: var(--glitch-text-muted) !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 280px !important;
+        flex-shrink: 1 !important;
+        min-width: 0 !important;
+      }
+      #agent-table tbody td:last-child .gl-badge {
+        font-size: var(--glitch-text-xs) !important;
+        padding: 1px 4px !important;
+        flex-shrink: 0 !important;
+      }
+      #agent-table tbody td:last-child .ctx-badge {
+        font-size: var(--glitch-text-xs) !important;
+        white-space: nowrap !important;
+        flex-shrink: 0 !important;
+      }
+      #agent-table tbody td:last-child .model-sep {
+        display: none !important;
+      }
+      #agent-table tbody td:last-child .model-pending {
+        font-size: var(--glitch-text-xs) !important;
+        white-space: nowrap !important;
+        overflow: hidden !important;
+        text-overflow: ellipsis !important;
+        max-width: 100% !important;
+      }
+    }
+
+    /* Hide top status cards on mobile */
+    @media (max-width: 767px) {
+      .status-grid {
+        display: none;
       }
     }
 
@@ -946,21 +1168,31 @@
         const isSelected = state.selectedAgents.includes(agent.name);
         const selClass = isSelected ? ' selected' : '';
 
+        // Agent name first, model details below
         return `<tr class="${selClass}"${rowStyle} data-agent="${escapeHtml(agent.name)}">
           <td style="width: 40px;"><input type="checkbox" class="agent-checkbox" data-agent="${escapeHtml(agent.name)}" ${isSelected ? 'checked' : ''}></td>
-          <td class="col-agent"><span class="agent-name">@${escapeHtml(agent.name)}</span></td>
-          <td>
-            <span class="model-line">
-              <span class="model-name">${escapeHtml(agent.model_name || displayModel)}</span>
-              <span class="model-sep"></span>
-              <span class="model-id">${escapeHtml(displayModel)}</span>
+          <td class="col-agent">
+            <span class="agent-name" style="font-size: var(--glitch-text-xs); font-weight: var(--glitch-font-medium); color: var(--glitch-text-primary); display: block;">
+              @${escapeHtml(agent.name)}
+            </span>
+          </td>
+          <td style="text-align: left; vertical-align: top;">
+            <span class="model-line" style="font-size: var(--glitch-text-xs); line-height: 1.3;">
+              <span class="model-name" style="font-size: var(--glitch-text-xs); white-space: normal; display: block; margin-bottom: 4px;">
+                ${escapeHtml(agent.model_name || displayModel)}
+              </span>
+              ${pendingHtml}
+              <span class="model-id" style="font-size: 8px; color: var(--glitch-text-muted); display: block;">
+                ${escapeHtml(displayModel)}
+              </span>
               ${caps ? '<span class="model-sep"></span>' + caps : ''}
               <span class="model-sep"></span>
-              <span class="gl-badge ${tierBadgeClass}"><span class="gl-badge-dot"></span>${escapeHtml(displayTier || 'unknown')}</span>
+              <span class="gl-badge ${tierBadgeClass}" style="font-size: 8px; padding: 1px 3px; margin-bottom: 2px;"><span class="gl-badge-dot"></span>${escapeHtml(displayTier || 'unknown')}</span>
               <span class="model-sep"></span>
-              <span class="ctx-badge">${contextText}</span>
+              <span class="ctx-badge" style="font-size: 8px; color: var(--glitch-text-secondary); display: block;">
+                ${contextText}
+              </span>
             </span>
-            ${pendingHtml}
           </td>
         </tr>`;
       }).join('');
