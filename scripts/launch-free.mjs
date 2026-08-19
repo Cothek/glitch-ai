@@ -605,8 +605,11 @@ async function main() {
     const checkModelsScript = join(ROOT_DIR, 'scripts', 'check-models.ps1');
     if (existsSync(checkModelsScript)) {
       try {
-        // Show raw PS1 output (no -Silent, stdio: inherit) so user sees any errors
-        pwsh(['-File', checkModelsScript, '-CheckOnly'], { timeout: 600000, stdio: 'inherit' });
+        // Show raw PS1 output (no -Silent, stdio: inherit) so user sees any errors.
+        // -SkipNvidiaFreeCheck makes the launch path cache-only (UseCacheOnly=true):
+        // fresh cache -> instant, stale cache -> last-known-good, probe only on
+        // first launch (no cache file). Matches launch.mjs / serve.mjs behavior.
+        pwsh(['-File', checkModelsScript, '-CheckOnly', '-SkipNvidiaFreeCheck'], { timeout: 600000, stdio: 'inherit' });
       } catch {
         log(DARK_YELLOW, '  Model fetch script failed');
       }

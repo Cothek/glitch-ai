@@ -769,10 +769,13 @@ function Test-NvidiaFreeEndpoint {
         $tryId = $candidateIds[$ci]
         $isLastCandidate = ($ci -eq ($candidateIds.Count - 1))
 
-        # FIX 3: give the error_0 retry a longer timeout (30s) on the second attempt.
-        # Free NVIDIA endpoints are slower and rate-limited; glm-5.2 times out at 15s
-        # but may respond within 30s. First attempt stays at 15s to keep fast models fast.
-        $timeoutSec = if ($script:errorZeroRetried) { 30 } else { 15 }
+        # FIX 3 (2026-08-19): cap BOTH attempts at 10s. Launch-time probes were
+        # taking up to 45.5s per slow model (15s + 0.5s sleep + 30s retry). The
+        # cache-preservation machinery (error_0_preserved_free / error_0_cached_free)
+        # keeps known-good free entries alive on timeout, so a shorter timeout only
+        # degrades fresh-probe accuracy, never the free list itself. The retry still
+        # gives a slow model one second chance, but each attempt is max 10s.
+        $timeoutSec = 10
 
         $bodyObj = @{
             model = $tryId
@@ -857,7 +860,7 @@ function Test-NvidiaFreeEndpoint {
                 if (-not $script:errorZeroRetried) {
                     $script:errorZeroRetried = $true
                     if (-not $Silent) {
-                        Write-Progress -Activity "Checking NVIDIA free models" -Status "Retrying $ModelId (timeout, 30s)..."
+                        Write-Progress -Activity "Checking NVIDIA free models" -Status "Retrying $ModelId (timeout, 10s)..."
                     }
                     Start-Sleep -Milliseconds 500
                     $ci--  # re-run this same candidate iteration

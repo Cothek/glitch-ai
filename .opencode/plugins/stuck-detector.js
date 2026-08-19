@@ -518,7 +518,10 @@ export const StuckDetectorPlugin = async ({ directory }) => {
           `If yes (genuinely stuck), stop and return partial findings plus a note about this blocker to the parent agent. ` +
           `If you are making progress (e.g., reading different files, dispatching different tasks, sequential successful steps), ` +
           `this is likely a false positive — CONTINUE your task normally.\n` +
-          `If you are the primary agent: load skill("breakthrough") only if you truly cannot make progress.`;
+          `If you are the PRIMARY agent (including glitch-omni, which is primary AND executor): STOP. ` +
+          `Do NOT re-run the flagged command or tool. Deliver your current findings to the user now and wait for direction. ` +
+          `In glitch-omni mode there is no parent agent to return to — the loop ends with you. ` +
+          `Only load skill("breakthrough") if you have genuinely exhausted your current approach.`;
 
         lastMessage.parts.push({
           id: `prt_${randomUUID()}`,
