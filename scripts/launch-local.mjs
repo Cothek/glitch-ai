@@ -84,8 +84,9 @@ const DEFAULT_LOCAL_MODEL = 'google/gemma-4-12b';
  * 
  * Returns the discovered model ID string, or DEFAULT_LOCAL_MODEL if discovery fails.
  */
-async function discoverLocalModels() {
-  const LM_STUDIO_MODELS_URL = 'http://192.168.86.139:1234/v1/models';
+async function discoverLocalModels(customBaseUrl) {
+  const baseUrl = customBaseUrl || 'http://127.0.0.1:1234/v1/models';
+  const LM_STUDIO_MODELS_URL = baseUrl;
   const timeoutMs = 5000; // 5 second timeout
 
   try {
