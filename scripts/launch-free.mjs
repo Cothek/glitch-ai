@@ -654,25 +654,26 @@ async function main() {
 
     const choices = showModelMenu(modelGroups, allModels, savedId);
 
-    const selection = await askQuestion(`Pick a model (1-${choices.length}, or Enter for current): `);
+    while (true) {
+      const selection = await askQuestion(`Pick a model (1-${choices.length}, or Enter for current): `);
 
-    if (!selection.trim() && hasDefault) {
+      if (!selection.trim() && hasDefault) {
+        log('');
+        log(GREEN, ` Keeping current: ${savedId} (${allModels[savedId].Name})`);
+        return savedId;
+      }
+
+      const num = parseInt(selection.trim(), 10);
+      if (!isNaN(num) && num >= 1 && num <= choices.length) {
+        const picked = choices[num - 1].ID;
+        log('');
+        log(GREEN, ` Selected: ${picked} (${allModels[picked].Name})`);
+        return picked;
+      }
+
       log('');
-      log(GREEN, ` Keeping current: ${savedId} (${allModels[savedId].Name})`);
-      return savedId;
+      log(RED, ` Invalid selection. Please enter a number 1-${choices.length}${hasDefault ? ' or press Enter to keep the current model' : ''}.`);
     }
-
-    const num = parseInt(selection.trim(), 10);
-    if (!isNaN(num) && num >= 1 && num <= choices.length) {
-      const picked = choices[num - 1].ID;
-      log('');
-      log(GREEN, ` Selected: ${picked} (${allModels[picked].Name})`);
-      return picked;
-    }
-
-    log('');
-    log(RED, ' Invalid selection. Exiting.');
-    process.exit(1);
   }
 
   // ---------------------------------------------------------------------
@@ -723,23 +724,26 @@ async function main() {
     log('');
 
     const visionChoices = showModelMenu(modelGroups, allModels, visionDefault);
-    const visionSelection = await askQuestion(`Pick vision model (1-${visionChoices.length}, or Enter for default): `);
+    while (true) {
+      const visionSelection = await askQuestion(`Pick vision model (1-${visionChoices.length}, or Enter for default): `);
 
-    if (!visionSelection.trim()) {
-      visionModel = visionDefault;
-      log('');
-      log(GREEN, ` Using ${visionModel === primaryModel ? 'primary' : 'saved vision'} model for @vision: ${visionModel} (${allModels[visionModel].Name})`);
-    } else {
+      if (!visionSelection.trim()) {
+        visionModel = visionDefault;
+        log('');
+        log(GREEN, ` Using ${visionModel === primaryModel ? 'primary' : 'saved vision'} model for @vision: ${visionModel} (${allModels[visionModel].Name})`);
+        break;
+      }
+
       const num = parseInt(visionSelection.trim(), 10);
       if (!isNaN(num) && num >= 1 && num <= visionChoices.length) {
         visionModel = visionChoices[num - 1].ID;
         log('');
         log(GREEN, ` Vision model selected: ${visionModel} (${allModels[visionModel].Name})`);
-      } else {
-        log('');
-        log(RED, ' Invalid selection. Using primary model for vision.');
-        visionModel = primaryModel;
+        break;
       }
+
+      log('');
+      log(RED, ` Invalid selection. Please enter a number 1-${visionChoices.length} or press Enter for the default.`);
     }
   }
 

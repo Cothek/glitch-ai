@@ -81,10 +81,23 @@ async function checkBranchBeforeLaunch() {
   log(YELLOW, `  !! Currently on branch '${current}', not 'main'`);
   log(YELLOW, '  Glitch is designed to run from the main branch for stability.');
   log(WHITE, '  [Y/n] Switch to main now (recommended)');
-  const choice = await askQuestion('  > ');
-  const raw = (choice ?? '').trim().toLowerCase();
 
-  if (raw === 'n' || raw === 'no') {
+  let wantsSwitch = true;
+  while (true) {
+    const choice = await askQuestion('  > ');
+    const raw = (choice ?? '').trim().toLowerCase();
+    if (raw === 'n' || raw === 'no') {
+      wantsSwitch = false;
+      break;
+    }
+    if (raw === '' || raw === 'y' || raw === 'yes') {
+      wantsSwitch = true;
+      break;
+    }
+    log(YELLOW, '  Please answer y (or press Enter) to switch, or n to stay on current branch.');
+  }
+
+  if (!wantsSwitch) {
     process.env.GLITCH_BRANCH_OK = '1';
     log(DARK_YELLOW, '  Continuing on current branch (may have unstable config)');
     log('');
@@ -248,8 +261,16 @@ async function showGlitchModeMenu(savedDeliveryId) {
     ? `Glitch mode (1-${DELIVERIES.length}, Enter for saved): `
     : `Glitch mode (1-${DELIVERIES.length}): `;
 
-  const selection = await askQuestion(prompt);
-  return selection.trim();
+  while (true) {
+    const selection = await askQuestion(prompt);
+    const raw = selection.trim();
+    if (raw === '' && savedDeliveryId) return savedDeliveryId;
+    const num = parseInt(raw, 10);
+    if (!isNaN(num) && num >= 1 && num <= DELIVERIES.length) {
+      return DELIVERIES[num - 1].id;
+    }
+    log(RED, `  Invalid selection. Please enter a number 1-${DELIVERIES.length}${savedDeliveryId ? ' or press Enter to keep the saved mode' : ''}.`);
+  }
 }
 
 async function showModelMenu(savedModelId) {
@@ -278,8 +299,16 @@ async function showModelMenu(savedModelId) {
     ? `Model tier (1-${MODELS.length}, Enter for saved): `
     : `Model tier (1-${MODELS.length}): `;
 
-  const selection = await askQuestion(prompt);
-  return selection.trim();
+  while (true) {
+    const selection = await askQuestion(prompt);
+    const raw = selection.trim();
+    if (raw === '' && savedModelId) return savedModelId;
+    const num = parseInt(raw, 10);
+    if (!isNaN(num) && num >= 1 && num <= MODELS.length) {
+      return MODELS[num - 1].id;
+    }
+    log(RED, `  Invalid selection. Please enter a number 1-${MODELS.length}${savedModelId ? ' or press Enter to keep the saved model' : ''}.`);
+  }
 }
 
 function runScript(scriptName, extraArgs = []) {
@@ -445,20 +474,7 @@ async function main() {
     }
 
     // Level 1: Glitch mode
-    const delSelection = await showGlitchModeMenu(savedDelivery);
-    let deliveryId;
-    if (!delSelection && savedDelivery) {
-      deliveryId = savedDelivery;
-    } else {
-      const num = parseInt(delSelection, 10);
-      if (!isNaN(num) && num >= 1 && num <= DELIVERIES.length) {
-        deliveryId = DELIVERIES[num - 1].id;
-      } else {
-        log(RED, ' Invalid Glitch mode selection. Exiting.');
-        logToFile('ERROR: Invalid Glitch mode selection');
-        process.exit(1);
-      }
-    }
+    const deliveryId = await showGlitchModeMenu(savedDelivery);
 
     // Safe is a delivery with no tier — skip the model menu entirely.
     if (deliveryId === 'safe') {
@@ -466,21 +482,7 @@ async function main() {
     } else {
       // Level 2: Model tier (use saved model only if delivery didn't change)
       const modelDefault = deliveryId === savedDelivery ? savedModel : null;
-      const modelSelection = await showModelMenu(modelDefault);
-      let modelId;
-      if (!modelSelection && modelDefault) {
-        modelId = modelDefault;
-      } else {
-        const num = parseInt(modelSelection, 10);
-        if (!isNaN(num) && num >= 1 && num <= MODELS.length) {
-          modelId = MODELS[num - 1].id;
-        } else {
-          log(RED, ' Invalid model selection. Exiting.');
-          logToFile('ERROR: Invalid model selection');
-          process.exit(1);
-        }
-      }
-
+      const modelId = await showModelMenu(modelDefault);
       modeId = `${deliveryId}-${modelId}`;
     }
   }
