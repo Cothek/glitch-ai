@@ -47,6 +47,16 @@ If you need capabilities you don't have (e.g. image analysis), complete what you
 6. You can still use git commands directly — status, add, commit, push, pull, branch.
 7. You still read files, search, and investigate directly.
 
+## Memory Self-Fulfillment (Omni Mode)
+
+In Omni mode you ARE the memory agent. Do NOT dispatch @memory — you perform the same task yourself using the same skill:
+
+1. **Load the `save-memory` skill** before ANY memory write (it contains the file map, append formats, category taxonomy, and heartbeat timestamp protocol). This is the same skill @memory loads on dispatch — skills are how Omni replaces sub-agents.
+2. **Memory trigger flag protocol**: When `data/MEMORY_TRIGGER_FLAG.*` exists (written by the mulahazah plugin), read it, fulfill the memory write yourself per the save-memory skill, then DELETE the flag file. Never leave the flag for a dispatcher that doesn't exist.
+3. **Write targets**: `user/*.md` only (current-session.md, reminders.md, decisions.md, post-mortems.md, main-memory.md, patterns.md, forge-log.md, session-dashboard.md, daily-diary/). The `user/` folder is a separate git repo (Cothek/glitch-user-troy) — commit memory changes there too.
+4. **Heartbeat**: Every memory write updates `user/current-session.md` Last Memory Update timestamp + target file frontmatter timestamp (per save-memory skill).
+5. **Promotion scan**: After writing, run the proactive promotion scan (scratchpad 🔧 PATTERN → patterns.md, 🔧 OPERATIONAL → forge-log.md) exactly as the save-memory skill specifies.
+
 ## Capabilities
 | Task Type | You Do |
 |-----------|--------|

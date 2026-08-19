@@ -1,4 +1,4 @@
-// mulahazah.js - OpenCode plugin: per-session threshold-based memory trigger
+// mulahazah.js - OpenCode plugin: per-session memory trigger
 //
 // OBSERVATION MODEL (per-session state):
 // Each chat session gets its own independent trigger state, keyed by sessionID.
@@ -6,22 +6,38 @@
 // a directive in session B, and sub-agent tool calls (which run in their own
 // sessionIDs) do not inflate the parent session's counter.
 //
-// TIME THRESHOLD (rolling window):
-// The time threshold measures elapsed time since the LAST TRIGGER for that
-// session (or since session start if never triggered). When the rolling window
-// fires, lastTriggerTime resets to now — so it fires at most once per
-// TIME_THRESHOLD_MS per session. This fixes the old bug where elapsed was
-// measured from a never-resetting sessionStartTime, causing the time threshold
-// to fire forever once 10 min passed.
+// TRIGGER MODEL (two independent paths, both measured from the LAST trigger —
+// i.e. the last memory write, since the trigger leads directly to the write):
+//
+//   1. HEARTBEAT (15 min): a background timer checks every 60s and fires once
+//      15 minutes after the last write IF at least 1 tool call happened since.
+//      This is the guaranteed per-session cadence: active sessions are captured
+//      every 15 min; a session that goes quiet fires once at the 15-min mark
+//      (the session-end capture), then stops until new activity. A truly dead
+//      session's flag is swept by the 24h stale reset.
+//
+//   2. TOKEN BURST (1M new tokens): fires when TOKEN_THRESHOLD new tokens
+//      (input + output + reasoning) have accumulated since the last write, even
+//      under the 30-min window. Catches token-heavy bursts (heavy parallel
+//      agent dispatch) so a session that "did a lot" in LLM compute is captured
+//      without waiting for the clock. Token totals are read from the OpenCode
+//      SQLite DB (session table) via node:sqlite — the same data source the
+//      TUI/web UI uses. If the DB is unavailable (open fails, or the runtime
+//      node lacks node:sqlite), the heartbeat still works; token bursts are
+//      skipped until the DB is readable again.
+//
+// Both paths reset lastTriggerTime + lastTokenBaseline in fireTrigger, so they
+// never double-fire: whichever comes first restarts the window.
 //
 // CONSUMPTION (experimental.chat.messages.transform):
 // The plugin hooks `experimental.chat.messages.transform`, which fires AFTER
 // messages are read from the DB and BEFORE they are sent to the LLM. If a
 // per-session trigger flag exists, its contents are appended as a text part
 // to the LAST message's parts — so the model is forced to see the directive
-// and dispatch @memory. The transform hook derives sessionID from
-// `output.messages[0].info.sessionID` (Message type has sessionID: string)
-// and reads ONLY that session's flag file, preventing cross-session spam.
+// and dispatch @memory (or self-fulfill in omni mode). The transform hook
+// derives sessionID from `output.messages[0].info.sessionID` (Message type has
+// sessionID: string) and reads ONLY that session's flag file, preventing
+// cross-session spam.
 //
 // Why this hook and not `chat.message`: `chat.message` fires inside
 // createUserMessage AFTER parts are built but BEFORE they are saved to the DB.
@@ -40,12 +56,10 @@
 // Signal flags (per-session):
 //   data/MEMORY_TRIGGER_FLAG.<sessionID> — short text summary, deleted after dispatch
 //
-// Thresholds (hardcoded):
-//   200 tool calls OR 4 hours rolling window → fire trigger (per session)
-//   Time threshold requires MINIMUM ACTIVITY: at least 20 tool calls must have
-//   happened in the window, otherwise an idle-but-long-lived session would
-//   trigger a memory dispatch every 4 hours with nothing to record.
-//   5 minute cooldown between triggers (per session)
+// Trigger paths (hardcoded, see scripts/lib/mulahazah-helpers.mjs):
+//   15 min heartbeat (requires >= 1 tool call since last write)
+//   OR 1M new tokens since last write (input+output+reasoning, from the DB)
+//   OR trigger phrase detected in tool args (immediate, subject to 5-min cooldown)
 //   24 hour stale reset per session entry
 //
 // NOTE (2026-08-18): thresholds raised from 50 calls / 30 min to 200 calls /
@@ -54,6 +68,12 @@
 // real time; only routine session observations are batched.
 // NOTE (2026-08-18): time threshold now gated on TIME_THRESHOLD_MIN_CALLS (20)
 // — a session with 1 tool call in 4h38m (observed live) must NOT fire.
+// NOTE (2026-08-19): the call-count / time thresholds are REPLACED by the
+// 15-min heartbeat + 1M-token burst model (heartbeat interval set to 15 min
+// per Troy 2026-08-19). Session-end capture is implicit: a quiet session fires
+// once at the 15-min mark after its last write.
+// glitch-omni sessions (task: deny, self-fulfilling) are now flag-capable —
+// they are detected via the DB agent column.
 //
 // Trigger phrases (case-insensitive scan of input.args):
 //   "remember that", "i prefer", "from now on", "always do", "never do",
@@ -66,15 +86,23 @@
 import { promises as fs, readFileSync, writeFileSync, statSync } from "fs";
 import { join } from "path";
 import { randomUUID } from "crypto";
+import {
+  HEARTBEAT_INTERVAL_MS,
+  TIMER_CHECK_MS,
+  TOKEN_THRESHOLD,
+  COOLDOWN_MS,
+  STALE_RESET_MS,
+  createSessionEntry,
+  normalizeEntry,
+  formatTokens,
+  formatDuration,
+  formatToolCounts,
+  evaluateTrigger,
+  readSessionTokens,
+  readSessionAgent,
+  isOmniSession,
+} from "../../scripts/lib/mulahazah-helpers.mjs";
 
-const TOOL_CALL_THRESHOLD = 200;
-const TIME_THRESHOLD_MS = 4 * 60 * 60 * 1000;
-// Minimum tool calls required for the TIME threshold to fire. Prevents idle
-// long-lived sessions (e.g. 1 call in 4h38m) from triggering memory dispatches
-// every 4 hours with nothing to record.
-const TIME_THRESHOLD_MIN_CALLS = 20;
-const COOLDOWN_MS = 5 * 60 * 1000;
-const STALE_RESET_MS = 24 * 60 * 60 * 1000;
 const OBSERVATIONS_MAX_BYTES = 5 * 1024 * 1024;
 const OBSERVATIONS_MAX_LINES = 1000;
 
@@ -89,19 +117,9 @@ const TRIGGER_PHRASES = [
   "don't forget",
 ];
 
-function createSessionEntry() {
-  return {
-    toolCallCount: 0,
-    toolCounts: {},
-    lastTriggerTime: null,
-    sessionStartTime: Date.now(),
-    // isDispatcher: true only for sessions that have successfully called task()
-    // (i.e. parent agents that can delegate to sub-agents). Sub-agents have
-    // task: deny in their agent definitions and cannot dispatch @memory, so
-    // we must never inject a memory-trigger directive into their context.
-    isDispatcher: false,
-  };
-}
+// Double-start guard (PM-033 pattern): if the plugin factory runs twice in one
+// process, only ONE heartbeat timer may exist. The first timer owns the checks.
+const HEARTBEAT_TIMER_KEY = "__mulahazah_heartbeat_timer__";
 
 export const MulahazahPlugin = async ({ directory }) => {
   const dataDir = join(directory, "data");
@@ -122,26 +140,19 @@ export const MulahazahPlugin = async ({ directory }) => {
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const now = Date.now();
-      for (const [sid, entry] of Object.entries(parsed)) {
-        if (!entry || typeof entry !== "object") continue;
-        const e = {
-          toolCallCount: typeof entry.toolCallCount === "number" ? entry.toolCallCount : 0,
-          toolCounts: (entry.toolCounts && typeof entry.toolCounts === "object") ? entry.toolCounts : {},
-          lastTriggerTime: typeof entry.lastTriggerTime === "number" ? entry.lastTriggerTime : null,
-          sessionStartTime: typeof entry.sessionStartTime === "number" ? entry.sessionStartTime : now,
-          // Backward-compatible: missing field defaults to false. On next save
-          // it will be persisted.
-          isDispatcher: entry.isDispatcher === true,
-        };
+      for (const [sid, rawEntry] of Object.entries(parsed)) {
+        const e = normalizeEntry(rawEntry, now);
         if (e.lastTriggerTime !== null && now - e.lastTriggerTime > STALE_RESET_MS) {
           e.toolCallCount = 0;
           e.toolCounts = {};
+          e.lastTokenBaseline = null;
         }
         if (now - e.sessionStartTime > STALE_RESET_MS) {
           e.toolCallCount = 0;
           e.toolCounts = {};
           e.sessionStartTime = now;
           e.lastTriggerTime = null;
+          e.lastTokenBaseline = null;
         }
         if (e.lastTriggerTime === null && e.toolCallCount > 1000) {
           e.toolCallCount = 0;
@@ -204,6 +215,20 @@ export const MulahazahPlugin = async ({ directory }) => {
     return sessionStates.get(sessionID);
   }
 
+  /** Resolve agent from DB once per session; mark glitch-omni as flag-capable.
+   *  Returns true if the agent was resolved on THIS call (state changed). */
+  function markFlagCapability(sessionID, ss) {
+    if (ss.agent !== null) return false; // already resolved
+    ss.agent = readSessionAgent(sessionID);
+    if (isOmniSession(ss.agent)) {
+      ss.isDispatcher = true;
+      if (process.env.MULAHAZAH_DEBUG) {
+        console.log(`[mulahazah] session ${sessionID} marked flag-capable (glitch-omni self-fulfillment)`);
+      }
+    }
+    return true;
+  }
+
   async function saveState() {
     try {
       const now = Date.now();
@@ -214,7 +239,12 @@ export const MulahazahPlugin = async ({ directory }) => {
           try {
             await fs.unlink(triggerFlagPath(sid));
           } catch (e) {
-            console.warn(`[mulahazah] Failed to delete stale flag for session ${sid}: ${e.message}`);
+            // ENOENT is the EXPECTED case — the flag was already consumed
+            // (deleted by @memory after the write, or never written). Only
+            // surface real errors; a missing flag is not one.
+            if (e.code !== "ENOENT") {
+              console.warn(`[mulahazah] Failed to delete stale flag for session ${sid}: ${e.message}`);
+            }
           }
         }
       }
@@ -252,28 +282,12 @@ export const MulahazahPlugin = async ({ directory }) => {
     }
   }
 
-  function formatToolCounts(toolCounts) {
-    const entries = Object.entries(toolCounts);
-    if (entries.length === 0) return "none";
-    entries.sort((a, b) => b[1] - a[1]);
-    return entries.map(([tool, count]) => `${tool}=${count}`).join(", ");
-  }
-
-  function formatDuration(ms) {
-    const totalMinutes = Math.floor(ms / 60000);
-    if (totalMinutes < 60) return `${totalMinutes}min`;
-    const hours = Math.floor(totalMinutes / 60);
-    const minutes = totalMinutes % 60;
-    return `${hours}h ${minutes}min`;
-  }
-
-  function buildThresholdSummary(sessionState) {
-    const anchor = sessionState.lastTriggerTime ?? sessionState.sessionStartTime;
-    const elapsed = Date.now() - anchor;
+  function buildTriggerSummary(sessionState, reason) {
     return [
-      `Mulahazah threshold reached: ${sessionState.toolCallCount} tool calls / ${formatDuration(elapsed)} elapsed.`,
-      `Tool breakdown: ${formatToolCounts(sessionState.toolCounts)}`,
-      `Trigger @memory to record observations.`,
+      `Mulahazah memory trigger: ${reason}.`,
+      `Tool calls since last write: ${sessionState.toolCallCount}. Tool breakdown: ${formatToolCounts(sessionState.toolCounts)}`,
+      `Session window since last write: ${formatDuration(Date.now() - (sessionState.lastTriggerTime ?? sessionState.sessionStartTime))}.`,
+      `Trigger @memory to record session observations (or self-fulfill per your mode).`,
     ].join("\n");
   }
 
@@ -295,15 +309,16 @@ export const MulahazahPlugin = async ({ directory }) => {
   async function fireTrigger(sessionID, summary) {
     try {
       const ss = sessionStates.get(sessionID);
-      // P0-1: Gate triggers to dispatcher sessions only. Sub-agents (reviewer,
-      // coder, explore, etc.) have task: deny in their agent definitions and
-      // cannot dispatch @memory. If we wrote a flag for them, the transform
-      // hook would inject "DISPATCH @memory" into their context on every
-      // subsequent message, and they'd loop forever trying (and failing) to
-      // dispatch. Their observations are already captured in observations.jsonl
-      // and swept by the parent at compaction.
+      // P0-1: Gate triggers to flag-capable sessions only (dispatchers, or
+      // glitch-omni self-fulfillers). Sub-agents (reviewer, coder, explore,
+      // etc.) have task: deny and cannot dispatch @memory — and they are NOT
+      // glitch-omni, so they never become flag-capable. If we wrote a flag for
+      // them, the transform hook would inject "DISPATCH @memory" into their
+      // context on every subsequent message, and they'd loop forever trying
+      // (and failing) to dispatch. Their observations are already captured in
+      // observations.jsonl and swept by the parent at compaction.
       if (!ss || !ss.isDispatcher) {
-        console.log(`[mulahazah] skipping memory trigger for non-dispatcher session ${sessionID} (sub-agent) — observations already logged to observations.jsonl`);
+        console.log(`[mulahazah] skipping memory trigger for non-capable session ${sessionID} (sub-agent) — observations already logged to observations.jsonl`);
         // Still reset counters so we don't re-fire in a tight loop on the
         // same session. lastTriggerTime advances to enforce cooldown.
         if (ss) {
@@ -315,14 +330,23 @@ export const MulahazahPlugin = async ({ directory }) => {
         return;
       }
 
-      const flagPath = triggerFlagPath(sessionID);
-      await fs.writeFile(flagPath, summary + "\n", "utf8");
+      // Reset BEFORE the async write so a concurrent timer tick + hook call
+      // cannot both pass the threshold in the same window and double-write.
       ss.lastTriggerTime = Date.now();
       ss.toolCallCount = 0;
       ss.toolCounts = {};
+      // Refresh the token baseline so the next window measures from THIS write.
+      const tokens = readSessionTokens(sessionID);
+      if (tokens) {
+        ss.lastTokenBaseline = tokens;
+        ss.lastTokenReadTime = Date.now();
+      }
+
+      const flagPath = triggerFlagPath(sessionID);
+      await fs.writeFile(flagPath, summary + "\n", "utf8");
       await saveState();
       if (process.env.MULAHAZAH_DEBUG) {
-        console.log(`[mulahazah] threshold reached for session ${sessionID}, flag written`);
+        console.log(`[mulahazah] trigger fired for session ${sessionID}, flag written`);
       }
     } catch (err) {
       console.error(`[mulahazah] Failed to write trigger flag: ${err.message}`);
@@ -356,6 +380,63 @@ export const MulahazahPlugin = async ({ directory }) => {
     return null;
   }
 
+  // Background heartbeat: checks every TIMER_CHECK_MS for sessions that crossed
+  // the 30-min window or the token-burst threshold since their last write.
+  async function runHeartbeatCheck() {
+    const now = Date.now();
+    let dirty = false;
+    for (const [sid, ss] of sessionStates) {
+      if (!ss) continue;
+      const lastActivity = ss.lastTriggerTime ?? ss.sessionStartTime;
+      if (now - lastActivity > STALE_RESET_MS) continue; // stale — saveState cleans it
+
+      const agentResolved = markFlagCapability(sid, ss);
+      if (agentResolved) dirty = true;
+      if (!ss.isDispatcher) continue;
+
+      // Token data: initialize the baseline on first observation, else read
+      // fresh totals to compute the burst delta. DB reads are cheap point
+      // lookups; failures return null and are retried next tick.
+      let tokens = null;
+      if (ss.lastTokenBaseline === null) {
+        tokens = readSessionTokens(sid);
+        if (tokens) {
+          ss.lastTokenBaseline = tokens;
+          ss.lastTokenReadTime = now;
+          dirty = true;
+        }
+      } else {
+        tokens = readSessionTokens(sid);
+      }
+
+      const hit = evaluateTrigger(ss, now, tokens);
+      if (hit && isCooldownElapsed(ss)) {
+        await fireTrigger(sid, buildTriggerSummary(ss, hit.reason));
+        dirty = true;
+      }
+    }
+    // Persist only when something changed (agent resolved, baseline initialized,
+    // or a trigger fired) — avoids a disk write every 60s tick on idle sessions.
+    if (dirty) await saveState();
+  }
+
+  function startHeartbeatTimer() {
+    if (globalThis[HEARTBEAT_TIMER_KEY]) return;
+    globalThis[HEARTBEAT_TIMER_KEY] = setInterval(() => {
+      runHeartbeatCheck().catch((err) =>
+        console.error(`[mulahazah] heartbeat check failed: ${err.message}`)
+      );
+    }, TIMER_CHECK_MS);
+    if (globalThis[HEARTBEAT_TIMER_KEY].unref) {
+      globalThis[HEARTBEAT_TIMER_KEY].unref(); // never keep the process alive
+    }
+    if (process.env.MULAHAZAH_DEBUG) {
+      console.log(`[mulahazah] heartbeat timer started (${TIMER_CHECK_MS}ms cadence)`);
+    }
+  }
+
+  startHeartbeatTimer();
+
   return {
     "experimental.chat.messages.transform": async (input, output) => {
       try {
@@ -387,15 +468,15 @@ export const MulahazahPlugin = async ({ directory }) => {
         if (!lastMessage || !Array.isArray(lastMessage.parts)) return;
 
         // P0-1 (defense in depth): if a flag exists for a session that is NOT
-        // a dispatcher (e.g. a stale flag left from before this fix, or an
+        // flag-capable (e.g. a stale flag left from before this fix, or an
         // edge case where fireTrigger's gate was bypassed), DELETE the flag
-        // instead of injecting the dispatch directive. This guarantees a
-        // sub-agent can never be told to dispatch.
+        // instead of injecting the directive. This guarantees a sub-agent can
+        // never be told to dispatch.
         const ss = sessionStates.get(sessionID);
         if (!ss || !ss.isDispatcher) {
           try {
             await fs.unlink(flagPath);
-            console.log(`[mulahazah] deleted stale trigger flag for non-dispatcher session ${sessionID}`);
+            console.log(`[mulahazah] deleted stale trigger flag for non-capable session ${sessionID}`);
           } catch (unlinkErr) {
             if (unlinkErr.code !== "ENOENT") {
               console.error(`[mulahazah] Failed to delete stale flag: ${unlinkErr.message}`);
@@ -414,7 +495,8 @@ export const MulahazahPlugin = async ({ directory }) => {
           `[MEMORY TRIGGER PENDING] data/MEMORY_TRIGGER_FLAG.${sessionID} exists:\n` +
           `---\n${flagContent.trim()}\n---\n` +
           `⚠️ IMPORTANT: If you are a SUB-AGENT and CANNOT call task()/@memory (task denied): DO NOT attempt to dispatch. Do NOT try to delete this flag with file tools if you cannot. Instead, include any notable observations in your final report to the parent agent, then continue your task normally.\n` +
-          `If you CAN dispatch: dispatch @memory to record session observations, then delete the flag file (data/MEMORY_TRIGGER_FLAG.${sessionID}).`;
+          `If you CAN dispatch: dispatch @memory to record session observations, then delete the flag file (data/MEMORY_TRIGGER_FLAG.${sessionID}).\n` +
+          `If you are glitch-omni (self-fulfillment mode, task denied but memory-capable): record the observations yourself per the save-memory skill, then delete the flag file (data/MEMORY_TRIGGER_FLAG.${sessionID}).`;
 
         lastMessage.parts.push({
           id: `prt_${randomUUID()}`,
@@ -444,7 +526,7 @@ export const MulahazahPlugin = async ({ directory }) => {
 
       appendObservation(tool, sessionID).catch((err) => console.error(`[mulahazah] background task failed: ${err.message}`));
 
-      // P0-1: Mark session as a dispatcher if it has successfully called task().
+      // P0-1: Mark session as flag-capable if it has successfully called task().
       // Only the delegating parent agent can successfully call task — sub-agents
       // have task: deny and their attempts surface as tool name "invalid" in the
       // observation log. We check for an error on the output to distinguish a
@@ -457,6 +539,11 @@ export const MulahazahPlugin = async ({ directory }) => {
           }
         }
       }
+
+      // Omni-mode primary sessions (glitch-omni) have task: deny, so they never
+      // get marked via a successful task() call. They self-fulfill memory flags,
+      // so detect them via the DB agent column (once, cached in ss.agent).
+      markFlagCapability(sessionID, ss);
 
       // Note: counters persist only on next trigger or every-10th-call save; cooldown-window increments are in-memory only (acceptable — heuristic data).
       if (!isCooldownElapsed(ss)) {
@@ -472,18 +559,9 @@ export const MulahazahPlugin = async ({ directory }) => {
         return;
       }
 
-      const anchor = ss.lastTriggerTime ?? ss.sessionStartTime;
-      const elapsed = Date.now() - anchor;
-      const hitCallThreshold = ss.toolCallCount >= TOOL_CALL_THRESHOLD;
-      // Time threshold requires minimum activity — an idle session (few tool
-      // calls over many hours) should NOT trigger a memory dispatch. Only
-      // fire on elapsed time when there's been meaningful work.
-      const hitTimeThreshold = elapsed >= TIME_THRESHOLD_MS && ss.toolCallCount >= TIME_THRESHOLD_MIN_CALLS;
-
-      if (hitCallThreshold || hitTimeThreshold) {
-        await fireTrigger(sessionID, buildThresholdSummary(ss));
-        return;
-      }
+      // Heartbeat + token-burst thresholds are evaluated by the background
+      // timer (runHeartbeatCheck, every TIMER_CHECK_MS). No in-hook check
+      // needed — the timer fires within 60s of any threshold being crossed.
 
       if (ss.toolCallCount % 10 === 0) {
         await saveState();
