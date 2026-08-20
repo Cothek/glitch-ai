@@ -2,7 +2,7 @@
 
 import { execSync, execFileSync } from "child_process";
 import { existsSync } from "fs";
-import { readFile, writeFile, readdir, stat, rename } from "fs/promises";
+import { readFile, writeFile, readdir, stat, rename, mkdir } from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -711,6 +711,125 @@ async function touchAllTimestamps() {
   return results;
 }
 
+// --- Step 2b: Trim current-session.md (mechanical RAM budget) ---
+// The 500-line auto-reset was documented (master-memory.md, session-format.md) but
+// never implemented — current-session.md only shrank when Glitch remembered to trim
+// it manually. This step makes it mechanical (2026-08-20): archive recaps from past
+// sessions, drop ✅ COMPLETED scratchpad entries, enforce a line budget.
+const SESSION_RAM_MAX_LINES = 150;
+
+// Pure trim logic — testable without touching the real file.
+// Returns { content, archived: [{date, text}], originalCount, newCount, droppedCompleted }
+function trimSessionRam(content) {
+  const lines = content.split("\n");
+  const originalCount = lines.length;
+
+  // Split into top-level sections by "## " headings. Lines before the first
+  // "## " heading (title, preamble) are preserved separately.
+  const sections = [];
+  const preamble = [];
+  let current = null;
+  for (const line of lines) {
+    const m = line.match(/^## (.+)$/);
+    if (m) {
+      current = { heading: m[1], body: [] };
+      sections.push(current);
+    } else if (current) {
+      current.body.push(line);
+    } else {
+      preamble.push(line);
+    }
+  }
+  if (sections.length === 0) {
+    return { content, archived: [], originalCount, newCount: originalCount, droppedCompleted: 0 };
+  }
+
+  // 1. Archive recaps from past sessions — keep only the most recent.
+  const recaps = sections.filter((s) => /^Session Recap \((\d{4}-\d{2}-\d{2})\)$/.test(s.heading));
+  const archived = [];
+  if (recaps.length > 1) {
+    recaps.sort((a, b) => {
+      const da = a.heading.match(/\((\d{4}-\d{2}-\d{2})\)/)[1];
+      const db = b.heading.match(/\((\d{4}-\d{2}-\d{2})\)/)[1];
+      return da < db ? 1 : -1;
+    });
+    for (const r of recaps.slice(1)) {
+      const text = [`## ${r.heading}`, ...r.body].join("\n").trim();
+      if (text) archived.push({ date: r.heading.match(/\((\d{4}-\d{2}-\d{2})\)/)[1], text });
+      sections.splice(sections.indexOf(r), 1);
+    }
+  }
+
+  // 2. Collapse the scratchpad: drop ✅ COMPLETED entries, keep the rest.
+  let droppedCompleted = 0;
+  const scratch = sections.find((s) => s.heading.startsWith("Working Memory"));
+  if (scratch) {
+    const kept = [];
+    let inCompleted = false;
+    for (const line of scratch.body) {
+      if (/^#### ✅ COMPLETED:/.test(line)) {
+        inCompleted = true;
+        droppedCompleted++;
+        continue;
+      }
+      if (/^#### /.test(line)) {
+        inCompleted = false;
+      }
+      if (!inCompleted) kept.push(line);
+    }
+    scratch.body = kept;
+  }
+
+  // 3. Rebuild — preamble first, then sections.
+  const body = sections.map((s) => [`## ${s.heading}`, ...s.body].join("\n")).join("\n\n");
+  const rebuilt = preamble.length > 0 ? `${preamble.join("\n")}\n\n${body}` : body;
+  const newCount = rebuilt.split("\n").length;
+  return { content: rebuilt, archived, originalCount, newCount, droppedCompleted };
+}
+
+async function trimCurrentSession() {
+  const fp = path.join(CWD, "user", "current-session.md");
+  const archiveDir = path.join(CWD, "user", "daily-diary", "archived");
+  try {
+    const content = await readFile(fp, "utf-8");
+    const originalCount = content.split("\n").length;
+    if (originalCount <= SESSION_RAM_MAX_LINES) {
+      return `✓ Session RAM: ${originalCount} lines (under ${SESSION_RAM_MAX_LINES} budget)`;
+    }
+
+    const result = trimSessionRam(content);
+    if (result.newCount >= originalCount && result.archived.length === 0) {
+      return `⚠️ Session RAM: ${originalCount} lines — trim produced no reduction, review manually`;
+    }
+
+    await writeFile(fp, result.content.replace(/\n+$/, "") + "\n", "utf-8");
+
+    if (result.archived.length > 0) {
+      await mkdir(archiveDir, { recursive: true });
+      for (const a of result.archived) {
+        const month = a.date.slice(0, 7);
+        const archiveFile = path.join(archiveDir, `${month}-session-recaps.md`);
+        let archiveContent = "";
+        try {
+          archiveContent = await readFile(archiveFile, "utf-8");
+        } catch {
+          // new file
+        }
+        archiveContent += `\n\n${a.text}\n`;
+        await writeFile(archiveFile, archiveContent, "utf-8");
+      }
+    }
+
+    const parts = [`✓ Session RAM: trimmed ${result.originalCount} → ${result.newCount} lines`];
+    if (result.archived.length > 0) parts.push(`archived ${result.archived.length} past recap(s)`);
+    if (result.droppedCompleted > 0) parts.push(`dropped ${result.droppedCompleted} completed scratchpad entry(ies)`);
+    return parts.join(" | ");
+  } catch (e) {
+    warn(`Session RAM trim failed: ${e.message}`);
+    return `✗ Session RAM: FAILED (${e.message})`;
+  }
+}
+
 // --- Main ---
 async function main() {
   const { due: heavyDue, lastRun: lastHeavyRun } = await shouldRunHeavyChecks();
@@ -722,6 +841,7 @@ async function main() {
   }
   const results = {
     timestamp: await updateTimestamp(),
+    ram: await trimCurrentSession(),
     diary: await checkDiaryStaleness(),
     curriculum: await checkCurriculum(),
     gc: await checkImageGC(heavyDue, lastHeavyRun),
@@ -746,6 +866,7 @@ async function main() {
     "",
     "=== Auto-Completed ===",
     results.timestamp,
+    results.ram,
     ...results.touches,
     results.diary,
     results.curriculum,
