@@ -4,7 +4,7 @@ import { execSync, execFileSync } from "child_process";
 import { existsSync } from "fs";
 import { readFile, writeFile, readdir, stat, rename, mkdir } from "fs/promises";
 import path from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CWD = path.resolve(__dirname, "..");
@@ -294,6 +294,64 @@ async function checkMemoryStaleness() {
   }
 
   return { lines: results, hasStale: staleFiles.length > 0 };
+}
+
+// --- Step 4e: Session dashboard staleness check ---
+// The dashboard is loaded at every session start (instructions array), so it must
+// stay live-only for context efficiency. Flags workstream sections where EVERY
+// status row is ✅ (done) or ❌ (abandoned) — those should be archived to
+// daily-diary/archived/. Sections with any 🔲/🔄/🔧/⏳ row are still active.
+
+// Pure section parser — testable without touching the real file.
+// Returns titles of workstream sections where every status row is ✅ or ❌.
+export function findStaleDashboardSections(content) {
+  const lines = content.split("\n");
+  const sections = [];
+  let current = null;
+
+  for (const line of lines) {
+    const headingMatch = line.match(/^###\s+(.+)/);
+    if (headingMatch) {
+      if (current) sections.push(current);
+      current = { title: headingMatch[1].trim(), rows: [] };
+      continue;
+    }
+    if (current && line.trim().startsWith("|")) {
+      // Skip table header (| Status | ...) and separator (|----|) rows.
+      if (/^\|\s*(Status|[-]+)\s*\|/.test(line.trim())) continue;
+      current.rows.push(line.trim());
+    }
+  }
+  if (current) sections.push(current);
+
+  return sections
+    .filter((s) => s.rows.length > 0 && s.rows.every((r) => /^\|\s*(✅|❌)/.test(r)))
+    .map((s) => s.title);
+}
+
+async function checkDashboardStaleness() {
+  const fp = path.join(CWD, "user", "session-dashboard.md");
+  try {
+    const content = await readFile(fp, "utf-8");
+    const stale = findStaleDashboardSections(content);
+    if (stale.length === 0) {
+      return { lines: ["✓ Dashboard: all workstreams active"], hasStale: false };
+    }
+
+    return {
+      lines: [
+        `⚠️ Dashboard: ${stale.length} workstream(s) fully done/abandoned — archive to daily-diary/archived/`,
+        ...stale.map((s) => `   - ${s}`),
+      ],
+      hasStale: true,
+    };
+  } catch (e) {
+    if (e.code === "ENOENT") {
+      return { lines: ["✓ Dashboard: not found (no session-dashboard.md)"], hasStale: false };
+    }
+    warn(`Dashboard staleness check failed: ${e.message}`);
+    return { lines: [`✗ Dashboard: FAILED (${e.message})`], hasStale: false };
+  }
 }
 
 // --- Step 5.5: Skill improvement review ---
@@ -848,6 +906,7 @@ async function main() {
     git: await checkGit(),
     touches: await touchAllTimestamps(),
     staleness: await checkMemoryStaleness(),
+    dashboard: await checkDashboardStaleness(),
     skillImp: await checkSkillImprovements(),
     dataAudit: auditResult.dataAudit,
     quarantineScan: auditResult.quarantineScan,
@@ -889,6 +948,12 @@ async function main() {
     ...(results.staleness.hasStale
       ? ["", "📋 Action: Review stale memory files above — promote scratchpad entries, update patterns/forge-log as needed"]
       : []),
+    "",
+    "=== Dashboard Staleness ===",
+    ...results.dashboard.lines,
+    ...(results.dashboard.hasStale
+      ? ["", "📋 Action: Archive fully-done workstreams to daily-diary/archived/2026-08-session-dashboard-archive.md"]
+      : []),
     ...(results.skillImp.hasPending
       ? ["", "=== Skill Improvements Pending ===", ...results.skillImp.lines]
       : []),
@@ -902,7 +967,12 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((e) => {
-  warn(`Fatal: ${e.message}`);
-  process.exit(1);
-});
+// Only run main() when executed directly — importing for tests must not trigger
+// a full compaction run (findStaleDashboardSections is exported for testing).
+const isMain = process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href;
+if (isMain) {
+  main().catch((e) => {
+    warn(`Fatal: ${e.message}`);
+    process.exit(1);
+  });
+}
