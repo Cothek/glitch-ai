@@ -79,10 +79,13 @@ const DEFAULT_LOCAL_MODEL = 'google/gemma-4-12b';
 
 /**
  * Asynchronously discovers available models from the LM Studio instance.
- * Attempts to fetch http://192.168.86.139:1234/v1/models and selects the first
- * text-capable model. Falls back gracefully on any error.
+ * Attempts to fetch http://127.0.0.1:1234/v1/models and collects ALL models.
+ * Falls back gracefully on any error.
  * 
- * Returns the discovered model ID string, or DEFAULT_LOCAL_MODEL if discovery fails.
+ * Returns { primary, all } where:
+ *   - primary: the model ID string to use as the default agent model
+ *   - all: array of { id, name } for every model LM Studio serves
+ * On failure, primary = DEFAULT_LOCAL_MODEL and all = [].
  */
 async function discoverLocalModels(customBaseUrl) {
   const baseUrl = customBaseUrl || 'http://127.0.0.1:1234/v1/models';
@@ -102,7 +105,7 @@ async function discoverLocalModels(customBaseUrl) {
     if (!response.ok) {
       // 404 or other HTTP error
       log(DARK_YELLOW, `  LM Studio model discovery: server responded ${response.status}`);
-      return DEFAULT_LOCAL_MODEL;
+      return { primary: DEFAULT_LOCAL_MODEL, all: [] };
     }
 
     const data = await response.json();
@@ -110,16 +113,22 @@ async function discoverLocalModels(customBaseUrl) {
 
     if (!models || models.length === 0) {
       log(DARK_YELLOW, '  LM Studio model discovery: no models found');
-      return DEFAULT_LOCAL_MODEL;
+      return { primary: DEFAULT_LOCAL_MODEL, all: [] };
     }
 
-    // Select first model - assume text-capable
+    // Collect ALL models (id + derived display name)
+    const allModels = models.map(m => ({
+      id: m.id,
+      name: (m.id.split('/').pop() || m.id).replace(/-/g, ' ') + ' (local)'
+    }));
+
+    // Select first model as the default agent model - assume text-capable
     // Most LM Studio models are text-capable by default; if vision-only, user can override
     const firstModel = models[0];
     const modelId = firstModel.id;
 
     log(GREEN, `  LM Studio model discovery: found ${models.length} models, using ${modelId}`);
-    return modelId;
+    return { primary: modelId, all: allModels };
   } catch (e) {
     // Connection refused, timeout, network error, invalid JSON, etc.
     if (e.name === 'AbortError') {
@@ -129,7 +138,7 @@ async function discoverLocalModels(customBaseUrl) {
     } else {
       log(DARK_YELLOW, `  LM Studio model discovery: failed (${e.message || e})`);
     }
-    return DEFAULT_LOCAL_MODEL;
+    return { primary: DEFAULT_LOCAL_MODEL, all: [] };
   }
 }
 
@@ -523,7 +532,9 @@ async function main() {
 
 // ---- Model discovery and selection ----
 // 1. Discover available models from LM Studio
-const discoveredModel = await discoverLocalModels();
+const discovery = await discoverLocalModels();
+const discoveredModel = discovery.primary;
+const allLocalModels = discovery.all; // [{ id, name }, ...] — every model LM Studio serves
 
 // 2. Apply user overrides (env var > --model flag > discovery)
 let localModel = discoveredModel;
@@ -585,6 +596,27 @@ localModel = normalizeModelId(localModel);
 
   // Inject shared providers (NVIDIA, LM Studio) from config/providers.json
   injectProviders(configObj);
+
+  // ---- Register ALL discovered LM Studio models in the config ----
+  // injectProviders() replaces the whole provider object with the static
+  // providers.json, so we re-populate provider.lmstudio.models with every
+  // model LM Studio actually serves. This is what makes OpenCode's model
+  // list (/models, model picker) show the local models.
+  if (configObj.provider && configObj.provider.lmstudio) {
+    const lmModels = {};
+    for (const m of allLocalModels) {
+      lmModels[m.id] = { name: m.name };
+    }
+    // Ensure the selected primary model is always present even if discovery
+    // returned an empty list (e.g. LM Studio was down but user set env var).
+    if (!lmModels[localModel]) {
+      lmModels[localModel] = {
+        name: (localModel.split('/').pop() || localModel).replace(/-/g, ' ') + ' (local)'
+      };
+    }
+    configObj.provider.lmstudio.models = lmModels;
+    log(DARK_GREEN, `  Registered ${Object.keys(lmModels).length} LM Studio model(s) in config`);
+  }
 
   // Build instructions list (engine + user)
   const engineInstructions = [
