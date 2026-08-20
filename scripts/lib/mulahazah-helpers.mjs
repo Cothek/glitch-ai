@@ -124,9 +124,9 @@ export function evaluateTrigger(ss, now, tokens) {
   const anchor = ss.lastTriggerTime ?? ss.sessionStartTime;
   const elapsed = now - anchor;
 
-  // 1) Heartbeat: 30 min since last write AND at least 1 tool call since.
-  //    (>=1 call guard prevents empty writes on idle sessions.)
-  if (elapsed >= HEARTBEAT_INTERVAL_MS && ss.toolCallCount >= 1) {
+  // 1) Heartbeat: 15 min since last write. No tool-call guard — sessions
+  //    with zero tool calls still need conversation state recorded after 15 min.
+  if (elapsed >= HEARTBEAT_INTERVAL_MS) {
     return {
       reason: `heartbeat: ${formatDuration(elapsed)} since last write, ${ss.toolCallCount} tool calls`,
       elapsed,

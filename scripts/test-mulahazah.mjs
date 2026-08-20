@@ -2,8 +2,9 @@
 // helpers (scripts/lib/mulahazah-helpers.mjs).
 //
 // Tests:
-//   1. Heartbeat trigger — fires at >= 30 min elapsed with >= 1 tool call;
-//      does NOT fire under 30 min, or at >= 30 min with 0 tool calls (idle guard).
+//   1. Heartbeat trigger — fires at >= 15 min elapsed regardless of tool calls
+//      (idle guard removed 2026-08-20: quiet sessions still need state capture);
+//      does NOT fire under 15 min.
 //   2. Token burst trigger — fires at >= 1M new tokens since last write;
 //      does NOT fire below the threshold, with no baseline, or with no delta.
 //   3. Session entry + normalization — defaults, field preservation, bad input.
@@ -71,11 +72,12 @@ test("does NOT fire under the interval", () => {
   assert.strictEqual(hit, null, "1ms under the interval must not fire");
 });
 
-test("does NOT fire at >= the interval with 0 tool calls (idle guard)", () => {
+test("fires at >= the interval even with 0 tool calls (idle guard removed)", () => {
   const ss = createSessionEntry(1_000_000);
   ss.toolCallCount = 0;
   const hit = evaluateTrigger(ss, 1_000_000 + HEARTBEAT_INTERVAL_MS * 2, null);
-  assert.strictEqual(hit, null, "idle session with no calls must not fire");
+  assert.ok(hit, "idle session with no calls must still fire (session-end capture)");
+  assert.match(hit.reason, /heartbeat/);
 });
 
 test("measures from lastTriggerTime, not sessionStartTime, after a write", () => {
@@ -103,7 +105,8 @@ test("fires at exactly TOKEN_THRESHOLD delta", () => {
   const ss = createSessionEntry(1_000_000);
   ss.lastTokenBaseline = { input: 1000, output: 1000, reasoning: 0, total: 2000 };
   const tokens = { input: 501_000, output: 501_000, reasoning: 0, total: 1_002_000 };
-  const hit = evaluateTrigger(ss, Date.now(), tokens);
+  // now within the heartbeat window (5 min) so the token burst is the trigger
+  const hit = evaluateTrigger(ss, 1_000_000 + 5 * 60_000, tokens);
   assert.ok(hit, "expected token burst to fire at exactly 1M delta");
   assert.match(hit.reason, /token burst/);
 });
@@ -112,16 +115,18 @@ test("does NOT fire below TOKEN_THRESHOLD delta", () => {
   const ss = createSessionEntry(1_000_000);
   ss.lastTokenBaseline = { input: 1000, output: 1000, reasoning: 0, total: 2000 };
   const tokens = { input: 400_000, output: 400_000, reasoning: 0, total: 800_000 };
-  const hit = evaluateTrigger(ss, Date.now(), tokens);
+  // now within the heartbeat window (5 min) so only the token check applies
+  const hit = evaluateTrigger(ss, 1_000_000 + 5 * 60_000, tokens);
   assert.strictEqual(hit, null, "800K delta must not fire at 1M threshold");
 });
 
 test("does NOT fire when tokens has no delta or negative delta", () => {
   const ss = createSessionEntry(1_000_000);
   ss.lastTokenBaseline = { input: 1000, output: 1000, reasoning: 0, total: 2000 };
-  const noDelta = evaluateTrigger(ss, Date.now(), { ...ss.lastTokenBaseline });
+  const now = 1_000_000 + 5 * 60_000; // within heartbeat window
+  const noDelta = evaluateTrigger(ss, now, { ...ss.lastTokenBaseline });
   assert.strictEqual(noDelta, null, "no delta must not fire");
-  const less = evaluateTrigger(ss, Date.now(), { input: 500, output: 500, reasoning: 0, total: 1000 });
+  const less = evaluateTrigger(ss, now, { input: 500, output: 500, reasoning: 0, total: 1000 });
   assert.strictEqual(less, null, "negative delta must not fire");
 });
 
@@ -129,7 +134,7 @@ test("does NOT fire when baseline is null (init window, handled by caller)", () 
   const ss = createSessionEntry(1_000_000);
   ss.lastTokenBaseline = null;
   const tokens = { input: 2_000_000, output: 100_000, reasoning: 0, total: 2_100_000 };
-  const hit = evaluateTrigger(ss, Date.now(), tokens);
+  const hit = evaluateTrigger(ss, 1_000_000 + 5 * 60_000, tokens); // within heartbeat window
   assert.strictEqual(hit, null, "no baseline means we cannot compute delta yet");
 });
 

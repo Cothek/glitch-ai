@@ -57,7 +57,7 @@
 //   data/MEMORY_TRIGGER_FLAG.<sessionID> — short text summary, deleted after dispatch
 //
 // Trigger paths (hardcoded, see scripts/lib/mulahazah-helpers.mjs):
-//   15 min heartbeat (requires >= 1 tool call since last write)
+//   15 min heartbeat (fires once 15 min after last write, regardless of tool calls)
 //   OR 1M new tokens since last write (input+output+reasoning, from the DB)
 //   OR trigger phrase detected in tool args (immediate, subject to 5-min cooldown)
 //   24 hour stale reset per session entry
@@ -71,7 +71,7 @@
 // NOTE (2026-08-19): the call-count / time thresholds are REPLACED by the
 // 15-min heartbeat + 1M-token burst model (heartbeat interval set to 15 min
 // per Troy 2026-08-19). Session-end capture is implicit: a quiet session fires
-// once at the 15-min mark after its last write.
+// once at the 15-min mark after its last write, even with zero tool calls.
 // glitch-omni sessions (task: deny, self-fulfilling) are now flag-capable —
 // they are detected via the DB agent column.
 //
