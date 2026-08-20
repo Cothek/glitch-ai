@@ -10,21 +10,15 @@
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { createRequire } from 'node:module';
+import { getSqliteDriver, openDatabase } from './sqlite-driver.mjs';
 
-const require = createRequire(import.meta.url);
-
-// Lazily load node:sqlite (built-in on Node 22.5+). Guarded so the helper
-// module doesn't crash at load time on older Node — the function below
-// returns { alive: null } if the import fails.
-let DatabaseSync = null;
-try {
-  DatabaseSync = require('node:sqlite').DatabaseSync;
-} catch {
-  // ADVISORY-7: node:sqlite unavailable — auto-abort degrades to signal-only
-  // mode (liveness checks always return alive:null → fail-closed on abort).
-  // Warn once so the operator knows auto-abort is disabled, not silently broken.
-  console.warn('[agent-watchdog] node:sqlite unavailable — auto-abort disabled, signal-only mode');
+// SQLite access is runtime-adaptive (see sqlite-driver.mjs): opencode's
+// embedded runtime is Bun (bun:sqlite), system Node has node:sqlite. If
+// NEITHER is available, auto-abort degrades to signal-only mode (liveness
+// checks always return alive:null → fail-closed on abort). In practice this
+// never fires — one of the two drivers is always present.
+if (!getSqliteDriver()) {
+  console.warn('[agent-watchdog] no SQLite driver (bun:sqlite/node:sqlite) — auto-abort disabled, signal-only mode');
 }
 
 /**
@@ -58,13 +52,13 @@ function defaultDbPath() {
  * @param dbPath - optional DB path override (used by tests)
  */
 export function isSessionToolRunning(sessionID, dbPath) {
-  if (!DatabaseSync) {
-    return { alive: null, error: 'node:sqlite unavailable' };
+  if (!getSqliteDriver()) {
+    return { alive: null, error: 'no SQLite driver (bun:sqlite/node:sqlite unavailable)' };
   }
   const path = dbPath || defaultDbPath();
   let db;
   try {
-    db = new DatabaseSync(path, { readonly: true });
+    db = openDatabase(path, { readonly: true });
   } catch (e) {
     return { alive: null, error: `DB open failed: ${e.message}` };
   }

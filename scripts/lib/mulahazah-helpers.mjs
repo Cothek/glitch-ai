@@ -27,18 +27,15 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
-import { createRequire } from "node:module";
+import { getSqliteDriver, openDatabase } from "./sqlite-driver.mjs";
 
-// node:sqlite is available on node >= 22.5 (stable in 24.x). Load it via
-// createRequire so a runtime without it degrades gracefully: token-burst
-// detection is disabled, but the heartbeat + phrase triggers keep working.
-// A hard top-level import would kill the ENTIRE plugin on older node.
-const require = createRequire(import.meta.url);
-let DatabaseSync = null;
-try {
-  DatabaseSync = require("node:sqlite").DatabaseSync;
-} catch {
-  console.warn("[mulahazah] node:sqlite unavailable — token-burst detection disabled (heartbeat + phrases still work)");
+// SQLite access is runtime-adaptive (see sqlite-driver.mjs): opencode's
+// embedded runtime is Bun (bun:sqlite), system Node has node:sqlite. If
+// NEITHER is available, token-burst detection is disabled but the heartbeat
+// + phrase triggers keep working. In practice this never fires — one of the
+// two drivers is always present.
+if (!getSqliteDriver()) {
+  console.warn("[mulahazah] no SQLite driver (bun:sqlite/node:sqlite) — token-burst detection disabled (heartbeat + phrases still work)");
 }
 
 export const HEARTBEAT_INTERVAL_MS = 15 * 60 * 1000; // 15 min from last write
@@ -169,7 +166,7 @@ export function getTokenDb() {
   const path = resolveDbPath();
   if (!path) return null;
   try {
-    cachedDb = new DatabaseSync(path, { readOnly: true });
+    cachedDb = openDatabase(path, { readonly: true });
     return cachedDb;
   } catch (err) {
     dbOpenFailed = true;
