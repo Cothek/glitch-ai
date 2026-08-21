@@ -181,18 +181,6 @@ function restartOpenCode() {
   writeFileSync(restartFlagPath, String(pid), 'utf-8');
   const logPath = join(ROOT_DIR, 'data', 'restart-kill.log');
 
-  let pidStr;
-  try {
-    pidStr = readFileSync(pidFilePath, 'utf-8').trim();
-  } catch (e) {
-    return { ok: false, error: `PID file not found: ${e.message}`, code: 'NO_PID_FILE' };
-  }
-
-  const pid = parseInt(pidStr, 10);
-  if (!pid || pid <= 0 || isNaN(pid)) {
-    return { ok: false, error: `Invalid PID in file: "${pidStr}"`, code: 'INVALID_PID' };
-  }
-
   setTimeout(() => {
     try {
       const logMsg = `[${new Date().toISOString()}] Killing opencode PID ${pid}...\n`;
