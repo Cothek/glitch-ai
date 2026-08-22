@@ -899,7 +899,15 @@ async function main() {
     // ---- Check for restart flag (seamless restart) ----
     const restartFlag = join(ROOT_DIR, 'data', '.restart-flag');
     if (existsSync(restartFlag)) {
+      // PM-034: Read PID from flag file before deleting it
+      let oldPid = 0;
+      try {
+        const flagContent = readFileSync(restartFlag, 'utf-8').trim();
+        const parsed = parseInt(flagContent, 10);
+        if (!isNaN(parsed) && parsed > 0) oldPid = parsed;
+      } catch {}
       unlinkSync(restartFlag);
+
       // PM-034: Wait for old process + port release before restart
       if (oldPid && oldPid > 0) {
         const waitForProcessExit = async (pid, timeoutMs = 10000) => {
@@ -907,7 +915,7 @@ async function main() {
             try {
               process.kill(pid, 0);
             } catch {
-              log(CYAN, `  Old PID \${pid} has exited.`);
+              log(CYAN, `  Old PID ${pid} has exited.`);
               break;
             }
             await new Promise(r => setTimeout(r, 500));
@@ -916,7 +924,7 @@ async function main() {
         await waitForProcessExit(oldPid, 10000);
       }
 
-const waitForPortsFree = async (ports, timeoutMs = 10000) => {
+      const waitForPortsFree = async (ports, timeoutMs = 10000) => {
         const checkPort = async (port) => {
           try {
             if (isWin) {
