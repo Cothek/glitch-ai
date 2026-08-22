@@ -133,11 +133,14 @@ async function runTransform(plugin, sessionID) {
 }
 
 // ---------------------------------------------------------------------------
-// Test 1: mulahazah — dispatcher session triggers flag at 200 calls
+// Test 1: mulahazah — dispatcher session triggers flag via trigger phrase
+// (2026-08-19: the 200-call threshold was replaced by the 30-min heartbeat +
+// 1M-token-burst model; the immediate trigger-phrase path is unchanged and is
+// the deterministic trigger we can drive in a test without waiting 30 min.)
 // ---------------------------------------------------------------------------
 async function testMulahazahDispatcher() {
   await withTempDir(async (tmp) => {
-    section("mulahazah: dispatcher session triggers flag at 200 calls");
+    section("mulahazah: dispatcher session triggers flag via trigger phrase");
     const plugin = await MulahazahPlugin({ directory: tmp });
     const sid = newSessionID("dispatcher");
     const dataDir = join(tmp, "data");
@@ -149,11 +152,14 @@ async function testMulahazahDispatcher() {
       { result: "ok" }
     );
 
-    // Drive 199 more read calls (total 200 including the task call)
-    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 199);
+    // Trigger phrase call → immediate flag
+    await plugin["tool.execute.after"](
+      { tool: "edit", sessionID: sid, args: { content: "remember that Troy prefers X" } },
+      { result: "ok" }
+    );
 
     assert(
-      "flag file exists after 200 calls (dispatcher)",
+      "flag file exists after trigger phrase (dispatcher)",
       existsSync(flagPath),
       `expected ${flagPath} to exist`
     );
@@ -161,8 +167,8 @@ async function testMulahazahDispatcher() {
     if (existsSync(flagPath)) {
       const content = readFileSync(flagPath, "utf8");
       assert(
-        "flag content mentions threshold",
-        /threshold reached/i.test(content) || /Mulahazah/i.test(content),
+        "flag content mentions phrase",
+        /remember that/i.test(content),
         `content was: ${content.slice(0, 120)}`
       );
     }
@@ -658,64 +664,56 @@ async function testObservationsTruncationFailureResilience() {
 }
 
 // ---------------------------------------------------------------------------
-// Test 14: FIX B — during cooldown, saveState is NOT called
+// Test 14: FIX B — during cooldown, trigger phrase does NOT re-fire
+// (2026-08-19: the old "saveState not called during cooldown" assertion is
+// obsolete — the new model persists state every 10 calls by design. The
+// cooldown guarantee that matters is: a consumed flag is NOT re-created by
+// repeated phrase calls inside the 5-min cooldown window.)
 // ---------------------------------------------------------------------------
-async function testCooldownNoSaveState() {
+async function testCooldownNoRefire() {
   await withTempDir(async (tmp) => {
-    section("FIX B: during cooldown, saveState is NOT called (state.json unchanged)");
+    section("FIX B: during cooldown, trigger phrase does NOT re-fire");
     const plugin = await MulahazahPlugin({ directory: tmp });
     const sid = newSessionID("cooldown");
     const dataDir = join(tmp, "data");
-    const stateFile = join(dataDir, "mulahazah", "state.json");
     const flagPath = join(dataDir, `MEMORY_TRIGGER_FLAG.${sid}`);
 
     await plugin["tool.execute.after"](
       { tool: "task", sessionID: sid, args: { prompt: "delegate" } },
       { result: "ok" }
     );
-    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 199);
+    await plugin["tool.execute.after"](
+      { tool: "edit", sessionID: sid, args: { content: "remember that Troy prefers X" } },
+      { result: "ok" }
+    );
 
     assert(
       "precondition: trigger fired (flag exists)",
       existsSync(flagPath)
     );
 
-    await settleIO();
-
-    const stateAfterTrigger = readFileSync(stateFile, "utf8");
-    const parsedTrigger = JSON.parse(stateAfterTrigger);
-    assert(
-      "precondition: state.json shows toolCallCount=0 after trigger reset",
-      parsedTrigger[sid]?.toolCallCount === 0,
-      `got toolCallCount=${parsedTrigger[sid]?.toolCallCount}`
-    );
-
-    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 15);
-    await settleIO();
-
-    const stateAfterCooldown = readFileSync(stateFile, "utf8");
+    // Simulate consumption (the memory agent deletes the flag after writing),
+    // then drive more phrase calls inside the cooldown window.
+    rmSync(flagPath, { force: true });
+    await driveCalls(plugin, sid, "edit", { content: "remember that Y" }, 3);
 
     assert(
-      "state.json is unchanged during cooldown (saveState not called)",
-      stateAfterCooldown === stateAfterTrigger,
-      "state.json was rewritten during cooldown — saveState churn not fixed"
-    );
-
-    const parsedCooldown = JSON.parse(stateAfterCooldown);
-    assert(
-      "state.json still shows toolCallCount=0 (in-memory counter incremented but not persisted)",
-      parsedCooldown[sid]?.toolCallCount === 0,
-      `got toolCallCount=${parsedCooldown[sid]?.toolCallCount}`
+      "no new flag during cooldown (phrase suppressed)",
+      !existsSync(flagPath),
+      "a new flag was written during cooldown — phrase suppression broken"
     );
   });
 }
 
 // ---------------------------------------------------------------------------
-// Test 15: FIX B — after cooldown expires, accumulated count triggers threshold
+// Test 15: FIX B — after cooldown expires, trigger phrase fires again
+// (2026-08-19: the old "accumulated count triggers 200-call threshold" test is
+// obsolete — the call-count threshold is gone. The cooldown-expiry guarantee
+// that matters: a phrase call after the 5-min cooldown writes a new flag.)
 // ---------------------------------------------------------------------------
-async function testCooldownExpiryAccumulatedCount() {
+async function testCooldownExpiryRefire() {
   await withTempDir(async (tmp) => {
-    section("FIX B: after cooldown expires, accumulated count triggers threshold");
+    section("FIX B: after cooldown expires, trigger phrase fires again");
     const dataDir = join(tmp, "data");
     const mulahazahDir = join(dataDir, "mulahazah");
     mkdirSync(mulahazahDir, { recursive: true });
@@ -724,9 +722,9 @@ async function testCooldownExpiryAccumulatedCount() {
 
     const preState = {
       [sid]: {
-        toolCallCount: 195,
-        toolCounts: { read: 195 },
-        lastTriggerTime: Date.now() - 6 * 60 * 1000,
+        toolCallCount: 0,
+        toolCounts: {},
+        lastTriggerTime: Date.now() - 6 * 60 * 1000, // 6 min ago — cooldown (5 min) expired
         sessionStartTime: Date.now() - 10 * 60 * 1000,
         isDispatcher: true,
       },
@@ -737,26 +735,74 @@ async function testCooldownExpiryAccumulatedCount() {
     const flagPath = join(dataDir, `MEMORY_TRIGGER_FLAG.${sid}`);
 
     assert(
-      "precondition: no flag before threshold",
+      "precondition: no flag before phrase",
       !existsSync(flagPath)
     );
 
-    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 5);
+    await plugin["tool.execute.after"](
+      { tool: "edit", sessionID: sid, args: { content: "from now on do X" } },
+      { result: "ok" }
+    );
 
     assert(
-      "flag file exists after 5 more calls (195 + 5 = 200, threshold fires)",
+      "flag file exists after cooldown expiry + phrase",
       existsSync(flagPath),
       `expected ${flagPath}`
     );
+  });
+}
 
-    if (existsSync(flagPath)) {
-      const content = readFileSync(flagPath, "utf8");
-      assert(
-        "flag content mentions 200 tool calls (accumulated count included)",
-        /200 tool calls/i.test(content),
-        `content was: ${content.slice(0, 200)}`
-      );
-    }
+// ---------------------------------------------------------------------------
+// Test 16: stale session cleanup does NOT warn/crash when flag already gone
+// (regression for the live ENOENT warning: "Failed to delete stale flag for
+// session ... ENOENT" — a stale session whose flag was already consumed by
+// @memory must be cleaned silently, not logged as an error.)
+// ---------------------------------------------------------------------------
+async function testStaleCleanupNoFlag() {
+  await withTempDir(async (tmp) => {
+    section("stale session cleanup: no ENOENT warning when flag already gone");
+    const dataDir = join(tmp, "data");
+    const mulahazahDir = join(dataDir, "mulahazah");
+    mkdirSync(mulahazahDir, { recursive: true });
+    const stateFile = join(mulahazahDir, "state.json");
+    const sid = newSessionID("stale");
+
+    // Pre-seed a STALE session entry (last memory write 25h ago) with NO flag
+    // file on disk — exactly the live scenario that produced the ENOENT
+    // warning. sessionStartTime is kept fresh (1h ago) so the plugin's
+    // load-time sweep does NOT revive the entry; saveState's stale-cleanup
+    // must delete it and swallow the missing-flag ENOENT.
+    const preState = {
+      [sid]: {
+        toolCallCount: 3,
+        toolCounts: { read: 3 },
+        lastTriggerTime: Date.now() - 25 * 60 * 60 * 1000,
+        sessionStartTime: Date.now() - 60 * 60 * 1000,
+        isDispatcher: true,
+      },
+    };
+    writeFileSync(stateFile, JSON.stringify(preState), "utf8");
+    assert(
+      "precondition: no flag file on disk",
+      !existsSync(join(dataDir, `MEMORY_TRIGGER_FLAG.${sid}`))
+    );
+
+    const plugin = await MulahazahPlugin({ directory: tmp });
+
+    // Drive 10 calls to force a saveState (every-10th-call persistence).
+    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 10);
+    await settleIO();
+
+    const stateAfter = JSON.parse(readFileSync(stateFile, "utf8"));
+    assert(
+      "stale session entry removed from state.json",
+      !(sid in stateAfter),
+      `stale entry still present: ${JSON.stringify(stateAfter[sid])}`
+    );
+    assert(
+      "no flag file created for stale session",
+      !existsSync(join(dataDir, `MEMORY_TRIGGER_FLAG.${sid}`))
+    );
   });
 }
 
@@ -782,8 +828,9 @@ try {
   await testStuckDetectorDeniedTaskDispatch();
   await testObservationsGrowthCap();
   await testObservationsTruncationFailureResilience();
-  await testCooldownNoSaveState();
-  await testCooldownExpiryAccumulatedCount();
+  await testCooldownNoRefire();
+  await testCooldownExpiryRefire();
+  await testStaleCleanupNoFlag();
 } catch (err) {
   console.error("\nFATAL: harness threw an unexpected error:");
   console.error(err);

@@ -165,21 +165,21 @@ function extractAgents(config) {
 
 function restartOpenCode() {
   const restartFlagPath = join(ROOT_DIR, 'data', '.restart-flag');
-  writeFileSync(restartFlagPath, '1', 'utf-8');
   const pidFilePath = join(ROOT_DIR, 'data', 'opencode.pid');
-  const logPath = join(ROOT_DIR, 'data', 'restart-kill.log');
-
   let pidStr;
   try {
     pidStr = readFileSync(pidFilePath, 'utf-8').trim();
   } catch (e) {
     return { ok: false, error: `PID file not found: ${e.message}`, code: 'NO_PID_FILE' };
   }
-
   const pid = parseInt(pidStr, 10);
   if (!pid || pid <= 0 || isNaN(pid)) {
     return { ok: false, error: `Invalid PID in file: "${pidStr}"`, code: 'INVALID_PID' };
   }
+  // Write the PID into the restart flag so the supervisor can wait for the
+  // old process tree to fully die before spawning the replacement (PM-034).
+  writeFileSync(restartFlagPath, String(pid), 'utf-8');
+  const logPath = join(ROOT_DIR, 'data', 'restart-kill.log');
 
   setTimeout(() => {
     try {

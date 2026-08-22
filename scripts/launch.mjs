@@ -899,7 +899,64 @@ async function main() {
     // ---- Check for restart flag (seamless restart) ----
     const restartFlag = join(ROOT_DIR, 'data', '.restart-flag');
     if (existsSync(restartFlag)) {
+      // PM-034: Read PID from flag file before deleting it
+      let oldPid = 0;
+      try {
+        const flagContent = readFileSync(restartFlag, 'utf-8').trim();
+        const parsed = parseInt(flagContent, 10);
+        if (!isNaN(parsed) && parsed > 0) oldPid = parsed;
+      } catch {}
       unlinkSync(restartFlag);
+
+      // PM-034: Wait for old process + port release before restart
+      if (oldPid && oldPid > 0) {
+        const waitForProcessExit = async (pid, timeoutMs = 10000) => {
+          for (let i = 0; i < timeoutMs / 500; i++) {
+            try {
+              process.kill(pid, 0);
+            } catch {
+              log(CYAN, `  Old PID ${pid} has exited.`);
+              break;
+            }
+            await new Promise(r => setTimeout(r, 500));
+          }
+        };
+        await waitForProcessExit(oldPid, 10000);
+      }
+
+      const waitForPortsFree = async (ports, timeoutMs = 10000) => {
+        const checkPort = async (port) => {
+          try {
+            if (isWin) {
+              const out = execFileSync('netstat', ['-ano'], { encoding: 'utf-8', timeout: 1000, maxBuffer: 10 * 1024 });
+              const re = new RegExp('[:' + '\\\\s' + ']' + port + '\\s+\\S+\\s+LISTENING\\s+(\\d+)$', 'm');
+              const m = out.match(re);
+              return m ? false : true;
+            } else {
+              const { execSync } = await import('child_process');
+              const out = execSync('lsof -i :' + port, { encoding: 'utf-8', timeout: 1000 }).trim();
+              return out ? false : true;
+            }
+          } catch {
+            return true;
+          }
+        };
+        const waitForPort = async (port, timeoutMs = 10000) => {
+          for (let i = 0; i < timeoutMs / 1000; i++) {
+            if (await checkPort(port)) {
+              log(CYAN, '  Port ' + port + ' is free.');
+              return true;
+            }
+            await new Promise(r => setTimeout(r, 1000));
+          }
+          return false;
+        };
+        for (const port of ports) {
+          await waitForPort(port, 10000);
+        }
+      };
+
+      await waitForPortsFree([4104, 4102, 4100], 10000);
       log('');
       log(MAGENTA, '  Restarting Glitch...');
       log('');

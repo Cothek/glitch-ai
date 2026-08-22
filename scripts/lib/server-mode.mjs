@@ -76,6 +76,23 @@ function promptUser(question) {
   });
 }
 
+// Yes/No prompt with validation — loops until the user enters y/yes, n/no,
+// or blank (when a default exists). Any other input is rejected with a
+// message and the question is asked again.
+async function promptYesNo(question, defaultYes) {
+  while (true) {
+    const answer = await promptUser(question);
+    if (answer === '') {
+      if (defaultYes !== null) return defaultYes;
+    } else if (answer === 'y' || answer === 'yes') {
+      return true;
+    } else if (answer === 'n' || answer === 'no') {
+      return false;
+    }
+    log(RED, `  Please answer y or n${defaultYes !== null ? ' (or press Enter for the default)' : ''}.`);
+  }
+}
+
 function timestamp() {
   const n = new Date();
   const p = (v) => String(v).padStart(2, '0');
@@ -643,12 +660,7 @@ export async function launchServer(options = {}) {
       let shouldKill;
       if (process.stdin.isTTY) {
         const hint = isGlitchSpecific ? '[Y/n]' : '[y/N]';
-        const answer = await promptUser(`  Kill it and continue? ${hint}: `);
-        if (isGlitchSpecific) {
-          shouldKill = (answer === '' || answer === 'y' || answer === 'yes');
-        } else {
-          shouldKill = (answer === 'y' || answer === 'yes');
-        }
+        shouldKill = await promptYesNo(`  Kill it and continue? ${hint}: `, isGlitchSpecific);
       } else {
         // Non-interactive: auto-kill Glitch-specific, skip generic.
         shouldKill = isGlitchSpecific;
@@ -822,8 +834,8 @@ export async function launchServer(options = {}) {
           log(YELLOW, '  Cloudflare not authenticated on this machine.');
           if (process.stdin.isTTY) {
             log(CYAN, '  Auto-setup can open your browser for one-time Cloudflare authorization.');
-            const answer = await promptUser('  Open browser to authorize Cloudflare? [Y/n]: ');
-            if (answer === '' || answer === 'y' || answer === 'yes') {
+            const answer = await promptYesNo('  Open browser to authorize Cloudflare? [Y/n]: ', true);
+            if (answer) {
               log(CYAN, '  Launching Cloudflare login (opens browser)...');
               const loginProc = spawn(CLOUDFLARED_BIN, ['tunnel', 'login'], { stdio: 'inherit' });
               await new Promise((resolve, reject) => {

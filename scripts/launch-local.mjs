@@ -77,7 +77,72 @@ if (existsSync(BundledNodeBin)) {
 
 const DEFAULT_LOCAL_MODEL = 'google/gemma-4-12b';
 
-const MAGENTA = '\x1b[35m';
+/**
+ * Asynchronously discovers available models from the LM Studio instance.
+ * Attempts to fetch http://127.0.0.1:1234/v1/models and collects ALL models.
+ * Falls back gracefully on any error.
+ * 
+ * Returns { primary, all } where:
+ *   - primary: the model ID string to use as the default agent model
+ *   - all: array of { id, name } for every model LM Studio serves
+ * On failure, primary = DEFAULT_LOCAL_MODEL and all = [].
+ */
+async function discoverLocalModels(customBaseUrl) {
+  const baseUrl = customBaseUrl || 'http://127.0.0.1:1234/v1/models';
+  const LM_STUDIO_MODELS_URL = baseUrl;
+  const timeoutMs = 5000; // 5 second timeout
+
+  try {
+    log(DARK_GRAY, '  Discovering LM Studio models...');
+
+    // Use AbortController for timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    const response = await fetch(LM_STUDIO_MODELS_URL, { signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      // 404 or other HTTP error
+      log(DARK_YELLOW, `  LM Studio model discovery: server responded ${response.status}`);
+      return { primary: DEFAULT_LOCAL_MODEL, all: [] };
+    }
+
+    const data = await response.json();
+    const models = data.data || [];
+
+    if (!models || models.length === 0) {
+      log(DARK_YELLOW, '  LM Studio model discovery: no models found');
+      return { primary: DEFAULT_LOCAL_MODEL, all: [] };
+    }
+
+    // Collect ALL models (id + derived display name)
+    const allModels = models.map(m => ({
+      id: m.id,
+      name: (m.id.split('/').pop() || m.id).replace(/-/g, ' ') + ' (local)'
+    }));
+
+    // Select first model as the default agent model - assume text-capable
+    // Most LM Studio models are text-capable by default; if vision-only, user can override
+    const firstModel = models[0];
+    const modelId = firstModel.id;
+
+    log(GREEN, `  LM Studio model discovery: found ${models.length} models, using ${modelId}`);
+    return { primary: modelId, all: allModels };
+  } catch (e) {
+    // Connection refused, timeout, network error, invalid JSON, etc.
+    if (e.name === 'AbortError') {
+      log(DARK_YELLOW, '  LM Studio model discovery: request timed out (>5s)');
+    } else if (e.message && e.message.includes('connect ECONNREFUSED')) {
+      log(DARK_YELLOW, '  LM Studio model discovery: connection refused (LM Studio not running)');
+    } else {
+      log(DARK_YELLOW, `  LM Studio model discovery: failed (${e.message || e})`);
+    }
+    return { primary: DEFAULT_LOCAL_MODEL, all: [] };
+  }
+}
+
+// ---- Detect zip download (no git repo) ----
 const CYAN = '\x1b[36m';
 const GREEN = '\x1b[32m';
 const RED = '\x1b[31m';
@@ -465,21 +530,35 @@ async function main() {
     return normalized;
   }
 
-  // ---- Determine model (env var > --model flag > default) ----
-  let localModel = DEFAULT_LOCAL_MODEL;
-  let modelSource = 'default';
+// ---- Model discovery and selection ----
+// 1. Discover available models from LM Studio
+const discovery = await discoverLocalModels();
+const discoveredModel = discovery.primary;
+const allLocalModels = discovery.all; // [{ id, name }, ...] — every model LM Studio serves
 
+// 2. Apply user overrides (env var > --model flag > discovery)
+let localModel = discoveredModel;
+let modelSource = 'discovery';
+
+if (process.env.GLITCH_LOCAL_MODEL) {
+  localModel = process.env.GLITCH_LOCAL_MODEL;
+  modelSource = 'env var';
+} else if (args.includes('--model')) {
   const flagIdx = args.indexOf('--model');
-  if (flagIdx !== -1 && flagIdx < args.length - 1) {
-    localModel = args[flagIdx + 1];
-    modelSource = '--model flag';
-  } else if (process.env.GLITCH_LOCAL_MODEL) {
-    localModel = process.env.GLITCH_LOCAL_MODEL;
-    modelSource = 'env var';
-  }
+  localModel = args[flagIdx + 1];
+  modelSource = '--model flag';
+}
 
-  // Normalize the model ID before use
-  localModel = normalizeModelId(localModel);
+// Show warning if using default (LM Studio not available or no models loaded)
+if (localModel === DEFAULT_LOCAL_MODEL && modelSource === 'discovery') {
+  log(YELLOW, '  WARNING: Using default model — LM Studio may not be running or has no models loaded.');
+}
+
+// Log the model selection
+log(CYAN, `  Using model: ${localModel} (source: ${modelSource})`);
+
+// Normalize the model ID before use
+localModel = normalizeModelId(localModel);
 
   const modelNameParts = localModel.split('/');
   const modelName = modelNameParts[modelNameParts.length - 1].replace(/-/g, ' ');
@@ -517,6 +596,27 @@ async function main() {
 
   // Inject shared providers (NVIDIA, LM Studio) from config/providers.json
   injectProviders(configObj);
+
+  // ---- Register ALL discovered LM Studio models in the config ----
+  // injectProviders() replaces the whole provider object with the static
+  // providers.json, so we re-populate provider.lmstudio.models with every
+  // model LM Studio actually serves. This is what makes OpenCode's model
+  // list (/models, model picker) show the local models.
+  if (configObj.provider && configObj.provider.lmstudio) {
+    const lmModels = {};
+    for (const m of allLocalModels) {
+      lmModels[m.id] = { name: m.name };
+    }
+    // Ensure the selected primary model is always present even if discovery
+    // returned an empty list (e.g. LM Studio was down but user set env var).
+    if (!lmModels[localModel]) {
+      lmModels[localModel] = {
+        name: (localModel.split('/').pop() || localModel).replace(/-/g, ' ') + ' (local)'
+      };
+    }
+    configObj.provider.lmstudio.models = lmModels;
+    log(DARK_GREEN, `  Registered ${Object.keys(lmModels).length} LM Studio model(s) in config`);
+  }
 
   // Build instructions list (engine + user)
   const engineInstructions = [
