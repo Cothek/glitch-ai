@@ -1292,33 +1292,44 @@ function Get-OpenRouterPricing($modelId) {
     return $null
 }
 
-# OpenCode Zen models: all free
+# OpenCode Zen models: both free and paid tiers exist; tier/free derived from OpenRouter pricing
+# Free-tier heuristic: model ID ends in "-free" or equals "big-pickle" (fallback when no OpenRouter data)
+# Unknown non-free: pricing = $null, tier = "budget_paid" (mirrors Go provider L1345-1354 convention)
 if ($zenModels -ne $null) {
     foreach ($m in $zenModels) {
-        if ($m -match '-free$' -or $m -eq 'big-pickle') {
-            $fullId = "opencode/$m"
-            $orData = Get-OpenRouterPricing $fullId
-            $capabilities = @(Get-ModelCapabilities -modelId $m -provider "opencode")
-            if ($orData) {
-                $p = 0.0; [void][double]::TryParse($orData.pricing.prompt, [ref]$p)
-                $c = 0.0; [void][double]::TryParse($orData.pricing.completion, [ref]$c)
-                $registryModels += @{
-                    id = $fullId; source = "zen"; provider = "opencode"
-                    pricing = @{ prompt = $p; completion = $c }
-                    tier = Get-CostTier $p $c
-                    capabilities = $capabilities
-                    context_length = $orData.context_length
-                    vision = ($capabilities -contains "vision"); free = $true
-                }
-            } else {
-                $registryModels += @{
-                    id = $fullId; source = "zen"; provider = "opencode"
-                    pricing = @{ prompt = 0; completion = 0 }
-                    tier = "free"
-                    capabilities = $capabilities
-                    context_length = $null
-                    vision = ($capabilities -contains "vision"); free = $true
-                }
+        $fullId = "opencode/$m"
+        $orData = Get-OpenRouterPricing $fullId
+        $capabilities = @(Get-ModelCapabilities -modelId $m -provider "opencode")
+        if ($orData) {
+            $p = 0.0; [void][double]::TryParse($orData.pricing.prompt, [ref]$p)
+            $c = 0.0; [void][double]::TryParse($orData.pricing.completion, [ref]$c)
+            $registryModels += @{
+                id = $fullId; source = "zen"; provider = "opencode"
+                pricing = @{ prompt = $p; completion = $c }
+                tier = Get-CostTier $p $c
+                capabilities = $capabilities
+                context_length = $orData.context_length
+                vision = ($capabilities -contains "vision"); free = ($p -eq 0.0 -and $c -eq 0.0)
+            }
+        } elseif ($m -match '-free$' -or $m -eq 'big-pickle') {
+            # Known free pattern — no OpenRouter data, trust the ID convention
+            $registryModels += @{
+                id = $fullId; source = "zen"; provider = "opencode"
+                pricing = @{ prompt = 0; completion = 0 }
+                tier = "free"
+                capabilities = $capabilities
+                context_length = $null
+                vision = ($capabilities -contains "vision"); free = $true
+            }
+        } else {
+            # No pricing data and not a known-free pattern — same as Go unknown path
+            $registryModels += @{
+                id = $fullId; source = "zen"; provider = "opencode"
+                pricing = $null
+                tier = "budget_paid"
+                capabilities = $capabilities
+                context_length = $null
+                vision = ($capabilities -contains "vision"); free = $false
             }
         }
     }
