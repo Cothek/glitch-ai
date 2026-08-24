@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync } from 'node:fs';
-import { dirname, resolve } from 'node:path';
+import { dirname, resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const REVIEW_PASS_SCRIPT = resolve(
@@ -9,6 +9,23 @@ const REVIEW_PASS_SCRIPT = resolve(
 const MARKER_PATH = resolve(
   dirname(fileURLToPath(import.meta.url)), '..', '..', 'data', '.review-pass.json'
 );
+
+// --- Node.js executable resolution ---
+// process.execPath inside opencode is opencode.exe (Go binary embedding Bun),
+// NOT node. Spawning it with a .mjs arg causes ETIMEDOUT (opencode hangs
+// initializing). Use portable Node from data/node/ instead.
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
+
+function getNodeExecutable(repoRoot) {
+  const candidates = [
+    join(repoRoot, 'data', 'node', 'node.exe'),       // Windows portable
+    join(repoRoot, 'data', 'node', 'bin', 'node'),     // Unix portable
+  ];
+  for (const p of candidates) {
+    try { if (existsSync(p)) return p; } catch {}
+  }
+  return 'node'; // fallback to PATH
+}
 
 export const DispatchReflexPlugin = async ({ directory, client }) => {
   const lastTaskTime = new Map();
@@ -132,11 +149,14 @@ export const DispatchReflexPlugin = async ({ directory, client }) => {
       const markerDir = dirname(MARKER_PATH);
       if (!existsSync(markerDir)) mkdirSync(markerDir, { recursive: true });
       // Delegate to the canonical writer script so the marker format stays in one place.
-      execFileSync(process.execPath, [REVIEW_PASS_SCRIPT, '--verdict', 'PASS', '--agent', agentName], {
-        cwd: resolve(dirname(fileURLToPath(import.meta.url)), '..', '..'),
+      // Use portable Node.js, NOT process.execPath (opencode.exe — Go binary
+      // embedding Bun, hangs on .mjs args → ETIMEDOUT).
+      const nodeBin = getNodeExecutable(REPO_ROOT);
+      execFileSync(nodeBin, [REVIEW_PASS_SCRIPT, '--verdict', 'PASS', '--agent', agentName], {
+        cwd: REPO_ROOT,
         encoding: 'utf-8',
         stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: 20000,
+        timeout: 30000,
       });
       console.log(`[dispatch-reflex] ✅ Review PASS (${agentName}) — review-pass marker written`);
     } catch (e) {

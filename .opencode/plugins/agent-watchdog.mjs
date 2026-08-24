@@ -46,6 +46,21 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning } from '../../scripts/lib/agent-watchdog-helpers.mjs';
 
+// --- Node.js executable resolution ---
+// process.execPath inside opencode is opencode.exe (Go binary embedding Bun),
+// NOT node. Spawning it with a .mjs arg causes ETIMEDOUT (opencode hangs
+// initializing). Use portable Node from data/node/ instead.
+function getNodeExecutable(repoRoot) {
+  const candidates = [
+    join(repoRoot, 'data', 'node', 'node.exe'),       // Windows portable
+    join(repoRoot, 'data', 'node', 'bin', 'node'),     // Unix portable
+  ];
+  for (const p of candidates) {
+    try { if (existsSync(p)) return p; } catch {}
+  }
+  return 'node'; // fallback to PATH
+}
+
 // --- Thresholds (parsed once at module load) ---
 // parseThreshold/isSignalFresh/shouldInjectForSession live in
 // scripts/lib/agent-watchdog-helpers.mjs so this file has EXACTLY ONE named
@@ -224,9 +239,12 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
   function abortSession(sessionID) {
     try {
       // M4: encoding utf-8 so execFileSync returns strings, not Buffers.
-      execFileSync(process.execPath, [ABORT_SCRIPT, sessionID], {
+      // Use portable Node.js, NOT process.execPath (opencode.exe — Go binary
+      // embedding Bun, hangs on .mjs args → ETIMEDOUT).
+      const nodeBin = getNodeExecutable(repoRoot);
+      execFileSync(nodeBin, [ABORT_SCRIPT, sessionID], {
         cwd: repoRoot,
-        timeout: 20000,
+        timeout: 30000,
         encoding: 'utf-8',
         stdio: ['ignore', 'pipe', 'pipe'],
       });
