@@ -1464,6 +1464,37 @@ $registryDir = Split-Path -Parent $RegistryFile
 if (-not (Test-Path $registryDir)) { New-Item -ItemType Directory -Path $registryDir -Force | Out-Null }
 $registryData | ConvertTo-Json -Depth 4 | Out-File -FilePath $RegistryFile -Encoding utf8 -Force
 
+# 6.76. Sync providers.json — additive merge of nvidia models from registry
+# Prevents static drift where providers.json is missing models discovered at runtime.
+$ProvidersFile = "$RootDir\config\providers.json"
+$addedCount = 0
+try {
+    if (Test-Path $ProvidersFile) {
+        $providersData = Get-Content $ProvidersFile -Raw | ConvertFrom-Json
+        if (-not ($providersData.nvidia.models -is [PSCustomObject])) {
+            $providersData.nvidia | Add-Member -NotePropertyName "models" -NotePropertyValue ([ordered]@{}) -Force
+        }
+        foreach ($entry in $dedupedModels) {
+            if ($entry.id -like "nvidia/*") {
+                $modelKey = $entry.id  # e.g. "nvidia/nemotron-3.5-lightning-30b-a3b"
+                if (-not ($providersData.nvidia.models.PSObject.Properties.Name -contains $modelKey)) {
+                    $displayName = "$($entry.id -replace 'nvidia/', '') (free)"
+                    $providersData.nvidia.models | Add-Member -NotePropertyName $modelKey -NotePropertyValue ([ordered]@{ name = $displayName }) -Force
+                    $addedCount++
+                }
+            }
+        }
+        if ($addedCount -gt 0) {
+            $providersData | ConvertTo-Json -Depth 4 | Out-File -FilePath $ProvidersFile -Encoding utf8 -Force
+            if (-not $Silent) { Write-Host " + Synced $addedCount nvidia model(s) to providers.json" -ForegroundColor Green }
+        } else {
+            if (-not $Silent) { Write-Host " providers.json: no nvidia models to sync (all present)" -ForegroundColor DarkGray }
+        }
+    }
+} catch {
+    if (-not $Silent) { Write-Host " [WARN] providers.json sync failed: $($_.Exception.Message)" -ForegroundColor Yellow }
+}
+
 # 7. Write status file
 $totalNow = ($currentSources.Values | ForEach-Object { $_ }).Count
 

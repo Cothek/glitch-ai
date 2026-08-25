@@ -977,6 +977,8 @@ async function main() {
 
       try {
         let configObj = JSON.parse(runtimeJson);
+        injectProviders(configObj);
+
         // Apply model overrides from user/model-assignments.json
         const assignmentsPath = join(ROOT_DIR, 'user', 'model-assignments.json');
         if (existsSync(assignmentsPath)) {
