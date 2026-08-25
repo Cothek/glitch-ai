@@ -70,7 +70,7 @@ async function abortSession(sessionID, baseUrl, authHeader) {
   try {
     const headers = {};
     if (authHeader) headers['Authorization'] = authHeader;
-    const res = await fetch(url, { method: 'POST', headers, signal: AbortSignal.timeout(10000) });
+    const res = await fetch(url, { method: 'POST', headers, signal: AbortSignal.timeout(15000) });
     if (res.status === 200 || res.status === 204) return { ok: true, status: res.status };
     if (res.status === 404) return { ok: false, status: 404, error: 'Session not found' };
     const body = await res.text().catch(() => '');

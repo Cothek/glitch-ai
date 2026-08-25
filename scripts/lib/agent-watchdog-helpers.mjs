@@ -84,6 +84,72 @@ export function isSessionToolRunning(sessionID, dbPath) {
 }
 
 /**
+ * Find the child sub-agent sessions of a parent session, created at or after
+ * `sinceTime` (epoch-ms). Uses the `session.parent_id` column — opencode sets
+ * it when a parent dispatches a sub-agent via the task tool.
+ *
+ * This is the liveness signal for the "don't cull healthy agents" fix: when a
+ * parent's task tool lingers, we look up its children and check whether they
+ * are still working before deciding the parent is stuck.
+ *
+ * Returns:
+ *   { ok: true, children: string[] } — child session IDs (may be empty)
+ *   { ok: false, error: string }     — DB unreliable (caller must fail-open)
+ */
+export function getChildSessions(parentID, sinceTime, dbPath) {
+  if (!getSqliteDriver()) return { ok: false, error: 'no SQLite driver (bun:sqlite/node:sqlite unavailable)' };
+  const path = dbPath || defaultDbPath();
+  let db;
+  try {
+    db = openDatabase(path, { readonly: true });
+  } catch (e) {
+    return { ok: false, error: `DB open failed: ${e.message}` };
+  }
+  try {
+    const rows = db.prepare(
+      'SELECT id FROM session WHERE parent_id = ? AND time_created >= ?'
+    ).all(parentID, sinceTime);
+    db.close();
+    return { ok: true, children: rows.map(r => r.id) };
+  } catch (e) {
+    try { db.close(); } catch { /* best-effort */ }
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
+ * Check whether a session has had ANY part activity within the last `windowMs`.
+ * A sub-agent that is actively working writes part rows (tool calls, model
+ * responses) with fresh `time_updated` values, so recent activity means the
+ * agent is making progress and must NOT be culled.
+ *
+ * Returns:
+ *   { ok: true, active: boolean } — whether the session was active in the window
+ *   { ok: false, error: string }  — DB unreliable (caller must fail-open)
+ */
+export function hasRecentActivity(sessionID, windowMs, dbPath) {
+  if (!getSqliteDriver()) return { ok: false, error: 'no SQLite driver (bun:sqlite/node:sqlite unavailable)' };
+  const path = dbPath || defaultDbPath();
+  let db;
+  try {
+    db = openDatabase(path, { readonly: true });
+  } catch (e) {
+    return { ok: false, error: `DB open failed: ${e.message}` };
+  }
+  try {
+    const cutoff = Date.now() - windowMs;
+    const row = db.prepare(
+      'SELECT 1 AS found FROM part WHERE session_id = ? AND time_updated >= ? LIMIT 1'
+    ).get(sessionID, cutoff);
+    db.close();
+    return { ok: true, active: !!row };
+  } catch (e) {
+    try { db.close(); } catch { /* best-effort */ }
+    return { ok: false, error: e.message };
+  }
+}
+
+/**
  * Parse a threshold (ms) from an env var with a default fallback.
  * Logs a warning if the env var is set but parses to NaN.
  */

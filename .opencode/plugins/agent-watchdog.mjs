@@ -14,21 +14,21 @@
 //   threshold, we write a signal file and call abort-agent.mjs to abort the
 //   session via the opencode web API.
 //
-// Threshold logic (documented design choice):
-//   - IDLE_THRESHOLD (default 300s = 5 min): applies to the `task` tool — a
-//     sub-agent that itself dispatched and is waiting on a child. This is the
-//     primary hung-agent signature. Aborting at 5 min is safe because a
-//     well-behaved sub-agent should produce tool output within 5 min.
+// Threshold logic (documented design choice — anti-over-culling, 2026-08-25):
+//   - IDLE_THRESHOLD (default 600s = 10 min): applies to the `task` tool — a
+//     parent waiting on a sub-agent. This is the primary hung-agent signature.
+//     BUT a task tool is only aborted when its CHILD sub-agent is confirmed
+//     idle (no running tool, no recent part activity) for STUCK_CONFIRM_POLLS
+//     consecutive polls. Deep sub-agent work (multi-file edits, research, long
+//     test runs) routinely exceeds 5 min, so the child-activity check is what
+//     prevents culling healthy agents.
 //   - AUTO_ABORT_THRESHOLD (default 600s = 10 min): applies to non-task tools.
-//     The parent's own long-running tools (webfetch on slow sites, websearch,
-//     read on huge files) can legitimately exceed 5 min. Using a higher
-//     threshold for non-task tools avoids false-positive aborts of the parent.
-//   - PARENT_SAFE_TOOLS (webfetch, websearch, read): even at the 10-min
-//     threshold, these are the parent's own operations that are legitimately
-//     slow. We write a signal file (for visibility) but do NOT auto-abort
-//     these. The `task` tool is the only tool we auto-abort at the 5-min
-//     threshold; all other tools auto-abort only at 10 min, and the safe-tools
-//     set is excluded from auto-abort entirely.
+//     Non-task tools are the parent's OWN long-running operations (bash, edit,
+//     read, webfetch, websearch). These are NEVER auto-aborted — signal-only
+//     for visibility. Aborting the parent's own tool is too aggressive and was
+//     the cause of "watchdog killing agents too quickly".
+//   - Only the `task` tool is ever auto-aborted, and only when its child is
+//     confirmed idle. Everything else is signal-only.
 //
 // Signal freshness:
 //   Signal files older than SIGNAL_TTL_MS (15 min) are stale. The transform
@@ -44,7 +44,7 @@ import { writeFileSync, unlinkSync, existsSync, mkdirSync, readFileSync, readdir
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning } from '../../scripts/lib/agent-watchdog-helpers.mjs';
+import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning, getChildSessions, hasRecentActivity } from '../../scripts/lib/agent-watchdog-helpers.mjs';
 
 // --- Node.js executable resolution ---
 // process.execPath inside opencode is opencode.exe (Go binary embedding Bun),
@@ -67,13 +67,31 @@ function getNodeExecutable(repoRoot) {
 // export (AgentWatchdogPlugin). opencode's plugin loader crashes silently on
 // files with >1 named export (b0aaef8 crash class).
 
-const IDLE_THRESHOLD_MS = parseThreshold('AGENT_IDLE_THRESHOLD_MS', 300_000);
+const IDLE_THRESHOLD_MS = parseThreshold('AGENT_IDLE_THRESHOLD_MS', 600_000);
 const AUTO_ABORT_THRESHOLD_MS = parseThreshold('AGENT_AUTO_ABORT_THRESHOLD_MS', 600_000);
 const POLL_INTERVAL_MS = 30_000;
 const SIGNAL_TTL_MS = 15 * 60 * 1000;
 
-// Tools that are the parent's own long-running operations — write a signal for
-// visibility but never auto-abort these (they're not hung sub-agents).
+// --- Anti-over-culling tuning (2026-08-24) ---
+// The original watchdog aborted a parent's `task` tool at 5 min regardless of
+// whether the child sub-agent was still working — deep sub-agent work (multi-
+// file edits, research, long test runs) routinely exceeds 5 min, so healthy
+// agents were being killed. The redesign:
+//   - Only `task` tools are ever auto-aborted (non-task tools are signal-only).
+//   - A task tool is only aborted when its CHILD sub-agent is confirmed idle
+//     (no running tool AND no recent part activity) for STUCK_CONFIRM_POLLS
+//     consecutive polls. Active children are never culled.
+//   - CHILD_ACTIVITY_WINDOW_MS = how recent a child's part activity must be to
+//     count as "working" (default 5 min).
+const CHILD_ACTIVITY_WINDOW_MS = parseThreshold('AGENT_CHILD_ACTIVITY_WINDOW_MS', 300_000);
+const CHILD_CREATE_SLACK_MS = 10_000; // slack for child session creation after task start
+const STUCK_CONFIRM_POLLS = 2;        // consecutive polls of confirmed-idle before abort
+const ABORT_RETRY_CAP = 3;            // max abort attempts before giving up (anti-spam)
+
+// Tools that are the parent's own long-running operations — historically
+// signal-only. As of the anti-over-culling redesign (2026-08-25) ALL non-task
+// tools are signal-only (never auto-aborted), so this set is no longer needed
+// for the abort decision; it is retained only as documentation of intent.
 const PARENT_SAFE_TOOLS = new Set(['webfetch', 'websearch', 'read']);
 
 // --- Signal freshness ---
@@ -265,100 +283,105 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
       const idleMs = now - entry.startTime;
       const idleSeconds = Math.round(idleMs / 1000);
 
-      // Determine the effective threshold based on the tool type.
-      // task tool = sub-agent waiting on a child → 5 min (IDLE_THRESHOLD).
-      // Other tools = parent's own long-running ops → 10 min (AUTO_ABORT_THRESHOLD).
+      // task tool = parent waiting on a sub-agent → IDLE_THRESHOLD (10 min).
+      // Non-task tools = parent's own long-running ops → signal-only, NEVER
+      // auto-aborted (aborting the parent's own tool is too aggressive and was
+      // the cause of "watchdog killing agents too quickly").
       const isTaskTool = entry.tool === 'task';
       const threshold = isTaskTool ? IDLE_THRESHOLD_MS : AUTO_ABORT_THRESHOLD_MS;
 
       if (idleMs < threshold) continue;
       if (entry.aborted) continue; // Already aborted successfully, skip.
 
-      // Fix 1: Liveness check — verify the session is still actually alive
-      // and the tool is still running BEFORE signaling or aborting. This
-      // prevents false positives on sessions that were aborted externally
-      // (user cancel, parent cancel cascade, escape key) — the after-hook
-      // never fires for those, so the runningTools entry lingers forever.
-      // Query the opencode SQLite DB (same pattern as abort-agent.mjs
-      // verifyStopped). If the DB check is unreliable (alive === null),
-      // fail-closed on abort: do NOT abort, but MAY write a signal.
+      // Liveness gate (parent): if the DB shows the session is NOT running,
+      // remove the stale entry and skip (false-positive prevention).
       const liveness = isSessionToolRunning(entry.sessionID);
       if (liveness.alive === false) {
-        // Session is dead or tool already completed — remove the stale entry
-        // (Fix 2) and skip. Do NOT write a signal for a dead session.
         runningTools.delete(key);
         console.log(`[agent-watchdog] Session ${entry.sessionID} is not running (liveness check) — removed stale entry (tool=${entry.tool}, idle=${idleSeconds}s)`);
         continue;
       }
-      // liveness.alive === null: DB check unreliable. Fail-closed on abort
-      // (do NOT abort without positive liveness confirmation), but allow
-      // signal-write for visibility.
 
-      // Decide whether to auto-abort:
-      // - task tool at IDLE_THRESHOLD → auto-abort (primary target).
-      // - non-task tools at AUTO_ABORT_THRESHOLD → auto-abort UNLESS the tool
-      //   is in PARENT_SAFE_TOOLS (webfetch/websearch/read are the parent's
-      //   own legitimately slow operations — signal only, no abort).
-      const shouldAutoAbort = isTaskTool
-        ? idleMs >= IDLE_THRESHOLD_MS
-        : (idleMs >= AUTO_ABORT_THRESHOLD_MS && !PARENT_SAFE_TOOLS.has(entry.tool));
-
-      // Fix 2: If the DB liveness check was unreliable, do NOT auto-abort
-      // even if the threshold says we should — fail-closed on abort.
-      const willAbort = shouldAutoAbort && liveness.alive === true;
-
-      // MAJOR-1: Write the signal file for visibility (always, on first
-      // detection). The `aborted` field is ALWAYS false at this point — we
-      // have NOT attempted the abort yet. If an abort will be performed,
-      // updateSignalAborted() rewrites the field with the ACTUAL outcome
-      // after the attempt. This prevents the signal from permanently claiming
-      // "aborted: true" when the abort actually failed (server unreachable,
-      // auth failure, session not found) — the exact false claim this fix
-      // was meant to prevent.
-      if (!existsSync(sessionSignalPath(entry.sessionID))) {
-        writeIdleSignal(entry.sessionID, entry.tool, idleSeconds, threshold / 1000, false);
-      }
-
-      // MINOR-4: Only set signaled=true for signal-only cases (no abort
-      // needed). For abort cases, signaled stays false until the abort
-      // SUCCEEDS — a failed abort gets retried on the next 30s poll. This
-      // prevents a transient abort failure from permanently leaving the
-      // session running. The signal file already exists (written above) so
-      // re-processing on the next poll won't re-write it (the existsSync
-      // guard above prevents duplicate signals).
-      if (!shouldAutoAbort) {
+      // Non-task tools: signal-only. The parent's own long-running operations
+      // (bash, edit, read, webfetch, etc.) are the parent's responsibility —
+      // never auto-abort them. Write a signal once for visibility.
+      if (!isTaskTool) {
+        if (!existsSync(sessionSignalPath(entry.sessionID))) {
+          writeIdleSignal(entry.sessionID, entry.tool, idleSeconds, threshold / 1000, false);
+        }
         entry.signaled = true;
         continue;
       }
 
-      if (!willAbort) {
-        // Liveness check was unreliable (alive === null) — fail-closed.
-        // Signal-only: mark signaled so we don't re-flag, but don't abort.
+      // ---- task tool: verify the child sub-agent is actually stuck ----
+      // A parent's task tool lingers while it waits on a sub-agent. That is
+      // NORMAL for deep work (5-10+ min). Only abort when the child is
+      // confirmed idle: no running tool AND no recent part activity.
+      const childCheck = getChildSessions(entry.sessionID, entry.startTime - CHILD_CREATE_SLACK_MS);
+      if (!childCheck.ok || childCheck.children.length === 0) {
+        // Can't confirm the child is idle (DB unreliable or no child found).
+        // Fail-open: do NOT abort — protecting healthy agents is the priority.
+        // Signal once for visibility.
+        if (!existsSync(sessionSignalPath(entry.sessionID))) {
+          writeIdleSignal(entry.sessionID, entry.tool, idleSeconds, threshold / 1000, false);
+        }
         entry.signaled = true;
-        console.warn(`[agent-watchdog] Skipping auto-abort for ${entry.sessionID} (tool=${entry.tool}, idle=${idleSeconds}s) — liveness check unreliable, fail-closed`);
+        console.warn(`[agent-watchdog] Task idle ${idleSeconds}s for ${entry.sessionID} but child status unknown — NOT aborting (fail-open)`);
         continue;
       }
 
-      console.log(`[agent-watchdog] Auto-aborting session ${entry.sessionID} (tool=${entry.tool}, idle=${idleSeconds}s, threshold=${threshold / 1000}s)`);
+      // Check each child for activity (running tool OR recent part update).
+      let anyActive = false;
+      for (const cid of childCheck.children) {
+        const act = hasRecentActivity(cid, CHILD_ACTIVITY_WINDOW_MS);
+        if (act.ok && act.active) { anyActive = true; break; }
+        const run = isSessionToolRunning(cid);
+        if (run.alive === true) { anyActive = true; break; }
+      }
+      if (anyActive) {
+        // Child is actively working — NOT stuck. Reset the confirmation
+        // counter and skip. This is the key fix: deep sub-agent work is
+        // never culled while it keeps making progress.
+        entry.stuckPolls = 0;
+        continue;
+      }
+
+      // All children idle — increment the stuck confirmation counter. Require
+      // STUCK_CONFIRM_POLLS consecutive polls before aborting (debounce).
+      entry.stuckPolls = (entry.stuckPolls || 0) + 1;
+      if (entry.stuckPolls < STUCK_CONFIRM_POLLS) {
+        if (!existsSync(sessionSignalPath(entry.sessionID))) {
+          writeIdleSignal(entry.sessionID, entry.tool, idleSeconds, threshold / 1000, false);
+        }
+        console.warn(`[agent-watchdog] Task idle ${idleSeconds}s for ${entry.sessionID}, child idle — confirming stuck (${entry.stuckPolls}/${STUCK_CONFIRM_POLLS})`);
+        continue;
+      }
+
+      // Confirmed stuck — abort.
+      console.log(`[agent-watchdog] Auto-aborting stuck session ${entry.sessionID} (tool=${entry.tool}, idle=${idleSeconds}s, threshold=${threshold / 1000}s)`);
       const aborted = abortSession(entry.sessionID);
       entry.aborted = aborted;
 
       if (aborted) {
-        // MAJOR-1: Rewrite the signal file with the actual outcome so the
-        // transform hook's directive text is honest ("has been aborted").
+        // Rewrite the signal with the actual outcome so the transform hook's
+        // directive text is honest ("has been aborted").
         updateSignalAborted(entry.sessionID, true);
-        // MINOR-4: Only mark signaled after a SUCCESSFUL abort — prevents
-        // re-flagging on every poll while keeping the entry eligible for
-        // retry if the abort had failed.
         entry.signaled = true;
       } else {
-        // MAJOR-1: Abort failed — rewrite the signal with aborted=false so
-        // the transform hook does NOT claim the session was aborted.
+        // Abort failed — rewrite the signal with aborted=false so the
+        // transform hook does NOT claim the session was aborted.
         updateSignalAborted(entry.sessionID, false);
-        // MINOR-4: Leave signaled=false so the next poll retries the abort.
-        // The signal file already exists (with aborted=false) so the
-        // existsSync guard prevents duplicate signal writes on retry.
-        console.warn(`[agent-watchdog] Abort failed for ${entry.sessionID} — will retry on next poll`);
+
+        // Retry cap: after ABORT_RETRY_CAP failed attempts (fetch timeout,
+        // server unreachable, etc.), give up to prevent infinite retry spam.
+        entry.abortRetries = (entry.abortRetries || 0) + 1;
+        if (entry.abortRetries >= ABORT_RETRY_CAP) {
+          entry.aborted = true;   // Stops future polls (guard at top)
+          entry.signaled = true;  // Prevents re-flagging
+          console.warn(`[agent-watchdog] Giving up abort for ${entry.sessionID} after ${entry.abortRetries} attempts — will not retry`);
+        } else {
+          console.warn(`[agent-watchdog] Abort failed for ${entry.sessionID} (${entry.abortRetries}/${ABORT_RETRY_CAP}) — will retry on next poll`);
+        }
       }
     }
   }
@@ -387,7 +410,7 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
         // M2: Composite key prevents the race where tool A's after-hook deletes
         // tool B's entry. Each (sessionID, tool, startTime) is unique.
         const key = toolKey(sessionID, tool, startTime);
-        runningTools.set(key, { sessionID, tool, startTime, aborted: false, signaled: false });
+        runningTools.set(key, { sessionID, tool, startTime, aborted: false, signaled: false, abortRetries: 0, stuckPolls: 0 });
         // m2: only clear the aborted flag when the new tool is a `task` tool
         // (parent re-dispatching after a previous child was aborted). For
         // non-task tools, leave the aborted flag intact — a parent running a
@@ -489,7 +512,7 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
 
           // Fix 3: Honest directive text. The signal payload now carries an
           // `aborted` boolean (recorded at signal-write time). If the signal
-          // is signal-only (PARENT_SAFE_TOOLS or liveness-unreliable fail-closed
+          // is signal-only (non-task tool, or child-status-unknown fail-open,
           // or no abort performed), the directive must NOT claim the session
           // was aborted. Also: if the signal sessionID is the same as the
           // receiving session (currentSessionID === signalSessionID), the

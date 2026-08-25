@@ -14,7 +14,7 @@ import assert from 'node:assert';
 import { mkdtempSync, writeFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning } from '../scripts/lib/agent-watchdog-helpers.mjs';
+import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning, getChildSessions, hasRecentActivity } from '../scripts/lib/agent-watchdog-helpers.mjs';
 
 let passed = 0;
 let failed = 0;
@@ -459,6 +459,105 @@ test('dbPath parameter passed explicitly → uses that path (not env)', () => {
     cleanupDb(dbPathExplicit);
     try { rmSync(tmpDirEnv, { recursive: true, force: true }); } catch { /* best-effort */ }
   }
+});
+
+// ============================================================
+// 8. Anti-over-culling helpers — getChildSessions + hasRecentActivity
+// ============================================================
+// These gate the "don't cull healthy agents" fix: a parent's task tool is only
+// aborted when its child sub-agent is confirmed idle. We create temp DBs with
+// BOTH the `part` and `session` tables (matching the real opencode schema).
+
+function createTestDbFull(parts, sessions) {
+  const { DatabaseSync } = createRequireFromNodeSqlite();
+  if (!DatabaseSync) return null;
+  const tmpDir = mkdtempSync(join(tmpdir(), 'watchdog-db-test-'));
+  const dbPath = join(tmpDir, 'opencode.db');
+  const db = new DatabaseSync(dbPath);
+  db.exec(`CREATE TABLE part (id TEXT PRIMARY KEY, session_id TEXT, data TEXT, time_updated INTEGER)`);
+  db.exec(`CREATE TABLE session (id TEXT PRIMARY KEY, parent_id TEXT, time_created INTEGER, time_updated INTEGER)`);
+  for (const r of parts) {
+    db.prepare(`INSERT INTO part (id, session_id, data, time_updated) VALUES (?, ?, ?, ?)`).run(
+      r.id, r.session_id, r.data, r.time_updated ?? Date.now()
+    );
+  }
+  for (const s of sessions) {
+    db.prepare(`INSERT INTO session (id, parent_id, time_created, time_updated) VALUES (?, ?, ?, ?)`).run(
+      s.id, s.parent_id ?? null, s.time_created ?? Date.now(), s.time_updated ?? Date.now()
+    );
+  }
+  db.close();
+  return dbPath;
+}
+
+test('getChildSessions returns children created after sinceTime', () => {
+  const dbPath = createTestDbFull([], [
+    { id: 'ses_parent', parent_id: null, time_created: 1000 },
+    { id: 'ses_child_new', parent_id: 'ses_parent', time_created: 5000 },
+    { id: 'ses_child_old', parent_id: 'ses_parent', time_created: 2000 },
+  ]);
+  if (!dbPath) { console.log('    (skipped — node:sqlite unavailable)'); return; }
+  try {
+    const result = getChildSessions('ses_parent', 3000, dbPath);
+    assert.strictEqual(result.ok, true, 'must be ok');
+    assert.deepStrictEqual(result.children, ['ses_child_new'], 'only children created after sinceTime');
+  } finally { cleanupDb(dbPath); }
+});
+
+test('getChildSessions returns empty when no children', () => {
+  const dbPath = createTestDbFull([], [
+    { id: 'ses_parent', parent_id: null, time_created: 1000 },
+  ]);
+  if (!dbPath) { console.log('    (skipped — node:sqlite unavailable)'); return; }
+  try {
+    const result = getChildSessions('ses_parent', 0, dbPath);
+    assert.strictEqual(result.ok, true, 'must be ok');
+    assert.deepStrictEqual(result.children, [], 'no children → empty array');
+  } finally { cleanupDb(dbPath); }
+});
+
+test('getChildSessions returns ok:false on missing DB (fail-open)', () => {
+  const tmpDir = mkdtempSync(join(tmpdir(), 'watchdog-db-test-'));
+  const nonexistentPath = join(tmpDir, 'does-not-exist.db');
+  try {
+    const result = getChildSessions('ses_parent', 0, nonexistentPath);
+    assert.strictEqual(result.ok, false, 'missing DB must be ok:false');
+    assert.ok(result.error, 'must include error');
+  } finally { try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ } }
+});
+
+test('hasRecentActivity true when a part was updated within the window', () => {
+  const dbPath = createTestDbFull([
+    { id: 'p1', session_id: 'ses_active', data: '{}', time_updated: Date.now() - 1000 },
+  ], []);
+  if (!dbPath) { console.log('    (skipped — node:sqlite unavailable)'); return; }
+  try {
+    const result = hasRecentActivity('ses_active', 300000, dbPath);
+    assert.strictEqual(result.ok, true, 'must be ok');
+    assert.strictEqual(result.active, true, 'recent part → active');
+  } finally { cleanupDb(dbPath); }
+});
+
+test('hasRecentActivity false when the newest part is older than the window', () => {
+  const dbPath = createTestDbFull([
+    { id: 'p1', session_id: 'ses_idle', data: '{}', time_updated: Date.now() - 600000 },
+  ], []);
+  if (!dbPath) { console.log('    (skipped — node:sqlite unavailable)'); return; }
+  try {
+    const result = hasRecentActivity('ses_idle', 300000, dbPath);
+    assert.strictEqual(result.ok, true, 'must be ok');
+    assert.strictEqual(result.active, false, 'old part → not active');
+  } finally { cleanupDb(dbPath); }
+});
+
+test('hasRecentActivity returns ok:false on missing DB (fail-open)', () => {
+  const tmpDir = mkdtempSync(join(tmpdir(), 'watchdog-db-test-'));
+  const nonexistentPath = join(tmpDir, 'does-not-exist.db');
+  try {
+    const result = hasRecentActivity('ses_any', 300000, nonexistentPath);
+    assert.strictEqual(result.ok, false, 'missing DB must be ok:false');
+    assert.ok(result.error, 'must include error');
+  } finally { try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ } }
 });
 
 // ============================================================
