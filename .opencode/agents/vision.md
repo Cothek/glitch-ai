@@ -1,5 +1,6 @@
 ---
 name: vision
+model: nvidia/minimaxai/minimax-m3
 mode: subagent
 temperature: 0.2
 

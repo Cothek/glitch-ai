@@ -37,12 +37,20 @@ let refreshState = { running: false, startedAt: null, finishedAt: null, error: n
 let refreshStdout = '';
 let refreshStderr = '';
 
+const REGISTRY_PATHS = [
+  join(ROOT_DIR, 'config', 'model-registry.json'),
+  join(ROOT_DIR, 'data', 'model-registry.json'),
+];
+
 function getRegistry() {
   const now = Date.now();
   if (registryCache && now - registryCacheTime < REGISTRY_CACHE_TTL) {
     return registryCache;
   }
-  registryCache = readJson(join(ROOT_DIR, 'config', 'model-registry.json'));
+  for (const p of REGISTRY_PATHS) {
+    const d = readJson(p);
+    if (d) { registryCache = d; break; }
+  }
   registryCacheTime = now;
   return registryCache;
 }
@@ -313,7 +321,8 @@ async function handler(req, res) {
         );
       }
       if (tier) {
-        models = models.filter((m) => m.tier === tier);
+        const matchTier = tier === 'budget' ? ['budget', 'budget_paid'] : [tier];
+        models = models.filter((m) => matchTier.includes(m.tier));
       }
       if (provider) {
         models = models.filter((m) => m.source === provider);
@@ -616,6 +625,6 @@ const server = http.createServer(handler);
 server.listen(PORT, () => {
   console.log(`Model UI server listening on :${PORT}`);
   console.log(`OpenCode config: ${join(ROOT_DIR, 'opencode.json')}`);
-  const registry = readJson(join(ROOT_DIR, 'config', 'model-registry.json'));
+  const registry = getRegistry();
   console.log(`Registry: ${registry?.models?.length || 0} models loaded`);
 });

@@ -1,5 +1,6 @@
 ---
 name: glitch-omni
+model: opencode-go/qwen3.6-plus
 mode: primary
 temperature: 0.2
 color: "#a855f7"

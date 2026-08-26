@@ -1,6 +1,6 @@
 ---
 name: memory
-model: opencode/deepseek-v4-flash-free
+model: nvidia/nvidia/nemotron-3.5-lightning-30b-a3b
 permission:
   read: allow
   write: allow

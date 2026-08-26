@@ -76,6 +76,33 @@ function log(color, msg) {
   }
 }
 
+function syncAgentModelFiles(assignments, logFn) {
+  const agentsDir = join(ROOT_DIR, '.opencode', 'agents');
+  let updated = 0;
+  for (const [agentName, modelId] of Object.entries(assignments)) {
+    const agentPath = join(agentsDir, `${agentName}.md`);
+    if (!existsSync(agentPath)) continue;
+    try {
+      let text = readFileSync(agentPath, 'utf-8');
+      // Strip BOM if present
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      if (/^model:\s*.+$/m.test(text)) {
+        text = text.replace(/^model:\s*.+$/m, `model: ${modelId}`);
+      } else {
+        // No model line — insert after name: line
+        text = text.replace(/^(name:\s*.+)$/m, `$1\nmodel: ${modelId}`);
+      }
+      writeFileSync(agentPath, text, 'utf-8');
+      updated++;
+    } catch (e) {
+      logFn(YELLOW, `  Warning: Could not sync agent file ${agentName}.md (${e.message})`);
+    }
+  }
+  if (updated > 0) {
+    logFn(DARK_GREEN, `  Synced model to ${updated} agent file(s) in .opencode/agents/`);
+  }
+}
+
 function timestamp() {
   const n = new Date();
   const p = (v) => String(v).padStart(2, '0');
@@ -467,6 +494,7 @@ async function main() {
         if (overrideCount > 0) {
           log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from user/model-assignments.json`);
         }
+        syncAgentModelFiles(assignments, log);
       } catch (e) {
         log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
       }
@@ -731,6 +759,7 @@ async function main() {
             if (overrideCount > 0) {
               log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from user/model-assignments.json`);
             }
+            syncAgentModelFiles(assignments, log);
           } catch (e) {
             log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
           }

@@ -21,6 +21,43 @@ if ($staleIdx -ge 0 -and $staleIdx -lt $args.Count - 1) {
     $StaleMinutes = [int]$args[$staleIdx + 1]
 }
 
+# --- Helper: detect native NVIDIA models (need nvidia/ prefix at API) -----------
+# Native models are NVIDIA's own or first-party hosted models whose raw API ID
+# starts with nvidia/. When OpenCode strips the first nvidia/ provider prefix,
+# these models still need nvidia/ at the API — so we store them double-prefixed.
+# Hosted third-party models (minimaxai/*, deepseek-ai/*, etc.) work without prefix.
+$script:nativeModelPatterns = @(
+    '^nvidia/nemotron',
+    '^nvidia/nv-',
+    '^nvidia/cosmos',
+    '^nvidia/neva',
+    '^nvidia/vila',
+    '^nvidia/llama-.*-nemotron',
+    '^nvidia/llama3-chatqa',
+    '^nvidia/meta/',
+    '^nvidia/moonshotai/',
+    '^nvidia/google/',
+    '^nvidia/mistralai/',
+    '^nvidia/microsoft/',
+    '^nvidia/openai/',
+    '^nvidia/nvidia-nemotron',
+    '^nvidia/ising',
+    '^nvidia/deepseek-ai/',
+    '^nvidia/ibm/',
+    '^nvidia/zyphra/',
+    '^nvidia/writer/',
+    '^nvidia/poolside/',
+    '^nvidia/thinkingmachines/'
+)
+
+function Test-NvidiaNativeModel($modelId) {
+    if (-not $modelId) { return $false }
+    foreach ($pattern in $script:nativeModelPatterns) {
+        if ($modelId -match $pattern) { return $true }
+    }
+    return $false
+}
+
 # --- Helper: normalize model ID (prevents double prefix / backslash issues) ---
 # --- Helper: name override dict for well-known NVIDIA models --------------------
 $NvidiaNameOverrides = @{
@@ -85,8 +122,6 @@ function Normalize-ModelId($modelId) {
   if (-not $modelId) { return $modelId }
   # 1. Replace any backslashes with forward slashes (Windows env var issue)
   $normalized = $modelId -replace '\\', '/'
-  # 2. Fix double nvidia/nvidia/ prefix (historical bug)
-  $normalized = $normalized -replace '^nvidia/nvidia/', 'nvidia/'
   return $normalized
 }
 
@@ -354,7 +389,16 @@ if ($zenModels -ne $null) {
 if ($nvidiaModels -ne $null) {
     # NVIDIA returns full model IDs like "nvidia/qwen/qwen3-coder-480b-a35b-instruct"
     # Normalize to ensure consistent format (single nvidia/ prefix, forward slashes)
-    $nvidiaShort = $nvidiaModels | ForEach-Object { Normalize-ModelId "nvidia/$($_.Replace('nvidia/', ''))" }
+    $nvidiaShort = $nvidiaModels | ForEach-Object {
+        $bare = $_.Replace('nvidia/', '')
+        $singleId = "nvidia/$bare"
+        # Native models need double prefix so OpenCode's strip leaves nvidia/ for the API
+        if (Test-NvidiaNativeModel $singleId) {
+            Normalize-ModelId "nvidia/$singleId"
+        } else {
+            Normalize-ModelId $singleId
+        }
+    }
     $currentSources["nvidia"] = $nvidiaShort
     $newInNvidia = if ($knownModels.ContainsKey("nvidia")) { Compare-Object $nvidiaShort $knownModels["nvidia"] | Where-Object { $_.SideIndicator -eq "<=" } | ForEach-Object { $_.InputObject } } else { $nvidiaShort }
     foreach ($m in $newInNvidia) {
@@ -621,8 +665,10 @@ function Get-NvidiaFreeSetFromOpenRouter {
 
 function Test-NvidiaFreeFromOpenRouter($nvidiaModelId) {
     $freeSet = Get-NvidiaFreeSetFromOpenRouter
-    $fullId = Normalize-ModelId "nvidia/$($nvidiaModelId.Replace('nvidia/', ''))"
-    $normalized = Normalize-For-Matching $fullId
+    # Use single-prefix ID for OpenRouter matching (no double prefix needed)
+    $bare = $nvidiaModelId.Replace('nvidia/', '')
+    $singleId = "nvidia/$bare"
+    $normalized = Normalize-For-Matching $singleId
     return $freeSet.ContainsKey($normalized)
 }
 
@@ -983,17 +1029,18 @@ function Get-NvidiaBehavioralFreeSet {
 
     $toTest = @()
     foreach ($m in $FilteredModels) {
-        $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
+        # Behavioral probe uses single-prefix ID (NVIDIA API format)
+        $probeId = "nvidia/$($m.Replace('nvidia/', ''))"
         # FIX 1: skip only models with a DEFINITIVE cached result. Transient results
         # (error_0, error_5xx, unexpected_*) must be re-tested every run so a poisoned
         # entry can heal. Previously ANY cached entry was skipped, which locked a
         # flaky model (e.g. glm-5.2) out of re-testing forever after one timeout.
-        if (-not $results.ContainsKey($fullId)) {
-            $toTest += $m
+        if (-not $results.ContainsKey($probeId)) {
+            $toTest += @{ raw = $m; probeId = $probeId }
         } else {
-            $cachedReason = [string]$results[$fullId].reason
+            $cachedReason = [string]$results[$probeId].reason
             if (-not (Test-BehavioralReasonDefinitive $cachedReason)) {
-                $toTest += $m
+                $toTest += @{ raw = $m; probeId = $probeId }
             }
         }
     }
@@ -1008,8 +1055,8 @@ function Get-NvidiaBehavioralFreeSet {
             Write-Progress -Activity "Checking NVIDIA free models" -Status "Testing $tested / $($toTest.Count) models" -PercentComplete 0
         }
         foreach ($m in $toTest) {
-            $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
-            $testResult = Test-NvidiaFreeEndpoint -ModelId $fullId -ApiKey $ApiKey
+            $probeId = $m.probeId
+            $testResult = Test-NvidiaFreeEndpoint -ModelId $probeId -ApiKey $ApiKey
 
             # FIX 2: cache-poisoning guard. If the NEW result is transient (error_0 /
             # error_* / unexpected_*) AND the PRIOR cached entry (seeded into $results
@@ -1018,29 +1065,29 @@ function Get-NvidiaBehavioralFreeSet {
             # prevents a single timeout from destroying a known-good free entry.
             $newReason = [string]$testResult.reason
             $priorEntry = $null
-            if ($results.ContainsKey($fullId)) { $priorEntry = $results[$fullId] }
+            if ($results.ContainsKey($probeId)) { $priorEntry = $results[$probeId] }
 
             if (-not (Test-BehavioralReasonDefinitive $newReason) -and $priorEntry -and $priorEntry.isFree -eq $true) {
                 # Preserve: keep isFree=true, mark the reason so it is visible in the cache.
                 $priorEntry.reason = "error_0_preserved_free"
                 $priorEntry.tested_at = $testResult.tested_at
-                $results[$fullId] = $priorEntry
-                $freeSet[$fullId] = $true
+                $results[$probeId] = $priorEntry
+                $freeSet[$probeId] = $true
                 # FIX 4b: record the FINAL (preserved) reason.
-                $script:behavioralReasons[$fullId] = "error_0_preserved_free"
+                $script:behavioralReasons[$probeId] = "error_0_preserved_free"
             } else {
                 # Normal path: overwrite with the fresh result.
-                $results[$fullId] = $testResult
+                $results[$probeId] = $testResult
                 if ($testResult.isFree) {
-                    $freeSet[$fullId] = $true
+                    $freeSet[$probeId] = $true
                 }
                 # FIX 4b: record the FINAL reason.
-                $script:behavioralReasons[$fullId] = $newReason
+                $script:behavioralReasons[$probeId] = $newReason
             }
 
             $tested++
             if (-not $Silent) {
-                $shortName = ($m -split '/')[-1]
+                $shortName = ($m.raw -split '/')[-1]
                 Write-Progress -Activity "Checking NVIDIA free models" -Status "Testing $tested / $($toTest.Count): $shortName" -PercentComplete ([math]::Round(($tested / $toTest.Count) * 100))
             }
             Start-Sleep -Milliseconds 200
@@ -1078,8 +1125,9 @@ function Test-NvidiaFreeCombined($nvidiaModelId) {
         }
         return $false
     }
-    $fullId = Normalize-ModelId "nvidia/$($nvidiaModelId.Replace('nvidia/', ''))"
-    if ($script:behavioralFreeSet.ContainsKey($fullId)) { return $true }
+    # Behavioral cache is keyed by single-prefix ID (API format)
+    $probeId = "nvidia/$($nvidiaModelId.Replace('nvidia/', ''))"
+    if ($script:behavioralFreeSet.ContainsKey($probeId)) { return $true }
     return $false
 }
 
@@ -1234,7 +1282,10 @@ if ($nvidiaModels -ne $null) {
             continue
         }
         $confirmedFreeCount++
-        $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
+        # Apply double prefix for native models so OpenCode routing works
+        $bare = $m.Replace('nvidia/', '')
+        $singleId = "nvidia/$bare"
+        $fullId = if (Test-NvidiaNativeModel $singleId) { "nvidia/$singleId" } else { $singleId }
         $parts = $m -split '/'
         $shortName = if ($parts.Count -ge 2) { $parts[-1] } else { $m }
         $displayName = Get-NvidiaDisplayName -modelName $shortName -isVision (Is-VisionModel $m)
@@ -1370,8 +1421,12 @@ if ($goModels -ne $null) {
 if ($nvidiaModels -ne $null) {
     $filteredModels = Filter-NvidiaModels $nvidiaModels
     foreach ($m in $filteredModels) {
-        $fullId = Normalize-ModelId "nvidia/$($m.Replace('nvidia/', ''))"
-        $orData = Get-OpenRouterPricing $fullId
+        # Apply double prefix for native models (OpenCode routing format)
+        $bare = $m.Replace('nvidia/', '')
+        $singleId = "nvidia/$bare"
+        $fullId = if (Test-NvidiaNativeModel $singleId) { "nvidia/$singleId" } else { $singleId }
+        # OpenRouter lookup uses single-prefix ID
+        $orData = Get-OpenRouterPricing $singleId
         $capabilities = @(Get-ModelCapabilities -modelId $m -provider "nvidia")
 
         # Free status from OpenRouter pricing + behavioral detection (either says free -> free)
@@ -1388,7 +1443,7 @@ if ($nvidiaModels -ne $null) {
             # error_* / unexpected_*), the model is UNVERIFIED, not "budget_paid".
             # A transient timeout must not be mislabeled as a definitive paid tier.
             if (-not $isFree) {
-                $bhReason = [string]$script:behavioralReasons[$fullId]
+                $bhReason = [string]$script:behavioralReasons[$singleId]
                 if (-not (Test-BehavioralReasonDefinitive $bhReason) -and $bhReason -ne "") {
                     $costTier = "unverified"
                 }
@@ -1409,7 +1464,7 @@ if ($nvidiaModels -ne $null) {
             # "unverified" instead of "unknown" to signal the probe failed (not
             # that the model is genuinely paid/unknown).
             if (-not $isFree) {
-                $bhReason = [string]$script:behavioralReasons[$fullId]
+                $bhReason = [string]$script:behavioralReasons[$singleId]
                 if (-not (Test-BehavioralReasonDefinitive $bhReason) -and $bhReason -ne "") {
                     $costTier = "unverified"
                 }

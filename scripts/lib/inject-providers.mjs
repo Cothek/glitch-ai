@@ -13,6 +13,38 @@ const REGISTRY_PATHS = [
   join(ROOT_DIR, 'data', 'model-registry.json'),
 ];
 
+// Native NVIDIA model patterns — these need nvidia/ prefix at the NVIDIA API.
+// When OpenCode strips the first nvidia/ provider prefix, native models still
+// need nvidia/ at the API — so we store them double-prefixed (nvidia/nvidia/...).
+const NATIVE_MODEL_PATTERNS = [
+  /^nvidia\/nemotron/,
+  /^nvidia\/nv-/,
+  /^nvidia\/cosmos/,
+  /^nvidia\/neva/,
+  /^nvidia\/vila/,
+  /^nvidia\/llama-.*-nemotron/,
+  /^nvidia\/llama3-chatqa/,
+  /^nvidia\/meta\//,
+  /^nvidia\/moonshotai\//,
+  /^nvidia\/google\//,
+  /^nvidia\/mistralai\//,
+  /^nvidia\/microsoft\//,
+  /^nvidia\/openai\//,
+  /^nvidia\/nvidia-nemotron/,
+  /^nvidia\/ising/,
+  /^nvidia\/deepseek-ai\//,
+  /^nvidia\/ibm\//,
+  /^nvidia\/zyphra\//,
+  /^nvidia\/writer\//,
+  /^nvidia\/poolside\//,
+  /^nvidia\/thinkingmachines\//,
+];
+
+function isNativeNvidiaModel(modelId) {
+  if (!modelId) return false;
+  return NATIVE_MODEL_PATTERNS.some(p => p.test(modelId));
+}
+
 /**
  * Read a JSON file, stripping a UTF-8 BOM if present.
  * PowerShell (PS 5.1) writes UTF-8 files with a BOM by default — both
@@ -24,6 +56,25 @@ function readJsonStripBom(filePath) {
   let raw = readFileSync(filePath, 'utf-8');
   if (raw.charCodeAt(0) === 0xFEFF) raw = raw.slice(1); // strip BOM
   return JSON.parse(raw);
+}
+
+/**
+ * Ensure a nvidia model ID has the correct prefix for OpenCode routing.
+ * Native models (nemotron, cosmos, meta/*, etc.) need double prefix
+ * (nvidia/nvidia/...) so after OpenCode strips one nvidia/, the API gets nvidia/...
+ * Hosted models (minimaxai/*, deepseek-ai/*, etc.) keep single prefix.
+ */
+function normalizeNvidiaModelId(modelId) {
+  if (!modelId || !modelId.startsWith('nvidia/')) return modelId;
+  const bare = modelId.replace(/^nvidia\//, '');
+  const singleId = `nvidia/${bare}`;
+  if (isNativeNvidiaModel(singleId)) {
+    // Ensure double prefix for native models
+    if (!modelId.startsWith('nvidia/nvidia/')) {
+      return `nvidia/${singleId}`;
+    }
+  }
+  return modelId;
 }
 
 /**
@@ -72,6 +123,38 @@ export function injectProviders(config) {
       }
     } catch (_e) {
       // Registry read is best-effort — don't block provider injection
+    }
+
+    // Ensure BOTH single and double prefix forms exist for native NVIDIA models.
+    // OpenCode may strip the first nvidia/ segment, so the single-prefix form
+    // must exist as a lookup key. Native models need the nvidia/ prefix at the
+    // NVIDIA API, so they're stored double-prefixed — but the stripped form
+    // must also be present for OpenCode's routing to match.
+    try {
+      const nvidiaModels = providers.nvidia?.models || {};
+      let fixed = 0;
+      for (const key of Object.keys(nvidiaModels)) {
+        if (key.startsWith('nvidia/nvidia/')) {
+          // Double-prefixed native model: ensure single-prefix form exists
+          const singleForm = key.replace(/^nvidia\/nvidia\//, 'nvidia/');
+          if (!(singleForm in nvidiaModels)) {
+            nvidiaModels[singleForm] = nvidiaModels[key];
+            fixed++;
+          }
+        } else if (key.startsWith('nvidia/') && !key.startsWith('nvidia/nvidia/')) {
+          // Single-prefixed native model: ensure double-prefix form exists
+          const normalized = normalizeNvidiaModelId(key);
+          if (normalized !== key && !(normalized in nvidiaModels)) {
+            nvidiaModels[normalized] = nvidiaModels[key];
+            fixed++;
+          }
+        }
+      }
+      if (fixed > 0) {
+        console.log(`  [FIX] Added ${fixed} mirrored native nvidia model(s) to providers`);
+      }
+    } catch (_e) {
+      // Best-effort fix
     }
 
     config.provider = providers;

@@ -38,7 +38,7 @@ if (!getSqliteDriver()) {
   console.warn("[mulahazah] no SQLite driver (bun:sqlite/node:sqlite) — token-burst detection disabled (heartbeat + phrases still work)");
 }
 
-export const HEARTBEAT_INTERVAL_MS = 15 * 60 * 1000; // 15 min from last write
+export const HEARTBEAT_INTERVAL_MS = 30 * 60 * 1000; // 30 min from last write (per user directive 2026-08-26)
 export const TIMER_CHECK_MS = 60 * 1000; // background timer cadence (60s)
 export const TOKEN_THRESHOLD = 1_000_000; // new tokens (in+out+reasoning) since last write
 export const COOLDOWN_MS = 5 * 60 * 1000; // phrase-trigger cooldown

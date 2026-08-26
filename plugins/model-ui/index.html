@@ -1091,7 +1091,7 @@
     }
 
     function tierBadgeClass(tier) {
-      const map = { free: 'free', budget: 'budget', mid: 'mid', premium: 'premium' };
+      const map = { free: 'free', budget: 'budget', budget_paid: 'budget', mid: 'mid', premium: 'premium' };
       return `gl-badge--${map[tier] || 'neutral'}`;
     }
 
@@ -1153,7 +1153,7 @@
         const displayModel = pendingChange ? pendingChange.new_model : agent.current_model;
         const displayTier = pendingChange ? pendingChange.tier : agent.tier;
         const tierBadgeClass = displayTier === 'free' ? 'gl-badge--free'
-          : displayTier === 'budget' ? 'gl-badge--budget'
+          : displayTier === 'budget' || displayTier === 'budget_paid' ? 'gl-badge--budget'
           : displayTier === 'mid' ? 'gl-badge--mid'
           : displayTier === 'premium' ? 'gl-badge--premium'
           : 'gl-badge--neutral';
@@ -1459,7 +1459,7 @@
           : '';
 
           const tierBadgeClass = model.tier === 'free' ? 'gl-badge--free'
-          : model.tier === 'budget' ? 'gl-badge--budget'
+          : model.tier === 'budget' || model.tier === 'budget_paid' ? 'gl-badge--budget'
           : model.tier === 'mid' ? 'gl-badge--mid'
           : model.tier === 'premium' ? 'gl-badge--premium'
           : 'gl-badge--neutral';
@@ -1552,6 +1552,43 @@
       }
     }
 
+    function pollUntilServerReady(overlay, opts = {}) {
+      const graceMs = opts.graceMs || 2000;
+      const intervalMs = opts.intervalMs || 1500;
+      const timeoutMs = opts.timeoutMs || 60000;
+      const statusEl = overlay.querySelector('#restart-status-text') || overlay.querySelector('div:last-child');
+      const startTime = Date.now();
+      let elapsed = 0;
+      const timer = setInterval(() => {
+        elapsed = Date.now() - startTime;
+        if (elapsed < graceMs) {
+          if (statusEl) statusEl.textContent = 'Restarting Glitch...';
+          return;
+        }
+        if (elapsed >= timeoutMs) {
+          clearInterval(timer);
+          if (statusEl) statusEl.textContent = 'Server did not respond — reloading anyway...';
+          setTimeout(() => window.location.reload(), 500);
+          return;
+        }
+        const secs = Math.round(elapsed / 1000);
+        if (statusEl) statusEl.textContent = `Waiting for server... ${secs}s`;
+        fetch('/api/status', { cache: 'no-store' })
+          .then(r => { if (r.ok) { clearInterval(timer); setTimeout(() => window.location.reload(), 400); } })
+          .catch(() => {});
+      }, intervalMs);
+    }
+
+    function showRestartOverlay() {
+      document.querySelectorAll('.gl-btn').forEach(b => b.disabled = true);
+      const overlay = document.createElement('div');
+      overlay.id = 'restart-overlay';
+      overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 16px;';
+      overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div id="restart-status-text" style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload when the server is back.</div>';
+      document.body.appendChild(overlay);
+      return overlay;
+    }
+
     async function applyAndRestart() {
       try {
         const data = await api('apply-and-restart', { method: 'POST' });
@@ -1560,13 +1597,8 @@
 
         if (data.restarting) {
           showToast(`Changes applied. Restarting Glitch...`, 'success');
-          document.querySelectorAll('.gl-btn').forEach(b => b.disabled = true);
-          const overlay = document.createElement('div');
-          overlay.id = 'restart-overlay';
-          overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 16px;';
-          overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload in a moment.</div>';
-          document.body.appendChild(overlay);
-          setTimeout(() => window.location.reload(), 2500);
+          const overlay = showRestartOverlay();
+          pollUntilServerReady(overlay);
         } else if (data.restart_error) {
           showToast(`Changes applied but restart failed: ${data.restart_error}`, 'warning');
         } else {
@@ -1580,15 +1612,10 @@
     async function manualRestart() {
       try {
         showToast('Restarting Glitch...', 'info');
-        document.querySelectorAll('.gl-btn').forEach(b => b.disabled = true);
-        const overlay = document.createElement('div');
-        overlay.id = 'restart-overlay';
-        overlay.style.cssText = 'position: fixed; inset: 0; background: rgba(0,0,0,0.7); display: flex; align-items: center; justify-content: center; z-index: 9999; flex-direction: column; gap: 16px;';
-        overlay.innerHTML = '<div class="gl-spinner gl-spinner--lg" style="border-color: var(--glitch-accent); border-top-color: transparent;"></div><div style="color: white; font-size: 18px;">Restarting Glitch...</div><div style="color: var(--glitch-text-muted); font-size: 13px;">The page will reload in a moment.</div>';
-        document.body.appendChild(overlay);
+        const overlay = showRestartOverlay();
         const data = await api('restart', { method: 'POST' });
         if (data.ok && data.restarting) {
-          setTimeout(() => window.location.reload(), 2500);
+          pollUntilServerReady(overlay);
         } else {
           overlay.remove();
           document.querySelectorAll('.gl-btn').forEach(b => b.disabled = false);

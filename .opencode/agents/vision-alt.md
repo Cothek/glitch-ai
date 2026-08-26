@@ -1,8 +1,8 @@
 ---
 name: vision-alt
+model: opencode-go/kimi-k2.6
 mode: subagent
 temperature: 0.2
-model: nvidia/qwen/qwen3.5-122b-a10b
 
 description: >-
   Alternative image and visual content analysis agent. Fallback when @vision

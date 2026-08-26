@@ -81,6 +81,33 @@ function log(color, msg) {
   }
 }
 
+function syncAgentModelFiles(assignments, logFn) {
+  const agentsDir = join(ROOT_DIR, '.opencode', 'agents');
+  let updated = 0;
+  for (const [agentName, modelId] of Object.entries(assignments)) {
+    const agentPath = join(agentsDir, `${agentName}.md`);
+    if (!existsSync(agentPath)) continue;
+    try {
+      let text = readFileSync(agentPath, 'utf-8');
+      // Strip BOM if present
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
+      if (/^model:\s*.+$/m.test(text)) {
+        text = text.replace(/^model:\s*.+$/m, `model: ${modelId}`);
+      } else {
+        // No model line — insert after name: line
+        text = text.replace(/^(name:\s*.+)$/m, `$1\nmodel: ${modelId}`);
+      }
+      writeFileSync(agentPath, text, 'utf-8');
+      updated++;
+    } catch (e) {
+      logFn(YELLOW, `  Warning: Could not sync agent file ${agentName}.md (${e.message})`);
+    }
+  }
+  if (updated > 0) {
+    logFn(DARK_GREEN, `  Synced model to ${updated} agent file(s) in .opencode/agents/`);
+  }
+}
+
 const UpdateLogPath = join(ROOT_DIR, 'data', 'opencode-update.log');
 
 function logUpdate(msg) {
@@ -483,9 +510,38 @@ async function main() {
         if (overrideCount > 0) {
           log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from user/model-assignments.json`);
         }
+        syncAgentModelFiles(assignments, log);
       } catch (e) {
         log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
       }
+    }
+
+    // ---- DEBUG: model routing instrumentation ----
+    try {
+      const memModel = configObj.agent?.memory?.model;
+      const nvidiaModels = configObj.provider?.nvidia?.models || {};
+      const nvidiaKeys = Object.keys(nvidiaModels);
+      const stripped = memModel ? memModel.split('/').slice(1).join('/') : '';
+      const hasFull = nvidiaKeys.includes(memModel);
+      const hasStripped = nvidiaKeys.includes(stripped);
+      log(MAGENTA, `  [DEBUG-MODEL] memory.model="${memModel}"`);
+      log(MAGENTA, `  [DEBUG-MODEL] provider.nvidia.models has full="${memModel}": ${hasFull}`);
+      log(MAGENTA, `  [DEBUG-MODEL] stripped="${stripped}" hasStripped: ${hasStripped}`);
+      log(MAGENTA, `  [DEBUG-MODEL] provider.nvidia.models total: ${nvidiaKeys.length}`);
+      // Also check all agent models vs provider keys
+      for (const [agentName, agentDef] of Object.entries(configObj.agent || {})) {
+        const model = agentDef.model;
+        if (model) {
+          const inNvidia = nvidiaKeys.includes(model);
+          const strippedM = model.split('/').slice(1).join('/');
+          const inNvidiaStripped = nvidiaKeys.includes(strippedM);
+          if (!inNvidia && !inNvidiaStripped) {
+            log(YELLOW, `  [DEBUG-MODEL] WARNING: agent "${agentName}" model="${model}" NOT in provider.nvidia.models (full or stripped)`);
+          }
+        }
+      }
+    } catch (debugErr) {
+      log(YELLOW, `  [DEBUG-MODEL] debug instrumentation error: ${debugErr.message}`);
     }
 
     const finalJson = JSON.stringify(configObj, null, 2);
@@ -993,10 +1049,38 @@ async function main() {
             if (overrideCount > 0) {
               log(DARK_GREEN, `  Applied ${overrideCount} model override(s) from user/model-assignments.json`);
             }
+            syncAgentModelFiles(assignments, log);
           } catch (e) {
             log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
           }
         }
+        // ---- DEBUG: model routing instrumentation (restart path) ----
+        try {
+          const memModel = configObj.agent?.memory?.model;
+          const nvidiaModels = configObj.provider?.nvidia?.models || {};
+          const nvidiaKeys = Object.keys(nvidiaModels);
+          const stripped = memModel ? memModel.split('/').slice(1).join('/') : '';
+          const hasFull = nvidiaKeys.includes(memModel);
+          const hasStripped = nvidiaKeys.includes(stripped);
+          log(MAGENTA, `  [DEBUG-MODEL-RESTART] memory.model="${memModel}"`);
+          log(MAGENTA, `  [DEBUG-MODEL-RESTART] provider.nvidia.models has full="${memModel}": ${hasFull}`);
+          log(MAGENTA, `  [DEBUG-MODEL-RESTART] stripped="${stripped}" hasStripped: ${hasStripped}`);
+          log(MAGENTA, `  [DEBUG-MODEL-RESTART] provider.nvidia.models total: ${nvidiaKeys.length}`);
+          for (const [agentName, agentDef] of Object.entries(configObj.agent || {})) {
+            const model = agentDef.model;
+            if (model) {
+              const inNvidia = nvidiaKeys.includes(model);
+              const strippedM = model.split('/').slice(1).join('/');
+              const inNvidiaStripped = nvidiaKeys.includes(strippedM);
+              if (!inNvidia && !inNvidiaStripped) {
+                log(YELLOW, `  [DEBUG-MODEL-RESTART] WARNING: agent "${agentName}" model="${model}" NOT in provider.nvidia.models (full or stripped)`);
+              }
+            }
+          }
+        } catch (debugErr) {
+          log(YELLOW, `  [DEBUG-MODEL-RESTART] debug instrumentation error: ${debugErr.message}`);
+        }
+
         const finalJson = JSON.stringify(configObj, null, 2);
         writeFileSync(ConfigPath, finalJson, 'utf-8');
         log(DARK_GREEN, `  Config written (${allInstructions.length} instruction files)`);
