@@ -84,6 +84,10 @@ function writeJson(path, data) {
 
 const isWin = process.platform === 'win32';
 
+function toPerMillion(perToken) {
+  return perToken != null ? Math.max(0, Math.round(perToken * 1_000_000 * 100) / 100) : null;
+}
+
 function resolvePowerShell() {
   if (isWin) {
     try {
@@ -292,6 +296,8 @@ async function handler(req, res) {
           tier: model?.tier || 'unknown',
           capabilities: model?.capabilities || [],
           context_length: model?.context_length || null,
+          cost_per_million_input: toPerMillion(model?.pricing?.prompt),
+          cost_per_million_output: toPerMillion(model?.pricing?.completion),
         };
       });
       sendJson(res, 200, { agents });
@@ -350,8 +356,8 @@ async function handler(req, res) {
           context_length: m.context_length,
           capabilities: m.capabilities || [],
           vision: m.vision || false,
-          cost_per_million_input: m.cost_per_million_input ?? 0,
-          cost_per_million_output: m.cost_per_million_output ?? 0,
+          cost_per_million_input: toPerMillion(m.pricing?.prompt),
+          cost_per_million_output: toPerMillion(m.pricing?.completion),
         })),
         total: models.length,
         providers,
