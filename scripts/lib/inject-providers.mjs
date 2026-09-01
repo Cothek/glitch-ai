@@ -92,33 +92,44 @@ export function injectProviders(config) {
   try {
     const providers = readJsonStripBom(PROVIDERS_PATH);
 
+    // Read registry once — shared by SYNC and CULL steps.
+    let registryModels = null;
+    let isFresh = false;
+    try {
+      for (const rp of REGISTRY_PATHS) {
+        if (existsSync(rp)) {
+          const rd = readJsonStripBom(rp);
+          const arr = rd.models || rd;
+          if (Array.isArray(arr)) {
+            registryModels = arr;
+            const generatedAt = rd.generated_at;
+            if (generatedAt) {
+              const age = Date.now() - new Date(generatedAt).getTime();
+              isFresh = !isNaN(age) && age < 48 * 60 * 60 * 1000;
+            }
+            break;
+          }
+        }
+      }
+    } catch (_e) { /* best-effort */ }
+
     // Runtime safety net: merge nvidia models from model-registry.json
     // Prevents "Model not found" when providers.json is stale on disk.
     try {
-      let registryData = null;
-      for (const rp of REGISTRY_PATHS) {
-        if (existsSync(rp)) {
-          registryData = readJsonStripBom(rp);
-          break;
+      if (registryModels) {
+        const nvidiaModels = providers.nvidia?.models || {};
+        let added = 0;
+        for (const entry of registryModels) {
+          if (entry.id && entry.id.startsWith('nvidia/') && !(entry.id in nvidiaModels)) {
+            const derivedName = entry.id.replace('nvidia/', '') + ' (free)';
+            nvidiaModels[entry.id] = { name: entry.name || derivedName };
+            added++;
+          }
         }
-      }
-      if (registryData) {
-        const models = registryData.models || registryData;
-        if (Array.isArray(models)) {
-          const nvidiaModels = providers.nvidia?.models || {};
-          let added = 0;
-          for (const entry of models) {
-            if (entry.id && entry.id.startsWith('nvidia/') && !(entry.id in nvidiaModels)) {
-              const derivedName = entry.id.replace('nvidia/', '') + ' (free)';
-              nvidiaModels[entry.id] = { name: entry.name || derivedName };
-              added++;
-            }
-          }
-          if (!providers.nvidia) providers.nvidia = {};
-          providers.nvidia.models = nvidiaModels;
-          if (added > 0) {
-            console.log(`  [SYNC] Added ${added} nvidia model(s) from registry to providers`);
-          }
+        if (!providers.nvidia) providers.nvidia = {};
+        providers.nvidia.models = nvidiaModels;
+        if (added > 0) {
+          console.log(`  [SYNC] Added ${added} nvidia model(s) from registry to providers`);
         }
       }
     } catch (_e) {
@@ -156,6 +167,87 @@ export function injectProviders(config) {
     } catch (_e) {
       // Best-effort fix
     }
+
+// Cull NVIDIA models to only usable free models with context > 0,
+        // then deduplicate by display name (keep single-prefix form).
+        try {
+          const nvidiaModels = providers.nvidia?.models || {};
+          if (!registryModels) {
+            console.warn('  [CULL] Registry unavailable, skipping cull');
+          } else {
+            const registryMap = new Map();
+            for (const m of registryModels) {
+              if (m.id) registryMap.set(m.id, m);
+            }
+
+            function findRegistryEntry(key) {
+              if (registryMap.has(key)) return registryMap.get(key);
+              const singleForm = key.replace(/^nvidia\/nvidia\//, 'nvidia/');
+              if (registryMap.has(singleForm)) return registryMap.get(singleForm);
+              const bareForm = key.replace(/^nvidia\//, '');
+              if (registryMap.has(bareForm)) return registryMap.get(bareForm);
+              return null;
+            }
+
+            // Critical models allowed to have null context_length (whitelist)
+            const CRITICAL_NULL_CONTEXT_MODELS = new Set([
+              'nvidia/nvidia/nemotron-3.5-lightning-30b-a3b',
+              'nvidia/nemotron-3.5-lightning-30b-a3b',
+            ]);
+
+            let culled = 0;
+            for (const key of Object.keys(nvidiaModels)) {
+              const entry = findRegistryEntry(key);
+              if (!entry) {
+                if (isFresh) { delete nvidiaModels[key]; culled++; }
+                else { console.log(`  [CULL] Stale registry, keeping ${key} (no registry entry)`); }
+                continue;
+              }
+              if (entry.context_length === 0) { delete nvidiaModels[key]; culled++; continue; }
+              if (entry.context_length == null) {
+                if (CRITICAL_NULL_CONTEXT_MODELS.has(key)) {
+                  console.log(`  [CULL] CRITICAL: ${key} has unknown context_length (null), keeping (whitelisted)`);
+                } else {
+                  console.log(`  [CULL] Removed ${key} (unknown context_length / null)`);
+                  delete nvidiaModels[key];
+                  culled++;
+                  continue;
+                }
+              }
+              if (isFresh && entry.free !== true && entry.tier !== 'free') { delete nvidiaModels[key]; culled++; continue; }
+              if (!isFresh && entry.free !== true && entry.tier !== 'free') { console.log(`  [CULL] Stale registry, skipping free check for ${key}`); }
+              if (entry.capabilities && !entry.capabilities.includes('text')) { delete nvidiaModels[key]; culled++; continue; }
+            }
+            if (culled > 0) {
+              console.log(`  [CULL] Removed ${culled} unusable nvidia model(s)`);
+            }
+
+            // Deduplicate by display name — keep single-prefix form over double-prefix.
+            const seenNames = new Map();
+            let deduped = 0;
+            const keys = Object.keys(nvidiaModels);
+            // Sort so single-prefix forms come before double-prefix forms
+            keys.sort((a, b) => {
+              const aDouble = a.startsWith('nvidia/nvidia/') ? 1 : 0;
+              const bDouble = b.startsWith('nvidia/nvidia/') ? 1 : 0;
+              return aDouble - bDouble;
+            });
+            for (const key of keys) {
+              const displayName = nvidiaModels[key]?.name || key;
+              if (seenNames.has(displayName)) {
+                delete nvidiaModels[key];
+                deduped++;
+              } else {
+                seenNames.set(displayName, key);
+              }
+            }
+            if (deduped > 0) {
+              console.log(`  [DEDUPE] Removed ${deduped} duplicate nvidia model(s)`);
+            }
+          }
+        } catch (_e) {
+          // Best-effort cull+dedupe — never block provider injection
+        }
 
     config.provider = providers;
   } catch (e) {
