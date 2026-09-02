@@ -88,6 +88,41 @@ function toPerMillion(perToken) {
   return perToken != null ? Math.max(0, Math.round(perToken * 1_000_000 * 100) / 100) : null;
 }
 
+/**
+ * Find the real per-million-token cost for a model, even if it's free.
+ * 1. If model has own nonzero pricing -> return it (NVIDIA native free models with real prices).
+ * 2. Else if free-looking (tier==='free' or id endsWith '-free' or ':free'):
+ *    strip suffix, look up paid sibling in the FULL registry, return sibling's pricing.
+ * 3. Else null.
+ */
+function findUnderlyingCost(model, registryModels) {
+  if (!model || !Array.isArray(registryModels)) return null;
+
+  const pricing = model.pricing;
+  const hasOwn = pricing && (
+    (typeof pricing.prompt === 'number' && pricing.prompt > 0) ||
+    (typeof pricing.completion === 'number' && pricing.completion > 0)
+  );
+  if (hasOwn) return pricing;
+
+  const isFree = model.tier === 'free' || model.free === true
+    || (typeof model.id === 'string' && (model.id.endsWith('-free') || model.id.endsWith(':free')));
+  if (!isFree) return null;
+
+  let siblingId = model.id;
+  if (siblingId.endsWith('-free')) siblingId = siblingId.slice(0, -5);
+  else if (siblingId.endsWith(':free')) siblingId = siblingId.slice(0, -5);
+
+  const sibling = registryModels.find((m) => m.id === siblingId);
+  const sp = sibling?.pricing;
+  if (sp && (
+    (typeof sp.prompt === 'number' && sp.prompt > 0) ||
+    (typeof sp.completion === 'number' && sp.completion > 0)
+  )) return sp;
+
+  return null;
+}
+
 function resolvePowerShell() {
   if (isWin) {
     try {
@@ -287,8 +322,10 @@ async function handler(req, res) {
       }
       const registry = getRegistry();
       const rawAgents = extractAgents(config);
+      const allModels = registry?.models || [];
       const agents = rawAgents.map((a) => {
         const model = lookupModel(a.model, registry);
+        const u = findUnderlyingCost(model, allModels);
         return {
           name: a.name,
           current_model: a.model,
@@ -298,6 +335,8 @@ async function handler(req, res) {
           context_length: model?.context_length || null,
           cost_per_million_input: toPerMillion(model?.pricing?.prompt),
           cost_per_million_output: toPerMillion(model?.pricing?.completion),
+          underlying_cost_per_million_input: u ? toPerMillion(u.prompt) : null,
+          underlying_cost_per_million_output: u ? toPerMillion(u.completion) : null,
         };
       });
       sendJson(res, 200, { agents });
@@ -346,19 +385,25 @@ async function handler(req, res) {
       const tiers = [...new Set((registry.models || []).map((m) => m.tier).filter(Boolean))];
       const capabilities = [...new Set((registry.models || []).flatMap(m => m.capabilities || []))].sort();
 
+      const fullModels = registry.models || [];
       sendJson(res, 200, {
-        models: models.map((m) => ({
-          id: m.id,
-          name: m.name,
-          provider: m.source,
-          source: m.source,
-          tier: m.tier,
-          context_length: m.context_length,
-          capabilities: m.capabilities || [],
-          vision: m.vision || false,
-          cost_per_million_input: toPerMillion(m.pricing?.prompt),
-          cost_per_million_output: toPerMillion(m.pricing?.completion),
-        })),
+        models: models.map((m) => {
+          const u = findUnderlyingCost(m, fullModels);
+          return {
+            id: m.id,
+            name: m.name,
+            provider: m.source,
+            source: m.source,
+            tier: m.tier,
+            context_length: m.context_length,
+            capabilities: m.capabilities || [],
+            vision: m.vision || false,
+            cost_per_million_input: toPerMillion(m.pricing?.prompt),
+            cost_per_million_output: toPerMillion(m.pricing?.completion),
+            underlying_cost_per_million_input: u ? toPerMillion(u.prompt) : null,
+            underlying_cost_per_million_output: u ? toPerMillion(u.completion) : null,
+          };
+        }),
         total: models.length,
         providers,
         tiers,

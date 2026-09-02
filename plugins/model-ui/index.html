@@ -176,6 +176,9 @@
     .agent-cost-badge--free {
       color: var(--glitch-success);
     }
+    .agent-cost-badge__underlying {
+      color: var(--glitch-text-muted);
+    }
 
     .model-card__action {
       flex-shrink: 0;
@@ -1143,6 +1146,30 @@
       }
     }
 
+    /**
+     * DRY cost formatter for agent badges and model picker.
+     * @param {number|null} costIn - direct cost per million input
+     * @param {number|null} costOut - direct cost per million output
+     * @param {number|null} underlyingIn - underlying cost per million input
+     * @param {number|null} underlyingOut - underlying cost per million output
+     * @returns {{ html: string, isFree: boolean }}
+     */
+    function formatCost(costIn, costOut, underlyingIn, underlyingOut) {
+      if (costIn != null && costIn > 0) {
+        const parts = ['$' + costIn.toFixed(2) + ' in'];
+        if (costOut != null) parts.push('$' + costOut.toFixed(2) + ' out');
+        return { html: parts.join(' / '), isFree: false };
+      }
+      const hasUnderlying = underlyingIn != null;
+      if (hasUnderlying) {
+        const parts = ['Free', '<span class="agent-cost-badge__underlying">$' + underlyingIn.toFixed(2)];
+        parts.push(underlyingOut != null ? '/' + underlyingOut.toFixed(2) : '');
+        parts.push('</span>');
+        return { html: parts.join(' '), isFree: true };
+      }
+      return { html: 'Free', isFree: true };
+    }
+
     function renderAgentTable() {
       document.getElementById('agent-table-loading').classList.add('gl-hidden');
 
@@ -1178,15 +1205,13 @@
         const selClass = isSelected ? ' selected' : '';
 
         const costBadge = (() => {
-          if (agent.cost_per_million_input == null) return '';
-          if (agent.cost_per_million_input === 0) {
-            return '<span class="model-sep"></span><span class="agent-cost-badge agent-cost-badge--free">Free</span>';
-          }
-          const input = '$' + agent.cost_per_million_input.toFixed(2);
-          if (agent.cost_per_million_output != null) {
-            return `<span class="model-sep"></span><span class="agent-cost-badge">${input} in / $${agent.cost_per_million_output.toFixed(2)} out</span>`;
-          }
-          return `<span class="model-sep"></span><span class="agent-cost-badge">${input} in</span>`;
+          if (agent.cost_per_million_input == null && agent.underlying_cost_per_million_input == null) return '';
+          const { html, isFree } = formatCost(
+            agent.cost_per_million_input, agent.cost_per_million_output,
+            agent.underlying_cost_per_million_input, agent.underlying_cost_per_million_output
+          );
+          const cls = isFree ? 'agent-cost-badge agent-cost-badge--free' : 'agent-cost-badge';
+          return html ? `<span class="model-sep"></span><span class="${cls}">${html}</span>` : '';
         })();
 
         // Agent name first, model details below
@@ -1476,12 +1501,10 @@
           `<span class="gl-badge gl-badge--capability">${escapeHtml(c)}</span>`
         ).join('');
 
-        const cost = model.cost_per_million_input != null
-          ? (model.cost_per_million_input === 0 ? 'Free'
-            : model.cost_per_million_output != null
-              ? `$${model.cost_per_million_input.toFixed(2)}/$${model.cost_per_million_output.toFixed(2)}`
-              : `$${model.cost_per_million_input.toFixed(2)}`)
-          : '';
+        const { html: costHtml } = formatCost(
+          model.cost_per_million_input, model.cost_per_million_output,
+          model.underlying_cost_per_million_input, model.underlying_cost_per_million_output
+        );
 
           const tierBadgeClass = model.tier === 'free' ? 'gl-badge--free'
           : model.tier === 'budget' || model.tier === 'budget_paid' ? 'gl-badge--budget'
@@ -1504,7 +1527,7 @@
             <span class="model-sep"></span>
             <span class="gl-badge gl-badge--neutral">${escapeHtml(model.provider || model.source || '')}</span>
             ${contextText ? '<span class="model-sep"></span><span class="ctx-badge">' + contextText + '</span>' : ''}
-            ${cost ? '<span class="model-sep"></span><span class="model-card__cost">' + cost + '</span>' : ''}
+            ${costHtml ? '<span class="model-sep"></span><span class="model-card__cost">' + costHtml + '</span>' : ''}
           </div>
           <div class="model-card__action">
             <button class="gl-btn ${isSelected ? 'gl-btn--primary' : 'gl-btn--secondary'} gl-btn--sm">${isSelected ? '&#10003;' : 'Select'}</button>
