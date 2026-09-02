@@ -773,6 +773,72 @@ function Save-NvidiaFreeCache($results) {
     return $success
 }
 
+# --- Zen free-model live validation -------------------------------------------
+# Zen's /models listing and its runtime can diverge: a model may be listed but
+# return 400/404 on an actual completion (observed: deepseek-v4-flash-free ->
+# HTTP 400 empty body, 2026-09-02). Listing alone cannot be trusted for the
+# Model Switcher picker. Probe each free candidate with a 1-token completion.
+# Verdicts are cached with the same 24h-TTL pattern as nvidia-free-cache.
+# Probing is skipped on the fast launch path (-SkipNvidiaFreeCheck); launch
+# consumes cached verdicts only. Transient failures (429/5xx/network) are NOT
+# cached and do NOT exclude a model — only definitive 400/404 does.
+$ZenValCacheFile = "$RootDir\data\zen-free-validation.json"
+$ZenValCacheTTLHours = 24
+
+function Load-ZenValCache {
+    param([switch]$Force)
+    if ($Force) { return $null }
+    if (-not (Test-Path $ZenValCacheFile)) { return $null }
+    try {
+        $cache = Get-Content $ZenValCacheFile -Raw | ConvertFrom-Json
+        if ($cache.generated_at) {
+            $age = (Get-Date) - (Get-Date $cache.generated_at)
+            if ($age.TotalHours -lt $ZenValCacheTTLHours) {
+                return $cache
+            }
+        }
+        return $null
+    } catch { return $null }
+}
+
+function Save-ZenValCache($results) {
+    # Same .tmp promotion pattern as Save-NvidiaFreeCache (never leave a stale .tmp).
+    try {
+        $dir = Split-Path -Parent $ZenValCacheFile
+        if (-not (Test-Path $dir)) { New-Item -ItemType Directory -Path $dir -Force | Out-Null }
+        $payload = @{ generated_at = (Get-Date).ToString("o"); ttl_hours = $ZenValCacheTTLHours; results = $results }
+        $tmpFile = "$ZenValCacheFile.tmp"
+        $payload | ConvertTo-Json -Depth 4 | Out-File -FilePath $tmpFile -Encoding utf8 -Force
+        if (Test-Path -LiteralPath $ZenValCacheFile) { Remove-Item -LiteralPath $ZenValCacheFile -Force }
+        try { Move-Item -LiteralPath $tmpFile -Destination $ZenValCacheFile -ErrorAction Stop }
+        catch { Copy-Item -LiteralPath $tmpFile -Destination $ZenValCacheFile -Force }
+        if (Test-Path -LiteralPath $tmpFile) { try { Remove-Item -LiteralPath $tmpFile -Force } catch { } }
+        return $true
+    } catch { return $false }
+}
+
+# Probe: POST a 1-token completion to Zen. 200 = working; 400/404 = definitive
+# dead (listed-but-invalid); anything else = transient (retry next run).
+function Test-ZenModelWorking {
+    param([string]$ModelId)
+    $bodyObj = @{
+        model = $ModelId
+        messages = @(@{ role = "user"; content = "ping" })
+        max_tokens = 1
+    }
+    $body = $bodyObj | ConvertTo-Json -Compress
+    try {
+        $null = Invoke-RestMethod -Method Post -Uri "https://opencode.ai/zen/v1/chat/completions" `
+            -Body $body -ContentType "application/json" -TimeoutSec 10
+        return "working"
+    } catch {
+        $code = 0
+        try { $code = [int]$_.Exception.Response.StatusCode } catch { }
+        if ($code -eq 400 -or $code -eq 404) { return "invalid" }
+        return "transient"
+    }
+}
+
 # Behavioral probe: tries the model ID as-is first. If the NVIDIA API returns 404
 # and the ID has an "nvidia/" prefix, retries once with the bare form (prefix stripped).
 # Some models are only reachable without the prefix. 410 (Gone) is NOT retried.
@@ -1343,11 +1409,71 @@ function Get-OpenRouterPricing($modelId) {
     return $null
 }
 
+# --- Zen free-validation stage --------------------------------------------------
+# Probe free candidates that have no cached verdict, then build the exclusion set.
+# -SkipNvidiaFreeCheck (fast launch path) skips probing but still APPLIES cached
+# verdicts, so the launch-time registry already excludes yesterday's dead models.
+$script:zenDeadModels = @{}
+if ($zenModels -ne $null -and $zenModels.Count -gt 0) {
+    $zenValVerdicts = @{}
+    $zenValCache = Load-ZenValCache -Force:$Force
+    if ($zenValCache -ne $null -and $zenValCache.results) {
+        foreach ($prop in $zenValCache.results.PSObject.Properties) {
+            $zenValVerdicts[$prop.Name] = $prop.Value
+        }
+    }
+
+    $zenProbedAny = $false
+    if (-not $SkipNvidiaFreeCheck) {
+        foreach ($m in $zenModels) {
+            $fullId = "opencode/$m"
+            # Free-candidate determination mirrors the classification loop below:
+            # OpenRouter pricing 0/0, or the -free / big-pickle fallback heuristic.
+            $orData = Get-OpenRouterPricing $fullId
+            $isFreeCandidate = $false
+            if ($orData) {
+                $p2 = 0.0; [void][double]::TryParse($orData.pricing.prompt, [ref]$p2)
+                $c2 = 0.0; [void][double]::TryParse($orData.pricing.completion, [ref]$c2)
+                if ($p2 -eq 0.0 -and $c2 -eq 0.0) { $isFreeCandidate = $true }
+            } elseif ($m -match '-free$' -or $m -eq 'big-pickle') {
+                $isFreeCandidate = $true
+            }
+            if (-not $isFreeCandidate) { continue }
+            if (-not $zenValVerdicts.ContainsKey($m)) {
+                $verdict = Test-ZenModelWorking $m
+                if ($verdict -eq "working" -or $verdict -eq "invalid") {
+                    $zenValVerdicts[$m] = $verdict
+                    $zenProbedAny = $true
+                    if (-not $Silent) {
+                        $vColor = if ($verdict -eq "invalid") { "Yellow" } else { "DarkGray" }
+                        Write-Host "    [zen-validate] ${m}: $verdict" -ForegroundColor $vColor
+                    }
+                }
+                # transient: not cached, model stays trusted this run
+            }
+        }
+        if ($zenProbedAny) {
+            $null = Save-ZenValCache $zenValVerdicts
+        }
+    }
+
+    # Apply verdicts: dead models are excluded from the picker registry below.
+    foreach ($k in $zenValVerdicts.Keys) {
+        if ($zenValVerdicts[$k] -eq "invalid") { $script:zenDeadModels[$k] = $true }
+    }
+    if ($script:zenDeadModels.Count -gt 0 -and -not $Silent) {
+        Write-Host "    Zen validation: excluding $($script:zenDeadModels.Count) listed-but-dead model(s): $($script:zenDeadModels.Keys -join ', ')" -ForegroundColor Yellow
+    }
+}
+
 # OpenCode Zen models: both free and paid tiers exist; tier/free derived from OpenRouter pricing
 # Free-tier heuristic: model ID ends in "-free" or equals "big-pickle" (fallback when no OpenRouter data)
 # Unknown non-free: pricing = $null, tier = "budget_paid" (mirrors Go provider L1345-1354 convention)
 if ($zenModels -ne $null) {
     foreach ($m in $zenModels) {
+        # Skip models probe-verified as dead (listed-but-invalid at runtime) —
+        # the Model Switcher picker must never offer them.
+        if ($script:zenDeadModels.ContainsKey($m)) { continue }
         $fullId = "opencode/$m"
         $orData = Get-OpenRouterPricing $fullId
         $capabilities = @(Get-ModelCapabilities -modelId $m -provider "opencode")
