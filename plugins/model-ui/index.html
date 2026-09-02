@@ -179,6 +179,13 @@
     .agent-cost-badge__underlying {
       color: var(--glitch-text-muted);
     }
+    .agent-cost-badge__estimated {
+      color: var(--glitch-text-muted);
+      font-style: italic;
+    }
+    .agent-cost-badge--estimated {
+      color: var(--glitch-text-muted);
+    }
 
     .model-card__action {
       flex-shrink: 0;
@@ -1154,21 +1161,28 @@
      * @param {number|null} underlyingOut - underlying cost per million output
      * @returns {{ html: string, isFree: boolean }}
      */
-    function formatCost(costIn, costOut, underlyingIn, underlyingOut) {
-      if (costIn != null && costIn > 0) {
-        const parts = ['$' + costIn.toFixed(2) + ' in'];
-        if (costOut != null) parts.push('$' + costOut.toFixed(2) + ' out');
-        return { html: parts.join(' / '), isFree: false };
-      }
-      const hasUnderlying = underlyingIn != null;
-      if (hasUnderlying) {
-        const parts = ['Free', '<span class="agent-cost-badge__underlying">$' + underlyingIn.toFixed(2)];
-        parts.push(underlyingOut != null ? '/' + underlyingOut.toFixed(2) : '');
-        parts.push('</span>');
-        return { html: parts.join(' '), isFree: true };
-      }
-      return { html: 'Free', isFree: true };
-    }
+     function formatCost(costIn, costOut, underlyingIn, underlyingOut, estimatedIn, estimatedOut) {
+       if (costIn != null && costIn > 0) {
+         const parts = ['$' + costIn.toFixed(2) + ' in'];
+         if (costOut != null) parts.push('$' + costOut.toFixed(2) + ' out');
+         return { html: parts.join(' / '), isFree: false, isEstimated: false };
+       }
+       const hasUnderlying = underlyingIn != null;
+       if (hasUnderlying) {
+         const parts = ['Free', '<span class="agent-cost-badge__underlying">$' + underlyingIn.toFixed(2)];
+         parts.push(underlyingOut != null ? '/' + underlyingOut.toFixed(2) : '');
+         parts.push('</span>');
+         return { html: parts.join(' '), isFree: true, isEstimated: false };
+       }
+       const hasEstimated = estimatedIn != null;
+       if (hasEstimated) {
+         const prefix = '<span class="agent-cost-badge__estimated">~</span>';
+         const parts = [prefix + '$' + estimatedIn.toFixed(2)];
+         if (estimatedOut != null) parts.push('$' + estimatedOut.toFixed(2));
+         return { html: parts.join(' / '), isFree: false, isEstimated: true };
+       }
+       return { html: 'Free', isFree: true, isEstimated: false };
+     }
 
     function renderAgentTable() {
       document.getElementById('agent-table-loading').classList.add('gl-hidden');
@@ -1205,12 +1219,15 @@
         const selClass = isSelected ? ' selected' : '';
 
         const costBadge = (() => {
-          if (agent.cost_per_million_input == null && agent.underlying_cost_per_million_input == null) return '';
-          const { html, isFree } = formatCost(
+          if (agent.cost_per_million_input == null && agent.underlying_cost_per_million_input == null && agent.estimated_cost_per_million_input == null) return '';
+          const { html, isFree, isEstimated } = formatCost(
             agent.cost_per_million_input, agent.cost_per_million_output,
-            agent.underlying_cost_per_million_input, agent.underlying_cost_per_million_output
+            agent.underlying_cost_per_million_input, agent.underlying_cost_per_million_output,
+            agent.estimated_cost_per_million_input, agent.estimated_cost_per_million_output
           );
-          const cls = isFree ? 'agent-cost-badge agent-cost-badge--free' : 'agent-cost-badge';
+          const cls = isFree ? 'agent-cost-badge agent-cost-badge--free'
+            : isEstimated ? 'agent-cost-badge agent-cost-badge--estimated'
+            : 'agent-cost-badge';
           return html ? `<span class="model-sep"></span><span class="${cls}">${html}</span>` : '';
         })();
 
@@ -1503,7 +1520,8 @@
 
         const { html: costHtml } = formatCost(
           model.cost_per_million_input, model.cost_per_million_output,
-          model.underlying_cost_per_million_input, model.underlying_cost_per_million_output
+          model.underlying_cost_per_million_input, model.underlying_cost_per_million_output,
+          model.estimated_cost_per_million_input, model.estimated_cost_per_million_output
         );
 
           const tierBadgeClass = model.tier === 'free' ? 'gl-badge--free'
