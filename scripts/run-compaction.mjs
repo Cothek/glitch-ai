@@ -890,6 +890,20 @@ async function trimCurrentSession() {
 
 // --- Main ---
 async function main() {
+  // ---- Janitor: clean stale flags, old logs, temp dirs (non-blocking) ----
+  try {
+    const { execFileSync: execSyncFE } = await import("child_process");
+    const janitorPath = path.join(__dirname, "janitor.mjs");
+    if (existsSync(janitorPath)) {
+      execSyncFE(process.execPath, [janitorPath, "--apply"], {
+        timeout: 15000,
+        stdio: "ignore",
+      });
+    }
+  } catch {
+    // janitor failure must never block compaction
+  }
+
   const { due: heavyDue, lastRun: lastHeavyRun } = await shouldRunHeavyChecks();
   const auditResult = await runDataAudit(heavyDue, lastHeavyRun);
   const dataReviewResult = await checkDataReview(heavyDue, lastHeavyRun);

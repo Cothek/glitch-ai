@@ -105,3 +105,16 @@ cloudflared.exe.tmp
 # Large binary backups
 *.exe.old.*
 opencode/opencode.exe.old.*
+
+# Root-level one-shot debug scripts (prevent re-committing junk)
+/check-*.js
+/fix.js
+/test-*.cjs
+/test-*.mjs
+/verify-*.mjs
+/verify-*.ps1
+/query
+/README.html
+
+# Quarantine dir (redundant with data/ above, explicit for documentation)
+data/quarantine/

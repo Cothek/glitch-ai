@@ -374,6 +374,16 @@ async function main() {
   // ---- Load .env ----
   loadEnv();
 
+  // ---- Janitor: clean stale flags, old logs, temp dirs (non-fatal — sync, 15s cap, must never block launch) ----
+  try {
+    const janitorPath = join(SCRIPT_DIR, 'janitor.mjs');
+    if (existsSync(janitorPath)) {
+      run('node', [janitorPath, '--apply'], { timeout: 15000, stdio: 'ignore' });
+    }
+  } catch {
+    // janitor failure must never block launch
+  }
+
   // ---- Auto-bootstrap: download OpenCode if missing ----
   if (!existsSync(OpenCodeBin)) {
     log(YELLOW, '  OpenCode not found. Running bootstrap to download...');
