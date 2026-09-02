@@ -683,25 +683,19 @@ async function main() {
   };
 
   // ---- Launch Server with restart loop ----
-  const { launchServer, cleanupServices } = await import('./lib/server-mode.mjs');
+  const { launchServer } = await import('./lib/server-mode.mjs');
 
   let shouldRestart = true;
-  let firstIteration = true;
   while (shouldRestart) {
     // Log restart loop iteration
     const loopLogPath = join(ROOT_DIR, 'data', 'restart-loop.log');
     writeFileSync(loopLogPath, `[${new Date().toISOString()}] Entered restart loop\n`, 'utf-8');
 
-    // Tear down old services before relaunching (skip on first iteration —
-    // nothing to clean up on a fresh start). This kills the old auth-proxy,
-    // cloudflared, and money-dashboard via their pid files so the new
-    // launchServer() doesn't hit port conflicts from orphaned processes.
-    if (!firstIteration) {
-      log(CYAN, '  Cleaning up old services before restart...');
-      cleanupServices();
-      await new Promise(r => setTimeout(r, 1000));
-    }
-    firstIteration = false;
+    // Restart = restart opencode ONLY. Sibling services (cloudflared, auth-proxy,
+    // money-dashboard, sessions-api, model-ui) are REUSED across restarts via
+    // their skip-if-alive / port-in-use checks in server-mode.mjs + plugin-manager.
+    // cleanup() still runs on real process exit (SIGINT/SIGTERM handlers in
+    // server-mode.mjs), so a full Glitch quit tears everything down.
 
     await launchServer({ OpenCodeBin, ROOT_DIR, HandyBin });
 
@@ -721,7 +715,10 @@ async function main() {
       if (oldPid && oldPid > 0) {
         await waitForProcessExit(oldPid, 10000);
       }
-      await waitForPortsFree([4104, 4102, 4100, 4110, 4191], 10000);
+      // Reuse model: only opencode's port must be free. 4104 (model-ui), 4100
+      // (auth-proxy), 4110 (money), 4191 (sessions-api) stay held intentionally —
+      // those services are reused, not restarted.
+      await waitForPortsFree([4102], 10000);
 
       log('');
       log(MAGENTA, '  Restarting Glitch...');

@@ -219,17 +219,64 @@ function killPidFromFile(pidFileName, expectedNames) {
   } catch {}
 }
 
+// Kill the outer PowerShell window host that wraps a visible-window service.
+// Each visible-window service (cloudflared, auth-proxy, money-dashboard) writes
+// TWO pid files: the service PID (e.g. cloudflared.pid — the node/cloudflared
+// process) AND the outer PowerShell window host PID (e.g. cloudflared.pid.window
+// — the -NoExit powershell.exe that hosts the visible window). taskkill /T kills
+// a process and its CHILDREN, never its parent, so killing the service PID leaves
+// the outer window alive as a zombie. This helper kills the window host tree
+// instead, which takes the whole subtree with it.
+//
+// Windows-only: on unix, .pid.window files are never created, so this is a no-op.
+function killWindowHost(windowPidFileName) {
+  if (!rootDirRef) return;
+  if (process.platform !== 'win32') return;
+  const pidFile = join(rootDirRef, 'data', `${windowPidFileName}.window`);
+  if (!existsSync(pidFile)) return;
+  let pid = 0;
+  try {
+    pid = parseInt(readFileSync(pidFile, 'utf-8').trim(), 10);
+    if (pid > 0 && isProcessAlive(pid)) {
+      const name = getProcessName(pid);
+      if (name === 'powershell' || name === 'pwsh') {
+        execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: 'ignore', timeout: 5000 });
+      }
+    }
+  } catch {}
+  // Delete the file when the process is confirmed dead or the pid was invalid.
+  // Leave the file if the process is alive and we declined to kill it (same
+  // semantics as killPidFromFile — don't mask a live process with a stale file).
+  try {
+    if (pid <= 0 || !isProcessAlive(pid)) {
+      unlinkSync(pidFile);
+    }
+  } catch {}
+}
+
 function cleanup() {
   for (const proc of backgroundProcesses) {
     try { if (!proc.killed) proc.kill(); } catch {}
   }
   backgroundProcesses.length = 0;
-  // Kill visible-window services by their pid files (Windows only).
+  // Kill the outer PowerShell window hosts first. taskkill /PID <windowPid> /T /F
+  // kills the whole tree (window host → inner script → service), so the existing
+  // service-level killPidFromFile calls below serve as belt-and-suspenders for unix
+  // and cases where the .pid.window file is missing.
+  killWindowHost('cloudflared');
+  killWindowHost('auth-proxy');
+  killWindowHost('money-dashboard');
+  // Kill visible-window services by their pid files (Windows + unix fallback).
   // Each call verifies the PID is alive and its process name matches the
   // expected set before taskkilling — guards against recycled PIDs.
   killPidFromFile('cloudflared.pid', ['cloudflared', 'powershell', 'pwsh', 'node']);
   killPidFromFile('auth-proxy.pid', ['node', 'powershell', 'pwsh']);
   killPidFromFile('money-dashboard.pid', ['node', 'powershell', 'pwsh']);
+  // Kill sessions-api by pid file. If the supervisor is force-killed (taskkill /F),
+  // process.on('exit') handlers never run — sessions-api orphans holding port 4191.
+  killPidFromFile('sessions-api.pid', ['node']);
+  // DO NOT kill plugin-model-ui.pid here — model-ui is the restart control plane
+  // and must survive restarts.
   if (fixerInterval) {
     clearInterval(fixerInterval);
     fixerInterval = null;
@@ -721,7 +768,27 @@ export async function launchServer(options = {}) {
   const targetOk = await checkAndClearPortWithRetry(TARGET_PORT);
   if (!targetOk) process.exit(1);
 
-  const authProxyOk = await checkAndClearPortWithRetry(AUTH_PROXY_PORT);
+  // ---- Auth proxy skip-if-alive (reuse across restarts) ----
+  // Restart = restart opencode only; sibling services are reused. If the pid
+  // file points at a live process with the right name, skip the port clear AND
+  // the spawn below instead of killing + respawning it every restart.
+  // Note: a reused auth-proxy keeps the password env it was launched with
+  // (stable via .server-password) — a full Glitch quit relaunches it fresh.
+  let authProxyReused = false;
+  if (existsSync(join(ROOT_DIR, 'data', 'auth-proxy.pid'))) {
+    try {
+      const apStoredPid = parseInt(readFileSync(join(ROOT_DIR, 'data', 'auth-proxy.pid'), 'utf-8').trim(), 10);
+      if (apStoredPid > 0 && isProcessAlive(apStoredPid)) {
+        const apName = getProcessName(apStoredPid);
+        if (apName && ['node', 'powershell', 'pwsh'].includes(apName)) {
+          authProxyReused = true;
+          log(DARK_GREEN, `  Auth proxy: already running (PID ${apStoredPid}) — reusing`);
+        }
+      }
+    } catch {}
+  }
+
+  const authProxyOk = authProxyReused || await checkAndClearPortWithRetry(AUTH_PROXY_PORT);
   if (!authProxyOk) process.exit(1);
 
   // ---- Cloudflare Tunnel status check + auto-setup ----
@@ -987,7 +1054,8 @@ export async function launchServer(options = {}) {
     log(DARK_GREEN, '  Handy already running');
   }
 
-  // ---- Start Auth Proxy ----
+  // ---- Start Auth Proxy (skipped when reused — see skip-if-alive above) ----
+  if (!authProxyReused) {
   log(CYAN, `  Starting auth proxy (port ${AUTH_PROXY_PORT} -> ${TARGET_PORT})...`);
   try {
     if (isWin) {
@@ -1023,6 +1091,7 @@ export async function launchServer(options = {}) {
     }
   } catch (e) {
     log(YELLOW, `  Auth proxy start failed: ${e.message}`);
+  }
   }
 
   // ---- Start Sessions API (port 4191) ----
