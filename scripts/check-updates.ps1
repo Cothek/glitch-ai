@@ -1,4 +1,4 @@
-param(
+﻿param(
   [switch]$Update = $false,
   [switch]$CheckOnly = $false,
   [string[]]$Filter = @()
@@ -42,6 +42,66 @@ function Invoke-WithSpinner {
   $null = Receive-Job $job -ErrorAction SilentlyContinue
   Remove-Job $job -Force
   return $true
+}
+
+# --- npm-globals safety helpers (bundled Node wipes globals on update) ---
+# The bundled Node tree (data\node) IS its own npm global prefix - global
+# packages (gitnexus, opencode) live as shims directly inside it. The bundled
+# Node update path renames data\node -> data\node.old and copies a fresh tree,
+# which silently deletes every npm global. These helpers detect, and restore,
+# config-declared globals.
+
+function Test-GitNexusConfigured {
+  # True when opencode.json (runtime) or any config/opencode-*.json template
+  # declares mcp.gitnexus - meaning Glitch expects the gitnexus MCP server.
+  $candidates = @((Join-Path $RootDir "opencode.json"))
+  $candidates += @(Get-ChildItem (Join-Path $RootDir "config") -Filter "opencode-*.json" -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName })
+  foreach ($cfgPath in $candidates) {
+    if (-not (Test-Path $cfgPath)) { continue }
+    try {
+      $cfg = Get-Content $cfgPath -Raw -ErrorAction Stop | ConvertFrom-Json -ErrorAction Stop
+      if ($cfg.mcp -and $cfg.mcp.PSObject.Properties.Name -contains "gitnexus") { return $true }
+    } catch { }
+  }
+  return $false
+}
+
+function Resolve-GitNexusBin {
+  # Returns the path to a usable gitnexus binary/shim, or $null when truly absent.
+  # Bundled tree first (that's where Glitch's own npm globals live), then PATH.
+  $bundledDir = Join-Path $RootDir "data\node"
+  foreach ($name in @("gitnexus.cmd", "gitnexus.exe", "gitnexus")) {
+    $p = Join-Path $bundledDir $name
+    if (Test-Path $p) { return $p }
+  }
+  $cmd = Get-Command gitnexus -ErrorAction SilentlyContinue
+  if ($cmd) { return $cmd.Source }
+  return $null
+}
+
+function Install-GitNexusBundle {
+  # Reinstalls gitnexus into the bundled node tree via data\node\npm.cmd.
+  # Mirrors install.ps1's pattern: bundled npm preferred, bundled node dir
+  # prepended to PATH so postinstall resolves the correct node. Returns $true
+  # when the shim/module exists afterwards.
+  $bundledNodeDir = Join-Path $RootDir "data\node"
+  $bundledNpm = Join-Path $bundledNodeDir "npm.cmd"
+  if (-not (Test-Path $bundledNpm)) { return $false }
+  $prevPath = $env:PATH
+  $env:PATH = "$bundledNodeDir;$env:PATH"
+  try {
+    $null = & $bundledNpm "install" "-g" "gitnexus@latest" 2>&1
+    $Ok = ($LASTEXITCODE -eq 0)
+    if (-not $Ok) { return $false }
+    # Verify the shim/module actually landed
+    return ((Test-Path (Join-Path $bundledNodeDir "gitnexus.cmd")) -or
+            (Test-Path (Join-Path $bundledNodeDir "gitnexus.exe")) -or
+            (Test-Path (Join-Path $bundledNodeDir "node_modules\gitnexus")))
+  } catch {
+    return $false
+  } finally {
+    $env:PATH = $prevPath
+  }
 }
 
 function Get-NvmActiveVersion {
@@ -407,15 +467,32 @@ try {
 try {
   $curVer = ""
   $latestVer = ""
-  try {
-    $curVer = (& "gitnexus" "--version" 2>$null).Trim()
-  } catch { $curVer = "unknown" }
+
+  # Missing-but-configured is a recoverable GAP, not silence: the bundled Node
+  # update path (rename data\node -> copy fresh tree) wipes npm globals, so
+  # gitnexus can vanish while the config still declares mcp.gitnexus.
+  $gnConfigured = Test-GitNexusConfigured
+  $gnBin = Resolve-GitNexusBin
+  $gnMissing = $gnConfigured -and (-not $gnBin)
+
+  if ($gnBin) {
+    try {
+      $verOut = & $gnBin "--version" 2>$null
+      if ($verOut) { $curVer = ([string]$verOut).Trim() }
+    } catch { }
+    if (-not $curVer) { $curVer = "unknown" }
+  } elseif ($gnConfigured) {
+    $curVer = "missing"
+  } else {
+    $curVer = "not configured"
+  }
 
   try {
     $latestVer = (& "npm" "view" "gitnexus" "version" 2>$null).Trim()
   } catch { $latestVer = "unknown" }
+  if (-not $latestVer) { $latestVer = "unknown" }
 
-  $hasUpdate = ($curVer -ne "unknown" -and $latestVer -ne "unknown" -and $curVer -ne $latestVer)
+  $hasUpdate = ($curVer -match '^\d+\.\d+' -and $latestVer -ne "unknown" -and $curVer -ne $latestVer)
   $updateType = "unknown"
   $autoSafe = $false
 
@@ -428,6 +505,36 @@ try {
     $updatesAvailable++
   }
 
+  # MISSING recovery: config declares the MCP server but no binary resolves.
+  if ($gnMissing) {
+    $updatesAvailable++
+    if ($IsUpdate) {
+      $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "GitNexus (reinstall - declared in config but binary missing)" -FromVer "missing" -ToVer $latestVer)
+      if ($proceed) {
+        Write-ColorHost "  Reinstalling gitnexus into data\node (npm install -g gitnexus)..." "Cyan"
+        if (Install-GitNexusBundle) {
+          $gnBin = Resolve-GitNexusBin
+          try {
+            $verOut = & $gnBin "--version" 2>$null
+            if ($verOut) { $curVer = ([string]$verOut).Trim() } else { $curVer = "installed" }
+          } catch { $curVer = "installed" }
+          $gnMissing = $false
+          if ($updatesAvailable -gt 0) { $updatesAvailable-- }
+          Write-ColorHost "  Reinstalled. Version: $curVer" "Green"
+        } else {
+          Write-ColorHost "  Reinstall FAILED. Manual: data\node\npm.cmd install -g gitnexus" "Red"
+        }
+      }
+    } else {
+      Write-ColorHost "  gitnexus is declared in config but the binary is missing (bundled Node update wipes npm globals). Run with -Update to reinstall." "Yellow"
+    }
+    # Recompute update flag after a successful reinstall
+    if (-not $gnMissing) {
+      $hasUpdate = ($curVer -match '^\d+\.\d+' -and $latestVer -ne "unknown" -and $curVer -ne $latestVer)
+      if ($hasUpdate) { $updateType = "unknown" }
+    }
+  }
+
   if ($IsUpdate -and $hasUpdate) {
     if ($updateType -eq "major") {
       $proceed = ($Filter.Count -gt 0 -or $Update) -or (Confirm-Update -Name "GitNexus" -FromVer $curVer -ToVer $latestVer)
@@ -435,8 +542,11 @@ try {
       $proceed = $true
     }
     if ($proceed) {
-      $null = Invoke-WithSpinner -Label "Upgrading gitnexus from $curVer to $latestVer" -ScriptBlock { & "npm" "install" "-g" "gitnexus@latest" 2>&1 | Out-Null }
-      try { $curVer = (& "gitnexus" "--version" 2>$null).Trim() } catch {}
+      $bundledNpmCmd = Join-Path $RootDir "data\node\npm.cmd"
+      $npmForUpgrade = if (Test-Path $bundledNpmCmd) { $bundledNpmCmd } else { "npm" }
+      $null = Invoke-WithSpinner -Label "Upgrading gitnexus from $curVer to $latestVer" -ScriptBlock ([scriptblock]::Create("& '$npmForUpgrade' 'install' '-g' 'gitnexus@latest' 2>&1 | Out-Null"))
+      $gnBin = Resolve-GitNexusBin
+      if ($gnBin) { try { $curVer = ([string](& $gnBin "--version" 2>$null)).Trim() } catch {} }
       Write-ColorHost "  Done. Version: $curVer" "Green"
       # After a successful update, clear the flag if the binary now matches latest
       if ($curVer -eq $latestVer) {
@@ -450,13 +560,13 @@ try {
     name = "gitnexus"
     current = $curVer
     latest = $latestVer
-    update_available = $hasUpdate
-    update_type = $updateType
+    update_available = ($hasUpdate -or $gnMissing)
+    update_type = $(if ($gnMissing) { "reinstall" } else { $updateType })
     auto_safe = $autoSafe
-    status = "ok"
+    status = $(if ($gnMissing) { "missing" } else { "ok" })
   }
 
-  Write-ColorHost ("  [{0}] Current: {1} | Latest: {2}" -f $(if ($hasUpdate) {"UPDATE"} else {"OK"}), $curVer, $latestVer) $(if ($hasUpdate) {"Yellow"} else {"Green"})
+  Write-ColorHost ("  [{0}] Current: {1} | Latest: {2}" -f $(if ($gnMissing) {"MISSING"} elseif ($hasUpdate) {"UPDATE"} else {"OK"}), $curVer, $latestVer) $(if ($hasUpdate -or $gnMissing) {"Yellow"} else {"Green"})
 } catch {
   $results += @{ name = "gitnexus"; status = "error"; error_message = $_.Exception.Message }
   Write-ColorHost "  [ERROR] $_" "Red"
@@ -1102,6 +1212,14 @@ try {
           if ($exe) {
             $targetDir = Join-Path $RootDir "data\node"
             $oldDir = Join-Path $RootDir "data\node.old"
+            # The bundled node dir IS the npm global prefix - the rename+copy below
+            # wipes every npm global. Capture gitnexus presence first so we can
+            # restore it afterwards.
+            $gnExistedBefore = (
+              (Test-Path (Join-Path $targetDir "gitnexus.cmd")) -or
+              (Test-Path (Join-Path $targetDir "gitnexus.exe")) -or
+              (Test-Path (Join-Path $targetDir "node_modules\gitnexus"))
+            )
             # Rename old dir to .old first (rename works even with running executables on Windows)
             if (Test-Path $targetDir) {
               if (Test-Path $oldDir) { Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue }
@@ -1112,6 +1230,18 @@ try {
             # Cleanup .old - may fail if node.exe still running; cleaned on next update
             Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue
             Write-ColorHost "  Node.js $latestVer extracted to data/node/" "Green"
+
+            # Restore gitnexus - unconditionally when config declares it, or when it
+            # was installed before the update wiped it. Do NOT rely on the pre-update
+            # check state: the update itself destroys the binary.
+            if ($gnExistedBefore -or (Test-GitNexusConfigured)) {
+              Write-ColorHost "  Restoring gitnexus (npm global - wiped by Node update): npm install -g gitnexus ..." "Cyan"
+              if (Install-GitNexusBundle) {
+                Write-ColorHost "  gitnexus restored (npm global)." "Green"
+              } else {
+                Write-ColorHost "  gitnexus restore FAILED - reinstall manually: data\node\npm.cmd install -g gitnexus" "Yellow"
+              }
+            }
           }
 
           Remove-Item $zipPath -Force -ErrorAction SilentlyContinue
@@ -1408,6 +1538,9 @@ foreach ($item in $results) {
   if ($item.status -eq "error") {
     $statusColor = "Red"
     $statusLabel = "ERROR"
+  } elseif ($item.status -eq "missing") {
+    $statusColor = "Yellow"
+    $statusLabel = "MISSING"
   } elseif ($item.update_available) {
     $statusColor = "Yellow"
     $statusLabel = "UPDATE"

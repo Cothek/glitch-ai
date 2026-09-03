@@ -1,4 +1,4 @@
-param(
+﻿param(
   [switch]$Force
 )
 
@@ -118,6 +118,14 @@ if ($needsDownload) {
       $extractedExe = Get-ChildItem $extractDir -Recurse -Filter "node.exe" | Select-Object -First 1
       if ($extractedExe) {
         $oldDir = "$BundledNodeDir.old"
+        # The bundled node dir IS the npm global prefix - the rename+copy below
+        # wipes every npm global (gitnexus, opencode). Capture gitnexus presence
+        # first so we can restore it afterwards.
+        $gnExistedBefore = (
+          (Test-Path (Join-Path $BundledNodeDir "gitnexus.cmd")) -or
+          (Test-Path (Join-Path $BundledNodeDir "gitnexus.exe")) -or
+          (Test-Path (Join-Path $BundledNodeDir "node_modules\gitnexus"))
+        )
         # Rename old dir to .old first (rename works even with running executables on Windows)
         if (Test-Path $BundledNodeDir) {
           if (Test-Path $oldDir) { Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue }
@@ -128,6 +136,26 @@ if ($needsDownload) {
         # Cleanup .old - may fail if node.exe still running; cleaned on next update
         Remove-Item $oldDir -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host "  Node.js extracted to data/node/" -ForegroundColor Green
+
+        # Restore gitnexus global wiped by the directory replacement above.
+        if ($gnExistedBefore) {
+          $bundledNpm = Join-Path $BundledNodeDir "npm.cmd"
+          if (Test-Path $bundledNpm) {
+            Write-Host "  Restoring gitnexus (npm global wiped by Node update)..." -ForegroundColor Yellow
+            $prevPath = $env:PATH
+            $env:PATH = "$BundledNodeDir;$env:PATH"
+            try {
+              $null = & $bundledNpm "install" "-g" "gitnexus@latest" 2>&1
+              if ($LASTEXITCODE -eq 0 -and ((Test-Path (Join-Path $BundledNodeDir "gitnexus.cmd")) -or (Test-Path (Join-Path $BundledNodeDir "node_modules\gitnexus")))) {
+                Write-Host "  gitnexus restored." -ForegroundColor Green
+              } else {
+                Write-Host "  gitnexus restore FAILED - reinstall manually: data\node\npm.cmd install -g gitnexus" -ForegroundColor Red
+              }
+            } finally {
+              $env:PATH = $prevPath
+            }
+          }
+        }
       } else {
         throw "Could not find node.exe in extracted archive"
       }
