@@ -94,6 +94,33 @@ export function formatTokens(n) {
   return String(n);
 }
 
+/**
+ * Cross-restart heartbeat reset. The heartbeat anchor (lastTriggerTime ??
+ * sessionStartTime) persists across process restarts via state.json. Without
+ * this reset, a session whose last write was >= HEARTBEAT_INTERVAL_MS ago
+ * fires at the FIRST timer tick of the next process even though zero new
+ * activity happened - re-flagging every recently-ended session on every
+ * Glitch restart (observed 2026-09-03: 27-flag startup burst, each re-stamped
+ * fresh so the janitor's 24h TTL never expires).
+ *
+ * Rule: if a full heartbeat window elapsed since the anchor WITHOUT a fire,
+ * that window ran while this process was not running - nothing recoverable.
+ * Start the window fresh: the first real activity in this process (tool-hook
+ * increments, fresh token baseline) restarts the clock. Mutates in place;
+ * returns true when the entry was reset.
+ */
+export function applyRestartWindowReset(e, now = Date.now()) {
+  const anchor = e.lastTriggerTime ?? e.sessionStartTime;
+  if (now - anchor < HEARTBEAT_INTERVAL_MS) return false;
+  e.sessionStartTime = now;
+  e.lastTriggerTime = null;
+  e.toolCallCount = 0;
+  e.toolCounts = {};
+  e.lastTokenBaseline = null;
+  e.lastTokenReadTime = null;
+  return true;
+}
+
 export function formatDuration(ms) {
   const totalMinutes = Math.floor(ms / 60000);
   if (totalMinutes < 60) return `${totalMinutes}min`;

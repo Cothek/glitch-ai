@@ -12,6 +12,9 @@
 //   5. Omni detection — glitch-omni flag-capable, sub-agents not.
 //   6. DB helpers — resolveDbPath honors OPENCODE_DB_PATH; readSessionTokens /
 //      readSessionAgent return real rows from a temp SQLite DB.
+//   7. Cross-restart window reset — loaded state older than one heartbeat
+//      window without a fire resets the anchor so ended sessions do NOT
+//      re-flag at the first timer tick of every restart (2026-09-03 burst bug).
 //
 // Run: node scripts/test-mulahazah.mjs
 // (or: data\node\node.exe scripts/test-mulahazah.mjs)
@@ -30,6 +33,7 @@ import {
   formatDuration,
   formatToolCounts,
   evaluateTrigger,
+  applyRestartWindowReset,
   resolveDbPath,
   readSessionTokens,
   readSessionAgent,
@@ -294,6 +298,147 @@ test("readSessionTokens + readSessionAgent return real rows", () => {
     rmSync(tmpDir, { recursive: true, force: true });
   }
 });
+
+// ============================================================
+console.log("\n7. Cross-restart window reset (applyRestartWindowReset):");
+// ============================================================
+
+test("resets entry whose lastTriggerTime is a full window old", () => {
+  const now = 10_000_000;
+  const e = createSessionEntry(now - HEARTBEAT_INTERVAL_MS * 4);
+  e.lastTriggerTime = now - HEARTBEAT_INTERVAL_MS * 2; // 2 windows ago
+  e.toolCallCount = 12;
+  e.toolCounts = { read: 7, bash: 5 };
+  e.lastTokenBaseline = { input: 1, output: 1, reasoning: 0, total: 2 };
+  e.lastTokenReadTime = now - 1000;
+  const reset = applyRestartWindowReset(e, now);
+  assert.ok(reset, "stale-by-two-windows entry must reset");
+  assert.strictEqual(e.lastTriggerTime, null);
+  assert.strictEqual(e.toolCallCount, 0);
+  assert.deepStrictEqual(e.toolCounts, {});
+  assert.strictEqual(e.sessionStartTime, now, "window restarts at load time");
+  assert.strictEqual(e.lastTokenBaseline, null, "token history must not cause a phantom burst");
+  assert.strictEqual(e.lastTokenReadTime, null);
+});
+
+test("resets at exactly one window elapsed (matches evaluateTrigger >= boundary)", () => {
+  const now = 10_000_000;
+  const e = createSessionEntry(now - HEARTBEAT_INTERVAL_MS);
+  const reset = applyRestartWindowReset(e, now);
+  assert.ok(reset, "exactly at the interval must reset (evaluateTrigger fires at >=)");
+});
+
+test("does NOT touch an entry written < 1 window ago (active cadence uncut)", () => {
+  const now = 10_000_000;
+  const e = createSessionEntry(now - 6 * 60_000);
+  e.lastTriggerTime = now - 5 * 60_000; // last write 5 min ago
+  e.toolCallCount = 3;
+  e.toolCounts = { read: 3 };
+  e.lastTokenBaseline = { input: 1, output: 1, reasoning: 0, total: 2 };
+  const reset = applyRestartWindowReset(e, now);
+  assert.strictEqual(reset, false, "recent entry must be left alone");
+  assert.strictEqual(e.lastTriggerTime, now - 5 * 60_000);
+  assert.strictEqual(e.toolCallCount, 3);
+  assert.ok(e.lastTokenBaseline, "recent baseline preserved");
+});
+
+test("resets never-fired entry whose sessionStartTime is a full window old", () => {
+  const now = 10_000_000;
+  const e = createSessionEntry(now - HEARTBEAT_INTERVAL_MS - 60_000);
+  e.toolCallCount = 9; // activity happened, but process died before any fire
+  const reset = applyRestartWindowReset(e, now);
+  assert.ok(reset, "never-fired + window-stale start anchors to now");
+  assert.strictEqual(e.sessionStartTime, now);
+  assert.strictEqual(e.toolCallCount, 0);
+});
+
+test("sweep predicate: window-reset entry flags are stale, recent-fire flags survive", () => {
+  const now = 10_000_000;
+  // Reset entry (spam flag class)
+  const staleEntry = createSessionEntry(now);
+  applyRestartWindowReset(staleEntry, now); // was not reset (fresh); simulate reset shape
+  staleEntry.lastTriggerTime = null;
+  staleEntry.toolCallCount = 0;
+  const spamFlagStale = staleEntry.lastTriggerTime === null && staleEntry.toolCallCount === 0;
+  assert.ok(spamFlagStale, "reset entries must match the startup-sweep deletion predicate");
+  // Legitimately pending flag: fired 1 min ago (lastTriggerTime set, counts zeroed by fire)
+  const pendingEntry = createSessionEntry(now - 40 * 60_000);
+  pendingEntry.lastTriggerTime = now - 60_000;
+  pendingEntry.toolCallCount = 0;
+  const pendingStale = pendingEntry.lastTriggerTime === null && pendingEntry.toolCallCount === 0;
+  assert.strictEqual(pendingStale, false, "recently-fired flags must NOT be swept");
+});
+
+// ============================================================
+// 8. Plugin integration — startup sweep vs restart-burst spam flags
+// ============================================================
+
+await (async () => {
+  console.log("\n8. Plugin startup sweep (restart-burst spam deletion):");
+  const { mkdirSync, writeFileSync: wf, existsSync } = await import("node:fs");
+  const { MulahazahPlugin } = await import("../.opencode/plugins/mulahazah.js");
+  const now = Date.now();
+
+  const tmp = mkdtempSync(join(tmpdir(), "mulahazah-plugin-"));
+  const dataDir = join(tmp, "data");
+  const mulDir = join(dataDir, "mulahazah");
+  mkdirSync(mulDir, { recursive: true });
+
+  // Three sessions in saved state:
+  const state = {
+    ses_old_spam: {
+      toolCallCount: 5, toolCounts: { read: 5 },
+      lastTriggerTime: now - 2 * 60 * 60_000, // fulfilled 2h ago, ended, restart stamps it fresh pre-fix
+      sessionStartTime: now - 4 * 60 * 60_000,
+      isDispatcher: true, agent: "glitch",
+      lastTokenBaseline: null, lastTokenReadTime: null,
+    },
+    ses_recent_pending: {
+      toolCallCount: 0, toolCounts: {},
+      lastTriggerTime: now - 60_000, // flag fired 1 min before restart - genuinely pending
+      sessionStartTime: now - 3 * 60 * 60_000,
+      isDispatcher: true, agent: "glitch",
+      lastTokenBaseline: null, lastTokenReadTime: null,
+    },
+    ses_active_recent: {
+      toolCallCount: 3, toolCounts: { bash: 3 },
+      lastTriggerTime: now - 10 * 60_000, // wrote 10 min ago, still inside the window
+      sessionStartTime: now - 90 * 60_000,
+      isDispatcher: true, agent: "glitch",
+      lastTokenBaseline: null, lastTokenReadTime: null,
+    },
+  };
+  wf(join(mulDir, "state.json"), JSON.stringify(state), "utf8");
+  for (const sid of Object.keys(state)) {
+    wf(join(dataDir, `MEMORY_TRIGGER_FLAG.${sid}`), "flag content\n", "utf8");
+  }
+  // An orphan flag for a session not in state at all:
+  wf(join(dataDir, "MEMORY_TRIGGER_FLAG.ses_orphan"), "orphan\n", "utf8");
+
+  const prevDb = process.env.OPENCODE_DB_PATH;
+  process.env.OPENCODE_DB_PATH = join(tmp, "opencode.db"); // point away from the real DB
+  try {
+    await MulahazahPlugin({ directory: tmp });
+  } finally {
+    if (prevDb === undefined) delete process.env.OPENCODE_DB_PATH;
+    else process.env.OPENCODE_DB_PATH = prevDb;
+  }
+
+  test("deletes restart-burst spam flag (old lastTriggerTime, no new activity)", () => {
+    assert.strictEqual(existsSync(join(dataDir, "MEMORY_TRIGGER_FLAG.ses_old_spam")), false);
+  });
+  test("deletes orphan flag (session absent from state)", () => {
+    assert.strictEqual(existsSync(join(dataDir, "MEMORY_TRIGGER_FLAG.ses_orphan")), false);
+  });
+  test("keeps flag fired 1 min before restart (genuinely pending)", () => {
+    assert.ok(existsSync(join(dataDir, "MEMORY_TRIGGER_FLAG.ses_recent_pending")));
+  });
+  test("keeps flag of session still mid-window with recent activity", () => {
+    assert.ok(existsSync(join(dataDir, "MEMORY_TRIGGER_FLAG.ses_active_recent")));
+  });
+
+  rmSync(tmp, { recursive: true, force: true });
+})();
 
 // ============================================================
 console.log(`\n${passed} passed, ${failed} failed\n`);

@@ -98,6 +98,7 @@ import {
   formatDuration,
   formatToolCounts,
   evaluateTrigger,
+  applyRestartWindowReset,
   readSessionTokens,
   readSessionAgent,
   isOmniSession,
@@ -158,6 +159,10 @@ export const MulahazahPlugin = async ({ directory }) => {
           e.toolCallCount = 0;
           e.toolCounts = {};
         }
+        // P1-3b: if a full heartbeat window elapsed without a fire, it ran
+        // while this process was down. Reset so ended sessions do NOT re-fire
+        // at the first timer tick of every restart (startup-burst bug).
+        applyRestartWindowReset(e, now);
         sessionStates.set(sid, e);
       }
     }
@@ -181,6 +186,17 @@ export const MulahazahPlugin = async ({ directory }) => {
       if (!sid) continue;
       const flagPath = join(dataDir, name);
       let stale = !sessionStates.has(sid);
+      if (!stale) {
+        // P1-3b: entry was window-reset at load (no in-process activity, no
+        // recent fire). Any flag on disk for it is a pre-restart leftover -
+        // the spam class the janitor's 24h TTL can't see because every
+        // restart re-stamped them fresh. A flag fired < HEARTBEAT_INTERVAL
+        // ago keeps lastTriggerTime set and survives (genuinely pending).
+        const ent = sessionStates.get(sid);
+        if (ent && ent.lastTriggerTime === null && ent.toolCallCount === 0) {
+          stale = true;
+        }
+      }
       if (!stale) {
         try {
           const st = await fs.stat(flagPath);
