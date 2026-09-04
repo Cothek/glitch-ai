@@ -13,7 +13,11 @@
   ],
   "instructions": [
     ".opencode/instructions/shared-agent-rules.md",
-    "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+    "glitch-memorycore/plugins/glitch-skills/skills-registry.md",
+    "user/main-memory.md",
+    "user/current-session.md",
+    "user/reminders.md",
+    "user/session-dashboard.md"
   ],
   "mcp": {
     "gitnexus": {
@@ -26,7 +30,7 @@
   },
   "agent": {
     "glitch": {
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "nvidia/nvidia/moonshotai/kimi-k3",
       "mode": "primary",
       "description": "Orchestrates tasks, manages memory, delegates to sub-agents, executes directly only as last resort",
       "color": "#a855f7",
@@ -48,7 +52,7 @@
       "prompt": "{file:.opencode/instructions/glitch-system-prompt.md}"
     },
     "general": {
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode/mimo-v2.5-free",
       "mode": "subagent",
       "description": "General-purpose agent -- bash, config edits. NOT for code changes or file operations.",
       "permission": {
@@ -67,7 +71,7 @@
       "temperature": 0.2
     },
     "explore": {
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "opencode/mimo-v2.5-free",
       "mode": "subagent",
       "description": "Codebase research -- find files, search code, answer questions about the codebase. Read-only.",
       "permission": {
@@ -84,7 +88,7 @@
       "temperature": 0.2
     },
     "coder": {
-      "model": "nvidia/minimaxai/minimax-m3",
+      "model": "opencode/mimo-v2.5-free",
       "mode": "subagent",
       "description": "Senior full-stack engineer -- complex code (5+ files, auth, architecture)",
       "permission": {
@@ -104,7 +108,7 @@
       "temperature": 0.2
     },
     "ui-designer": {
-      "model": "nvidia/minimaxai/minimax-m3",
+      "model": "opencode/mimo-v2.5-free",
       "mode": "subagent",
       "description": "Senior UI designer -- design system work, shadcn/ui, Radix, Tailwind v4",
       "permission": {
@@ -124,7 +128,7 @@
       "temperature": 0.2
     },
     "reviewer": {
-      "model": "nvidia/minimaxai/minimax-m3",
+      "model": "opencode/mimo-v2.5-free",
       "mode": "subagent",
       "description": "Independent code quality gate -- read-only, severity-rated reports",
       "permission": {
@@ -142,7 +146,7 @@
       "temperature": 0.2
     },
     "testing": {
-      "model": "nvidia/minimaxai/minimax-m3",
+      "model": "opencode/mimo-v2.5-free",
       "mode": "subagent",
       "description": "Test writer -- TDD, framework detection, edge case coverage",
       "permission": {
@@ -162,7 +166,7 @@
       "temperature": 0.2
     },
     "pentester": {
-      "model": "nvidia/minimaxai/minimax-m3",
+      "model": "opencode/mimo-v2.5-free",
       "mode": "subagent",
       "description": "Application security tester and penetration testing specialist. Performs structured security assessments, OWASP Top 10 analysis, API security testing, dependency scanning, and secret detection. Runs security tools, analyzes code for vulnerabilities, and produces structured findings reports.",
       "permission": {
@@ -180,7 +184,7 @@
       "temperature": 0.2
     },
     "vision": {
-      "model": "nvidia/moonshotai/kimi-k2.6",
+      "model": "nvidia/minimaxai/minimax-m3",
       "mode": "subagent",
       "description": "Image and visual content analysis. Analyzes screenshots, UI mockups, diagrams, and other visual content using the read tool.",
       "permission": {
@@ -197,7 +201,7 @@
       "temperature": 0.2
     },
     "vision-alt": {
-      "model": "nvidia/qwen/qwen3.5-122b-a10b",
+      "model": "opencode-go/deepseek-v4-flash-vision-exp",
       "mode": "subagent",
       "description": "Alternative image and visual content analysis agent. Fallback when @vision fails with model-level errors (NVIDIA DEGRADED function, quota exhaustion, model not found). Uses a different underlying model than @vision.",
       "permission": {
@@ -214,7 +218,7 @@
       "temperature": 0.2
     },
     "memory": {
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "nvidia/nvidia/nemotron-3.5-lightning-30b-a3b",
       "mode": "subagent",
       "description": "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
       "permission": {
@@ -235,7 +239,7 @@
       "temperature": 0.2
     },
     "memory-paid": {
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode-go/qwen3.6-plus",
       "mode": "subagent",
       "description": "Memory writer — paid fallback with deepseek-v4-flash. Reads and appends to user/*.md files only. Loads save-memory skill. Use when @memory (free) returns empty results due to quota exhaustion or transient failure.",
       "permission": {
@@ -256,7 +260,7 @@
       "temperature": 0.2
     },
     "glitch-omni": {
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode-go/qwen3.6-plus",
       "mode": "primary",
       "description": "Direct-execution variant — does everything itself, no sub-agent delegation. Alternative primary selectable from agent switcher.",
       "color": "#a855f7",
@@ -295,7 +299,7 @@
       "temperature": 0.2
     },
     "general-paid": {
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode-go/qwen3.6-plus",
       "mode": "subagent",
       "description": "General-purpose agent — paid fallback for @general. Same capabilities (bash, config edits) but on paid model with higher reliability. Use when @general (free) returns empty results due to quota exhaustion or transient failure.",
       "permission": {
@@ -314,7 +318,7 @@
       "temperature": 0.2
     },
     "explore-paid": {
-      "model": "opencode-go/deepseek-v4-flash",
+      "model": "opencode-go/qwen3.6-plus",
       "mode": "subagent",
       "description": "Codebase research — paid fallback for @explore. Read-only codebase search and analysis. Use when @explore (free) returns empty results.",
       "permission": {
@@ -426,7 +430,7 @@
       "temperature": 0.2
     },
     "scout": {
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "nvidia/nvidia/moonshotai/kimi-k3",
       "mode": "subagent",
       "description": "Demand researcher for the money operation. Read-only by construction: webfetch/websearch/read/glob/grep ONLY. Never writes files, never runs bash, never touches credentials. Returns structured play proposals.",
       "permission": {
@@ -447,7 +451,7 @@
       "temperature": 0.2
     },
     "validator": {
-      "model": "opencode/deepseek-v4-flash-free",
+      "model": "nvidia/nvidia/moonshotai/kimi-k3",
       "mode": "subagent",
       "description": "Market validator for the money operation. Builds a landing page + waitlist for an approved play using read/write/edit/webfetch/websearch. No bash, no task, no credentials. Output goes to the business dir only.",
       "permission": {
@@ -492,13 +496,54 @@
         "baseURL": "https://integrate.api.nvidia.com/v1"
       },
       "models": {
-        "minimaxai/minimax-m3": {
-          "name": "MiniMax M3 (free, multimodal)",
-          "context_length": 1000000
-        },
-        "nvidia/nemotron-3.5-lightning-30b-a3b": {
+        "nvidia/nvidia/nemotron-3.5-lightning-30b-a3b": {
           "name": "Nemotron 3.5 Lightning 30B (free)",
           "context_length": 262144
+        },
+        "nvidia/nvidia/deepseek-ai/deepseek-v4-flash-0731": {
+          "name": "nvidia/deepseek-ai/deepseek-v4-flash-0731 (free)"
+        },
+        "nvidia/nvidia/google/gemma-4-31b-it": {
+          "name": "nvidia/google/gemma-4-31b-it (free)"
+        },
+        "nvidia/nvidia/meta/muse-glimmer-30b": {
+          "name": "nvidia/meta/muse-glimmer-30b (free)"
+        },
+        "nvidia/minimaxai/minimax-m3": {
+          "name": "minimaxai/minimax-m3 (free)"
+        },
+        "nvidia/nvidia/moonshotai/kimi-k3": {
+          "name": "nvidia/moonshotai/kimi-k3 (free)"
+        },
+        "nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
+          "name": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning (free)"
+        },
+        "nvidia/nvidia/nemotron-3-super-120b-a12b": {
+          "name": "nvidia/nemotron-3-super-120b-a12b (free)"
+        },
+        "nvidia/nvidia/nemotron-3-ultra-550b-a55b": {
+          "name": "nvidia/nemotron-3-ultra-550b-a55b (free)"
+        },
+        "nvidia/nvidia/openai/gpt-oss-20b": {
+          "name": "nvidia/openai/gpt-oss-20b (free)"
+        },
+        "nvidia/nvidia/poolside/laguna-xs-2.1": {
+          "name": "nvidia/poolside/laguna-xs-2.1 (free)"
+        },
+        "nvidia/nemotron-3.5-content-safety:free": {
+          "name": "nemotron-3.5-content-safety:free (free)"
+        },
+        "nvidia/nemotron-3-ultra-550b-a55b:free": {
+          "name": "nemotron-3-ultra-550b-a55b:free (free)"
+        },
+        "nvidia/nemotron-3-super-120b-a12b:free": {
+          "name": "nemotron-3-super-120b-a12b:free (free)"
+        },
+        "nvidia/nemotron-3.5-lightning:free": {
+          "name": "nemotron-3.5-lightning:free (free)"
+        },
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": {
+          "name": "nemotron-3-nano-omni-30b-a3b-reasoning:free (free)"
         }
       }
     }

@@ -92,7 +92,7 @@ export function injectProviders(config) {
   try {
     const providers = readJsonStripBom(PROVIDERS_PATH);
 
-    // Read registry once — shared by SYNC and CULL steps.
+    // Read registry once — used by the CULL freshness check.
     let registryModels = null;
     let isFresh = false;
     try {
@@ -112,29 +112,6 @@ export function injectProviders(config) {
         }
       }
     } catch (_e) { /* best-effort */ }
-
-    // Runtime safety net: merge nvidia models from model-registry.json
-    // Prevents "Model not found" when providers.json is stale on disk.
-    try {
-      if (registryModels) {
-        const nvidiaModels = providers.nvidia?.models || {};
-        let added = 0;
-        for (const entry of registryModels) {
-          if (entry.id && entry.id.startsWith('nvidia/') && !(entry.id in nvidiaModels)) {
-            const derivedName = entry.id.replace('nvidia/', '') + ' (free)';
-            nvidiaModels[entry.id] = { name: entry.name || derivedName };
-            added++;
-          }
-        }
-        if (!providers.nvidia) providers.nvidia = {};
-        providers.nvidia.models = nvidiaModels;
-        if (added > 0) {
-          console.log(`  [SYNC] Added ${added} nvidia model(s) from registry to providers`);
-        }
-      }
-    } catch (_e) {
-      // Registry read is best-effort — don't block provider injection
-    }
 
     // Ensure BOTH single and double prefix forms exist for native NVIDIA models.
     // OpenCode may strip the first nvidia/ segment, so the single-prefix form
@@ -180,14 +157,16 @@ export function injectProviders(config) {
               if (m.id) registryMap.set(m.id, m);
             }
 
-            function findRegistryEntry(key) {
-              if (registryMap.has(key)) return registryMap.get(key);
-              const singleForm = key.replace(/^nvidia\/nvidia\//, 'nvidia/');
-              if (registryMap.has(singleForm)) return registryMap.get(singleForm);
-              const bareForm = key.replace(/^nvidia\//, '');
-              if (registryMap.has(bareForm)) return registryMap.get(bareForm);
-              return null;
-            }
+function findRegistryEntry(key) {
+  if (registryMap.has(key)) return registryMap.get(key);
+  const singleForm = key.replace(/^nvidia\/nvidia\//, 'nvidia/');
+  if (registryMap.has(singleForm)) return registryMap.get(singleForm);
+  const bareForm = key.replace(/^nvidia\//, '');
+  if (registryMap.has(bareForm)) return registryMap.get(bareForm);
+  const prefixedForm = `nvidia/${key}`;
+  if (registryMap.has(prefixedForm)) return registryMap.get(prefixedForm);
+  return null;
+}
 
             // Critical models allowed to have null context_length (whitelist)
             const CRITICAL_NULL_CONTEXT_MODELS = new Set([
