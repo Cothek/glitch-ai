@@ -8,6 +8,8 @@ import { platform } from 'os';
 const args = process.argv.slice(2);
 const pathIndex = args.indexOf('--path');
 const customPath = pathIndex !== -1 && pathIndex + 1 < args.length ? args[pathIndex + 1] : null;
+const rootIndex = args.indexOf('--root');
+const customRoot = rootIndex !== -1 && rootIndex + 1 < args.length ? args[rootIndex + 1] : null;
 const quiet = args.includes('--quiet');
 
 const GREEN = '\x1b[32m';
@@ -21,7 +23,7 @@ function logOk(msg) { if (!quiet) console.log(`  ${GREEN}${msg}${RESET}`); }
 function logFail(msg) { if (!quiet) console.log(`  ${RED}${msg}${RESET}`); }
 
 const SCRIPT_DIR = dirname(fileURLToPath(import.meta.url));
-const ROOT_DIR = customPath ? dirname(resolve(customPath)) : resolve(SCRIPT_DIR, '..');
+const ROOT_DIR = customRoot ? resolve(customRoot) : resolve(SCRIPT_DIR, '..');
 const configPath = customPath ? resolve(customPath) : join(ROOT_DIR, 'opencode.json');
 
 if (!existsSync(configPath)) {
@@ -105,6 +107,30 @@ if (config.agent) {
 
   if (errors.length === 0 && !quiet) {
     logOk(`[OK] Agents: ${agentNames.length} configured, all valid`);
+  }
+
+  // Validate {file:...} references in agent prompts
+  const promptFileMissing = [];
+  for (const [name, agentConfig] of Object.entries(config.agent)) {
+    if (agentConfig.prompt && typeof agentConfig.prompt === 'string') {
+      const fileRefRe = /\{file:([^}]+)\}/g;
+      let m;
+      while ((m = fileRefRe.exec(agentConfig.prompt)) !== null) {
+        const refPath = m[1];
+        const fullPath = join(ROOT_DIR, refPath);
+        if (!existsSync(fullPath)) {
+          promptFileMissing.push(`${name}.prompt -> ${refPath}`);
+        }
+      }
+    }
+  }
+  if (promptFileMissing.length > 0) {
+    const msg = `Missing prompt file refs: ${promptFileMissing.join(', ')}`;
+    errors.push(msg);
+    logFail(`[FAIL] ${msg}`);
+    exitCode = 1;
+  } else if (!quiet) {
+    logOk('[OK] All prompt file refs exist');
   }
 }
 

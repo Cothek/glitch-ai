@@ -5,8 +5,9 @@
  * Centralizes the duplicated user profile detection logic that was in all 4 launch scripts.
  *
  * Exports:
- *   detectUserProfile(rootDir, envVarNames)  -- Find user profile from env vars or auto-detect
- *   buildUserInstructions(rootDir, userName)  -- Build instruction file paths for opencode.json
+ *   detectUserProfile(rootDir, envVarNames)   -- Find user profile from env vars or auto-detect
+ *   buildUserInstructions(rootDir, userName)   -- Build instruction file paths for opencode.json
+ *   buildMemoryPromptRefs(rootDir, userName)   -- Build {file:...} prompt refs for memory files
  */
 
 import { existsSync, readdirSync } from 'fs';
@@ -180,4 +181,39 @@ export function buildUserInstructions(rootDir, userName) {
 
   // No profile
   return [];
+}
+
+/**
+ * Build {file:...} prompt references for the 4 memory files.
+ * Returns a single string suitable for appending to an agent's prompt field.
+ *
+ * @param {string} rootDir  - Project root directory
+ * @param {string|null} userName  - User name from detectUserProfile()
+ * @returns {string} String of {file:...} refs joined by \n\n, or '' if no profile
+ */
+export function buildMemoryPromptRefs(rootDir, userName) {
+  if (userName) {
+    // Subdirectory profile: user/<name>/*.md
+    return [
+      `{file:user/${userName}/main-memory.md}`,
+      `{file:user/${userName}/current-session.md}`,
+      `{file:user/${userName}/reminders.md}`,
+      `{file:user/${userName}/session-dashboard.md}`
+    ].join('\n\n');
+  }
+
+  if (userName === '') {
+    // Flat profile: user/main-memory.md etc.
+    if (existsSync(join(rootDir, 'user', 'main-memory.md'))) {
+      return [
+        '{file:user/main-memory.md}',
+        '{file:user/current-session.md}',
+        '{file:user/reminders.md}',
+        '{file:user/session-dashboard.md}'
+      ].join('\n\n');
+    }
+  }
+
+  // No profile
+  return '';
 }

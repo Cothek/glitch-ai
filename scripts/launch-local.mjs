@@ -8,7 +8,7 @@ import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
 import { checkUserRepoUpdates } from './lib/git-sync.mjs';
-import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
+import { detectUserProfile, buildUserInstructions, buildMemoryPromptRefs } from './lib/user-profile.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
 import { bootstrapOpenCode } from './lib/bootstrap-opencode.mjs';
 import { initLaunchLog } from './lib/launch-log.mjs';
@@ -594,6 +594,12 @@ localModel = normalizeModelId(localModel);
   // Set the local mode prompt directly on the parsed object
   configObj.agent.glitch.prompt = buildLocalPrompt(localModel, modelName);
 
+  // Append memory file refs to glitch prompt (no glitch-omni in local mode)
+  const memoryPromptRefs = buildMemoryPromptRefs(ROOT_DIR, UserName);
+  if (memoryPromptRefs) {
+    configObj.agent.glitch.prompt += '\n\n' + memoryPromptRefs;
+  }
+
   // Inject shared providers (NVIDIA, LM Studio) from config/providers.json
   injectProviders(configObj);
 
@@ -618,15 +624,13 @@ localModel = normalizeModelId(localModel);
     log(DARK_GREEN, `  Registered ${Object.keys(lmModels).length} LM Studio model(s) in config`);
   }
 
-  // Build instructions list (engine + user)
+  // Build instructions list (engine only — memory now in agent prompts)
   const engineInstructions = [
     '.opencode/instructions/shared-agent-rules.md',
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
   ];
 
-  let userInstructions = buildUserInstructions(ROOT_DIR, UserName);
-
-  const allInstructions = [...engineInstructions, ...userInstructions];
+  const allInstructions = [...engineInstructions];
   const instrJson = allInstructions.map(s => `    "${s}"`).join(',\n');
   const instrBlock = `"instructions": [\n${instrJson}\n  ]`;
 

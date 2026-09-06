@@ -9,6 +9,7 @@ import { get as httpsGet } from 'https';
 import { tmpdir } from 'os';
 import { checkUserRepoUpdates } from './lib/git-sync.mjs';
 import { injectProviders } from './lib/inject-providers.mjs';
+import { buildMemoryPromptRefs } from './lib/user-profile.mjs';
 import { ensureEngine } from './lib/engine-bootstrap.mjs';
 import { bootstrapOpenCode } from './lib/bootstrap-opencode.mjs';
 import { initLaunchLog, logToFile } from './lib/launch-log.mjs';
@@ -888,24 +889,7 @@ async function main() {
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
   ];
 
-  let userInstructions = [];
-  if (UserName && UserName !== '') {
-    userInstructions = [
-      `user/${UserName}/main-memory.md`,
-      `user/${UserName}/current-session.md`,
-      `user/${UserName}/reminders.md`,
-      `user/${UserName}/session-dashboard.md`
-    ];
-  } else if (existsSync(join(ROOT_DIR, 'user', 'main-memory.md'))) {
-    userInstructions = [
-      'user/main-memory.md',
-      'user/current-session.md',
-      'user/reminders.md',
-      'user/session-dashboard.md'
-    ];
-  }
-
-  const allInstructions = [...engineInstructions, ...userInstructions];
+  const allInstructions = [...engineInstructions];
   const instrJson = allInstructions.map(s => `    "${s}"`).join(',\n');
   const instrBlock = `"instructions": [\n${instrJson}\n  ]`;
   let withModels = templateText.replace(/__MODEL__/g, primaryModel);
@@ -915,6 +899,16 @@ async function main() {
 
   // Set the free mode prompt directly on the parsed object (avoids string escaping)
   configObj.agent.glitch.prompt = buildFreePrompt(primaryModel, primaryName, visionModel, visionName);
+
+  // Append memory file refs to glitch and glitch-omni prompts
+  const memoryPromptRefs = buildMemoryPromptRefs(ROOT_DIR, UserName);
+  if (memoryPromptRefs) {
+    for (const agentName of ['glitch', 'glitch-omni']) {
+      if (configObj.agent?.[agentName]?.prompt) {
+        configObj.agent[agentName].prompt += '\n\n' + memoryPromptRefs;
+      }
+    }
+  }
 
   // Inject shared providers (NVIDIA, LM Studio) from config/providers.json
   injectProviders(configObj);

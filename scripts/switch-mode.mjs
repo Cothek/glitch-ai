@@ -7,6 +7,7 @@ import { execFileSync } from 'child_process';
 import { createInterface } from 'readline';
 import { platform } from 'os';
 import { initLaunchLog } from './lib/launch-log.mjs';
+import { buildMemoryPromptRefs } from './lib/user-profile.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -71,9 +72,20 @@ async function generateNormalConfig(templateText) {
   let UserName = process.env.GLITCH_USER || null; let userFound = false; const UserDir = join(ROOT_DIR, 'user');
   if (UserName) { const subdirPath = join(UserDir, UserName); if (existsSync(join(subdirPath, 'main-memory.md'))) userFound = true; else if (existsSync(join(UserDir, 'main-memory.md'))) { UserName = ''; userFound = true; } else { log(YELLOW, '  WARNING: User ' + UserName + ' specified but no profile found'); UserName = null; } }
   if (!userFound) { if (existsSync(join(UserDir, 'main-memory.md'))) { UserName = ''; userFound = true; } else if (existsSync(UserDir)) { const { readdirSync } = await import('fs'); try { const entries = readdirSync(UserDir, { withFileTypes: true }); const profiles = entries.filter(e => e.isDirectory()).map(e => e.name).filter(name => existsSync(join(UserDir, name, 'main-memory.md'))); if (profiles.length === 1) { UserName = profiles[0]; userFound = true; } else if (profiles.length > 1) { UserName = profiles[0]; userFound = true; } } catch {} } }
-  let userInstructions = []; if (UserName && UserName !== '') { userInstructions = ['user/' + UserName + '/main-memory.md', 'user/' + UserName + '/current-session.md', 'user/' + UserName + '/reminders.md', 'user/' + UserName + '/session-dashboard.md']; } else if (existsSync(join(ROOT_DIR, 'user', 'main-memory.md'))) { userInstructions = ['user/main-memory.md', 'user/current-session.md', 'user/reminders.md', 'user/session-dashboard.md']; }
-  const allInstructions = [...engineInstructions, ...userInstructions]; const instrJson = allInstructions.map(s => '    "' + s + '"').join(',\n'); const instrBlock = '"instructions": [\n' + instrJson + '\n  ]'; const runtimeJson = templateText.replace(/"[Ii]nstructions"\s*:\s*\[[^\]]*\]/, instrBlock);
-  try { JSON.parse(runtimeJson); return runtimeJson; } catch (e) { log(RED, '  ERROR: Generated config is invalid JSON: ' + e.message); return null; }
+  const allInstructions = [...engineInstructions]; const instrJson = allInstructions.map(s => '    "' + s + '"').join(',\n'); const instrBlock = '"instructions": [\n' + instrJson + '\n  ]'; const runtimeJson = templateText.replace(/"[Ii]nstructions"\s*:\s*\[[^\]]*\]/, instrBlock);
+  try {
+    const configObj = JSON.parse(runtimeJson);
+    // Append memory file refs to glitch and glitch-omni prompts
+    const memoryPromptRefs = buildMemoryPromptRefs(ROOT_DIR, UserName);
+    if (memoryPromptRefs) {
+      for (const agentName of ['glitch', 'glitch-omni']) {
+        if (configObj.agent?.[agentName]?.prompt) {
+          configObj.agent[agentName].prompt += '\n\n' + memoryPromptRefs;
+        }
+      }
+    }
+    return JSON.stringify(configObj, null, 2);
+  } catch (e) { log(RED, '  ERROR: Generated config is invalid JSON: ' + e.message); return null; }
 }
 
 async function runLaunchScript(scriptPath) { const fullPath = join(ROOT_DIR, scriptPath); if (!existsSync(fullPath)) { log(RED, '  Launch script not found: ' + scriptPath); return { success: false }; } log(CYAN, '  Starting ' + scriptPath + '...'); console.log(''); try { execFileSync('node', [fullPath], { cwd: ROOT_DIR, stdio: 'inherit', timeout: 0 }); return { success: true }; } catch (e) { if (e.status !== null) log(RED, '  Launch script exited with code ' + e.status); else log(RED, '  Launch script error: ' + e.message); return { success: false }; } }

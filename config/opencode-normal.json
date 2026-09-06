@@ -278,6 +278,7 @@
         "todowrite": "allow",
         "task": "deny"
       },
+      "prompt": "{file:.opencode/agents/glitch-omni.md}",
       "temperature": 0.2
     },
     "glitch-lightweight": {

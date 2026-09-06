@@ -7,7 +7,7 @@ import { execFileSync, spawn } from 'child_process';
 import { createInterface } from 'readline';
 import { get as httpsGet } from 'https';
 import { checkRepoUpdates, checkUserRepoUpdates, handleRestartOnUpdate } from './lib/git-sync.mjs';
-import { detectUserProfile, buildUserInstructions } from './lib/user-profile.mjs';
+import { detectUserProfile, buildUserInstructions, buildMemoryPromptRefs } from './lib/user-profile.mjs';
 import { bootstrapOpenCode } from './lib/bootstrap-opencode.mjs';
 import { migrateModelAssignments } from './lib/migrate-assignments.mjs';
 import { initLaunchLog } from './lib/launch-log.mjs';
@@ -475,9 +475,9 @@ async function main() {
     'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
   ];
 
-  let userInstructions = buildUserInstructions(ROOT_DIR, UserName);
+  const memoryPromptRefs = buildMemoryPromptRefs(ROOT_DIR, UserName);
 
-  const allInstructions = [...engineInstructions, ...userInstructions];
+  const allInstructions = [...engineInstructions];
   const instrJson = allInstructions.map(s => `    "${s}"`).join(',\n');
   const instrBlock = `"instructions": [\n${instrJson}\n  ]`;
   const runtimeJson = templateText.replace(/"[Ii]nstructions"\s*:\s*\[[^\]]*\]/, instrBlock);
@@ -508,6 +508,16 @@ async function main() {
       } catch (e) {
         log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
       }
+    }
+
+    // Append memory file refs to glitch and glitch-omni prompts
+    if (memoryPromptRefs) {
+      for (const agentName of ['glitch', 'glitch-omni']) {
+        if (configObj.agent?.[agentName]?.prompt) {
+          configObj.agent[agentName].prompt += '\n\n' + memoryPromptRefs;
+        }
+      }
+      log(DARK_GREEN, `  Appended memory refs to glitch/glitch-omni prompts`);
     }
 
     const finalJson = JSON.stringify(configObj, null, 2);
@@ -755,8 +765,8 @@ async function main() {
         '.opencode/instructions/shared-agent-rules.md',
         'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
       ];
-      let userInstructions = buildUserInstructions(ROOT_DIR, UserName);
-      const allInstructions = [...engineInstructions, ...userInstructions];
+      const memoryPromptRefs = buildMemoryPromptRefs(ROOT_DIR, UserName);
+      const allInstructions = [...engineInstructions];
       const instrJson = allInstructions.map(s => `    "${s}"`).join(',\n');
       const instrBlock = `"instructions": [\n${instrJson}\n  ]`;
       const runtimeJson = templateText.replace(/"[Ii]nstructions"\s*:\s*\[[^\]]*\]/, instrBlock);
@@ -784,6 +794,16 @@ async function main() {
             log(YELLOW, `  Warning: Could not read user/model-assignments.json (${e.message})`);
           }
         }
+
+        // Append memory file refs to glitch and glitch-omni prompts
+        if (memoryPromptRefs) {
+          for (const agentName of ['glitch', 'glitch-omni']) {
+            if (configObj.agent?.[agentName]?.prompt) {
+              configObj.agent[agentName].prompt += '\n\n' + memoryPromptRefs;
+            }
+          }
+        }
+
         const finalJson = JSON.stringify(configObj, null, 2);
         writeFileSync(ConfigPath, finalJson, 'utf-8');
         log(DARK_GREEN, `  Config written (${allInstructions.length} instruction files)`);
