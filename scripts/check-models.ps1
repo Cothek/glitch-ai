@@ -241,6 +241,30 @@ function Fetch-OpenRouterFreeModels {
   }
 }
 
+# --- Helper: fetch FreeToken (local FlashML engine) served models ----------------
+# FreeToken exposes an OpenAI-compatible /v1/models endpoint. The base URL is read
+# from config/providers.json (freetoken.options.baseURL) so it stays in sync with
+# the provider config. Returns an array of served model IDs, or $null if the server
+# is unreachable (graceful skip - FreeToken may not be running).
+function Fetch-FreeTokenModels {
+    $providersFile = "$RootDir\config\providers.json"
+    $modelsUrl = ""
+    if (-not (Test-Path $providersFile)) { return $null }
+    try {
+        $providers = Get-Content $providersFile -Raw | ConvertFrom-Json
+        $ft = $providers.freetoken
+        if (-not $ft -or -not $ft.options.baseURL) { return $null }
+        $baseUrl = $ft.options.baseURL.TrimEnd('/')
+        $modelsUrl = "$baseUrl/models"
+        $response = Invoke-RestMethod -Uri $modelsUrl -Method Get -TimeoutSec 10 -ErrorAction Stop
+        $ids = if ($response.data) { @($response.data | ForEach-Object { $_.id }) } else { @() }
+        return @($ids | Where-Object { $_ -ne $null -and $_ -ne '' })
+    } catch {
+        if (-not $Silent) { Write-Host " [WARN] FreeToken server not reachable at $modelsUrl (is it running?) - skipping FreeToken models" -ForegroundColor Yellow }
+        return $null
+    }
+}
+
 # --- Load our current agent models from opencode.json ---------------------------
 function Get-CurrentAgentModels {
     if (-not (Test-Path $ConfigFile)) { return @{} }
@@ -312,7 +336,7 @@ if ($cache -and $cache.sources) {
 $prevTotal = ($knownModels.Values | ForEach-Object { $_ }).Count
 
 if (-not $Silent) {
-  Write-Host " Sources: Go (opencode-go), Zen (opencode), NVIDIA, OpenRouter"
+  Write-Host " Sources: Go (opencode-go), Zen (opencode), NVIDIA, OpenRouter, FreeToken"
   if ($cache) { Write-Host " Previous snapshot: $($cache.lastCheck) ($prevTotal models)" }
 }
 
@@ -361,6 +385,7 @@ $goModels = Fetch-Models "https://opencode.ai/zen/go/v1/models"
 $zenModels = Fetch-Models "https://opencode.ai/zen/v1/models"
 $nvidiaModels = Fetch-NvidiaModels
 $openrouterModels = Fetch-OpenRouterFreeModels
+$freetokenModels = Fetch-FreeTokenModels
 
 $currentSources = @{}
 $newModels = @()
@@ -416,6 +441,16 @@ if ($openrouterModels -ne $null) {
     $allNew += $m
   }
   if (-not $Silent) { Write-Host " OpenRouter: $($openrouterModels.Count) free models ($($newInOR.Count) new)" -ForegroundColor $(if ($newInOR.Count -gt 0) { "Green" } else { "Gray" }) }
+}
+
+if ($freetokenModels -ne $null) {
+  $currentSources["freetoken"] = $freetokenModels
+  $newInFT = if ($knownModels.ContainsKey("freetoken")) { Compare-Object $freetokenModels $knownModels["freetoken"] | Where-Object { $_.SideIndicator -eq "<=" } | ForEach-Object { $_.InputObject } } else { $freetokenModels }
+  foreach ($m in $newInFT) {
+    $newModels += @{ model = $m; source = "FreeToken" }
+    $allNew += $m
+  }
+  if (-not $Silent) { Write-Host " FreeToken: $($freetokenModels.Count) models ($($newInFT.Count) new)" -ForegroundColor $(if ($newInFT.Count -gt 0) { "Green" } else { "Gray" }) }
 }
 
 # 3. Load current agent config for cross-reference
@@ -1626,6 +1661,21 @@ foreach ($orId in $orFullModels.Keys) {
     }
 }
 
+# FreeToken (local FlashML engine) models - always free, served locally
+if ($freetokenModels -ne $null) {
+    foreach ($m in $freetokenModels) {
+        $fullId = "freetoken/$m"
+        $registryModels += @{
+            id = $fullId; source = "freetoken"; provider = "freetoken"
+            pricing = @{ prompt = 0; completion = 0 }
+            tier = "free"
+            capabilities = @("text")
+            context_length = $null
+            vision = $false; free = $true
+        }
+    }
+}
+
 # Deduplicate by model ID (keep first occurrence — source priority: zen > go > nvidia > openrouter)
 $seen = @{}
 $dedupedModels = @()
@@ -1674,6 +1724,37 @@ try {
     }
 } catch {
     if (-not $Silent) { Write-Host " [WARN] providers.json sync failed: $($_.Exception.Message)" -ForegroundColor Yellow }
+}
+
+# 6.77. Sync providers.json - additive merge of freetoken models from registry
+# Ensures the freetoken provider has an entry for every served model so OpenCode
+# can route freetoken/<id> to the local engine.
+$ftAddedCount = 0
+try {
+    if (Test-Path $ProvidersFile) {
+        $providersData = Get-Content $ProvidersFile -Raw | ConvertFrom-Json
+        if (-not $providersData.freetoken) {
+            $providersData | Add-Member -NotePropertyName "freetoken" -NotePropertyValue ([ordered]@{ npm = "@ai-sdk/openai-compatible"; name = "FreeToken (local)"; options = @{ baseURL = "http://192.168.68.64:1919/v1" }; models = [ordered]@{} }) -Force
+        }
+        if (-not ($providersData.freetoken.models -is [PSCustomObject])) {
+            $providersData.freetoken | Add-Member -NotePropertyName "models" -NotePropertyValue ([ordered]@{}) -Force
+        }
+        foreach ($entry in $dedupedModels) {
+            if ($entry.source -eq "freetoken") {
+                $modelKey = $entry.id -replace '^freetoken/', ''
+                if (-not ($providersData.freetoken.models.PSObject.Properties.Name -contains $modelKey)) {
+                    $providersData.freetoken.models | Add-Member -NotePropertyName $modelKey -NotePropertyValue ([ordered]@{ name = $modelKey }) -Force
+                    $ftAddedCount++
+                }
+            }
+        }
+        if ($ftAddedCount -gt 0) {
+            $providersData | ConvertTo-Json -Depth 4 | Out-File -FilePath $ProvidersFile -Encoding utf8 -Force
+            if (-not $Silent) { Write-Host " + Synced $ftAddedCount freetoken model(s) to providers.json" -ForegroundColor Green }
+        }
+    }
+} catch {
+    if (-not $Silent) { Write-Host " [WARN] providers.json freetoken sync failed: $($_.Exception.Message)" -ForegroundColor Yellow }
 }
 
 # 7. Write status file
