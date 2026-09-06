@@ -749,10 +749,9 @@ export async function launchServer(options = {}) {
   }
 
   // Retry-and-wait wrapper: retry checkAndClearPort up to 3 times with 2s
-  // sleep between attempts. This replaces the old process.exit(1) on first
-  // failure, which killed the entire Glitch process during a restart when the
-  // port was still in TIME_WAIT or held by an orphaned service that hadn't
-  // fully released yet.
+  // sleep between attempts. On the final attempt, force-kill any PID holding
+  // the port as a last resort before returning false (avoids process.exit(1)
+  // unless the port truly cannot be freed).
   async function checkAndClearPortWithRetry(port, maxRetries = 3) {
     for (let attempt = 1; attempt <= maxRetries; attempt++) {
       const ok = await checkAndClearPort(port);
@@ -761,6 +760,28 @@ export async function launchServer(options = {}) {
         log(YELLOW, `  Retrying port ${port} check (attempt ${attempt + 1}/${maxRetries}) in 2s...`);
         await new Promise(r => setTimeout(r, 2000));
       }
+    }
+    // Final fallback: force-kill whatever is listening on this port, wait 2s,
+    // and recheck one last time. This covers the case where checkAndClearPort
+    // skipped the kill (unknown process, user declined) but the restart still
+    // needs the port freed.
+    const lastPid = getPortPid(port);
+    if (lastPid && lastPid > 0) {
+      log(YELLOW, `  Final fallback: force-killing PID ${lastPid} holding port ${port}...`);
+      try {
+        if (isWin) {
+          execFileSync('taskkill', ['/PID', String(lastPid), '/T', '/F'], { stdio: 'ignore', timeout: 5000 });
+        } else {
+          execFileSync('kill', ['-9', String(lastPid)], { stdio: 'ignore', timeout: 5000 });
+        }
+      } catch (e) { log(YELLOW, `  Force-kill failed: ${e.message}`); }
+      await new Promise(r => setTimeout(r, 2000));
+      const nowFree = await checkPort(port);
+      if (nowFree) {
+        log(GREEN, `  Port ${port} freed by final force-kill of PID ${lastPid}.`);
+        return true;
+      }
+      log(RED, `  Port ${port} STILL in use after force-killing PID ${lastPid}.`);
     }
     return false;
   }

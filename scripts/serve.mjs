@@ -664,8 +664,8 @@ async function main() {
     const checkPort = async (port) => {
       try {
         if (isWin) {
-          const out = execFileSync('netstat', ['-ano'], { encoding: 'utf-8', timeout: 1000, maxBuffer: 10 * 1024 });
-          const re = new RegExp('[:' + '\\\\s' + ']' + port + '\\s+\\S+\\s+LISTENING\\s+(\\d+)$', 'm');
+          const out = execFileSync('netstat', ['-ano'], { encoding: 'utf-8', timeout: 1000, maxBuffer: 10 * 1024 * 1024 });
+          const re = new RegExp(`[:\\s]${port}\\s+\\S+\\s+LISTENING\\s+(\\d+)$`, 'm');
           const m = out.match(re);
           return m ? false : true;
         } else {
@@ -685,11 +685,15 @@ async function main() {
         }
         await new Promise(r => setTimeout(r, 1000));
       }
+      log(RED, `  WARNING: Port ${port} is still in use after ${timeoutMs}ms timeout.`);
       return false;
     };
+    let allFree = true;
     for (const port of ports) {
-      await waitForPort(port, 10000);
+      const free = await waitForPort(port, timeoutMs);
+      if (!free) allFree = false;
     }
+    return allFree;
   };
 
   // ---- Launch Server with restart loop ----
@@ -728,7 +732,16 @@ async function main() {
       // Reuse model: only opencode's port must be free. 4104 (model-ui), 4100
       // (auth-proxy), 4110 (money), 4191 (sessions-api) stay held intentionally —
       // those services are reused, not restarted.
-      await waitForPortsFree([4102], 10000);
+      let portsFree = await waitForPortsFree([4102], 10000);
+      if (!portsFree) {
+        // Port still held — one retry with a fresh check before proceeding.
+        log(YELLOW, '  Retrying port-free check (2s wait)...');
+        await new Promise(r => setTimeout(r, 2000));
+        portsFree = await waitForPortsFree([4102], 5000);
+        if (!portsFree) {
+          log(RED, '  Port 4102 is still in use after retry. The restart will likely fail — the new instance cannot bind the port.');
+        }
+      }
 
       log('');
       log(MAGENTA, '  Restarting Glitch...');

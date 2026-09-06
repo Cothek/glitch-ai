@@ -4,6 +4,7 @@ import { join, dirname, resolve, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn, exec, execFileSync } from 'node:child_process';
 import { migrateModelAssignments } from '../../scripts/lib/migrate-assignments.mjs';
+import { parsePortPid } from '../../scripts/lib/parse-netstat.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -244,27 +245,60 @@ function extractAgents(config) {
   return agents;
 }
 
+const TARGET_PORT = parseInt(process.env.TARGET_PORT || '4102', 10);
+
+/**
+ * Find the PID of the process actually listening on the given port via netstat.
+ * Returns the parsed PID or null if no listener is found.
+ */
+function getPortPid(port) {
+  try {
+    if (process.platform !== 'win32') return null;
+    const out = execFileSync('netstat', ['-ano'], {
+      encoding: 'utf-8',
+      timeout: 5000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+    return parsePortPid(out, port);
+  } catch {
+    return null;
+  }
+}
+
 function restartOpenCode() {
   const restartFlagPath = join(ROOT_DIR, 'data', '.restart-flag');
   const pidFilePath = join(ROOT_DIR, 'data', 'opencode.pid');
-  let pidStr;
-  try {
-    pidStr = readFileSync(pidFilePath, 'utf-8').trim();
-  } catch (e) {
-    return { ok: false, error: `PID file not found: ${e.message}`, code: 'NO_PID_FILE' };
+  const logPath = join(ROOT_DIR, 'data', 'restart-kill.log');
+
+  // Layer 1 fix: find the ACTUAL PID listening on port 4102 via netstat.
+  // The PID file may point at the launcher, not the process holding the port,
+  // so trust the live port holder over the file (PM-034 restart reliability).
+  let pid = getPortPid(TARGET_PORT);
+  let pidSource = 'netstat (port listener)';
+
+  if (!pid || pid <= 0) {
+    // Fallback: read from PID file if netstat didn't find a listener.
+    let pidStr;
+    try {
+      pidStr = readFileSync(pidFilePath, 'utf-8').trim();
+    } catch (e) {
+      return { ok: false, error: `PID file not found: ${e.message}`, code: 'NO_PID_FILE' };
+    }
+    pid = parseInt(pidStr, 10);
+    pidSource = 'pid-file (fallback)';
   }
-  const pid = parseInt(pidStr, 10);
+
   if (!pid || pid <= 0 || isNaN(pid)) {
-    return { ok: false, error: `Invalid PID in file: "${pidStr}"`, code: 'INVALID_PID' };
+    return { ok: false, error: `Invalid PID: "${pid}" (source: ${pidSource})`, code: 'INVALID_PID' };
   }
+
   // Write the PID into the restart flag so the supervisor can wait for the
   // old process tree to fully die before spawning the replacement (PM-034).
   writeFileSync(restartFlagPath, String(pid), 'utf-8');
-  const logPath = join(ROOT_DIR, 'data', 'restart-kill.log');
 
   setTimeout(() => {
     try {
-      const logMsg = `[${new Date().toISOString()}] Killing opencode PID ${pid}...\n`;
+      const logMsg = `[${new Date().toISOString()}] Killing PID ${pid} (source: ${pidSource})...\n`;
       writeFileSync(logPath, logMsg, 'utf-8');
       if (process.platform === 'win32') {
         const killProc = spawn('taskkill', ['/PID', String(pid), '/T', '/F'], { stdio: ['ignore', 'pipe', 'pipe'] });
@@ -272,14 +306,18 @@ function restartOpenCode() {
         killProc.stdout.on('data', (d) => { stdout += d.toString(); });
         killProc.stderr.on('data', (d) => { stderr += d.toString(); });
         killProc.on('close', (code) => {
-          writeFileSync(logPath, `exit code: ${code}\nstdout: ${stdout}\nstderr: ${stderr}\n`, 'utf-8');
+          const result = `[${new Date().toISOString()}] exit code: ${code}\nstdout: ${stdout}\nstderr: ${stderr}\n`;
+          writeFileSync(logPath, result, 'utf-8');
+          if (code !== 0) {
+            writeFileSync(logPath, `[${new Date().toISOString()}] WARNING: taskkill exited with code ${code}\n`, 'utf-8');
+          }
         });
       } else {
         process.kill(pid, 'SIGTERM');
-        writeFileSync(logPath, 'SIGTERM sent\n', 'utf-8');
+        writeFileSync(logPath, `[${new Date().toISOString()}] SIGTERM sent to PID ${pid}\n`, 'utf-8');
       }
     } catch (e) {
-      writeFileSync(logPath, `Error: ${e.message}\n`, 'utf-8');
+      writeFileSync(logPath, `[${new Date().toISOString()}] Error: ${e.message}\n`, 'utf-8');
     }
   }, 2000);
 
