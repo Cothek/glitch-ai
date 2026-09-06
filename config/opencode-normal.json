@@ -280,6 +280,28 @@
       },
       "temperature": 0.2
     },
+    "glitch-lightweight": {
+      "model": "freetoken/Qwen3.6-35B-A3B-NVFP4",
+      "mode": "primary",
+      "description": "Slimmed-down Glitch variant for the local FreeToken model (limited context). Coordinates via sub-agents, uses recall tool for on-demand memory, no memory files in context.",
+      "color": "#22c55e",
+      "temperature": 0.2,
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "allow",
+        "skill": "allow",
+        "todowrite": "allow",
+        "task": "allow"
+      },
+      "prompt": "{file:.opencode/instructions/glitch-lightweight-prompt.md}"
+    },
     "pentester-paid": {
       "model": "opencode-go/qwen3.7-plus",
       "mode": "subagent",
