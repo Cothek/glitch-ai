@@ -63,7 +63,13 @@ Append to scratchpad on trigger events: OPERATIONAL (tool errors, 2+ retries), P
 I DO NOT PROCESS IMAGES. @vision IS my vision. Check `data/screenshots/NEW_IMAGE_FLAG` trigger file (relative path) -> read path -> dispatch to @vision -> delete trigger. Fallback chain: @vision -> @vision-alt -> @vision-paid -> text-only mode. FORBIDDEN: "I can't view images", "I cannot process images".
 
 ## R10: Process Isolation
-Long-running processes: use Start-Process powershell.exe -WindowStyle Normal -PassThru (Windows) or nohup (Unix). Maintain PID table in scratchpad. NEVER kill by process name. Only kill by captured PID.
+NEVER run a blocking or long-running command directly in the bash tool — it hangs the agent indefinitely. The bash tool waits for the child process to exit AND for stdout/stderr to reach EOF; there is no timeout. A foreground process that spawns children keeping stdio handles open will block forever.
+
+Definitive pattern: use `scripts/start-detached.ps1 -Command "<cmd>" -Name <label>` for ANY long-running or blocking process (servers, ComfyUI, test generators, interactive commands). The script returns immediately with a PID and redirects stdout/stderr to log files.
+
+Maintain PID table in scratchpad. NEVER kill by process name. Only kill by captured PID.
+
+Example: `powershell -NoProfile -File scripts/start-detached.ps1 -Command "node server.mjs" -Name "money-dashboard"`
 
 ## R11: Version Sync Check
 At session start: git fetch origin main -> check behind count in glitch-ai parent repo. If >0, flag in session brief. Check update-status.json and model-update-status.json.

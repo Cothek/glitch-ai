@@ -14,7 +14,7 @@ import assert from 'node:assert';
 import { mkdtempSync, writeFileSync, readdirSync, existsSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning, getChildSessions, hasRecentActivity } from '../scripts/lib/agent-watchdog-helpers.mjs';
+import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning, getChildSessions, hasRecentActivity, shouldAbortSubagentBash } from '../scripts/lib/agent-watchdog-helpers.mjs';
 
 let passed = 0;
 let failed = 0;
@@ -558,6 +558,84 @@ test('hasRecentActivity returns ok:false on missing DB (fail-open)', () => {
     assert.strictEqual(result.ok, false, 'missing DB must be ok:false');
     assert.ok(result.error, 'must include error');
   } finally { try { rmSync(tmpDir, { recursive: true, force: true }); } catch { /* best-effort */ } }
+});
+
+// ============================================================
+// 9. Sub-agent bash abort decision logic (shouldAbortSubagentBash)
+// ============================================================
+// Pure helper that decides whether a sub-agent's hung bash should be auto-aborted.
+// The plugin calls this to avoid duplicating the decision logic in checkAndAbort().
+
+const THRESHOLD_MS = 900_000; // 15 min default
+
+test('sub-agent bash over threshold → true', () => {
+  const result = shouldAbortSubagentBash({
+    tool: 'bash',
+    isParent: false,
+    idleMs: 1_000_000,
+    thresholdMs: THRESHOLD_MS,
+  });
+  assert.strictEqual(result, true, 'Sub-agent bash over threshold must be aborted');
+});
+
+test('sub-agent bash under threshold → false', () => {
+  const result = shouldAbortSubagentBash({
+    tool: 'bash',
+    isParent: false,
+    idleMs: 600_000,
+    thresholdMs: THRESHOLD_MS,
+  });
+  assert.strictEqual(result, false, 'Sub-agent bash under threshold must NOT be aborted');
+});
+
+test('parent bash (isParent=true) → false (never abort parent own bash)', () => {
+  const result = shouldAbortSubagentBash({
+    tool: 'bash',
+    isParent: true,
+    idleMs: 2_000_000,
+    thresholdMs: THRESHOLD_MS,
+  });
+  assert.strictEqual(result, false, 'Parent bash must NEVER be aborted (anti-over-culling)');
+});
+
+test('non-bash sub-agent tool (e.g. read) → false', () => {
+  const result = shouldAbortSubagentBash({
+    tool: 'read',
+    isParent: false,
+    idleMs: 2_000_000,
+    thresholdMs: THRESHOLD_MS,
+  });
+  assert.strictEqual(result, false, 'Non-bash tool must NOT be aborted by this logic');
+});
+
+test('non-bash sub-agent tool (e.g. webfetch) → false', () => {
+  const result = shouldAbortSubagentBash({
+    tool: 'webfetch',
+    isParent: false,
+    idleMs: 2_000_000,
+    thresholdMs: THRESHOLD_MS,
+  });
+  assert.strictEqual(result, false, 'webfetch must NOT be aborted by this logic');
+});
+
+test('sub-agent bash exactly at threshold → true', () => {
+  const result = shouldAbortSubagentBash({
+    tool: 'bash',
+    isParent: false,
+    idleMs: THRESHOLD_MS,
+    thresholdMs: THRESHOLD_MS,
+  });
+  assert.strictEqual(result, true, 'Sub-agent bash at exactly the threshold must be aborted');
+});
+
+test('task tool with isParent=false → false', () => {
+  const result = shouldAbortSubagentBash({
+    tool: 'task',
+    isParent: false,
+    idleMs: 2_000_000,
+    thresholdMs: THRESHOLD_MS,
+  });
+  assert.strictEqual(result, false, 'task tool must NOT be handled by this helper (handled by task-tool branch)');
 });
 
 // ============================================================

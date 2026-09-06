@@ -22,13 +22,24 @@
 //     consecutive polls. Deep sub-agent work (multi-file edits, research, long
 //     test runs) routinely exceeds 5 min, so the child-activity check is what
 //     prevents culling healthy agents.
-//   - AUTO_ABORT_THRESHOLD (default 600s = 10 min): applies to non-task tools.
-//     Non-task tools are the parent's OWN long-running operations (bash, edit,
-//     read, webfetch, websearch). These are NEVER auto-aborted — signal-only
-//     for visibility. Aborting the parent's own tool is too aggressive and was
-//     the cause of "watchdog killing agents too quickly".
-//   - Only the `task` tool is ever auto-aborted, and only when its child is
-//     confirmed idle. Everything else is signal-only.
+//   - AUTO_ABORT_THRESHOLD (default 600s = 10 min): applies to non-task tools
+//     that are the parent's OWN long-running operations (bash, edit, read,
+//     webfetch, websearch). These are NEVER auto-aborted — signal-only for
+//     visibility. Aborting the parent's own tool is too aggressive and was the
+//     cause of "watchdog killing agents too quickly".
+//   - SUBAGENT_BASH_ABORT_THRESHOLD (default 900s = 15 min): applies to bash
+//     commands running in SUB-AGENT sessions (those NOT in parentSessions).
+//     Sub-agents (general, coder, testing) have task:deny so they never appear
+//     in parentSessions; glitch-omni has bash:allow + task:deny, also never in
+//     parentSessions. When a sub-agent's bash command blocks forever (spawns a
+//     foreground process that inherits stdio handles — servers, ComfyUI,
+//     interactive commands), the bash tool hangs with no config timeout. This
+//     threshold auto-aborts such hangs to unblock the parent's task() call.
+//     Deliberately longer than the 600s task threshold to avoid culling
+//     legitimately long sub-agent bash work. Parents' own bash is still
+//     signal-only (anti-over-culling).
+//   - Only `task` tools and sub-agent `bash` tools are ever auto-aborted.
+//     Everything else is signal-only.
 //
 // Signal freshness:
 //   Signal files older than SIGNAL_TTL_MS (15 min) are stale. The transform
@@ -44,7 +55,7 @@ import { writeFileSync, unlinkSync, existsSync, mkdirSync, readFileSync, readdir
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
-import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning, getChildSessions, hasRecentActivity } from '../../scripts/lib/agent-watchdog-helpers.mjs';
+import { parseThreshold, isSignalFresh, shouldInjectForSession, isSessionToolRunning, getChildSessions, hasRecentActivity, shouldAbortSubagentBash } from '../../scripts/lib/agent-watchdog-helpers.mjs';
 
 // --- Node.js executable resolution ---
 // process.execPath inside opencode is opencode.exe (Go binary embedding Bun),
@@ -69,6 +80,7 @@ function getNodeExecutable(repoRoot) {
 
 const IDLE_THRESHOLD_MS = parseThreshold('AGENT_IDLE_THRESHOLD_MS', 600_000);
 const AUTO_ABORT_THRESHOLD_MS = parseThreshold('AGENT_AUTO_ABORT_THRESHOLD_MS', 600_000);
+const SUBAGENT_BASH_ABORT_THRESHOLD_MS = parseThreshold('AGENT_SUBAGENT_BASH_ABORT_THRESHOLD_MS', 900_000);
 const POLL_INTERVAL_MS = 30_000;
 const SIGNAL_TTL_MS = 15 * 60 * 1000;
 
@@ -302,10 +314,47 @@ export const AgentWatchdogPlugin = async ({ directory }) => {
         continue;
       }
 
-      // Non-task tools: signal-only. The parent's own long-running operations
-      // (bash, edit, read, webfetch, etc.) are the parent's responsibility —
-      // never auto-abort them. Write a signal once for visibility.
+      // Non-task tools: signal-only for the parent's own operations. BUT
+      // sub-agent bash hangs ARE auto-aborted — sub-agents (task:deny) and
+      // glitch-omni (task:deny) can run bash that blocks forever on
+      // foreground processes (servers, ComfyUI, interactive commands). The
+      // bash tool spawns PowerShell and waits for both process exit AND
+      // stdout/stderr EOF — when a child process inherits and keeps stdio
+      // handles open, the bash tool blocks forever with no config timeout.
+      // Aborting unblocks the parent's task() call (the primary goal).
       if (!isTaskTool) {
+        const isSubagentBash = shouldAbortSubagentBash({
+          tool: entry.tool,
+          isParent: parentSessions.has(entry.sessionID),
+          idleMs,
+          thresholdMs: SUBAGENT_BASH_ABORT_THRESHOLD_MS,
+        });
+
+        if (isSubagentBash) {
+          // Sub-agent bash hang confirmed — abort the session.
+          console.log(`[agent-watchdog] Auto-aborting hung sub-agent bash (session=${entry.sessionID}, idle=${idleSeconds}s, threshold=${SUBAGENT_BASH_ABORT_THRESHOLD_MS / 1000}s)`);
+          const aborted = abortSession(entry.sessionID);
+          entry.aborted = aborted;
+
+          if (aborted) {
+            writeIdleSignal(entry.sessionID, entry.tool, idleSeconds, SUBAGENT_BASH_ABORT_THRESHOLD_MS / 1000, true);
+            entry.signaled = true;
+          } else {
+            writeIdleSignal(entry.sessionID, entry.tool, idleSeconds, SUBAGENT_BASH_ABORT_THRESHOLD_MS / 1000, false);
+            entry.abortRetries = (entry.abortRetries || 0) + 1;
+            if (entry.abortRetries >= ABORT_RETRY_CAP) {
+              entry.aborted = true;
+              entry.signaled = true;
+              console.warn(`[agent-watchdog] Giving up abort for sub-agent bash ${entry.sessionID} after ${entry.abortRetries} attempts — will not retry`);
+            } else {
+              console.warn(`[agent-watchdog] Abort failed for sub-agent bash ${entry.sessionID} (${entry.abortRetries}/${ABORT_RETRY_CAP}) — will retry on next poll`);
+            }
+          }
+          continue;
+        }
+
+        // All other non-task tools: signal-only (parent's own long-running
+        // operations — aborting them is too aggressive).
         if (!existsSync(sessionSignalPath(entry.sessionID))) {
           writeIdleSignal(entry.sessionID, entry.tool, idleSeconds, threshold / 1000, false);
         }

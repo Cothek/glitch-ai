@@ -29,6 +29,9 @@ Before ANY UI change: scan for `components/ui/` design system. If exists, ALL el
 **R21: Stuck Detection**
 `stuck-detector.js` monitors tool patterns per-session. Writes `data/.stuck-signal.<sessionID>.json` on 5 rule types: (1) `tool_repetition` — 3+ same non-progress tool with >75%-similar args in last 8, (2) `error_cascade` — 3+ consecutive errors, (3) `command_repetition` — same bash command 2+ times, (4) `readonly_repetition` — 6+ consecutive same readonly tool (read/glob/grep) with identical fingerprints (same file/pattern), (5) `permission_loop` — 2+ consecutive denied calls. Progress tools excluded from stuck detection: edit, write, bash, read, glob, grep, task, todowrite, skill, question. Signals expire after 15 min (TTL sweep on init). The global `data/.stuck-signal.json` mirrors the most recent active signal with a `sessionID` field. When signal exists: sub-agents self-check (continue if making progress, stop if genuinely stuck); primary agent loads `skill("breakthrough")` only if truly stuck.
 
+**R22: Process Isolation — Never Run Blocking Commands in the Bash Tool**
+Sub-agents' bash tool hangs indefinitely on foreground blocking or long-running commands (servers, ComfyUI, test generators, interactive commands) because it waits for the child process to exit AND for stdout/stderr EOF, with no timeout. For ANY long-running process, use `scripts/start-detached.ps1 -Command "<cmd>" -Name <label>` (returns immediately with a PID, logs to `data/logs/`). Never run `node server.mjs`, `python main.py`, or similar directly in the bash tool. Never kill by process name — only by captured PID.
+
 ## Available Tools (Bash-Accessible)
 
 These CLI tools are available to you. Use them to gather context, search memory, or check system state during your tasks.

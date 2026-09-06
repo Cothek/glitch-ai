@@ -215,3 +215,28 @@ export function shouldInjectForSession(currentSessionID, signalSessionID, parent
   // is likely for a child it dispatched (child tracking is best-effort).
   return true;
 }
+
+/**
+ * Decide whether a sub-agent's hung bash command should be auto-aborted.
+ *
+ * Sub-agents (general, coder, testing, etc.) have task:deny, so they are NEVER
+ * in parentSessions (only sessions that call the task tool are added). The
+ * primary agent glitch has bash:deny so it can never run bash. glitch-omni has
+ * bash:allow + task:deny, so it's also never in parentSessions — a hung omni
+ * bash is also worth aborting.
+ *
+ * Therefore: `!isParent && tool === 'bash'` correctly identifies sub-agent or
+ * omni bash hangs that should be auto-aborted after the threshold.
+ *
+ * @param {object} params
+ * @param {string} params.tool - the tool name (e.g. 'bash', 'read', 'task')
+ * @param {boolean} params.isParent - whether the session is in parentSessions
+ * @param {number} params.idleMs - how long the tool has been running (ms)
+ * @param {number} params.thresholdMs - the abort threshold (ms)
+ * @returns {boolean} true if the bash should be auto-aborted
+ */
+export function shouldAbortSubagentBash({ tool, isParent, idleMs, thresholdMs }) {
+  if (tool !== 'bash') return false;
+  if (isParent) return false;
+  return idleMs >= thresholdMs;
+}
