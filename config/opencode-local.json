@@ -15,11 +15,15 @@
      ".opencode/instructions/shared-agent-rules.md",
      "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
  ],
-     "mcp":  {
+      "mcp":  {
                 "gitnexus":  {
                              "type":  "local",
                              "command":  ["gitnexus",  "mcp"]
-                         }
+                         },
+                "glitch-image-gen":  {
+                                        "type":  "local",
+                                        "command":  ["node", ".opencode/plugins/glitch-image-gen.mjs"]
+                                    }
             },
      "agent":  {
                  "glitch":  {

@@ -19,7 +19,11 @@
                "gitnexus":  {
                                 "type":  "local",
                                 "command":  ["gitnexus",  "mcp"]
-                            }
+                            },
+               "glitch-image-gen":  {
+                                        "type":  "local",
+                                        "command":  ["node", ".opencode/plugins/glitch-image-gen.mjs"]
+                                    }
            },
     "agent":  {
                   "glitch":  {
