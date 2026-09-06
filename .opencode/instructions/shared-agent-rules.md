@@ -32,6 +32,8 @@ Before ANY UI change: scan for `components/ui/` design system. If exists, ALL el
 **R22: Process Isolation — Never Run Blocking Commands in the Bash Tool**
 Sub-agents' bash tool hangs indefinitely on foreground blocking or long-running commands (servers, ComfyUI, test generators, interactive commands) because it waits for the child process to exit AND for stdout/stderr EOF, with no timeout. For ANY long-running process, use `scripts/start-detached.ps1 -Command "<cmd>" -Name <label>` (returns immediately with a PID, logs to `data/logs/`). Never run `node server.mjs`, `python main.py`, or similar directly in the bash tool. Never kill by process name — only by captured PID.
 
+**External watchdog** (`scripts/watchdog-external.mjs`): Runs as a separate background process at startup, independent of opencode's event loop. Polls the SQLite DB every 30s for bash sessions running >15 min, finds the hung process via OS enumeration (descendants of opencode PID), kills the process tree, and aborts the session via `abort-agent.mjs`. Auto-started by `launch.mjs`. Manual launch: `scripts/start-detached.ps1 -Command "node scripts/watchdog-external.mjs" -Name "watchdog-external"`. PID logged to `data/logs/watchdog-external.pid`, log to `data/logs/watchdog-external.log`.
+
 ## Available Tools (Bash-Accessible)
 
 These CLI tools are available to you. Use them to gather context, search memory, or check system state during your tasks.

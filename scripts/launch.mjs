@@ -856,6 +856,37 @@ async function main() {
     log(YELLOW, `  Plugin manager error: ${e.message}`);
   }
 
+  // ---- Start external watchdog (independent of opencode's event loop) ----
+  // The in-process watchdog (.opencode/plugins/agent-watchdog.mjs) cannot detect
+  // sub-agent bash hangs because when a bash tool hangs, opencode's Go runtime
+  // blocks awaiting child exit + stdio EOF, which blocks the Bun event loop.
+  // This external process polls the SQLite DB for wedged bash sessions and kills
+  // the hung process tree from OUTSIDE the blocked opencode process.
+  try {
+    const watchdogScript = join(SCRIPT_DIR, 'watchdog-external.mjs');
+    if (existsSync(watchdogScript)) {
+      const watchdogPidFile = join(ROOT_DIR, 'data', 'logs', 'watchdog-external.pid');
+      const watchdogProc = spawn(
+        isWin ? join(BundledNodeDir, 'node.exe') : 'node',
+        [watchdogScript],
+        {
+          cwd: ROOT_DIR,
+          stdio: 'ignore',
+          detached: true,
+          windowsHide: true,
+        }
+      );
+      watchdogProc.unref();
+      watchdogProc.on('error', (err) => {
+        log(YELLOW, `  External watchdog failed to start: ${err.message}`);
+      });
+      try { writeFileSync(watchdogPidFile, String(watchdogProc.pid), 'utf-8'); } catch {}
+      log(DARK_GREEN, `  External watchdog started (PID ${watchdogProc.pid})`);
+    }
+  } catch (e) {
+    log(YELLOW, `  External watchdog failed to start: ${e.message}`);
+  }
+
   // ---- Launch with restart loop ----
   let shouldRestart = true;
   while (shouldRestart) {
