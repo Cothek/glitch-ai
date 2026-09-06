@@ -979,7 +979,7 @@ async function main() {
         const checkPort = async (port) => {
           try {
             if (isWin) {
-              const out = execFileSync('netstat', ['-ano'], { encoding: 'utf-8', timeout: 1000, maxBuffer: 10 * 1024 });
+              const out = execFileSync('netstat', ['-ano'], { encoding: 'utf-8', timeout: 1000, maxBuffer: 10 * 1024 * 1024 });
               const re = new RegExp('[:' + '\\\\s' + ']' + port + '\\s+\\S+\\s+LISTENING\\s+(\\d+)$', 'm');
               const m = out.match(re);
               return m ? false : true;
