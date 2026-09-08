@@ -1,6 +1,6 @@
 ---
 name: memory
-model: nvidia/nvidia/deepseek-ai/deepseek-v4-flash-0731
+model: nvidia/deepseek-ai/deepseek-v4-flash-0731
 permission:
   read: allow
   write: allow
