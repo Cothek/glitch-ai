@@ -238,7 +238,7 @@ function extractAgents(config) {
   const agents = [];
   const agentBlock = config?.agent || {};
   for (const [name, def] of Object.entries(agentBlock)) {
-    if (def && typeof def === 'object' && def.model) {
+    if (def && typeof def === 'object' && def.model && !def.disable) {
       agents.push({ name, model: def.model });
     }
   }
