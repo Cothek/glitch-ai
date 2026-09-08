@@ -275,6 +275,9 @@ function cleanup() {
   // Kill sessions-api by pid file. If the supervisor is force-killed (taskkill /F),
   // process.on('exit') handlers never run — sessions-api orphans holding port 4191.
   killPidFromFile('sessions-api.pid', ['node']);
+  // Kill opencode by pid file — it holds port 4102 and would otherwise orphan
+  // on a full Glitch quit, leaving the port stuck open.
+  killPidFromFile('opencode.pid', ['opencode', 'node']);
   // DO NOT kill plugin-model-ui.pid here — model-ui is the restart control plane
   // and must survive restarts.
   if (fixerInterval) {
