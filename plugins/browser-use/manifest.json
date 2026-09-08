@@ -1,0 +1,9 @@
+{
+  "name": "browser-use",
+  "description": "AI browser automation — navigate, click, type, extract data from websites like a human",
+  "version": "1.0.0",
+  "start_command": "node plugins/browser-use/server.mjs",
+  "port": 4105,
+  "default_enabled": false,
+  "visible_window": false
+}
