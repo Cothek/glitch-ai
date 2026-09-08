@@ -26,6 +26,8 @@
                                     }
             },
      "agent":  {
+                 "build":  { "disable":  true },
+                 "plan":  { "disable":  true },
                  "glitch":  {
                             "model":  "__MODEL__",
                             "mode":  "primary",

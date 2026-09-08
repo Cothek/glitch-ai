@@ -29,6 +29,8 @@
     }
   },
   "agent": {
+    "build": { "disable": true },
+    "plan": { "disable": true },
     "glitch": {
       "model": "opencode-go/deepseek-v4-flash",
       "mode": "primary",

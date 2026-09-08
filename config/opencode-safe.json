@@ -7,6 +7,8 @@
     "openrouter"
   ],
   "agent": {
+    "build": { "disable": true },
+    "plan": { "disable": true },
     "glitch": {
       "mode": "primary",
       "description": "Safe mode -- troubleshoot and repair Glitch configuration",
