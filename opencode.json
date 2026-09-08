@@ -13,11 +13,7 @@
   ],
   "instructions": [
     ".opencode/instructions/shared-agent-rules.md",
-    "glitch-memorycore/plugins/glitch-skills/skills-registry.md",
-    "user/main-memory.md",
-    "user/current-session.md",
-    "user/reminders.md",
-    "user/session-dashboard.md"
+    "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
   ],
   "mcp": {
     "gitnexus": {
@@ -26,9 +22,23 @@
         "gitnexus",
         "mcp"
       ]
+    },
+    "glitch-image-gen": {
+      "type": "local",
+      "command": [
+        "node",
+        ".opencode/plugins/glitch-image-gen.mjs"
+      ]
     }
   },
   "agent": {
+    "build": {
+      "disable": true
+    },
+    "plan": {
+      "disable": true,
+      "model": "opencode/deepseek-v4-flash-free"
+    },
     "glitch": {
       "model": "nvidia/nvidia/moonshotai/kimi-k3",
       "mode": "primary",
@@ -49,7 +59,7 @@
         "todowrite": "allow",
         "task": "allow"
       },
-      "prompt": "{file:.opencode/instructions/glitch-system-prompt.md}"
+      "prompt": "{file:.opencode/instructions/glitch-system-prompt.md}\n\n{file:user/main-memory.md}\n\n{file:user/current-session.md}\n\n{file:user/reminders.md}\n\n{file:user/session-dashboard.md}"
     },
     "general": {
       "model": "opencode/mimo-v2.5-free",
@@ -218,7 +228,7 @@
       "temperature": 0.2
     },
     "memory": {
-      "model": "nvidia/nvidia/nemotron-3.5-lightning-30b-a3b",
+      "model": "nvidia/nvidia/deepseek-ai/deepseek-v4-flash-0731",
       "mode": "subagent",
       "description": "Memory writer - reads and appends to user/*.md files only. Loads save-memory skill.",
       "permission": {
@@ -278,7 +288,30 @@
         "todowrite": "allow",
         "task": "deny"
       },
+      "prompt": "{file:.opencode/agents/glitch-omni.md}\n\n{file:user/main-memory.md}\n\n{file:user/current-session.md}\n\n{file:user/reminders.md}\n\n{file:user/session-dashboard.md}",
       "temperature": 0.2
+    },
+    "glitch-lightweight": {
+      "model": "freetoken/Qwen3.6-35B-A3B-NVFP4",
+      "mode": "primary",
+      "description": "Slimmed-down Glitch variant for the local FreeToken model (limited context). Coordinates via sub-agents, uses recall tool for on-demand memory, no memory files in context.",
+      "color": "#22c55e",
+      "temperature": 0.2,
+      "permission": {
+        "read": "allow",
+        "edit": "deny",
+        "bash": "deny",
+        "glob": "allow",
+        "grep": "allow",
+        "list": "allow",
+        "webfetch": "allow",
+        "websearch": "allow",
+        "question": "allow",
+        "skill": "allow",
+        "todowrite": "allow",
+        "task": "allow"
+      },
+      "prompt": "{file:.opencode/instructions/glitch-lightweight-prompt.md}"
     },
     "pentester-paid": {
       "model": "opencode-go/qwen3.7-plus",
@@ -496,39 +529,37 @@
         "baseURL": "https://integrate.api.nvidia.com/v1"
       },
       "models": {
-        "nvidia/nvidia/nemotron-3.5-lightning-30b-a3b": {
+        "minimaxai/minimax-m3": {
+          "name": "MiniMax M3 (free, multimodal)",
+          "context_length": 1000000
+        },
+        "nvidia/nemotron-3.5-lightning-30b-a3b": {
           "name": "Nemotron 3.5 Lightning 30B (free)",
           "context_length": 262144
         },
-        "nvidia/nvidia/deepseek-ai/deepseek-v4-flash-0731": {
-          "name": "nvidia/deepseek-ai/deepseek-v4-flash-0731 (free)"
-        },
         "nvidia/nvidia/google/gemma-4-31b-it": {
-          "name": "nvidia/google/gemma-4-31b-it (free)"
+          "name": "google/gemma-4-31b-it (free)"
         },
         "nvidia/nvidia/meta/muse-glimmer-30b": {
-          "name": "nvidia/meta/muse-glimmer-30b (free)"
+          "name": "meta/muse-glimmer-30b (free)"
         },
         "nvidia/minimaxai/minimax-m3": {
           "name": "minimaxai/minimax-m3 (free)"
         },
         "nvidia/nvidia/moonshotai/kimi-k3": {
-          "name": "nvidia/moonshotai/kimi-k3 (free)"
-        },
-        "nvidia/nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
-          "name": "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning (free)"
+          "name": "moonshotai/kimi-k3 (free)"
         },
         "nvidia/nvidia/nemotron-3-super-120b-a12b": {
-          "name": "nvidia/nemotron-3-super-120b-a12b (free)"
+          "name": "nemotron-3-super-120b-a12b (free)"
         },
         "nvidia/nvidia/nemotron-3-ultra-550b-a55b": {
-          "name": "nvidia/nemotron-3-ultra-550b-a55b (free)"
+          "name": "nemotron-3-ultra-550b-a55b (free)"
         },
         "nvidia/nvidia/openai/gpt-oss-20b": {
-          "name": "nvidia/openai/gpt-oss-20b (free)"
+          "name": "openai/gpt-oss-20b (free)"
         },
         "nvidia/nvidia/poolside/laguna-xs-2.1": {
-          "name": "nvidia/poolside/laguna-xs-2.1 (free)"
+          "name": "poolside/laguna-xs-2.1 (free)"
         },
         "nvidia/nemotron-3.5-content-safety:free": {
           "name": "nemotron-3.5-content-safety:free (free)"
@@ -544,6 +575,28 @@
         },
         "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": {
           "name": "nemotron-3-nano-omni-30b-a3b-reasoning:free (free)"
+        },
+        "nvidia/deepseek-ai/deepseek-v4-flash-0731": {
+          "name": "deepseek-ai/deepseek-v4-flash-0731 (free)"
+        },
+        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
+          "name": "nemotron-3-nano-omni-30b-a3b-reasoning (free)"
+        }
+      }
+    },
+    "freetoken": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "FreeToken (local)",
+      "options": {
+        "baseURL": "http://192.168.68.64:1919/v1"
+      },
+      "models": {
+        "Qwen3.6-35B-A3B-NVFP4": {
+          "name": "Qwen3.6-35B-A3B-NVFP4",
+          "limit": {
+            "context": 262144,
+            "output": 32768
+          }
         }
       }
     }

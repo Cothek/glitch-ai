@@ -1,4 +1,4 @@
-param(
+﻿param(
   [string]$ComfyUIPath = "",
   [switch]$SkipPython = $false,
   [switch]$SkipModel = $false,
@@ -109,7 +109,12 @@ if (-not $SkipPython) {
       exit 1
     }
 
-    $assetUrl = "https://github.com/astral-sh/python-build-standalone/releases/download/$tagName/cpython-3.12.13+20250129-x86_64-pc-windows-msvc-shared-install_only.tar.gz"
+    $winAsset = $releaseJson.assets | Where-Object { $_.name -match "cpython-.*x86_64-pc-windows-msvc-install_only\.tar\.gz$" -and $_.name -notmatch "stripped" } | Select-Object -First 1
+    if (-not $winAsset) {
+      Write-Fail "Could not find Windows x86_64 Python asset in release $tagName"
+      exit 1
+    }
+    $assetUrl = $winAsset.browser_download_url
     $archivePath = Join-Path $TempDir "python.tar.gz"
 
     Write-Host "    Downloading Python ($tagName)..." -ForegroundColor Yellow
@@ -199,10 +204,15 @@ if (Test-Path $ComfyUIRepo) {
 }
 
 try {
-  git clone https://github.com/comfyanonymous/ComfyUI.git $ComfyUIRepo 2>&1 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
-  if ($LASTEXITCODE -ne 0) { throw "git clone failed with exit code $LASTEXITCODE" }
+  $prevEAP = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  & git clone https://github.com/comfyanonymous/ComfyUI.git $ComfyUIRepo 2>&1 | ForEach-Object { Write-Host "      $_" -ForegroundColor DarkGray }
+  $cloneExit = $LASTEXITCODE
+  $ErrorActionPreference = $prevEAP
+  if ($cloneExit -ne 0) { throw "git clone failed with exit code $cloneExit" }
   Write-Ok "ComfyUI cloned to $ComfyUIRepo"
 } catch {
+  $ErrorActionPreference = $prevEAP
   Write-Fail "Failed to clone ComfyUI: $_"
   exit 1
 }
@@ -221,6 +231,9 @@ try {
 
 $VenvPython = Join-Path $VenvDir "Scripts/python.exe"
 $VenvPip = Join-Path $VenvDir "Scripts/pip.exe"
+
+$prevEAP2 = $ErrorActionPreference
+$ErrorActionPreference = "Continue"
 
 Write-Host "    Upgrading pip..." -ForegroundColor Yellow
 try {
@@ -258,6 +271,7 @@ try {
   Write-Ok "ComfyUI requirements installed"
 } catch {
   Write-Fail "Failed to install ComfyUI requirements: $_"
+  $ErrorActionPreference = $prevEAP2
   exit 1
 }
 
@@ -269,6 +283,8 @@ try {
   Write-Warn "Some additional packages failed to install: $_"
   Write-Warn "Core functionality should still work."
 }
+
+$ErrorActionPreference = $prevEAP2
 
 # ── 7. Download SDXL Model ──
 Write-Step "[6/12] Downloading SDXL model..."

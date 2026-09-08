@@ -2,9 +2,18 @@ import fs from 'fs';
 import path from 'path';
 import http from 'http';
 import readline from 'readline';
+import { fileURLToPath } from 'url';
 
 const COMFYUI_HOST = '127.0.0.1';
 const COMFYUI_PORT = 8188;
+
+// ─── Timeout configuration ──────────────────────────────────────────────────────
+// SDXL on 8GB VRAM: model load + warmup + generation = 60-120s+.
+// Default 180s (3 min) accommodates first-generation cold start.
+// Override via env: IMAGE_GEN_TIMEOUT_MS=300000 (5 min) for very slow GPUs.
+const IMAGE_GEN_TIMEOUT_MS = parseInt(process.env.IMAGE_GEN_TIMEOUT_MS, 10) || 180_000;
+const POLL_INTERVAL_MS = 2000;
+const HTTP_REQUEST_TIMEOUT_MS = 30_000;
 
 // ─── Default SDXL txt2img workflow (ComfyUI API format) ───────────────────────
 
@@ -81,7 +90,7 @@ function respondError(id, code, message) {
 
 function httpRequest(options, postData = null) {
   return new Promise((resolve, reject) => {
-    const req = http.request(options, (res) => {
+    const req = http.request({ ...options, timeout: HTTP_REQUEST_TIMEOUT_MS }, (res) => {
       let data = '';
       res.setEncoding('utf8');
       res.on('data', (chunk) => { data += chunk; });
@@ -92,6 +101,9 @@ function httpRequest(options, postData = null) {
           resolve({ statusCode: res.statusCode, headers: res.headers, body: data });
         }
       });
+    });
+    req.on('timeout', () => {
+      req.destroy(new Error(`HTTP request to ${options.hostname}:${options.port}${options.path} timed out after ${HTTP_REQUEST_TIMEOUT_MS}ms`));
     });
     req.on('error', (err) => reject(err));
     if (postData) {
@@ -122,12 +134,7 @@ async function comfyuiPost(route, body) {
 }
 
 function findProjectRoot() {
-  let dir = path.dirname(new URL(import.meta.url).pathname);
-  // On Windows, import.meta.url starts with file:///C:/... so pathname starts with /C:/...
-  // Remove leading slash on Windows
-  if (process.platform === 'win32' && dir.startsWith('/')) {
-    dir = dir.slice(1);
-  }
+  let dir = path.dirname(fileURLToPath(import.meta.url));
   while (dir && dir !== path.dirname(dir)) {
     if (fs.existsSync(path.join(dir, 'opencode.json')) || fs.existsSync(path.join(dir, 'scripts'))) {
       return dir;
@@ -259,9 +266,10 @@ async function handleGenerateImage(args) {
 
   // 5. Poll history
   let historyData = null;
-  const maxAttempts = 150; // 5 minutes max
+  const maxAttempts = Math.ceil(IMAGE_GEN_TIMEOUT_MS / POLL_INTERVAL_MS);
+  console.error(`[glitch-image-gen] Polling for up to ${IMAGE_GEN_TIMEOUT_MS / 1000}s (max ${maxAttempts} attempts)`);
   for (let attempt = 0; attempt < maxAttempts; attempt++) {
-    await new Promise(r => setTimeout(r, 2000));
+    await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
     try {
       const histRes = await comfyuiGet(`/history/${promptId}`);
       if (histRes.body && Object.keys(histRes.body).length > 0) {
@@ -276,7 +284,7 @@ async function handleGenerateImage(args) {
 
   if (!historyData) {
     return {
-      content: [{ type: 'text', text: `Timed out waiting for ComfyUI to process prompt ${promptId}.` }]
+      content: [{ type: 'text', text: `Timed out waiting for ComfyUI to process prompt ${promptId} after ${IMAGE_GEN_TIMEOUT_MS / 1000}s. Increase IMAGE_GEN_TIMEOUT_MS env var if your GPU is slow.` }]
     };
   }
 
@@ -303,22 +311,23 @@ async function handleGenerateImage(args) {
     const images = nodeOutput.images || [];
     for (const img of images) {
       const comfyOutputDir = img.subfolder
-        ? path.join(projectRoot, 'output', img.subfolder)
-        : path.join(projectRoot, 'output');
-      const srcPath = path.join(comfyOutputDir, img.filename);
+        ? path.join(projectRoot, 'data', 'comfyui', 'ComfyUI', 'output', img.subfolder)
+        : path.join(projectRoot, 'data', 'comfyui', 'ComfyUI', 'output');
+      let srcPath = path.join(comfyOutputDir, img.filename);
 
       if (!fs.existsSync(srcPath)) {
         // Try ComfyUI's default output location if project root doesn't have it
         const fallbackPath = path.join(process.env.USERPROFILE || process.env.HOME || '', 'ComfyUI', 'output', img.subfolder || '', img.filename);
         if (fs.existsSync(fallbackPath)) {
           console.error('[glitch-image-gen] Found image at fallback path:', fallbackPath);
+          srcPath = fallbackPath;
         } else {
           console.error('[glitch-image-gen] Image not found:', srcPath);
           continue;
         }
       }
 
-      const screenshotsDir = path.join(projectRoot, 'data', 'screenshots');
+      const screenshotsDir = args.output_dir || process.env.IMAGE_OUTPUT_DIR || path.join(projectRoot, 'data', 'screenshots');
       ensureDir(screenshotsDir);
 
       const ext = path.extname(img.filename) || '.png';
@@ -373,6 +382,7 @@ async function handleComfyuiStatus() {
     const comfyPaths = [
       path.join(process.env.USERPROFILE || process.env.HOME || '', 'ComfyUI'),
       path.join(findProjectRoot(), 'ComfyUI'),
+      path.join(findProjectRoot(), 'data', 'comfyui', 'ComfyUI'),
     ];
     for (const p of comfyPaths) {
       if (fs.existsSync(p)) {
@@ -448,6 +458,10 @@ async function handleRequest(req) {
               seed: {
                 type: 'integer',
                 description: 'Random seed (omit for random)'
+              },
+              output_dir: {
+                type: 'string',
+                description: 'Absolute path to the directory where the generated image should be saved. If omitted, falls back to IMAGE_OUTPUT_DIR env var, then the default data/screenshots.'
               }
             },
             required: ['prompt']
@@ -513,3 +527,4 @@ rl.on('line', (line) => {
 });
 
 console.error('[glitch-image-gen] MCP server started. Waiting for JSON-RPC messages on stdin...');
+console.error(`[glitch-image-gen] Timeouts: generation=${IMAGE_GEN_TIMEOUT_MS}ms, http=${HTTP_REQUEST_TIMEOUT_MS}ms, poll=${POLL_INTERVAL_MS}ms`);
