@@ -1,6 +1,6 @@
 node -e @"
 const sqlite3 = require('node:sqlite');
-const db = new sqlite3.DatabaseSync('C:\\Users\\cothe\\.local\\share\\opencode\\opencode.db');
+const db = new sqlite3.DatabaseSync(require('path').join(require('os').homedir(), '.local', 'share', 'opencode', 'opencode.db'));
 
 console.log('=== Most recent 25 root sessions (parent_id IS NULL) ALL directories ===');
 console.log('id\tdirectory\ttime_created\ttitle');

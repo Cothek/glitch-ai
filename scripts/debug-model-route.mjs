@@ -41,7 +41,7 @@ for (const [name, def] of Object.entries(config.agent || {})) {
 }
 
 // === Part 2: Query opencode.db ===
-const dbPath = 'C:\\Users\\cothe\\.local\\share\\opencode\\opencode.db';
+const dbPath = join(process.env.USERPROFILE || process.env.HOME || '', '.local', 'share', 'opencode', 'opencode.db');
 if (!existsSync(dbPath)) {
   console.log('\nopencode.db not found at:', dbPath);
   process.exit(0);

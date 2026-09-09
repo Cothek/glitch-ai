@@ -274,19 +274,27 @@ function cleanup() {
   // and cases where the .pid.window file is missing.
   killWindowHost('cloudflared');
   killWindowHost('auth-proxy');
-  killWindowHost('money-dashboard');
-  killWindowHost('glitch-trader-engine');
-  killWindowHost('glitch-trader-api');
-  killWindowHost('glitch-trader-web');
+  if (process.env.GLITCH_ENABLE_MONEY === '1' || process.env.GLITCH_ENABLE_MONEY === 'true') {
+    killWindowHost('money-dashboard');
+  }
+  if (process.env.GLITCH_ENABLE_TRADER === '1' || process.env.GLITCH_ENABLE_TRADER === 'true') {
+    killWindowHost('glitch-trader-engine');
+    killWindowHost('glitch-trader-api');
+    killWindowHost('glitch-trader-web');
+  }
   // Kill visible-window services by their pid files (Windows + unix fallback).
   // Each call verifies the PID is alive and its process name matches the
   // expected set before taskkilling — guards against recycled PIDs.
   killPidFromFile('cloudflared.pid', ['cloudflared', 'powershell', 'pwsh', 'node']);
   killPidFromFile('auth-proxy.pid', ['node', 'powershell', 'pwsh']);
-  killPidFromFile('money-dashboard.pid', ['node', 'powershell', 'pwsh']);
-  killPidFromFile('glitch-trader-engine.pid', ['python', 'powershell', 'pwsh']);
-  killPidFromFile('glitch-trader-api.pid', ['python', 'powershell', 'pwsh']);
-  killPidFromFile('glitch-trader-web.pid', ['node', 'powershell', 'pwsh']);
+  if (process.env.GLITCH_ENABLE_MONEY === '1' || process.env.GLITCH_ENABLE_MONEY === 'true') {
+    killPidFromFile('money-dashboard.pid', ['node', 'powershell', 'pwsh']);
+  }
+  if (process.env.GLITCH_ENABLE_TRADER === '1' || process.env.GLITCH_ENABLE_TRADER === 'true') {
+    killPidFromFile('glitch-trader-engine.pid', ['python', 'powershell', 'pwsh']);
+    killPidFromFile('glitch-trader-api.pid', ['python', 'powershell', 'pwsh']);
+    killPidFromFile('glitch-trader-web.pid', ['node', 'powershell', 'pwsh']);
+  }
   // Kill sessions-api by pid file. If the supervisor is force-killed (taskkill /F),
   // process.on('exit') handlers never run — sessions-api orphans holding port 4191.
   killPidFromFile('sessions-api.pid', ['node']);
@@ -395,7 +403,7 @@ async function startSessionsApi(ROOT_DIR) {
 // @param {string[]} [opts.serviceArgs] - Arguments for the service (direct mode).
 // @param {string} [opts.setupCommand] - PowerShell commands run before the service (e.g. env vars).
 // @returns {Promise<number|null>}     - Real PID read from the pid file, or null on timeout.
-async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, cwd, innerCommand, serviceExe, serviceArgs, setupCommand }) {
+export async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, cwd, innerCommand, serviceExe, serviceArgs, setupCommand }) {
   const dataDir = join(ROOT_DIR, 'data');
   if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
 
@@ -510,228 +518,6 @@ async function startVisibleWindow({ ROOT_DIR, title, ps1FileName, pidFileName, c
   }
 
   return realPid;
-}
-
-// ---- Money dashboard (port 4110) ----
-// Standalone glitch-money control dashboard. Runs in its own visible
-// PowerShell window on Windows (mirrors the model-ui visible_window pattern
-// in plugin-manager.mjs). Falls back to a detached hidden spawn on Unix.
-const MONEY_DASHBOARD_PORT = 4110;
-
-async function startMoneyDashboard(ROOT_DIR) {
-  const isWin = process.platform === 'win32';
-  const dataDir = join(ROOT_DIR, 'data');
-  const moneyDir = process.env.MONEY_DASHBOARD_DIR || join(ROOT_DIR, '..', 'code', 'glitch-money');
-  const serverScript = join(moneyDir, 'dashboard', 'server.mjs');
-  const pidFilePath = join(dataDir, 'money-dashboard.pid');
-
-  if (!existsSync(serverScript)) {
-    log(DARK_YELLOW, `  Money dashboard: server not found at ${serverScript}`);
-    return;
-  }
-
-  // Skip if port already in use (service already running)
-  const portFree = await checkPort(MONEY_DASHBOARD_PORT);
-  if (!portFree) {
-    log(DARK_GREEN, `  Money dashboard: already running on port ${MONEY_DASHBOARD_PORT}`);
-    return;
-  }
-
-  try {
-    if (isWin) {
-      // Pass GLITCH_AI_ROOT so the dashboard's fleet-db/cost-db can locate the
-      // opencode DB and config files without hardcoded paths.
-      const realPid = await startVisibleWindow({
-        ROOT_DIR,
-        title: `Glitch: money-dashboard (port ${MONEY_DASHBOARD_PORT})`,
-        ps1FileName: 'money-dashboard-window.ps1',
-        pidFileName: 'money-dashboard.pid',
-        cwd: moneyDir,
-        serviceExe: 'node',
-        serviceArgs: [serverScript, '--force-seed'],
-        setupCommand: `$env:GLITCH_AI_ROOT = '${ROOT_DIR.replace(/'/g, "''")}'`,
-      });
-      log(DARK_GREEN, `  Money dashboard: listening on port ${MONEY_DASHBOARD_PORT} (PID ${realPid || 'unknown'})`);
-    } else {
-      // Non-Windows: detached hidden spawn fallback
-      if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
-      const proc = spawn('node', [serverScript, '--force-seed'], {
-        cwd: moneyDir,
-        stdio: 'ignore',
-        windowsHide: true,
-        detached: true,
-        env: { ...process.env, GLITCH_AI_ROOT: ROOT_DIR },
-      });
-      proc.on('error', (err) => {
-        log(YELLOW, `  Money dashboard failed to start: ${err.message}`);
-      });
-      proc.unref();
-      trackProcess(proc);
-
-      try {
-        writeFileSync(pidFilePath, String(proc.pid), 'utf-8');
-      } catch {}
-
-      await new Promise(r => setTimeout(r, 500));
-      log(DARK_GREEN, `  Money dashboard: listening on port ${MONEY_DASHBOARD_PORT} (PID ${proc.pid})`);
-    }
-  } catch (e) {
-    log(YELLOW, `  Money dashboard start failed: ${e.message}`);
-  }
-}
-
-// ---- Glitch Trader (engine + API port 4120 + web port 3000) ----
-// Optional add-on: trading engine, REST API, and web UI. Each runs in its
-// own visible PowerShell window. Skipped silently if the directory is missing.
-const GLITCH_TRADER_API_PORT = 4120;
-const GLITCH_TRADER_WEB_PORT = 3000;
-
-async function startGlitchTrader(ROOT_DIR) {
-  const isWin = process.platform === 'win32';
-  const dataDir = join(ROOT_DIR, 'data');
-  const traderDir = process.env.GLITCH_TRADER_DIR || join(ROOT_DIR, '..', 'code', 'glitch-trader');
-  const pythonExe = join(traderDir, 'engine', '.venv', 'Scripts', 'python.exe');
-  const engineMain = join(traderDir, 'engine', 'main.py');
-
-  if (!existsSync(pythonExe) || !existsSync(engineMain)) {
-    log(DARK_YELLOW, `  Glitch Trader: not found at ${traderDir} — skipping`);
-    return;
-  }
-
-  // --- Engine (no fixed port) ---
-  const enginePidFile = join(dataDir, 'glitch-trader-engine.pid');
-  try {
-    if (isWin) {
-      const realPid = await startVisibleWindow({
-        ROOT_DIR,
-        title: 'Glitch Trader: engine',
-        ps1FileName: 'glitch-trader-engine-window.ps1',
-        pidFileName: 'glitch-trader-engine.pid',
-        cwd: traderDir,
-        serviceExe: pythonExe,
-        serviceArgs: [engineMain],
-      });
-      if (realPid && isProcessAlive(realPid)) {
-        log(DARK_GREEN, `  Glitch Trader engine: started (PID ${realPid})`);
-      } else {
-        log(YELLOW, `  Glitch Trader engine: failed to start (process exited immediately)`);
-      }
-    } else {
-      if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
-      const proc = spawn(pythonExe, [engineMain], {
-        cwd: traderDir,
-        stdio: 'ignore',
-        windowsHide: true,
-        detached: true,
-      });
-      proc.on('error', (err) => { log(YELLOW, `  Glitch Trader engine failed to start: ${err.message}`); });
-      proc.unref();
-      trackProcess(proc);
-      try { writeFileSync(enginePidFile, String(proc.pid), 'utf-8'); } catch {}
-      await new Promise(r => setTimeout(r, 500));
-      if (isProcessAlive(proc.pid)) {
-        log(DARK_GREEN, `  Glitch Trader engine: started (PID ${proc.pid})`);
-      } else {
-        log(YELLOW, `  Glitch Trader engine: failed to start (process exited immediately)`);
-      }
-    }
-  } catch (e) {
-    log(YELLOW, `  Glitch Trader engine start failed: ${e.message}`);
-  }
-
-  // --- API (port 4120) ---
-  const apiPortFree = await checkPort(GLITCH_TRADER_API_PORT);
-  if (!apiPortFree) {
-    log(DARK_GREEN, `  Glitch Trader API: already running on port ${GLITCH_TRADER_API_PORT}`);
-  } else {
-    try {
-      if (isWin) {
-        const realPid = await startVisibleWindow({
-          ROOT_DIR,
-          title: `Glitch Trader: API (port ${GLITCH_TRADER_API_PORT})`,
-          ps1FileName: 'glitch-trader-api-window.ps1',
-          pidFileName: 'glitch-trader-api.pid',
-          cwd: traderDir,
-          serviceExe: pythonExe,
-          serviceArgs: ['-m', 'uvicorn', 'engine.api.__main__:app', '--port', String(GLITCH_TRADER_API_PORT)],
-        });
-        if (await waitForPort(GLITCH_TRADER_API_PORT)) {
-          log(DARK_GREEN, `  Glitch Trader API: listening on port ${GLITCH_TRADER_API_PORT} (PID ${realPid || 'unknown'})`);
-        } else {
-          log(YELLOW, `  Glitch Trader API: failed to bind port ${GLITCH_TRADER_API_PORT} (process may have exited)`);
-        }
-      } else {
-        if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
-        const proc = spawn(pythonExe, ['-m', 'uvicorn', 'engine.api.__main__:app', '--port', String(GLITCH_TRADER_API_PORT)], {
-          cwd: traderDir,
-          stdio: 'ignore',
-          windowsHide: true,
-          detached: true,
-        });
-        proc.on('error', (err) => { log(YELLOW, `  Glitch Trader API failed to start: ${err.message}`); });
-        proc.unref();
-        trackProcess(proc);
-        try { writeFileSync(join(dataDir, 'glitch-trader-api.pid'), String(proc.pid), 'utf-8'); } catch {}
-        if (await waitForPort(GLITCH_TRADER_API_PORT)) {
-          log(DARK_GREEN, `  Glitch Trader API: listening on port ${GLITCH_TRADER_API_PORT} (PID ${proc.pid})`);
-        } else {
-          log(YELLOW, `  Glitch Trader API: failed to bind port ${GLITCH_TRADER_API_PORT} (process may have exited)`);
-        }
-      }
-    } catch (e) {
-      log(YELLOW, `  Glitch Trader API start failed: ${e.message}`);
-    }
-  }
-
-  // --- Web app (port 3000) ---
-  const webPortFree = await checkPort(GLITCH_TRADER_WEB_PORT);
-  if (!webPortFree) {
-    log(DARK_GREEN, `  Glitch Trader web: already running on port ${GLITCH_TRADER_WEB_PORT}`);
-  } else {
-    const webDir = join(traderDir, 'web');
-    if (!existsSync(webDir)) {
-      log(DARK_YELLOW, `  Glitch Trader web: ${webDir} not found — skipping`);
-    } else {
-      try {
-        const npmCmd = isWin ? 'npm.cmd' : 'npm';
-        if (isWin) {
-          const realPid = await startVisibleWindow({
-            ROOT_DIR,
-            title: `Glitch Trader: web app (port ${GLITCH_TRADER_WEB_PORT})`,
-            ps1FileName: 'glitch-trader-web-window.ps1',
-            pidFileName: 'glitch-trader-web.pid',
-            cwd: webDir,
-            serviceExe: npmCmd,
-            serviceArgs: ['run', 'dev'],
-          });
-          if (await waitForPort(GLITCH_TRADER_WEB_PORT)) {
-            log(DARK_GREEN, `  Glitch Trader web: listening on port ${GLITCH_TRADER_WEB_PORT} (PID ${realPid || 'unknown'})`);
-          } else {
-            log(YELLOW, `  Glitch Trader web: failed to bind port ${GLITCH_TRADER_WEB_PORT} (process may have exited)`);
-          }
-        } else {
-          if (!existsSync(dataDir)) { mkdirSync(dataDir, { recursive: true }); }
-          const proc = spawn(npmCmd, ['run', 'dev'], {
-            cwd: webDir,
-            stdio: 'ignore',
-            windowsHide: true,
-            detached: true,
-          });
-          proc.on('error', (err) => { log(YELLOW, `  Glitch Trader web failed to start: ${err.message}`); });
-          proc.unref();
-          trackProcess(proc);
-          try { writeFileSync(join(dataDir, 'glitch-trader-web.pid'), String(proc.pid), 'utf-8'); } catch {}
-          if (await waitForPort(GLITCH_TRADER_WEB_PORT)) {
-            log(DARK_GREEN, `  Glitch Trader web: listening on port ${GLITCH_TRADER_WEB_PORT} (PID ${proc.pid})`);
-          } else {
-            log(YELLOW, `  Glitch Trader web: failed to bind port ${GLITCH_TRADER_WEB_PORT} (process may have exited)`);
-          }
-        }
-      } catch (e) {
-        log(YELLOW, `  Glitch Trader web start failed: ${e.message}`);
-      }
-    }
-  }
 }
 
 /**
@@ -1290,11 +1076,24 @@ export async function launchServer(options = {}) {
   // ---- Start Sessions API (port 4191) ----
   await startSessionsApi(ROOT_DIR);
 
-  // ---- Start Money dashboard (port 4110) ----
-  await startMoneyDashboard(ROOT_DIR);
+  // ---- Start optional add-ons (gated by env vars) ----
+  if (process.env.GLITCH_ENABLE_MONEY === '1' || process.env.GLITCH_ENABLE_MONEY === 'true') {
+    try {
+      const { startMoneyDashboard } = await import('../addons/money-dashboard.mjs');
+      await startMoneyDashboard(ROOT_DIR);
+    } catch (e) {
+      log(YELLOW, `  Money dashboard add-on error: ${e.message}`);
+    }
+  }
 
-  // ---- Start Glitch Trader (engine + API + web) ----
-  await startGlitchTrader(ROOT_DIR);
+  if (process.env.GLITCH_ENABLE_TRADER === '1' || process.env.GLITCH_ENABLE_TRADER === 'true') {
+    try {
+      const { startGlitchTrader } = await import('../addons/glitch-trader.mjs');
+      await startGlitchTrader(ROOT_DIR);
+    } catch (e) {
+      log(YELLOW, `  Glitch Trader add-on error: ${e.message}`);
+    }
+  }
 
   // ---- Start enabled plugins ----
   log(CYAN, '  Starting enabled plugins...');
@@ -1330,7 +1129,9 @@ export async function launchServer(options = {}) {
   if (cloudflareDomain) {
     log(GREEN, `    Model Switcher (tunnel): https://${cloudflareDomain}/models?auth_token=${authToken}`);
   }
-  log(GREEN,   `    Money dashboard:  http://localhost:4110`);
+  if (process.env.GLITCH_ENABLE_MONEY === '1' || process.env.GLITCH_ENABLE_MONEY === 'true') {
+    log(GREEN,   `    Money dashboard:  http://localhost:4110`);
+  }
   log(GREEN,   `    Sessions API:     http://localhost:4191`);
   log(GREEN,   `    Local:  http://localhost:${TARGET_PORT}/${dirSlug}/`);
   log('');

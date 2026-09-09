@@ -35,7 +35,7 @@ if exist "%~dp0data\node\node.exe" (
     set "PATH=%~dp0data\node;%PATH%"
 )
 
-if exist "%~dp0glitch-head.txt" powershell -NoProfile -Command "Get-Content '%~dp0glitch-head.txt' -Encoding UTF8"
+if exist "%~dp0assets\glitch-head.txt" powershell -NoProfile -Command "Get-Content '%~dp0assets\glitch-head.txt' -Encoding UTF8"
 echo.
 set "LOG_FILE=%~dp0data\launch.log"
 if not exist "%~dp0data" mkdir "%~dp0data"

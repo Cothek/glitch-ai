@@ -557,7 +557,7 @@ check('User Profile', 'Config', () => {
 });
 
 check('Glitch Head', 'Config', () => {
-  const f = join(ROOT_DIR, 'glitch-head.txt');
+  const f = join(ROOT_DIR, 'assets', 'glitch-head.txt');
   if (!existsSync(f)) {
     return {
       ok: false,
@@ -569,7 +569,7 @@ check('Glitch Head', 'Config', () => {
   return {
     ok: true,
     version: 'found',
-    path: 'glitch-head.txt',
+    path: 'assets/glitch-head.txt',
     note: null,
   };
 });

@@ -25,7 +25,7 @@ const KNOWN_MANIFEST = new Set([
   '.server-password',
   'config/',
   'data/',
-  'glitch-head.txt',
+  'assets/glitch-head.txt',
   'glitch-memorycore/',
   'handy-voice/',
   'launch-glitch.bat',
