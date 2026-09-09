@@ -90,6 +90,9 @@ export async function startGlitchTrader(ROOT_DIR) {
   } catch {}
 
   if (!engineAlreadyRunning) {
+  // Set PYTHONPATH so Python can resolve 'engine' as a package
+  const prevPythonPath = process.env.PYTHONPATH;
+  process.env.PYTHONPATH = traderDir;
   try {
     if (isWin) {
       const realPid = await startVisibleWindow({
@@ -100,7 +103,6 @@ export async function startGlitchTrader(ROOT_DIR) {
         cwd: traderDir,
         serviceExe: pythonExe,
         serviceArgs: [engineMain],
-        setupCommand: `$env:PYTHONPATH = '${traderDir.replace(/'/g, "''")}'`,
       });
       if (realPid && isProcessAlive(realPid)) {
         log(DARK_GREEN, `  Glitch Trader engine: started (PID ${realPid})`);
@@ -129,6 +131,12 @@ export async function startGlitchTrader(ROOT_DIR) {
     }
   } catch (e) {
     log(YELLOW, `  Glitch Trader engine start failed: ${e.message}`);
+  }
+  // Restore original PYTHONPATH
+  if (prevPythonPath !== undefined) {
+    process.env.PYTHONPATH = prevPythonPath;
+  } else {
+    delete process.env.PYTHONPATH;
   }
   } // end if (!engineAlreadyRunning)
 
