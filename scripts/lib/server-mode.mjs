@@ -274,27 +274,15 @@ function cleanup() {
   // and cases where the .pid.window file is missing.
   killWindowHost('cloudflared');
   killWindowHost('auth-proxy');
-  if (process.env.GLITCH_ENABLE_MONEY === '1' || process.env.GLITCH_ENABLE_MONEY === 'true') {
-    killWindowHost('money-dashboard');
-  }
-  if (process.env.GLITCH_ENABLE_TRADER === '1' || process.env.GLITCH_ENABLE_TRADER === 'true') {
-    killWindowHost('glitch-trader-engine');
-    killWindowHost('glitch-trader-api');
-    killWindowHost('glitch-trader-web');
-  }
+  // DO NOT kill money-dashboard here — money-dashboard is an external addon
+  // that must survive Glitch restarts.
+  // DO NOT kill glitch-trader-*.pid here — glitch-trader is an external addon
+  // that must survive Glitch restarts.
   // Kill visible-window services by their pid files (Windows + unix fallback).
   // Each call verifies the PID is alive and its process name matches the
   // expected set before taskkilling — guards against recycled PIDs.
   killPidFromFile('cloudflared.pid', ['cloudflared', 'powershell', 'pwsh', 'node']);
   killPidFromFile('auth-proxy.pid', ['node', 'powershell', 'pwsh']);
-  if (process.env.GLITCH_ENABLE_MONEY === '1' || process.env.GLITCH_ENABLE_MONEY === 'true') {
-    killPidFromFile('money-dashboard.pid', ['node', 'powershell', 'pwsh']);
-  }
-  if (process.env.GLITCH_ENABLE_TRADER === '1' || process.env.GLITCH_ENABLE_TRADER === 'true') {
-    killPidFromFile('glitch-trader-engine.pid', ['python', 'powershell', 'pwsh']);
-    killPidFromFile('glitch-trader-api.pid', ['python', 'powershell', 'pwsh']);
-    killPidFromFile('glitch-trader-web.pid', ['node', 'powershell', 'pwsh']);
-  }
   // Kill sessions-api by pid file. If the supervisor is force-killed (taskkill /F),
   // process.on('exit') handlers never run — sessions-api orphans holding port 4191.
   killPidFromFile('sessions-api.pid', ['node']);

@@ -6,7 +6,7 @@
  * glitch-ai's data dir, so each project owns its own process state.
  */
 
-import { existsSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { spawn } from 'child_process';
 import net from 'net';
@@ -76,6 +76,20 @@ export async function startGlitchTrader(ROOT_DIR) {
 
   // --- Engine (no fixed port) ---
   const enginePidFile = join(dataDir, 'glitch-trader-engine.pid');
+
+  // Skip engine if already running (check PID file liveness)
+  let engineAlreadyRunning = false;
+  try {
+    if (existsSync(enginePidFile)) {
+      const storedPid = parseInt(readFileSync(enginePidFile, 'utf-8').trim(), 10);
+      if (storedPid > 0 && isProcessAlive(storedPid)) {
+        engineAlreadyRunning = true;
+        log(DARK_GREEN, `  Glitch Trader engine: already running (PID ${storedPid}) — reusing`);
+      }
+    }
+  } catch {}
+
+  if (!engineAlreadyRunning) {
   try {
     if (isWin) {
       const realPid = await startVisibleWindow({
@@ -114,6 +128,7 @@ export async function startGlitchTrader(ROOT_DIR) {
   } catch (e) {
     log(YELLOW, `  Glitch Trader engine start failed: ${e.message}`);
   }
+  } // end if (!engineAlreadyRunning)
 
   // --- API (port 4120) ---
   const apiPortFree = await checkPort(GLITCH_TRADER_API_PORT);
