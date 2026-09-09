@@ -40,6 +40,15 @@ function isNativeNvidiaModel(modelId) {
   return NATIVE_MODEL_PATTERNS.some(p => p.test(modelId));
 }
 
+function cleanDisplayName(modelId) {
+  let id = modelId;
+  if (id.startsWith('nvidia/')) id = id.slice(7);
+  id = id.replace(/:(free|batch)$/i, '').replace(/\(free\)/gi, '').trim();
+  return id.split('/').map(seg =>
+    seg.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
+  ).join(' ');
+}
+
 /**
  * Read a JSON file, stripping a UTF-8 BOM if present.
  * PowerShell (PS 5.1) writes UTF-8 files with a BOM by default — both
@@ -108,6 +117,40 @@ export function injectProviders(config) {
       }
     } catch (_e) { /* best-effort */ }
 
+    // SYNC: Add usable models from the live registry into providers.nvidia.models.
+    // The static providers.json only provides structure + critical fallback models.
+    // The live registry is the source of truth for which models are available.
+    try {
+      if (registryModels && registryModels.length > 0) {
+        if (!providers.nvidia) providers.nvidia = {};
+        if (!providers.nvidia.models) providers.nvidia.models = {};
+        const nvidiaModels = providers.nvidia.models;
+
+        let synced = 0;
+        for (const entry of registryModels) {
+          if (entry.provider !== 'nvidia') continue;
+          if (entry.context_length == null || entry.context_length <= 0) continue;
+          if (entry.free !== true && entry.tier !== 'free') continue;
+          if (entry.capabilities && !entry.capabilities.includes('text')) continue;
+
+          const registryId = entry.id;
+          const key = registryId.replace(/^nvidia\//, '');
+
+          if (key in nvidiaModels) continue;
+          if (`nvidia/${key}` in nvidiaModels) continue;
+
+          nvidiaModels[key] = {
+            name: cleanDisplayName(registryId),
+            context_length: entry.context_length,
+          };
+          synced++;
+        }
+        if (synced > 0) {
+          console.log(`  [SYNC] Added ${synced} usable nvidia model(s) from registry`);
+        }
+      }
+    } catch (_e) { /* best-effort sync */ }
+
     // Ensure BOTH single and double prefix forms exist for native NVIDIA models.
     // OpenCode may strip the first nvidia/ segment, so the single-prefix form
     // must exist as a lookup key. Native models need the nvidia/ prefix at the
@@ -169,25 +212,19 @@ function findRegistryEntry(key) {
               'nvidia/nemotron-3.5-lightning-30b-a3b',
             ]);
 
+            const baselineKeys = new Set(Object.keys(nvidiaModels));
             let culled = 0;
             for (const key of Object.keys(nvidiaModels)) {
               const entry = findRegistryEntry(key);
               if (!entry) {
-                if (isFresh) { delete nvidiaModels[key]; culled++; }
-                else { console.log(`  [CULL] Stale registry, keeping ${key} (no registry entry)`); }
+                console.log(`  [CULL] No registry entry for ${key}, keeping (baseline model)`);
                 continue;
               }
               if (entry.context_length === 0) { delete nvidiaModels[key]; culled++; continue; }
               if (entry.context_length == null) {
-                if (CRITICAL_NULL_CONTEXT_MODELS.has(key)) {
-                  console.log(`  [CULL] CRITICAL: ${key} has unknown context_length (null), keeping (whitelisted)`);
-                } else {
-                  console.log(`  [CULL] Removed ${key} (unknown context_length / null)`);
-                  delete nvidiaModels[key];
-                  culled++;
-                  continue;
-                }
+                console.log(`  [CULL] ${key} has unknown context_length (null), keeping`);
               }
+              if (baselineKeys.has(key)) { continue; }
               if (isFresh && entry.free !== true && entry.tier !== 'free') { delete nvidiaModels[key]; culled++; continue; }
               if (!isFresh && entry.free !== true && entry.tier !== 'free') { console.log(`  [CULL] Stale registry, skipping free check for ${key}`); }
               if (entry.capabilities && !entry.capabilities.includes('text')) { delete nvidiaModels[key]; culled++; continue; }

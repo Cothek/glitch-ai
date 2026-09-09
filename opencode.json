@@ -539,73 +539,13 @@
         "nvidia/nemotron-3.5-lightning-30b-a3b": {
           "name": "Nemotron 3.5 Lightning 30B (free)",
           "context_length": 262144
-        },
-        "nvidia/minimaxai/minimax-m3": {
-          "name": "minimaxai/minimax-m3 (free)"
-        },
-        "nvidia/nvidia/nemotron-3-super-120b-a12b": {
-          "name": "nemotron-3-super-120b-a12b (free)"
-        },
-        "nvidia/nvidia/nemotron-3-ultra-550b-a55b": {
-          "name": "nemotron-3-ultra-550b-a55b (free)"
-        },
-        "nvidia/nemotron-3.5-content-safety:free": {
-          "name": "nemotron-3.5-content-safety:free (free)"
-        },
-        "nvidia/nemotron-3-ultra-550b-a55b:free": {
-          "name": "nemotron-3-ultra-550b-a55b:free (free)"
-        },
-        "nvidia/nemotron-3-super-120b-a12b:free": {
-          "name": "nemotron-3-super-120b-a12b:free (free)"
-        },
-        "nvidia/nemotron-3.5-lightning:free": {
-          "name": "nemotron-3.5-lightning:free (free)"
-        },
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free": {
-          "name": "nemotron-3-nano-omni-30b-a3b-reasoning:free (free)"
-        },
-        "nvidia/deepseek-ai/deepseek-v4-flash-0731": {
-          "name": "deepseek-ai/deepseek-v4-flash-0731 (free)"
-        },
-        "nvidia/google/gemma-4-31b-it": {
-          "name": "google/gemma-4-31b-it (free)"
-        },
-        "nvidia/meta/muse-glimmer-30b": {
-          "name": "meta/muse-glimmer-30b (free)"
-        },
-        "nvidia/moonshotai/kimi-k3": {
-          "name": "moonshotai/kimi-k3 (free)"
-        },
-        "nvidia/openai/gpt-oss-20b": {
-          "name": "openai/gpt-oss-20b (free)"
-        },
-        "nvidia/poolside/laguna-xs-2.1": {
-          "name": "poolside/laguna-xs-2.1 (free)"
-        },
-        "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": {
-          "name": "nemotron-3-nano-omni-30b-a3b-reasoning (free)"
-        }
-      }
-    },
-    "freetoken": {
-      "npm": "@ai-sdk/openai-compatible",
-      "name": "FreeToken (local)",
-      "options": {
-        "baseURL": "http://192.168.68.64:1919/v1"
-      },
-      "models": {
-        "Qwen3.6-35B-A3B-NVFP4": {
-          "name": "Qwen3.6-35B-A3B-NVFP4",
-          "limit": {
-            "context": 262144,
-            "output": 32768
-          }
         }
       }
     }
   },
   "compaction": {
     "auto": true,
-    "tail_turns": 8
+    "tail_turns": 8,
+    "reserved": 8192
   }
 }

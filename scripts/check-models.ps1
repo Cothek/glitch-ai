@@ -1691,7 +1691,13 @@ if (-not (Test-Path $registryDir)) { New-Item -ItemType Directory -Path $registr
 $registryData | ConvertTo-Json -Depth 4 | Out-File -FilePath $RegistryFile -Encoding utf8 -Force
 
 # 6.76. Sync providers.json — additive merge of nvidia models from registry
-# Prevents static drift where providers.json is missing models discovered at runtime.
+# DISABLED (2026-09-03): This block re-added every registry nvidia model to
+# providers.json with derived "(free)" names (e.g. "google/gemma-4-31b-it (free)").
+# Those entries showed Context: 0 in the web app picker and did not route correctly.
+# The startup pipeline (scripts/lib/inject-providers.mjs) now owns the model list:
+# it reads providers.json (curated baseline), merges the fresh registry, mirrors
+# native prefix forms, CULLs unusable models, and DEDUPEs display names. Keeping
+# this block would re-introduce the junk it culls. See data/plans/nvidia-cull-plan.md.
 $ProvidersFile = "$RootDir\config\providers.json"
 $addedCount = 0
 try {
@@ -1704,15 +1710,17 @@ try {
             if ($entry.id -like "nvidia/*") {
                 $modelKey = $entry.id  # e.g. "nvidia/nemotron-3.5-lightning-30b-a3b"
                 if (-not ($providersData.nvidia.models.PSObject.Properties.Name -contains $modelKey)) {
-                    $displayName = "$($entry.id -replace 'nvidia/', '') (free)"
-                    $providersData.nvidia.models | Add-Member -NotePropertyName $modelKey -NotePropertyValue ([ordered]@{ name = $displayName }) -Force
+                    # DISABLED: do not add derived "(free)" entries — they break the picker.
+                    # $displayName = "$($entry.id -replace 'nvidia/', '') (free)"
+                    # $providersData.nvidia.models | Add-Member -NotePropertyName $modelKey -NotePropertyValue ([ordered]@{ name = $displayName }) -Force
                     $addedCount++
                 }
             }
         }
         if ($addedCount -gt 0) {
-            $providersData | ConvertTo-Json -Depth 4 | Out-File -FilePath $ProvidersFile -Encoding utf8 -Force
-            if (-not $Silent) { Write-Host " + Synced $addedCount nvidia model(s) to providers.json" -ForegroundColor Green }
+            # DISABLED: do not write back junk entries to providers.json.
+            # $providersData | ConvertTo-Json -Depth 4 | Out-File -FilePath $ProvidersFile -Encoding utf8 -Force
+            if (-not $Silent) { Write-Host " providers.json: nvidia sync disabled (inject-providers.mjs owns the list)" -ForegroundColor DarkGray }
         } else {
             if (-not $Silent) { Write-Host " providers.json: no nvidia models to sync (all present)" -ForegroundColor DarkGray }
         }
