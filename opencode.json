@@ -12,8 +12,7 @@
     ".opencode/plugins/agent-watchdog.mjs"
   ],
   "instructions": [
-    ".opencode/instructions/shared-agent-rules.md",
-    "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
+    ".opencode/instructions/shared-agent-rules.md"
   ],
   "mcp": {
     "gitnexus": {
