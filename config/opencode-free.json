@@ -11,10 +11,9 @@
                    ".opencode/plugins/plan-reflex.js",
     ".opencode/plugins/agent-watchdog.mjs"
   ],
-     "instructions":  [
-                            ".opencode/instructions/shared-agent-rules.md",
-                           "glitch-memorycore/plugins/glitch-skills/skills-registry.md"
-                       ],
+"instructions":  [
+                            ".opencode/instructions/shared-agent-rules.md"
+                        ],
     "mcp":  {
                "gitnexus":  {
                                 "type":  "local",
@@ -269,6 +268,7 @@
     "default_agent":  "glitch",
     "compaction":  {
                        "auto":  true,
-                       "tail_turns":  8
+                       "tail_turns":  8,
+                       "reserved":  8192
                    }
 }

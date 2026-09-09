@@ -626,8 +626,7 @@ localModel = normalizeModelId(localModel);
 
   // Build instructions list (engine only — memory now in agent prompts)
   const engineInstructions = [
-    '.opencode/instructions/shared-agent-rules.md',
-    'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
+    '.opencode/instructions/shared-agent-rules.md'
   ];
 
   const allInstructions = [...engineInstructions];

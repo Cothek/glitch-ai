@@ -471,8 +471,7 @@ async function main() {
   if (templateText.charCodeAt(0) === 0xFEFF) templateText = templateText.slice(1);
 
   const engineInstructions = [
-    '.opencode/instructions/shared-agent-rules.md',
-    'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
+    '.opencode/instructions/shared-agent-rules.md'
   ];
 
   const memoryPromptRefs = buildMemoryPromptRefs(ROOT_DIR, UserName);
@@ -762,8 +761,7 @@ async function main() {
       let templateText = readFileSync(TemplatePath, 'utf-8');
       if (templateText.charCodeAt(0) === 0xFEFF) templateText = templateText.slice(1);
       const engineInstructions = [
-        '.opencode/instructions/shared-agent-rules.md',
-        'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
+        '.opencode/instructions/shared-agent-rules.md'
       ];
       const memoryPromptRefs = buildMemoryPromptRefs(ROOT_DIR, UserName);
       const allInstructions = [...engineInstructions];

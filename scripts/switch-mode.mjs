@@ -66,8 +66,7 @@ async function switchMode(targetMode, options = {}) {
 
 async function generateNormalConfig(templateText) {
   const engineInstructions = [
-    '.opencode/instructions/shared-agent-rules.md',
-    'glitch-memorycore/plugins/glitch-skills/skills-registry.md'
+    '.opencode/instructions/shared-agent-rules.md'
   ];
   let UserName = process.env.GLITCH_USER || null; let userFound = false; const UserDir = join(ROOT_DIR, 'user');
   if (UserName) { const subdirPath = join(UserDir, UserName); if (existsSync(join(subdirPath, 'main-memory.md'))) userFound = true; else if (existsSync(join(UserDir, 'main-memory.md'))) { UserName = ''; userFound = true; } else { log(YELLOW, '  WARNING: User ' + UserName + ' specified but no profile found'); UserName = null; } }
