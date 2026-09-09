@@ -206,7 +206,91 @@
                                                                         },
                                   "nvidia/nemotron-3-nano-30b-a3b":  {
                                                                          "name":  "nemotron-3-nano-30b-a3b (free)"
-                                                                     }
+                                                                     },
+                                  "nvidia/deepseek-ai/deepseek-coder-6.7b-instruct":  {
+                                                                                          "name":  "deepseek-ai/deepseek-coder-6.7b-instruct (free)"
+                                                                                      },
+                                  "nvidia/deepseek-ai/deepseek-v4-flash-0731":  {
+                                                                                    "name":  "deepseek-ai/deepseek-v4-flash-0731 (free)"
+                                                                                },
+                                  "nvidia/deepseek-ai/deepseek-v4-pro-0813":  {
+                                                                                  "name":  "deepseek-ai/deepseek-v4-pro-0813 (free)"
+                                                                              },
+                                  "nvidia/google/gemma-3-12b-it":  {
+                                                                       "name":  "google/gemma-3-12b-it (free)"
+                                                                   },
+                                  "nvidia/google/gemma-4-31b-it":  {
+                                                                       "name":  "google/gemma-4-31b-it (free)"
+                                                                   },
+                                  "nvidia/ibm/granite-3.0-8b-instruct":  {
+                                                                             "name":  "ibm/granite-3.0-8b-instruct (free)"
+                                                                         },
+                                  "nvidia/meta/codellama-70b":  {
+                                                                    "name":  "meta/codellama-70b (free)"
+                                                                },
+                                  "nvidia/meta/llama-3.2-11b-vision-instruct":  {
+                                                                                    "name":  "meta/llama-3.2-11b-vision-instruct (free)"
+                                                                                },
+                                  "nvidia/meta/llama-3.2-90b-vision-instruct":  {
+                                                                                    "name":  "meta/llama-3.2-90b-vision-instruct (free)"
+                                                                                },
+                                  "nvidia/meta/llama2-70b":  {
+                                                                 "name":  "meta/llama2-70b (free)"
+                                                             },
+                                  "nvidia/meta/muse-glimmer-30b":  {
+                                                                       "name":  "meta/muse-glimmer-30b (free)"
+                                                                   },
+                                  "nvidia/microsoft/kosmos-2":  {
+                                                                    "name":  "microsoft/kosmos-2 (free)"
+                                                                },
+                                  "nvidia/microsoft/phi-3.5-moe-instruct":  {
+                                                                                "name":  "microsoft/phi-3.5-moe-instruct (free)"
+                                                                            },
+                                  "nvidia/mistralai/codestral-22b-instruct-v0.1":  {
+                                                                                       "name":  "mistralai/codestral-22b-instruct-v0.1 (free)"
+                                                                                   },
+                                  "nvidia/mistralai/mistral-7b-instruct-v0.3":  {
+                                                                                    "name":  "mistralai/mistral-7b-instruct-v0.3 (free)"
+                                                                                },
+                                  "nvidia/mistralai/mistral-large":  {
+                                                                         "name":  "mistralai/mistral-large (free)"
+                                                                     },
+                                  "nvidia/mistralai/mistral-large-2-instruct":  {
+                                                                                    "name":  "mistralai/mistral-large-2-instruct (free)"
+                                                                                },
+                                  "nvidia/mistralai/mistral-nemotron":  {
+                                                                            "name":  "mistralai/mistral-nemotron (free)"
+                                                                        },
+                                  "nvidia/mistralai/mixtral-8x22b-v0.1":  {
+                                                                              "name":  "mistralai/mixtral-8x22b-v0.1 (free)"
+                                                                          },
+                                  "nvidia/moonshotai/kimi-k2.6":  {
+                                                                      "name":  "moonshotai/kimi-k2.6 (free)"
+                                                                  },
+                                  "nvidia/moonshotai/kimi-k3":  {
+                                                                    "name":  "moonshotai/kimi-k3 (free)"
+                                                                },
+                                  "nvidia/openai/gpt-oss-20b":  {
+                                                                    "name":  "openai/gpt-oss-20b (free)"
+                                                                },
+                                  "nvidia/poolside/laguna-xs-2.1":  {
+                                                                        "name":  "poolside/laguna-xs-2.1 (free)"
+                                                                    },
+                                  "nvidia/writer/palmyra-creative-122b":  {
+                                                                              "name":  "writer/palmyra-creative-122b (free)"
+                                                                          },
+                                  "nvidia/writer/palmyra-fin-70b-32k":  {
+                                                                            "name":  "writer/palmyra-fin-70b-32k (free)"
+                                                                        },
+                                  "nvidia/writer/palmyra-med-70b":  {
+                                                                        "name":  "writer/palmyra-med-70b (free)"
+                                                                    },
+                                  "nvidia/writer/palmyra-med-70b-32k":  {
+                                                                            "name":  "writer/palmyra-med-70b-32k (free)"
+                                                                        },
+                                  "nvidia/zyphra/zamba2-7b-instruct":  {
+                                                                           "name":  "zyphra/zamba2-7b-instruct (free)"
+                                                                       }
                               }
                },
     "freetoken":  {
