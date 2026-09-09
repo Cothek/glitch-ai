@@ -100,6 +100,7 @@ export async function startGlitchTrader(ROOT_DIR) {
         cwd: traderDir,
         serviceExe: pythonExe,
         serviceArgs: [engineMain],
+        setupCommand: `$env:PYTHONPATH = '${traderDir.replace(/'/g, "''")}'`,
       });
       if (realPid && isProcessAlive(realPid)) {
         log(DARK_GREEN, `  Glitch Trader engine: started (PID ${realPid})`);
@@ -113,6 +114,7 @@ export async function startGlitchTrader(ROOT_DIR) {
         stdio: 'ignore',
         windowsHide: true,
         detached: true,
+        env: { ...process.env, PYTHONPATH: traderDir },
       });
       proc.on('error', (err) => { log(YELLOW, `  Glitch Trader engine failed to start: ${err.message}`); });
       proc.unref();
