@@ -2,9 +2,8 @@
 // helpers (scripts/lib/mulahazah-helpers.mjs).
 //
 // Tests:
-//   1. Heartbeat trigger — fires at >= 15 min elapsed regardless of tool calls
-//      (idle guard removed 2026-08-20: quiet sessions still need state capture);
-//      does NOT fire under 15 min.
+//   1. Heartbeat trigger — fires at >= 30 min elapsed with >= 1 tool call;
+//      does NOT fire under 30 min, or at >= 30 min with 0 tool calls (idle guard).
 //   2. Token burst trigger — fires at >= 1M new tokens since last write;
 //      does NOT fire below the threshold, with no baseline, or with no delta.
 //   3. Session entry + normalization — defaults, field preservation, bad input.
@@ -76,12 +75,11 @@ test("does NOT fire under the interval", () => {
   assert.strictEqual(hit, null, "1ms under the interval must not fire");
 });
 
-test("fires at >= the interval even with 0 tool calls (idle guard removed)", () => {
+test("does NOT fire at >= the interval with 0 tool calls (idle guard)", () => {
   const ss = createSessionEntry(1_000_000);
   ss.toolCallCount = 0;
   const hit = evaluateTrigger(ss, 1_000_000 + HEARTBEAT_INTERVAL_MS * 2, null);
-  assert.ok(hit, "idle session with no calls must still fire (session-end capture)");
-  assert.match(hit.reason, /heartbeat/);
+  assert.strictEqual(hit, null, "idle session with no calls must not fire");
 });
 
 test("measures from lastTriggerTime, not sessionStartTime, after a write", () => {

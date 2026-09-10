@@ -92,6 +92,7 @@ import {
   TOKEN_THRESHOLD,
   COOLDOWN_MS,
   STALE_RESET_MS,
+  FLAG_TTL_MS,
   createSessionEntry,
   normalizeEntry,
   formatTokens,
@@ -249,7 +250,7 @@ export const MulahazahPlugin = async ({ directory }) => {
     try {
       const now = Date.now();
       for (const [sid, entry] of sessionStates) {
-        const lastActivity = entry.lastTriggerTime ?? entry.sessionStartTime;
+        const lastActivity = entry.lastActivityTime ?? entry.sessionStartTime;
         if (now - lastActivity > STALE_RESET_MS) {
           sessionStates.delete(sid);
           try {
@@ -396,9 +397,47 @@ export const MulahazahPlugin = async ({ directory }) => {
     return null;
   }
 
+  // P1-4: Periodic flag TTL sweep — delete flags older than FLAG_TTL_MS.
+  // The startup sweep (P1-3) only runs once at load; it cannot catch flags
+  // orphaned AFTER load (a session that fires a trigger then dies without
+  // consuming its flag). This sweep runs on every heartbeat tick and deletes
+  // any flag that has sat unconsumed longer than FLAG_TTL_MS. A genuinely
+  // active session consumes its flag within minutes (next message turn), so
+  // anything older than the TTL is stale (dead or long-idle session). This is
+  // a safety net on top of the tool-call guard in evaluateTrigger, which stops
+  // dead sessions from re-firing in the first place.
+  async function sweepStaleFlags() {
+    try {
+      const entries = await fs.readdir(dataDir);
+      const now = Date.now();
+      for (const name of entries) {
+        if (!name.startsWith("MEMORY_TRIGGER_FLAG.")) continue;
+        const flagPath = join(dataDir, name);
+        try {
+          const st = await fs.stat(flagPath);
+          if (now - st.mtimeMs > FLAG_TTL_MS) {
+            await fs.unlink(flagPath);
+            if (process.env.MULAHAZAH_DEBUG) {
+              console.log(`[mulahazah] TTL sweep: deleted stale flag ${name} (${Math.round((now - st.mtimeMs) / 60000)}min old)`);
+            }
+          }
+        } catch (err) {
+          if (err.code !== "ENOENT") {
+            console.error(`[mulahazah] TTL sweep: failed to process ${name}: ${err.message}`);
+          }
+        }
+      }
+    } catch (err) {
+      if (err.code !== "ENOENT") {
+        console.error(`[mulahazah] TTL sweep failed: ${err.message}`);
+      }
+    }
+  }
+
   // Background heartbeat: checks every TIMER_CHECK_MS for sessions that crossed
   // the 30-min window or the token-burst threshold since their last write.
   async function runHeartbeatCheck() {
+    await sweepStaleFlags();
     const now = Date.now();
     let dirty = false;
     for (const [sid, ss] of sessionStates) {
@@ -539,6 +578,7 @@ export const MulahazahPlugin = async ({ directory }) => {
 
       ss.toolCallCount++;
       ss.toolCounts[tool] = (ss.toolCounts[tool] || 0) + 1;
+      ss.lastActivityTime = Date.now();
 
       appendObservation(tool, sessionID).catch((err) => console.error(`[mulahazah] background task failed: ${err.message}`));
 

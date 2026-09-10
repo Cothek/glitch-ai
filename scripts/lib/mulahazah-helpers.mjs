@@ -43,6 +43,7 @@ export const TIMER_CHECK_MS = 60 * 1000; // background timer cadence (60s)
 export const TOKEN_THRESHOLD = 1_000_000; // new tokens (in+out+reasoning) since last write
 export const COOLDOWN_MS = 5 * 60 * 1000; // phrase-trigger cooldown
 export const STALE_RESET_MS = 24 * 60 * 60 * 1000; // session staleness
+export const FLAG_TTL_MS = 2 * 60 * 60 * 1000; // orphaned flag TTL (2h) — safety net for flags never consumed
 
 export function createSessionEntry(now = Date.now()) {
   return {
@@ -50,6 +51,11 @@ export function createSessionEntry(now = Date.now()) {
     toolCounts: {},
     lastTriggerTime: null,
     sessionStartTime: now,
+    // lastActivityTime: last tool call (staleness anchor). Distinct from
+    // lastTriggerTime (heartbeat anchor) so that applyRestartWindowReset can
+    // reset the heartbeat window WITHOUT reviving a dead session's staleness
+    // clock. saveState prunes sessions whose lastActivityTime is > 24h old.
+    lastActivityTime: null,
     // isDispatcher: true only for sessions that can PROCESS a memory-trigger
     // flag. Normal primary sessions (glitch) call task() successfully and are
     // marked on first successful dispatch. glitch-omni sessions never call
@@ -74,6 +80,13 @@ export function normalizeEntry(raw, now = Date.now()) {
   e.toolCounts = raw.toolCounts && typeof raw.toolCounts === "object" ? raw.toolCounts : {};
   e.lastTriggerTime = typeof raw.lastTriggerTime === "number" ? raw.lastTriggerTime : null;
   e.sessionStartTime = typeof raw.sessionStartTime === "number" ? raw.sessionStartTime : now;
+  // lastActivityTime: infer from the old staleness signal (lastTriggerTime ??
+  // sessionStartTime) for entries persisted before this field existed, so a
+  // one-time migration doesn't leave legacy dead sessions unprunable.
+  e.lastActivityTime =
+    typeof raw.lastActivityTime === "number"
+      ? raw.lastActivityTime
+      : (e.lastTriggerTime ?? e.sessionStartTime);
   e.isDispatcher = raw.isDispatcher === true;
   e.agent = typeof raw.agent === "string" ? raw.agent : null;
   e.lastTokenBaseline =
@@ -148,9 +161,14 @@ export function evaluateTrigger(ss, now, tokens) {
   const anchor = ss.lastTriggerTime ?? ss.sessionStartTime;
   const elapsed = now - anchor;
 
-  // 1) Heartbeat: 15 min since last write. No tool-call guard — sessions
-  //    with zero tool calls still need conversation state recorded after 15 min.
-  if (elapsed >= HEARTBEAT_INTERVAL_MS) {
+  // 1) Heartbeat: 30 min since last write AND at least 1 tool call since.
+  //    The >=1 call guard prevents empty writes on idle/dead sessions — a
+  //    session with zero new tool calls has nothing new to record, and firing
+  //    anyway re-writes an orphaned flag every interval (observed 2026-09-10:
+  //    43 orphaned flags in ~18 min from dead sessions). Session-end capture
+  //    is still achieved: the last heartbeat with tool calls captures the
+  //    final work before the session goes quiet.
+  if (elapsed >= HEARTBEAT_INTERVAL_MS && ss.toolCallCount >= 1) {
     return {
       reason: `heartbeat: ${formatDuration(elapsed)} since last write, ${ss.toolCallCount} tool calls`,
       elapsed,

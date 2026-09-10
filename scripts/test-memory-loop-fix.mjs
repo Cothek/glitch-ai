@@ -765,15 +765,17 @@ async function testStaleCleanupNoFlag() {
     const mulahazahDir = join(dataDir, "mulahazah");
     mkdirSync(mulahazahDir, { recursive: true });
     const stateFile = join(mulahazahDir, "state.json");
-    const sid = newSessionID("stale");
+    const staleSid = newSessionID("stale");
+    const activeSid = newSessionID("active");
 
-    // Pre-seed a STALE session entry (last memory write 25h ago) with NO flag
+    // Pre-seed a STALE session entry (last activity 25h ago) with NO flag
     // file on disk — exactly the live scenario that produced the ENOENT
-    // warning. sessionStartTime is kept fresh (1h ago) so the plugin's
-    // load-time sweep does NOT revive the entry; saveState's stale-cleanup
-    // must delete it and swallow the missing-flag ENOENT.
+    // warning. lastActivityTime is inferred from lastTriggerTime (25h ago),
+    // so saveState's stale-cleanup must delete it and swallow the missing-flag
+    // ENOENT. applyRestartWindowReset resets the heartbeat anchor but must NOT
+    // revive the staleness clock (the 2026-09-10 state.json bloat bug).
     const preState = {
-      [sid]: {
+      [staleSid]: {
         toolCallCount: 3,
         toolCounts: { read: 3 },
         lastTriggerTime: Date.now() - 25 * 60 * 60 * 1000,
@@ -784,24 +786,25 @@ async function testStaleCleanupNoFlag() {
     writeFileSync(stateFile, JSON.stringify(preState), "utf8");
     assert(
       "precondition: no flag file on disk",
-      !existsSync(join(dataDir, `MEMORY_TRIGGER_FLAG.${sid}`))
+      !existsSync(join(dataDir, `MEMORY_TRIGGER_FLAG.${staleSid}`))
     );
 
     const plugin = await MulahazahPlugin({ directory: tmp });
 
-    // Drive 10 calls to force a saveState (every-10th-call persistence).
-    await driveCalls(plugin, sid, "read", { filePath: "/tmp/x" }, 10);
+    // Drive 10 calls on a DIFFERENT (active) session to force a saveState
+    // (every-10th-call persistence) without making the stale session active.
+    await driveCalls(plugin, activeSid, "read", { filePath: "/tmp/x" }, 10);
     await settleIO();
 
     const stateAfter = JSON.parse(readFileSync(stateFile, "utf8"));
     assert(
       "stale session entry removed from state.json",
-      !(sid in stateAfter),
-      `stale entry still present: ${JSON.stringify(stateAfter[sid])}`
+      !(staleSid in stateAfter),
+      `stale entry still present: ${JSON.stringify(stateAfter[staleSid])}`
     );
     assert(
       "no flag file created for stale session",
-      !existsSync(join(dataDir, `MEMORY_TRIGGER_FLAG.${sid}`))
+      !existsSync(join(dataDir, `MEMORY_TRIGGER_FLAG.${staleSid}`))
     );
   });
 }
