@@ -169,6 +169,20 @@ function getProcessName(pid) {
   }
 }
 
+function getProcessDetails(pid) {
+  if (!pid || !Number.isInteger(pid) || pid <= 0) return null;
+  try {
+    if (process.platform !== 'win32') return null;
+    const ps = execFileSync('powershell', [
+      '-NoProfile', '-Command',
+      `Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}' | Select-Object Name,CommandLine | Format-List; (Get-Process -Id ${pid} -IncludeUserName -ErrorAction SilentlyContinue).UserName`
+    ], { encoding: 'utf-8', timeout: 5000, maxBuffer: 1024 * 1024 });
+    return ps.trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 function isProcessAlive(pid) {
   if (!pid) return false;
   try {
@@ -640,6 +654,8 @@ export async function launchServer(options = {}) {
     if (pid && name && (ALL_KNOWN_PROCESS_NAMES.has(name) || isGlitchServiceByPidFile)) {
       const isGlitchSpecific = GLITCH_SPECIFIC_PROCESS_NAMES.has(name) || isGlitchServiceByPidFile;
       log(YELLOW, `  Port ${port} is held by ${name} (PID ${pid}) — likely an orphaned Glitch process.`);
+      const details = getProcessDetails(pid);
+      if (details) log(YELLOW, `  Process details:\n${details}`);
 
       // Decide whether to kill. Two gates:
       //   1. TTY gate (m2): only prompt interactively when stdin is a TTY.
@@ -716,11 +732,14 @@ export async function launchServer(options = {}) {
       log(YELLOW, `  Final fallback: force-killing PID ${lastPid} holding port ${port}...`);
       try {
         if (isWin) {
-          execFileSync('taskkill', ['/PID', String(lastPid), '/T', '/F'], { stdio: 'ignore', timeout: 5000 });
+          execFileSync('taskkill', ['/PID', String(lastPid), '/T', '/F'], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf-8', timeout: 5000 });
         } else {
           execFileSync('kill', ['-9', String(lastPid)], { stdio: 'ignore', timeout: 5000 });
         }
-      } catch (e) { log(YELLOW, `  Force-kill failed: ${e.message}`); }
+      } catch (e) {
+        log(RED, `  Force-kill failed: ${e.message}`);
+        if (e.stderr) log(RED, `  taskkill stderr: ${e.stderr.trim()}`);
+      }
       await new Promise(r => setTimeout(r, 2000));
       const nowFree = await checkPort(port);
       if (nowFree) {
