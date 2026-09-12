@@ -110,6 +110,18 @@ function checkPort(port) {
   });
 }
 
+async function waitForPortFree(port, timeoutMs = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    if (await checkPort(port)) {
+      log(GREEN, `  Port ${port} freed (lingering socket cleared).`);
+      return true;
+    }
+    await new Promise(r => setTimeout(r, 1000));
+  }
+  return false;
+}
+
 async function waitForPort(port, maxWaitMs = 5000, intervalMs = 500) {
   const deadline = Date.now() + maxWaitMs;
   while (Date.now() < deadline) {
@@ -698,6 +710,10 @@ export async function launchServer(options = {}) {
     }
 
     // Either unknown process, user declined, or kill failed — show the error.
+    if (pid) {
+      const details = getProcessDetails(pid);
+      if (details) log(YELLOW, `  Process details:\n${details}`);
+    }
     log(RED, `  ERROR: Port ${port} is in use (likely orphan TCP socket from previous crash).`);
     if (pid && name) {
       log(YELLOW, `  Held by: ${name} (PID ${pid}). Close that process or kill it manually.`);
@@ -729,24 +745,35 @@ export async function launchServer(options = {}) {
     // needs the port freed.
     const lastPid = getPortPid(port);
     if (lastPid && lastPid > 0) {
-      log(YELLOW, `  Final fallback: force-killing PID ${lastPid} holding port ${port}...`);
-      try {
-        if (isWin) {
-          execFileSync('taskkill', ['/PID', String(lastPid), '/T', '/F'], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf-8', timeout: 5000 });
-        } else {
-          execFileSync('kill', ['-9', String(lastPid)], { stdio: 'ignore', timeout: 5000 });
+      const name = getProcessName(lastPid);
+      if (!name) {
+        // Process already dead — the port is held by a lingering socket that will
+        // clear on its own. Wait for it instead of trying to taskkill a dead process.
+        log(YELLOW, `  Port ${port} held by a dying process (PID ${lastPid} already exited) — waiting for lingering socket to clear...`);
+        if (await waitForPortFree(port, 30000)) {
+          return true;
         }
-      } catch (e) {
-        log(RED, `  Force-kill failed: ${e.message}`);
-        if (e.stderr) log(RED, `  taskkill stderr: ${e.stderr.trim()}`);
+        log(RED, `  Port ${port} still not free after waiting for lingering socket.`);
+      } else {
+        log(YELLOW, `  Final fallback: force-killing PID ${lastPid} (${name}) holding port ${port}...`);
+        try {
+          if (isWin) {
+            execFileSync('taskkill', ['/PID', String(lastPid), '/T', '/F'], { stdio: ['ignore', 'ignore', 'pipe'], encoding: 'utf-8', timeout: 5000 });
+          } else {
+            execFileSync('kill', ['-9', String(lastPid)], { stdio: 'ignore', timeout: 5000 });
+          }
+        } catch (e) {
+          log(RED, `  Force-kill failed: ${e.message}`);
+          if (e.stderr) log(RED, `  taskkill stderr: ${e.stderr.trim()}`);
+        }
+        await new Promise(r => setTimeout(r, 2000));
+        const nowFree = await checkPort(port);
+        if (nowFree) {
+          log(GREEN, `  Port ${port} freed by final force-kill of PID ${lastPid}.`);
+          return true;
+        }
+        log(RED, `  Port ${port} STILL in use after force-killing PID ${lastPid}.`);
       }
-      await new Promise(r => setTimeout(r, 2000));
-      const nowFree = await checkPort(port);
-      if (nowFree) {
-        log(GREEN, `  Port ${port} freed by final force-kill of PID ${lastPid}.`);
-        return true;
-      }
-      log(RED, `  Port ${port} STILL in use after force-killing PID ${lastPid}.`);
     }
     return false;
   }
