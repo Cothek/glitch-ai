@@ -127,6 +127,53 @@ export function createConfigManager(configPath) {
   return { get, set, validate };
 }
 
+// ── Secrets (API keys) ──
+
+/**
+ * Secrets manager — stores provider API keys in data/secrets.json,
+ * namespaced under "browser-use" so they don't collide with other
+ * Glitch secrets (e.g. price-tracker). Keys are NEVER returned in full
+ * by the API — only masked. Structure:
+ *   { "browser-use": { "<provider-id>": "<api-key>", ... } }
+ */
+export function createSecretsManager(secretsPath) {
+  function load() {
+    return readJson(secretsPath) || {};
+  }
+
+  function save(secrets) {
+    writeJson(secretsPath, secrets);
+  }
+
+  function getKey(namespace, id) {
+    const secrets = load();
+    return secrets[namespace]?.[id] || '';
+  }
+
+  function setKey(namespace, id, key) {
+    const secrets = load();
+    if (!secrets[namespace]) secrets[namespace] = {};
+    secrets[namespace][id] = key;
+    save(secrets);
+  }
+
+  function deleteKey(namespace, id) {
+    const secrets = load();
+    if (secrets[namespace]) {
+      delete secrets[namespace][id];
+      if (Object.keys(secrets[namespace]).length === 0) delete secrets[namespace];
+      save(secrets);
+    }
+  }
+
+  function hasKey(namespace, id) {
+    const secrets = load();
+    return !!(secrets[namespace]?.[id]);
+  }
+
+  return { load, save, getKey, setKey, deleteKey, hasKey };
+}
+
 // ── History ──
 
 export function createHistoryManager(historyPath) {

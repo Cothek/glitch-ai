@@ -8,6 +8,13 @@ description: "MUST use when user says 'browse to', 'open website', 'search for',
 ## Activation
 When this skill activates, check if browser-use plugin is running (GET /api/status on port 4105).
 
+## Settings UI (Web)
+A web UI for managing providers and API keys is served at:
+```
+http://localhost:4105/
+```
+It lets the user (Troy) enter/edit API keys per provider, select the active provider/model, test connections, and add new providers — no config-file editing needed. API keys entered here are stored in `data/secrets.json` (gitignored), NOT in config.json.
+
 ## When to Use
 - Web research across multiple sites
 - Form filling with user data
@@ -404,6 +411,18 @@ DELETE http://localhost:4105/api/providers/my-provider
 ```
 Cannot delete the active provider — switch first.
 
+#### Save an API Key (to secrets.json)
+```
+POST http://localhost:4105/api/providers/my-provider/key
+{ "apiKey": "sk-..." }
+```
+Stores the key in `data/secrets.json` under `browser-use.<provider-id>`. This is the recommended way to set keys — they stay out of config.json and out of git.
+
+#### Remove an API Key
+```
+DELETE http://localhost:4105/api/providers/my-provider/key
+```
+
 #### OpenCode Go / NVIDIA / Any OpenAI-Compatible Endpoint
 Use type `openai-compatible` with a custom `baseUrl`:
 ```json
@@ -417,8 +436,10 @@ Use type `openai-compatible` with a custom `baseUrl`:
   "vision": false
 }
 ```
+NVIDIA free endpoints: `baseUrl` = `https://integrate.api.nvidia.com/v1`, type `openai-compatible`, requires a free NVIDIA NIM API key from build.nvidia.com.
 
 #### API Key Resolution Priority
-1. `provider.apiKey` in config (if set)
-2. Environment variable (e.g. `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`)
-3. Error thrown if neither is available
+1. `data/secrets.json` → `browser-use.<provider-id>` (set via the settings UI or `/api/providers/:id/key`)
+2. `provider.apiKey` in config (inline, backward compat)
+3. Environment variable (e.g. `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`)
+4. Error thrown if none is available

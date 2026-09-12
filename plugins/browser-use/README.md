@@ -153,9 +153,21 @@ curl -X POST http://localhost:4105/api/providers \
 ```
 
 **API key resolution priority:**
-1. `provider.apiKey` in config (if set)
-2. Environment variable (e.g. `OPENROUTER_API_KEY`)
-3. Error if neither available
+1. `data/secrets.json` → `browser-use.<provider-id>` (set via the settings UI or `/api/providers/:id/key`)
+2. `provider.apiKey` in config (inline, backward compat)
+3. Environment variable (e.g. `OPENROUTER_API_KEY`)
+4. Error if none available
+
+### Settings UI (Web)
+
+A web UI for managing providers and API keys is served at **http://localhost:4105/** once the server is running. It lets you:
+
+- Enter/edit API keys per provider (stored in `data/secrets.json`, gitignored)
+- Select the active provider + model
+- Test provider connections
+- Add new providers
+
+No config-file editing needed.
 
 ### Options
 
@@ -345,13 +357,16 @@ curl http://localhost:4105/api/sessions
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
-| `/api/providers` | GET | List all providers (API keys masked) |
+| `/api/providers` | GET | List all providers (API keys masked, `has_key` flag) |
 | `/api/providers` | POST | Add a new provider |
 | `/api/providers/:id` | PUT | Update a provider (partial) |
 | `/api/providers/:id` | DELETE | Remove a provider |
 | `/api/providers/:id/test` | POST | Test provider connection |
+| `/api/providers/:id/key` | POST | Save API key to `data/secrets.json` |
+| `/api/providers/:id/key` | DELETE | Remove API key from `data/secrets.json` |
 | `/api/llm/select` | POST | Set active provider + model |
 | `/api/llm/status` | GET | Current active provider info |
+| `/` | GET | Settings UI (web) |
 
 **Example: Add and test a provider**
 ```bash

@@ -48,15 +48,17 @@
  */
 
 import http from 'node:http';
-import { readdirSync, statSync, writeFileSync, existsSync } from 'node:fs';
+import { readdirSync, statSync, writeFileSync, readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createLogger, ensureDir, readJson, writeJson,
   createConfigManager, createHistoryManager,
   createActionRegistry, createScheduler, exportHistory,
+  createSecretsManager,
   isDomainAllowed, sleep, maskSensitive, maskObject, ROOT_DIR,
 } from './helpers.mjs';
+import { createOpenAICompatibleLLM } from './openai-compatible-adapter.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -67,11 +69,15 @@ const HISTORY_PATH = join(ROOT_DIR, 'data', 'browser-use', 'history.json');
 const SCREENSHOTS_DIR = join(ROOT_DIR, 'data', 'browser-use', 'screenshots');
 const ACTIONS_PATH = join(ROOT_DIR, 'data', 'browser-use', 'actions.json');
 const SCHEDULE_PATH = join(ROOT_DIR, 'data', 'browser-use', 'schedule.json');
+const SECRETS_PATH = join(ROOT_DIR, 'data', 'secrets.json');
+const SETTINGS_HTML_PATH = join(__dirname, 'settings.html');
+const SECRETS_NAMESPACE = 'browser-use';
 
 const log = createLogger(LOG_PATH);
 const configManager = createConfigManager(CONFIG_PATH);
 const historyManager = createHistoryManager(HISTORY_PATH);
 const actionRegistry = createActionRegistry(ACTIONS_PATH);
+const secretsManager = createSecretsManager(SECRETS_PATH);
 
 // ── Browser Use Integration ──
 
@@ -184,7 +190,12 @@ function migrateLegacyConfig(config) {
 }
 
 function resolveApiKey(provider) {
+  // 1. secrets.json (user-entered via settings UI) — highest priority
+  const secretKey = secretsManager.getKey(SECRETS_NAMESPACE, provider.id);
+  if (secretKey && secretKey.trim()) return secretKey.trim();
+  // 2. inline config apiKey — backward compat
   if (provider.apiKey && provider.apiKey.trim()) return provider.apiKey.trim();
+  // 3. environment variable
   const envKey = ENV_KEY_MAP[provider.type];
   if (envKey && process.env[envKey]) return process.env[envKey];
   if (provider.type === 'openai-compatible' && process.env.OPENAI_API_KEY) return process.env.OPENAI_API_KEY;
@@ -230,10 +241,19 @@ async function createLLM(config) {
   }
 
   switch (type) {
-    case 'openai':
-    case 'openai-compatible': {
+    case 'openai': {
       const { ChatOpenAI } = await import('browser-use/llm/openai');
       return new ChatOpenAI({ model, apiKey, baseURL: provider.baseUrl || undefined });
+    }
+    case 'openai-compatible': {
+      // NVIDIA NIM, OpenCode Go, LM Studio, vLLM, etc. — use the custom adapter
+      // that speaks the older OpenAI dialect (max_tokens, no frequency_penalty,
+      // json_object response_format) these endpoints accept.
+      return await createOpenAICompatibleLLM({
+        model,
+        apiKey,
+        baseUrl: provider.baseUrl,
+      });
     }
     case 'openrouter': {
       const { ChatOpenRouter } = await import('browser-use/llm/openrouter');
@@ -450,6 +470,19 @@ async function handler(req, res) {
   const method = req.method;
 
   try {
+    // ── GET / — serve settings UI ──
+    if (method === 'GET' && (pathname === '/' || pathname === '/settings')) {
+      try {
+        const html = readFileSync(SETTINGS_HTML_PATH, 'utf-8');
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+      } catch {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end('<h1>Browser Use Settings</h1><p>settings.html not found. Run the installer to regenerate it.</p>');
+      }
+      return;
+    }
+
     // ── GET /api/status ──
     if (method === 'GET' && pathname === '/api/status') {
       const config = configManager.get();
@@ -1180,6 +1213,7 @@ async function handler(req, res) {
       const masked = providers.map(p => ({
         ...p,
         apiKey: maskSensitive(p.apiKey || ''),
+        has_key: secretsManager.hasKey(SECRETS_NAMESPACE, p.id),
       }));
       sendJson(res, 200, {
         providers: masked,
@@ -1187,6 +1221,38 @@ async function handler(req, res) {
         active_model: migrated?.llm?.active_model || null,
         supported_types: SUPPORTED_PROVIDER_TYPES,
       });
+      return;
+    }
+
+    // ── POST /api/providers/:id/key — save API key to secrets.json ──
+    if (method === 'POST' && pathname.match(/^\/api\/providers\/[^/]+\/key$/)) {
+      const providerId = pathname.split('/api/providers/')[1].split('/')[0];
+      const config = configManager.get();
+      const migrated = migrateLegacyConfig(config);
+      const providers = migrated?.llm?.providers || [];
+      const provider = providers.find(p => p.id === providerId);
+      if (!provider) {
+        sendJson(res, 404, { error: `Provider "${providerId}" not found` });
+        return;
+      }
+      const body = await parseBody(req);
+      const key = body?.apiKey;
+      if (typeof key !== 'string' || key.trim().length === 0) {
+        sendJson(res, 400, { error: 'apiKey is required and must be a non-empty string' });
+        return;
+      }
+      secretsManager.setKey(SECRETS_NAMESPACE, providerId, key.trim());
+      log('INFO', 'API key saved', { provider: providerId, key: maskSensitive(key.trim()) });
+      sendJson(res, 200, { success: true, message: `API key saved for "${providerId}"`, has_key: true });
+      return;
+    }
+
+    // ── DELETE /api/providers/:id/key — remove API key from secrets.json ──
+    if (method === 'DELETE' && pathname.match(/^\/api\/providers\/[^/]+\/key$/)) {
+      const providerId = pathname.split('/api/providers/')[1].split('/')[0];
+      secretsManager.deleteKey(SECRETS_NAMESPACE, providerId);
+      log('INFO', 'API key removed', { provider: providerId });
+      sendJson(res, 200, { success: true, message: `API key removed for "${providerId}"`, has_key: false });
       return;
     }
 
@@ -1352,8 +1418,9 @@ async function handler(req, res) {
       try {
         const llm = await createLLM(testConfig);
         if (llm && typeof llm.ainvoke === 'function') {
+          const { UserMessage } = await import('browser-use/llm/messages');
           await Promise.race([
-            llm.ainvoke([{ role: 'user', content: 'ping' }]),
+            llm.ainvoke([new UserMessage('ping')]),
             new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out after 15s')), 15000)),
           ]);
         }
