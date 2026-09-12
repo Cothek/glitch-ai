@@ -125,6 +125,19 @@ export function isWedged(part, now, thresholdMs) {
 }
 
 /**
+ * Detached launchers (start-detached.ps1) return immediately after spawning a
+ * detached child process. The bash tool's DB part can remain in `running` state
+ * (stale) because the detached child keeps stdio handles open, so the watchdog
+ * would otherwise flag these as "wedged" and abort the session — a false
+ * positive. Skip them.
+ * @param {string} command
+ * @returns {boolean}
+ */
+export function isDetachedLauncher(command) {
+  return /start-detached\.ps1/i.test(command || '');
+}
+
+/**
  * Build a map of parent→children from process list.
  * @param {{ pid: number, ppid: number }[]} processes
  * @returns {Map<number, number[]>} parentPid → childPids
@@ -377,9 +390,14 @@ async function pollOnce() {
   const wedged = [];
   for (const row of rows) {
     const parsed = parseBashPart(row.data, row.session_id);
-    if (parsed && isWedged(parsed, now, THRESHOLD_MS)) {
-      wedged.push(parsed);
+    if (!parsed || !isWedged(parsed, now, THRESHOLD_MS)) continue;
+    if (isDetachedLauncher(parsed.command)) {
+      // Detached launcher — command completed immediately; DB state is stale.
+      // Do NOT abort the session (false positive).
+      log(`SKIP detached launcher (stale running state): session=${parsed.sessionID} command="${parsed.command.slice(0, 80)}"`);
+      continue;
     }
+    wedged.push(parsed);
   }
 
   if (wedged.length === 0) return;

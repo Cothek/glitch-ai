@@ -5,6 +5,7 @@
 import {
   parseBashPart,
   isWedged,
+  isDetachedLauncher,
   buildParentMap,
   buildDescendants,
   findHungProcess,
@@ -111,6 +112,18 @@ assert(isWedged(part, 1000000 + threshold, threshold) === false, 'false when exa
 assert(isWedged(part, 1000000 + 1000, threshold) === false, 'false when only 1s elapsed');
 // Edge: start time is very old, threshold is short — always wedged
 assert(isWedged(part, 1000000 + threshold * 100, threshold) === true, 'true when start is very old');
+
+// ============================================================
+// isDetachedLauncher
+// ============================================================
+console.log('\n--- isDetachedLauncher ---');
+
+assert(isDetachedLauncher('& "E:\\Glitch AI\\glitch-ai\\scripts\\start-detached.ps1" -Command "node server.mjs" -Name "browser-use"') === true, 'true for start-detached.ps1');
+assert(isDetachedLauncher('powershell start-detached.ps1 -Command "node x"') === true, 'true for start-detached.ps1 (no path)');
+assert(isDetachedLauncher('node server.mjs') === false, 'false for plain node command');
+assert(isDetachedLauncher('python main.py') === false, 'false for plain python command');
+assert(isDetachedLauncher('') === false, 'false for empty command');
+assert(isDetachedLauncher(undefined) === false, 'false for undefined command');
 
 // ============================================================
 // buildParentMap
