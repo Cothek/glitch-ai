@@ -112,12 +112,41 @@ function checkPort(port) {
 
 async function waitForPortFree(port, timeoutMs = 30000) {
   const start = Date.now();
+  const intervalSec = 5; // log diagnostics every 5s
+  let lastLogTime = 0;
   while (Date.now() - start < timeoutMs) {
     if (await checkPort(port)) {
-      log(GREEN, `  Port ${port} freed (lingering socket cleared).`);
+      log(GREEN, `  Port ${port} freed (lingering socket cleared) after ${((Date.now() - start) / 1000).toFixed(1)}s.`);
       return true;
     }
+    const elapsed = Date.now() - start;
+    const elapsedSec = (elapsed / 1000).toFixed(1);
+    // Log netstat diagnostics every 5s so we can see if the LISTENING entry is clearing
+    if (elapsed - lastLogTime >= intervalSec * 1000) {
+      lastLogTime = elapsed;
+      const entry = getNetstatEntry(port);
+      if (entry) {
+        log(YELLOW, `  [${elapsedSec}s] Port ${port} still in use — netstat:\n    ${entry.replace(/\n/g, '\n    ')}`);
+      } else {
+        log(YELLOW, `  [${elapsedSec}s] Port ${port} still in use — no netstat LISTENING entry found (socket may be clearing...)`);
+      }
+      // Also re-check if the process is still alive
+      const pid = getPortPid(port);
+      if (pid) {
+        const name = getProcessName(pid);
+        log(YELLOW, `  [${elapsedSec}s] Port ${port} held by PID ${pid} (${name || 'unknown/dead'})`);
+      }
+    }
     await new Promise(r => setTimeout(r, 1000));
+  }
+  // Final diagnostic on timeout
+  const finalEntry = getNetstatEntry(port);
+  const finalPid = getPortPid(port);
+  log(RED, `  Port ${port} not freed after ${timeoutMs / 1000}s timeout.`);
+  if (finalEntry) log(RED, `  Final netstat: ${finalEntry}`);
+  if (finalPid) {
+    const name = getProcessName(finalPid);
+    log(RED, `  Final holder: PID ${finalPid} (${name || 'unknown/dead'})`);
   }
   return false;
 }
@@ -181,13 +210,34 @@ function getProcessName(pid) {
   }
 }
 
+/**
+ * Get the raw netstat entry for a specific port on Windows.
+ * Returns the matching line(s) from `netstat -ano` for diagnostic logging,
+ * or null if nothing found. Helps diagnose stuck sockets during port-clear waits.
+ */
+function getNetstatEntry(port) {
+  if (process.platform !== 'win32') return null;
+  try {
+    const out = execFileSync('netstat', ['-ano'], { encoding: 'utf-8', timeout: 5000, maxBuffer: 10 * 1024 * 1024 });
+    const re = new RegExp(`[:\\s]${port}\\s+.+`, 'gim');
+    const matches = out.match(re);
+    if (!matches || matches.length === 0) return null;
+    // Return only lines that contain port number (filter noise)
+    return matches.filter(l => l.includes(`:${port}`) || l.includes(` ${port} `)).join('\n');
+  } catch {
+    return null;
+  }
+}
+
 function getProcessDetails(pid) {
   if (!pid || !Number.isInteger(pid) || pid <= 0) return null;
   try {
     if (process.platform !== 'win32') return null;
+    // Use only Get-CimInstance (no admin required). Get-Process -IncludeUserName
+    // requires elevation and produces noisy stderr when run without admin.
     const ps = execFileSync('powershell', [
       '-NoProfile', '-Command',
-      `Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}' | Select-Object Name,CommandLine | Format-List; (Get-Process -Id ${pid} -IncludeUserName -ErrorAction SilentlyContinue).UserName`
+      `Get-CimInstance Win32_Process -Filter 'ProcessId=${pid}' | Select-Object Name,CommandLine,CreationDate | Format-List`
     ], { encoding: 'utf-8', timeout: 5000, maxBuffer: 1024 * 1024 });
     return ps.trim() || null;
   } catch {
@@ -709,6 +759,22 @@ export async function launchServer(options = {}) {
       }
     }
 
+    // Dead-process detection: if netstat shows a LISTENING entry for a PID
+    // that no longer exists in tasklist, the port is held by a lingering OS
+    // socket. Wait for it to clear instead of immediately showing the error.
+    // This is the common case on Windows after taskkill /F — the process exits
+    // but the TCP stack takes time to release the socket.
+    if (pid && !name) {
+      log(YELLOW, `  Port ${port} held by dead process (PID ${pid} not found in tasklist) — waiting for OS to release socket...`);
+      const entry = getNetstatEntry(port);
+      if (entry) log(DARK_GRAY, `  netstat: ${entry.split('\n')[0]?.trim() || entry}`);
+      // Wait up to 15s for the socket to clear (shorter than the 30s final fallback)
+      if (await waitForPortFree(port, 15000)) {
+        return true;
+      }
+      log(RED, `  Port ${port} still in use after waiting for dead process socket to clear.`);
+    }
+
     // Either unknown process, user declined, or kill failed — show the error.
     if (pid) {
       const details = getProcessDetails(pid);
@@ -750,7 +816,7 @@ export async function launchServer(options = {}) {
         // Process already dead — the port is held by a lingering socket that will
         // clear on its own. Wait for it instead of trying to taskkill a dead process.
         log(YELLOW, `  Port ${port} held by a dying process (PID ${lastPid} already exited) — waiting for lingering socket to clear...`);
-        if (await waitForPortFree(port, 30000)) {
+        if (await waitForPortFree(port, 60000)) {
           return true;
         }
         log(RED, `  Port ${port} still not free after waiting for lingering socket.`);
@@ -1129,6 +1195,15 @@ export async function launchServer(options = {}) {
     }
   }
 
+  if (process.env.GLITCH_ENABLE_ANTIGRAVITY === '1' || process.env.GLITCH_ENABLE_ANTIGRAVITY === 'true') {
+    try {
+      const { startAntigravity } = await import('../addons/antigravity.mjs');
+      await startAntigravity(ROOT_DIR);
+    } catch (e) {
+      log(YELLOW, `  Antigravity add-on error: ${e.message}`);
+    }
+  }
+
   // ---- Start enabled plugins ----
   log(CYAN, '  Starting enabled plugins...');
   try {
@@ -1163,8 +1238,11 @@ export async function launchServer(options = {}) {
   if (cloudflareDomain) {
     log(GREEN, `    Model Switcher (tunnel): https://${cloudflareDomain}/models?auth_token=${authToken}`);
   }
-  if (process.env.GLITCH_ENABLE_MONEY === '1' || process.env.GLITCH_ENABLE_MONEY === 'true') {
-    log(GREEN,   `    Money dashboard:  http://localhost:4110`);
+if (process.env.GLITCH_ENABLE_MONEY === '1' || process.env.GLITCH_ENABLE_MONEY === 'true') {
+    log(GREEN, `    Money dashboard:  http://localhost:4110`);
+  }
+  if (process.env.GLITCH_ENABLE_ANTIGRAVITY === '1' || process.env.GLITCH_ENABLE_ANTIGRAVITY === 'true') {
+    log(GREEN, `    Antigravity CLI:  configured (headless mode ready)`);
   }
   log(GREEN,   `    Sessions API:     http://localhost:4191`);
   log(GREEN,   `    Local:  http://localhost:${TARGET_PORT}/${dirSlug}/`);
