@@ -3,6 +3,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { fileURLToPath } from 'url';
+import { discoverLocalModels, mergeIntoProviders } from '../../scripts/discover-local-models.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -85,9 +86,9 @@ function normalizeNvidiaModelId(modelId) {
  * Read the shared providers file and inject them into a runtime config object.
  *
  * @param {object} config - Parsed JSON config object (e.g., from a template)
- * @returns {object} - The config object with providers merged in (mutated)
+ * @returns {Promise<object>} - The config object with providers merged in (mutated)
  */
-export function injectProviders(config) {
+export async function injectProviders(config) {
   if (!config) return config;
   if (!existsSync(PROVIDERS_PATH)) {
     console.warn('  [WARN] providers.json not found, skipping provider injection');
@@ -95,6 +96,45 @@ export function injectProviders(config) {
   }
   try {
     const providers = readJsonStripBom(PROVIDERS_PATH);
+
+    // Discover local models from LM Studio and FreeToken (WSL)
+    // This must happen before the nvidia sync to ensure local models are available
+    try {
+      const localModels = await discoverLocalModels();
+      if (Object.keys(localModels).length > 0) {
+        // Merge discovered models into freetoken provider
+        if (!providers.freetoken) {
+          providers.freetoken = {
+            npm: '@ai-sdk/openai-compatible',
+            name: 'Local Models (FreeToken/LM Studio)',
+            options: {
+              baseURL: 'http://localhost:1919/v1',
+            },
+            models: {},
+          };
+        }
+        
+        const existingModels = providers.freetoken.models || {};
+        let added = 0;
+        for (const [key, model] of Object.entries(localModels)) {
+          if (!(key in existingModels)) {
+            existingModels[key] = model;
+            added++;
+          } else {
+            // Update last_seen for existing entries
+            existingModels[key].last_seen = model.last_seen;
+          }
+        }
+        
+        providers.freetoken.models = existingModels;
+        if (added > 0) {
+          console.log(`  [DISCOVER] Added ${added} local model(s) to freetoken provider`);
+        }
+      }
+    } catch (error) {
+      console.warn(`  [DISCOVER] Local model discovery failed: ${error.message}`);
+      // Continue with existing config
+    }
 
     // Read registry once — used by the CULL freshness check.
     let registryModels = null;
@@ -283,7 +323,11 @@ if (process.argv[1] && (process.argv[1] === __filename || process.argv[1].endsWi
   }
 
   const config = readJsonStripBom(targetPath);
-  injectProviders(config);
-  writeFileSync(targetPath, JSON.stringify(config, null, 2), 'utf-8');
-  console.log(`Providers injected into ${targetPath}`);
+  injectProviders(config).then(() => {
+    writeFileSync(targetPath, JSON.stringify(config, null, 2), 'utf-8');
+    console.log(`Providers injected into ${targetPath}`);
+  }).catch(error => {
+    console.error(`Failed to inject providers: ${error.message}`);
+    process.exit(1);
+  });
 }

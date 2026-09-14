@@ -1,4 +1,4 @@
-﻿{
+{
   "nvidia": {
     "npm": "@ai-sdk/openai-compatible",
     "name": "NVIDIA API (free endpoints)",
@@ -41,6 +41,27 @@
       "z-ai/glm-5.1": {
         "name": "GLM 5.1 (free)",
         "context_length": 1000000
+      }
+    }
+  },
+  "freetoken": {
+    "npm": "@ai-sdk/openai-compatible",
+    "name": "Local Models (FreeToken/LM Studio)",
+    "options": {
+      "baseURL": "http://localhost:1919/v1"
+    },
+    "models": {
+      "freetoken-wsl/qwen/qwen3.8-27b": {
+        "name": "Qwen/Qwen3.8 27b",
+        "context_length": 32768,
+        "backend": "freetoken-wsl",
+        "last_seen": "2026-09-14T22:32:59.651Z"
+      },
+      "freetoken-wsl/text-embedding-nomic-embed-text-v1.5": {
+        "name": "Text Embedding Nomic Embed Text V1.5",
+        "context_length": 32768,
+        "backend": "freetoken-wsl",
+        "last_seen": "2026-09-14T22:32:59.651Z"
       }
     }
   }
