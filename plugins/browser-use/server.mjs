@@ -1419,9 +1419,11 @@ async function handler(req, res) {
         const llm = await createLLM(testConfig);
         if (llm && typeof llm.ainvoke === 'function') {
           const { UserMessage } = await import('browser-use/llm/messages');
+          // Reasoning models (e.g. kimi-k3) can take 60s+ per call — use a generous timeout
+          const testTimeoutMs = Number(process.env.BROWSER_USE_TEST_TIMEOUT_MS) || (migrated.llm.test_timeout_seconds || 90) * 1000;
           await Promise.race([
             llm.ainvoke([new UserMessage('ping')]),
-            new Promise((_, reject) => setTimeout(() => reject(new Error('Connection timed out after 15s')), 15000)),
+            new Promise((_, reject) => setTimeout(() => reject(new Error(`Connection timed out after ${Math.round(testTimeoutMs / 1000)}s`)), testTimeoutMs)),
           ]);
         }
         log('INFO', 'Provider test succeeded', { id: providerId });
