@@ -53,15 +53,21 @@
     "models": {
       "qwen/qwen3.8-27b": {
         "name": "Qwen/Qwen3.8 27b",
-        "context_length": 32768,
+        "limit": {
+          "context": 32768,
+          "output": 8192
+        },
         "backend": "freetoken-wsl",
-        "last_seen": "2026-09-15T15:17:23.677Z"
+        "last_seen": "2026-09-15T18:25:04.569Z"
       },
       "text-embedding-nomic-embed-text-v1.5": {
         "name": "Text Embedding Nomic Embed Text V1.5",
-        "context_length": 32768,
+        "limit": {
+          "context": 32768,
+          "output": 8192
+        },
         "backend": "freetoken-wsl",
-        "last_seen": "2026-09-15T15:17:23.678Z"
+        "last_seen": "2026-09-15T18:25:04.569Z"
       }
     }
   }

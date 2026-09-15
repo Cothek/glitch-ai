@@ -172,7 +172,10 @@ export async function discoverLocalModels() {
   for (const entry of Object.values(merged)) {
     models[entry.id] = {
       name: entry.id.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
-      context_length: 32768, // Default for local models
+      limit: {
+        context: 32768,
+        output: 8192,
+      },
       backend: entry.backend,
       last_seen: entry.last_seen,
     };
