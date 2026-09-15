@@ -98,40 +98,13 @@ export async function injectProviders(config) {
     const providers = readJsonStripBom(PROVIDERS_PATH);
 
     // Discover local models from LM Studio and FreeToken (WSL)
-    // This must happen before the nvidia sync to ensure local models are available
+    // This must happen before the nvidia sync to ensure local models are available.
+    // Each backend gets its own provider entry (lmstudio, freetoken-wsl) with
+    // the correct baseURL for that endpoint.
     try {
       const localModels = await discoverLocalModels();
       if (Object.keys(localModels).length > 0) {
-        // Merge discovered models into freetoken provider
-        if (!providers.freetoken) {
-          providers.freetoken = {
-            npm: '@ai-sdk/openai-compatible',
-            name: 'Local Models (FreeToken/LM Studio)',
-            options: {
-              baseURL: 'http://localhost:1919/v1',
-            },
-            models: {},
-          };
-        }
-        
-        const existingModels = providers.freetoken.models || {};
-        let added = 0;
-        for (const [key, model] of Object.entries(localModels)) {
-          // key is the raw model ID from /v1/models — matches OpenCode's lookup
-          if (!(key in existingModels)) {
-            existingModels[key] = model;
-            added++;
-          } else {
-            // Update last_seen and backend for existing entries
-            existingModels[key].last_seen = model.last_seen;
-            existingModels[key].backend = model.backend;
-          }
-        }
-        
-        providers.freetoken.models = existingModels;
-        if (added > 0) {
-          console.log(`  [DISCOVER] Added ${added} local model(s) to freetoken provider`);
-        }
+        mergeIntoProviders(localModels);
       }
     } catch (error) {
       console.warn(`  [DISCOVER] Local model discovery failed: ${error.message}`);

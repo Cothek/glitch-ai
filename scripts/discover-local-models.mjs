@@ -20,18 +20,23 @@ const ROOT_DIR = resolve(__dirname, '..');
 const PROVIDERS_PATH = join(ROOT_DIR, 'config', 'providers.json');
 const DISCOVERY_CACHE_PATH = join(ROOT_DIR, 'data', 'local-models-cache.json');
 
-// Endpoint configurations
+// Endpoint configurations — each backend gets its own provider entry
+// because they serve on different ports/URLs.
 const ENDPOINTS = [
   {
     name: 'LM Studio',
     backend: 'lmstudio',
-    url: 'http://localhost:1919/v1/models',
+    url: 'http://192.168.68.64:1234/v1/models',
+    providerBaseURL: 'http://192.168.68.64:1234/v1',
+    providerName: 'LM Studio (local)',
     timeout: 3000,
   },
   {
     name: 'FreeToken (WSL)',
     backend: 'freetoken-wsl',
     url: 'http://192.168.68.64:1919/v1/models',
+    providerBaseURL: 'http://192.168.68.64:1919/v1',
+    providerName: 'FreeToken (WSL)',
     timeout: 3000,
   },
 ];
@@ -185,7 +190,8 @@ export async function discoverLocalModels() {
 }
 
 /**
- * Merge discovered models into providers.json (freetoken provider)
+ * Merge discovered models into providers.json — one provider per backend
+ * since each backend serves on a different port/URL.
  */
 export function mergeIntoProviders(discoveredModels) {
   if (!existsSync(PROVIDERS_PATH)) {
@@ -195,38 +201,63 @@ export function mergeIntoProviders(discoveredModels) {
   
   const providers = readJsonStripBom(PROVIDERS_PATH);
   
-  // Ensure freetoken provider exists
-  if (!providers.freetoken) {
-    providers.freetoken = {
-      npm: '@ai-sdk/openai-compatible',
-      name: 'Local Models (FreeToken/LM Studio)',
-      options: {
-        baseURL: 'http://localhost:1919/v1',
-      },
-      models: {},
-    };
+  // Group models by backend
+  const byBackend = {};
+  for (const [key, model] of Object.entries(discoveredModels)) {
+    const backend = model.backend;
+    if (!byBackend[backend]) byBackend[backend] = {};
+    byBackend[backend][key] = model;
   }
   
-  // Merge discovered models (additive, don't overwrite manual entries)
-  // Key is the raw model ID from the /v1/models endpoint
-  const existingModels = providers.freetoken.models || {};
-  let added = 0;
+  let totalAdded = 0;
   
-  for (const [key, model] of Object.entries(discoveredModels)) {
-    if (!(key in existingModels)) {
-      existingModels[key] = model;
-      added++;
-    } else {
-      // Update last_seen for existing entries
-      existingModels[key].last_seen = model.last_seen;
+  for (const endpoint of ENDPOINTS) {
+    const backendModels = byBackend[endpoint.backend] || {};
+    const providerKey = endpoint.backend;
+    
+    // Ensure provider exists for this backend
+    if (!providers[providerKey]) {
+      providers[providerKey] = {
+        npm: '@ai-sdk/openai-compatible',
+        name: endpoint.providerName,
+        options: {
+          baseURL: endpoint.providerBaseURL,
+        },
+        models: {},
+      };
+    }
+    
+    const existingModels = providers[providerKey].models || {};
+    let added = 0;
+    
+    for (const [key, model] of Object.entries(backendModels)) {
+      if (!(key in existingModels)) {
+        existingModels[key] = model;
+        added++;
+      } else {
+        existingModels[key].last_seen = model.last_seen;
+      }
+    }
+    
+    providers[providerKey].models = existingModels;
+    if (added > 0) {
+      console.log(`  [DISCOVER] Added ${added} model(s) to ${providerKey} provider`);
+    }
+    totalAdded += added;
+  }
+  
+  // Remove legacy single freetoken provider if it exists (migrated to per-backend)
+  if (providers.freetoken && !ENDPOINTS.some(e => e.backend === 'freetoken')) {
+    // Only remove if empty — don't delete user's manual entries
+    const ftModels = providers.freetoken.models || {};
+    if (Object.keys(ftModels).length === 0) {
+      delete providers.freetoken;
     }
   }
   
-  providers.freetoken.models = existingModels;
-  
   // Write back
   writeFileSync(PROVIDERS_PATH, JSON.stringify(providers, null, 2), 'utf-8');
-  console.log(`  [DISCOVER] Added ${added} new model(s) to freetoken provider`);
+  console.log(`  [DISCOVER] Total: ${totalAdded} new model(s) across ${ENDPOINTS.length} provider(s)`);
   
   return true;
 }
