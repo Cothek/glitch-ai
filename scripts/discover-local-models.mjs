@@ -166,11 +166,11 @@ export async function discoverLocalModels() {
   saveCache(merged);
   
   // Convert to provider format
+  // Key MUST match the model ID returned by /v1/models so OpenCode can
+  // resolve context_length and other metadata from the provider config.
   const models = {};
   for (const entry of Object.values(merged)) {
-    // Use backend prefix to avoid ID collisions
-    const providerKey = `${entry.backend}/${entry.id}`;
-    models[providerKey] = {
+    models[entry.id] = {
       name: entry.id.replace(/[-_]/g, ' ').replace(/\b\w/g, c => c.toUpperCase()),
       context_length: 32768, // Default for local models
       backend: entry.backend,
@@ -205,6 +205,7 @@ export function mergeIntoProviders(discoveredModels) {
   }
   
   // Merge discovered models (additive, don't overwrite manual entries)
+  // Key is the raw model ID from the /v1/models endpoint
   const existingModels = providers.freetoken.models || {};
   let added = 0;
   

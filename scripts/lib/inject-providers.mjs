@@ -117,12 +117,14 @@ export async function injectProviders(config) {
         const existingModels = providers.freetoken.models || {};
         let added = 0;
         for (const [key, model] of Object.entries(localModels)) {
+          // key is the raw model ID from /v1/models — matches OpenCode's lookup
           if (!(key in existingModels)) {
             existingModels[key] = model;
             added++;
           } else {
-            // Update last_seen for existing entries
+            // Update last_seen and backend for existing entries
             existingModels[key].last_seen = model.last_seen;
+            existingModels[key].backend = model.backend;
           }
         }
         
