@@ -488,7 +488,7 @@ async function main() {
 
   try {
     let configObj = JSON.parse(runtimeJson);
-    injectProviders(configObj);
+    await injectProviders(configObj);
 
     // One-time migration: copy legacy data/model-assignments.json to user/ if needed
     migrateModelAssignments(ROOT_DIR, log);
@@ -896,6 +896,35 @@ async function main() {
     log(YELLOW, `  External watchdog failed to start: ${e.message}`);
   }
 
+  // ---- Start GitNexus index sync (background re-index) ----
+  // Keeps the GitNexus code graph fresh so the blast-radius hook (and the
+  // impact/context/query MCP tools) return real dependents instead of stale
+  // "index is N commits behind" warnings. Incremental — fast when the index is
+  // already fresh, full rebuild only on schema changes. Detached so it never
+  // blocks startup (same pattern as the external watchdog above).
+  try {
+    const gitnexusSyncScript = join(SCRIPT_DIR, 'gitnexus-sync.mjs');
+    if (existsSync(gitnexusSyncScript)) {
+      const syncProc = spawn(
+        isWin ? join(BundledNodeDir, 'node.exe') : 'node',
+        [gitnexusSyncScript],
+        {
+          cwd: ROOT_DIR,
+          stdio: 'ignore',
+          detached: true,
+          windowsHide: true,
+        }
+      );
+      syncProc.unref();
+      syncProc.on('error', (err) => {
+        log(YELLOW, `  GitNexus sync failed to start: ${err.message}`);
+      });
+      log(DARK_GREEN, `  GitNexus index sync started (PID ${syncProc.pid})`);
+    }
+  } catch (e) {
+    log(YELLOW, `  GitNexus index sync failed to start: ${e.message}`);
+  }
+
   // ---- Launch with restart loop ----
   let shouldRestart = true;
   while (shouldRestart) {
@@ -1039,7 +1068,7 @@ async function main() {
 
       try {
         let configObj = JSON.parse(runtimeJson);
-        injectProviders(configObj);
+        await injectProviders(configObj);
 
         // Apply model overrides from user/model-assignments.json
         const assignmentsPath = join(ROOT_DIR, 'user', 'model-assignments.json');
