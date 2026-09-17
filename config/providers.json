@@ -47,6 +47,7 @@
   "lmstudio": {
     "npm": "@ai-sdk/openai-compatible",
     "name": "LM Studio (local)",
+    "auto_detect": true,
     "options": {
       "baseURL": "http://192.168.68.64:1234/v1"
     },
@@ -57,6 +58,8 @@
           "context": 32768,
           "output": 8192
         },
+        "auto_detect": true,
+        "last_detected": null,
         "backend": "lmstudio",
         "last_seen": "2026-09-15T22:04:18.414Z"
       },
@@ -66,6 +69,8 @@
           "context": 32768,
           "output": 8192
         },
+        "auto_detect": true,
+        "last_detected": null,
         "backend": "lmstudio",
         "last_seen": "2026-09-15T22:04:18.415Z"
       },
@@ -75,6 +80,8 @@
           "context": 32768,
           "output": 8192
         },
+        "auto_detect": true,
+        "last_detected": null,
         "backend": "lmstudio",
         "last_seen": "2026-09-15T22:04:18.415Z"
       }

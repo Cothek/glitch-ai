@@ -76,11 +76,13 @@ async function probeEndpoint(endpoint) {
       return null;
     }
     
-    return data.data.map(model => ({
-      id: model.id,
-      backend: endpoint.backend,
-      last_seen: new Date().toISOString(),
-    }));
+    return data.data
+      .filter(model => model.id && model.id.length > 2) // skip obviously fake IDs
+      .map(model => ({
+        id: model.id,
+        backend: endpoint.backend,
+        last_seen: new Date().toISOString(),
+      }));
   } catch (error) {
     clearTimeout(timeoutId);
     if (error.name === 'AbortError') {
@@ -263,7 +265,7 @@ export function mergeIntoProviders(discoveredModels) {
 }
 
 // CLI entry point
-if (process.argv[1] === __filename || process.argv[1].endsWith('discover-local-models.mjs')) {
+if (process.argv[1] === __filename || process.argv[1]?.endsWith('discover-local-models.mjs')) {
   const persist = process.argv.includes('--persist');
   
   discoverLocalModels().then(models => {
