@@ -1400,7 +1400,8 @@ async function handler(req, res) {
         return;
       }
 
-      const model = provider.models?.[0] || '';
+      const activeModel = migrated.llm?.active_model || '';
+      const model = (provider.models?.includes(activeModel) ? activeModel : provider.models?.[0]) || '';
       if (!model) {
         sendJson(res, 400, { error: 'Provider has no models configured. Add at least one model before testing.' });
         return;
