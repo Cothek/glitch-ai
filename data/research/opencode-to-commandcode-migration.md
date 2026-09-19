@@ -495,6 +495,305 @@ This creates a feedback loop: **challenges build skill → Taste remembers what 
 
 ---
 
+## 4D. Glitch Memory System — Full Architecture Analysis
+
+This section provides a comprehensive analysis of Glitch's memory system, documenting its architecture, protocols, and the design decisions that make it robust. The goal is to ensure Command Code achieves equivalent capability.
+
+### Core Design Principle: User Memory Separation
+
+**The most important design decision**: User memory is **completely separate** from Glitch core.
+
+```
+glitch-ai/                    # Core system (shared by all users)
+├── .agents/skills/           # Skills (shared)
+├── .opencode/                # Config (shared)
+├── scripts/                  # Infrastructure (shared)
+├── user/                     # ← SEPARATE GIT REPO (per-user)
+│   ├── .git/                 # Own git history
+│   ├── main-memory.md        # User profile
+│   ├── decisions.md          # Decision log
+│   ├── post-mortems.md       # Failure analysis
+│   └── ...                   # 20+ memory files
+└── glitch-memorycore/        # Memory system core (shared)
+    ├── users/_template/      # Template for new users
+    ├── plugins/              # Memory plugins (FTS5, curriculum, etc.)
+    └── library/              # Shared knowledge base
+```
+
+**Why this matters:**
+- `user/` is a **nested git repo** (`Cothek/glitch-user-troy`) with its own commit history
+- Core Glitch updates don't touch user memory
+- User memory can be backed up/restored independently
+- Multiple users can share one Glitch installation (each has their own `user/` repo)
+- Memory survives core reinstalls, upgrades, and config changes
+
+**Command Code equivalent:** CC's `AGENTS.md` lives in the project directory. There's no inherent separation between "core" and "user memory." For multi-user support, CC would need:
+- A configurable memory directory (not hardcoded to project root)
+- Per-user memory files that can be swapped/imported
+- A way to keep memory separate from code (so git commits don't mix)
+
+### Memory File Architecture
+
+Glitch uses **20+ structured markdown files**, each with a specific purpose:
+
+| File | Lines | Purpose | Format |
+|------|-------|---------|--------|
+| `main-memory.md` | 217 | User profile, preferences, directives | Dated sections with category tags |
+| `current-session.md` | 159 | Session state, recap, scratchpad | Real-time append-only |
+| `decisions.md` | 892 | Decision log with rationale | Dated entries with categories |
+| `post-mortems.md` | 1028 | Failure analysis log | PM-NNN numbered entries |
+| `reminders.md` | 391 | Persistent cross-session reminders | Open/Closed sections |
+| `patterns.md` | 151 | Repeated workflows discovered | Dated pattern entries |
+| `forge-log.md` | 60 | Self-improvement operations | Dated operation entries |
+| `session-dashboard.md` | 97 | Live workstream tracker | Status/Progress/Next Step tables |
+| `projects/project-list.md` | — | LRU project tracking | Project entries |
+| `daily-diary/` | — | Daily session documentation | YYYY-MM-DD.md files |
+| `library/` | — | Reusable knowledge base | Topic-specific files |
+
+**Key design patterns:**
+
+1. **YAML frontmatter** on every file:
+   ```yaml
+   ---
+   type: UserProfile
+   title: Main Memory — Troy
+   description: Unified identity profile
+   tags: [troy, profile, memory]
+   timestamp: 2026-09-10T00:00:00Z
+   ---
+   ```
+
+2. **Append-only** — never modify or delete existing entries
+3. **Dated entries** — every entry gets a date (`## YYYY-MM-DD — Title`)
+4. **Category tags** — `_Category: CATEGORY_NAME_` on line after heading
+5. **Bold labels** — `**Decision:**`, `**Rationale:**`, `**Implications:**`
+
+**Command Code equivalent:** CC's `AGENTS.md` is a single freeform file. To match Glitch's structure, CC would need:
+- Multiple memory files (not just one AGENTS.md)
+- YAML frontmatter support (or equivalent metadata)
+- Append-only discipline (enforced by convention or tooling)
+- Category tags for organization
+
+### save-memory Skill — The Write Protocol
+
+The `save-memory` skill defines exactly how memory gets written:
+
+**Mandatory Heartbeat (Every Write):**
+1. Update `user/current-session.md` → `Last Memory Update` timestamp
+2. Update target file's YAML frontmatter → `timestamp` field
+3. **Never skip** — this prevents stale-session gaps
+
+**File Map (What Goes Where):**
+| Trigger | Target File | Action |
+|---------|-------------|--------|
+| User expresses preference | `main-memory.md` → User Profile | Append new section |
+| Decision made | `decisions.md` | Append dated entry |
+| Error/fix | `post-mortems.md` | Append PM-NNN entry |
+| Follow-up needed | `reminders.md` | Append reminder |
+| Pattern discovered (2+) | `patterns.md` | Append pattern entry |
+| Repeated workflow (3+) | `forge-log.md` | Append forge entry |
+| Session work | `current-session.md` | Append scratchpad bullet |
+
+**Proactive Promotion Scan (After Every Write):**
+1. Scan `current-session.md` scratchpad for `🔧 PATTERN:` entries
+2. If not already in `patterns.md` → promote to `patterns.md`
+3. Scan for `🔧 OPERATIONAL:` entries
+4. If not already in `forge-log.md` → promote to `forge-log.md`
+5. Report what was promoted vs skipped
+
+**Dedup Logic:** Before appending, grep target file to check if entry already exists (by title/description keywords, not exact match).
+
+**Command Code equivalent:** CC has no equivalent protocol. To match:
+- A `save-memory` skill that defines write protocols
+- Heartbeat timestamps on every write
+- File map for routing different types of memory
+- Proactive promotion from scratchpad to permanent memory
+- Dedup logic to prevent duplicate entries
+
+### FTS5 Search — Full-Text Search Over Memory
+
+Glitch has a **SQLite FTS5 search engine** over all memory files:
+
+**Architecture:**
+```
+glitch-memorycore/plugins/embed-search/
+├── index-memory.mjs      # Indexer (walks .md files, splits by ## headings)
+├── search-memory.mjs     # Search CLI (BM25 + hybrid)
+├── embeddings.mjs        # Vector embeddings for semantic search
+├── memory-search.db      # SQLite database with FTS5 index
+└── check-dedup.mjs       # Deduplication checker
+```
+
+**How it works:**
+1. **Indexer** walks `glitch-memorycore/` directory tree
+2. Splits `.md` files into chunks by `##` headings
+3. Stores chunks in `memory_chunks` table (file_path, section_heading, content, content_hash)
+4. FTS5 virtual table `memory_fts` indexes all chunks
+5. **Change detection**: only re-indexes chunks whose `content_hash` or `file_mtime` changed
+
+**Search modes:**
+- **BM25 only**: `node search-memory.mjs -q "query"` — full-text search with BM25 ranking
+- **Hybrid**: `node search-memory.mjs -q "query" --hybrid` — BM25 + cosine similarity via RRF
+- **Embeddings only**: `node search-memory.mjs -q "query" --embeddings-only` — pure semantic search
+
+**BM25 ranking weights**: `bm25(memory_fts, 10.0, 5.0, 2.0)` (content=10, section_heading=5, file_path=2)
+
+**Hybrid search (RRF fusion):**
+```javascript
+rrfScore = 1/(60 + bm25Rank) + 1/(60 + simRank)
+```
+
+**CLI usage:**
+```bash
+node search-memory.mjs -q "memory update protocol" --limit 5
+node search-memory.mjs -q "git discipline" --json
+node search-memory.mjs -q "autonomous agents" --hybrid --limit 5
+```
+
+**Command Code equivalent:** CC has no FTS5 search. To match:
+- A SQLite FTS5 database indexing all memory files
+- BM25 ranking for keyword search
+- Optional embedding-based semantic search
+- Incremental re-indexing (only changed files)
+- CLI tool for searching from bash
+
+### Mulahazah Plugin — The Memory Trigger System
+
+The `mulahazah` plugin is the **automatic memory trigger** that ensures memory gets written without manual intervention:
+
+**Trigger Model (Two Independent Paths):**
+
+| Trigger | Interval | Condition | Purpose |
+|---------|----------|-----------|---------|
+| **Heartbeat** | 30 min from last write | At least 1 tool call since | Guaranteed per-session cadence |
+| **Token Burst** | — | 1M new tokens accumulated | Catches token-heavy bursts |
+
+**How it works:**
+1. Hooks observe every tool call (passive, <50ms)
+2. `evaluateTrigger()` checks if either trigger condition is met
+3. If triggered: writes `MEMORY_TRIGGER_FLAG` file to `data/`
+4. `@memory` agent (or Glitch-Omni) picks up the flag
+5. Reads flag, fulfills the memory write, deletes the flag
+
+**State tracking** (`mulahazah-state.json`):
+```json
+{
+  "sessions": {
+    "ses_xxx": {
+      "toolCallCount": 42,
+      "toolCounts": {"read": 10, "bash": 8, "write": 3},
+      "lastTriggerTime": 1700000000,
+      "sessionStartTime": 1699990000,
+      "lastActivityTime": 1700000000,
+      "isDispatcher": true,
+      "agent": "glitch-omni",
+      "lastTokenBaseline": {"input": 50000, "output": 20000, "reasoning": 0, "total": 70000}
+    }
+  }
+}
+```
+
+**Safety mechanisms:**
+- **Cooldown**: 5 min between phrase triggers
+- **Stale reset**: 24h — dead sessions stop generating flags
+- **TTL sweep**: 2h — orphaned flags get cleaned up
+- **Idle guard**: Heartbeat only fires if tool calls > 0 (prevents dead sessions)
+- **Token baseline**: Measures delta, not absolute (old sessions don't fire on history)
+
+**Command Code equivalent:** CC has no equivalent. To match:
+- A hook that observes tool calls and tracks session state
+- Heartbeat + token-burst triggers
+- Flag file protocol for cross-process communication
+- State pruning for dead sessions
+- TTL sweep for orphaned flags
+
+### MemoryCore — The Underlying Framework
+
+Glitch's memory system is built on **Glitch MemoryCore** (forked from Project-AI-MemoryCore v4.2):
+
+**Directory structure:**
+```
+glitch-memorycore/
+├── master-memory.md              # Entry point & loading system
+├── core/                         # Identity, truthfulness injection
+├── main/                         # Session format, mulahazah rules
+├── users/                        # User memory files + templates
+│   ├── _template/                # New user setup templates
+│   │   ├── profile-setup.json    # Setup questionnaire schema
+│   │   └── main-memory.template.md
+│   ├── current-session.md
+│   ├── decisions.md
+│   ├── patterns.md
+│   └── projects/
+├── plugins/                      # Memory plugins
+│   ├── embed-search/             # FTS5 search engine
+│   ├── curriculum/               # Self-play challenges
+│   ├── dev-loop/                 # TDD test tools
+│   └── glitch-skills/            # Skill definitions
+├── library/                      # Shared knowledge base
+├── daily-diary/                  # Daily documentation
+└── data/                         # Known models, etc.
+```
+
+**Key files:**
+- `master-memory.md` — Entry point that loads all memory
+- `prompt-rules.md` / `prompt-rules-core.md` — Rules for memory writes
+- `design-principles.md` — UI design principles
+- `glitch.md` — Glitch's identity definition
+
+**Template system for new users:**
+- `users/_template/profile-setup.json` — Setup questionnaire (name, GitHub, style, focus, goals)
+- `users/_template/main-memory.template.md` — Template with `{{USER_NAME}}` placeholders
+- On first run: questionnaire fills template → creates personalized `main-memory.md`
+
+**Command Code equivalent:** CC has no equivalent framework. To match:
+- A `glitch-memorycore/` directory structure
+- Template system for new users
+- Master memory entry point
+- Plugin architecture for memory extensions
+
+### Summary: What CC Needs to Match Glitch's Memory Robustness
+
+| Capability | Glitch Implementation | CC Equivalent Needed |
+|------------|----------------------|---------------------|
+| **User separation** | Separate git repo (`user/`) | Configurable memory directory, per-user files |
+| **Structured files** | 20+ files with YAML frontmatter, categories, dates | Multiple memory files with metadata |
+| **Write protocol** | save-memory skill (heartbeat, file map, dedup) | Equivalent skill with same protocols |
+| **Search** | FTS5 SQLite with BM25 + hybrid | FTS5 index over memory files |
+| **Auto-trigger** | Mulahazah plugin (heartbeat + token burst) | Hook-based trigger system |
+| **State tracking** | mulahazah-state.json (per-session) | Session state tracking |
+| **Promotion** | Scratchpad → patterns/forge-log | Auto-promotion from working memory |
+| **Template system** | users/_template/ with questionnaire | User setup wizard |
+| **Knowledge base** | library/ with shared knowledge | Shared library directory |
+| **Daily diary** | daily-diary/YYYY-MM-DD.md | Daily documentation system |
+| **Version history** | Separate git repo | Memory-only git repo |
+
+### Migration Effort for Memory System
+
+**Critical path items:**
+1. **User separation** (2-3 days) — Design CC-compatible memory directory structure
+2. **save-memory skill** (1 day) — Port skill to CC format with same protocols
+3. **FTS5 search** (1-2 days) — Port indexer + search CLI
+4. **Mulahazah triggers** (2-3 days) — Implement hook-based trigger system
+5. **Template system** (1 day) — Port user setup wizard
+6. **Testing** (1-2 days) — End-to-end memory persistence tests
+
+**Total estimated:** 8-12 days for full memory system parity
+
+**Minimum viable (Phase 1):** 3-4 days
+- User separation (configurable directory)
+- Basic save-memory skill (write protocols)
+- No FTS5 search (use grep)
+- No mulahazah triggers (manual writes)
+
+**Full parity (Phase 2):** 5-8 additional days
+- FTS5 search
+- Mulahazah trigger system
+- Template system
+- Daily diary
+
+---
+
 ## 5. What We Get Free (That We Did Not Have)
 
 These are capabilities CC provides out-of-the-box that we would have had to build or live without under opencode.
