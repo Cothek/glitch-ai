@@ -383,13 +383,14 @@ Command Code's harness is specifically engineered for open models. These optimiz
 |---|---|
 | **Mulahazah plugin** | Continuous improvement loop with tool-call observation, heartbeat capture, memory trigger — CC has no equivalent |
 | **Stuck detector** | Monitors tool patterns for 5 stuck conditions — CC has no equivalent |
-| **Curriculum skill** | Self-play challenges for learning — CC has no equivalent |
 | **Blast-radius hook** | GitNexus pre-edit impact analysis — CC has no equivalent |
 | **External watchdog** | Process monitoring + abort — CC has no equivalent |
 | **opencode plugin ecosystem** | MCP servers, hooks, permissions — different architecture |
 | **Glitch-Omni agent** | Direct-execution mode with full tool access — CC is a different agent paradigm |
 | **Structured memory format** | Dated entries with categories, append-only — CC uses freeform AGENTS.md |
 | **Separate memory git repo** | Version history + backup — CC memory is in project dir |
+
+> **Note:** The Curriculum skill has been ported to CC (see Section 4C).
 
 ---
 
@@ -407,6 +408,90 @@ Command Code's harness is specifically engineered for open models. These optimiz
 **The two systems complement each other:**
 - Command Code = better coding agent (harness, models, taste)
 - Glitch = better infrastructure (memory, monitoring, self-improvement)
+
+---
+
+## 4C. Curriculum Skill — Ported to Command Code
+
+The Glitch curriculum skill (self-play learning system) has been ported to Command Code format and is ready to use.
+
+### What It Does
+
+The curriculum generates coding challenges, attempts them with TDD verification, and progresses through difficulty levels. It's an autonomous skill-building system where you practice specific skills, get verified results, and level up.
+
+### Levels
+
+| Level | Challenge Type | Pass Criteria | Promote At |
+|-------|---------------|---------------|------------|
+| 1 | **Tool creation** — build single-function tools | All test cases pass | 3 tools created |
+| 2 | **Tool chains** — combine tools for multi-step tasks | End-to-end execution passes | 5 tools total |
+| 3 | **System improvement** — propose+apply config/skill fix | Report accepted + committed | 3 improvements |
+| 4 | **Memory consolidation** — deduplicate/improve memory | Merge applied, no regressions | 2 consolidations |
+| 5 | **Meta-curriculum** — improve the curriculum itself | Self-referential patch works | Voluntary |
+
+### Files Created
+
+| File | Purpose |
+|------|---------|
+| `.commandcode/skills/curriculum/SKILL.md` | Skill definition with 5 levels, 18 challenges, execution workflow |
+| `.commandcode/skills/curriculum/tools/verify.mjs` | TDD test verifier for Level 1 challenges |
+| `.commandcode/skills/curriculum/curriculum-state.json` | Progress tracking state file |
+| `.commandcode/skills/curriculum/references/curriculum-guide.md` | User-facing guide and reference |
+| `.commandcode/skills/curriculum/README.md` | Skill overview and quick start |
+
+### Level 1 Challenges (Tool Creation)
+
+| # | Description | Test Cases | Tags |
+|---|-------------|------------|------|
+| 1 | Sort an array of numbers ascending | `[3,1,2]`→`[1,2,3]`, `[]`→`[]`, `[5,5,5]`→`[5,5,5]` | array, sort |
+| 2 | Reverse a string | `"hello"`→`"olleh"`, `""`→`""`, `"a"`→`"a"` | string, reverse |
+| 3 | Extract all numbers from a string | `"abc123def456"`→`[123,456]`, `"none"`→`[]`, `"42"`→`[42]` | string, extract |
+| 4 | Validate an email address | `"a@b.com"`→`true`, `"not@valid"`→`false`, `""`→`false` | validate, email |
+| 5 | Count word frequency | `"a b a"`→`{a:2,b:1}`, `"hi"`→`{hi:1}`, `""`→`{}` | string, count |
+| 6 | Remove duplicates from an array | `[1,2,1,3]`→`[1,2,3]`, `[]`→`[]`, `[1,1,1]`→`[1]` | array, unique |
+| 7 | Capitalize each word in a string | `"hello world"`→`"Hello World"`, `"a"`→`"A"`, `""`→`""` | string, format |
+| 8 | Flatten a nested array | `[1,[2,[3]]]`→`[1,2,3]`, `[]`→`[]`, `[1]`→`[1]` | array, flatten |
+| 9 | Convert CSV row to JSON object | `"name,age\nTroy,30"`→`[{name:"Troy",age:30}]` | csv, parse |
+| 10 | Validate a URL format | `"https://x.com"`→`true`, `"not-a-url"`→`false`, `""`→`false` | validate, url |
+| 11 | Check if a string is a palindrome | `"racecar"`→`true`, `"hello"`→`false`, `""`→`true` | string, palindrome |
+
+### Key Differences from Glitch Curriculum
+
+| Aspect | Glitch | Command Code |
+|--------|--------|--------------|
+| **Execution** | Dispatches to @coder/@general sub-agents | Runs directly — you build the solution yourself |
+| **Verification** | `tdd-test.mjs` in plugins directory | `tools/verify.mjs` in skill directory |
+| **State tracking** | `plugins/curriculum/curriculum-state.json` | `.commandcode/skills/curriculum/curriculum-state.json` |
+| **Taste integration** | Manual feed to patterns.md | Automatic via Taste packages |
+| **Skill invocation** | `skill("curriculum")` tool call | `/curriculum` command |
+
+### Integration with Taste
+
+After completing challenges, learnings can be fed into the Taste system:
+
+| Level | What to Feed | Taste Package |
+|-------|--------------|---------------|
+| 1 | Tool creation patterns | `coding-style` |
+| 2 | Chain composition patterns | `architecture` |
+| 3 | System improvement patterns | `workflows` |
+
+This creates a feedback loop: **challenges build skill → Taste remembers what worked**.
+
+### Commands
+
+| Command | Description |
+|---------|-------------|
+| `/curriculum` | Start or continue the curriculum |
+| `/curriculum status` | Show current level, completed challenges, next challenge |
+| `/curriculum reset` | Reset progress and start over |
+| `/curriculum skip` | Skip current challenge, move to next |
+| `/curriculum level <N>` | Jump to a specific level |
+
+### Migration Effort
+
+**Effort:** 0 days (already completed). The skill is ready to use in Command Code.
+
+**Status:** ✅ Ported and tested. All files in place at `.commandcode/skills/curriculum/`.
 
 ---
 
