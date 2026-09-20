@@ -794,6 +794,275 @@ glitch-memorycore/
 
 ---
 
+## 4E. Glitch Features → Command Code Mapping (Complete)
+
+This section maps every Glitch feature to its Command Code equivalent, noting where CC is better, equal, or needs work.
+
+### 1. Three-Layer Architecture (Multi-User by Design)
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| User separation | Separate git repo (`user/`) | `~/.config/commandcode/memory/` (global) + `AGENTS.md` (project) | ✅ Simpler, no git repos needed |
+| Memory isolation | Per-user git repo | Global memory + project conventions | ✅ Clean separation |
+| Core updates | Don't touch user data | AGENTS.md lives in project dir | ✅ No conflict risk |
+
+**CC approach**: Global memory (`~/.config/commandcode/memory/global.md`) travels with you across projects. Project memory (`AGENTS.md`) is project-specific. No separate git repos needed.
+
+**Migration effort**: 1 day to set up directory structure.
+
+### 2. Multi-Agent Orchestration System
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Agent count | 12+ specialized agents | Built-in agents + custom agents | ⚠️ Fewer but sufficient |
+| Model routing | Free-to-paid fallback | GOAT (150+ providers, keyless Ollama) | ✅ Better model access |
+| Agent creation | Manual config files | `cmd agents create` | ✅ Simpler |
+| Agent import | N/A | `/import opencode` | ✅ One-command migration |
+
+**CC approach**: Built-in agents (coder, reviewer, tester, planner) + custom agents via CLI. Model routing is automatic via GOAT subscription ($10/mo for $70 in credits).
+
+**Migration effort**: 0.5 days — import agent definitions, assign models.
+
+### 3. 10 Custom Plugins → CC Hooks + Built-in Features
+
+#### 3.1 Mulahazah → Taste System
+
+| Aspect | Glitch (Mulahazah) | Command Code (Taste) | Better in CC? |
+|--------|-------------------|---------------------|---------------|
+| Learning mechanism | Explicit triggers (heartbeat, token burst, phrases) | Automatic (every accept/reject/edit) | ✅ No manual triggers needed |
+| State management | Per-session JSON file | Built-in model | ✅ No file management |
+| Pattern capture | Manual promotion to patterns.md | Automatic pattern learning | ✅ Fully automatic |
+| Orphan cleanup | TTL sweep, stale reset | Not needed | ✅ No orphans possible |
+| Push/pull | Not supported | Share taste with team | ✅ Collaboration feature |
+
+**CC approach**: Taste learns from every interaction automatically. No flag files, no orphan cleanup, no manual promotion. Patterns are captured implicitly and can be shared via packages.
+
+**Migration effort**: 0 days — Taste is built-in and superior.
+
+#### 3.2 Stuck Detector → CC Hooks
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Detection rules | 5 rules (tool repetition, error cascade, etc.) | Not built-in | ⚠️ Needs implementation |
+| State tracking | Per-session JSON | Hook-accessible session state | ✅ More context available |
+| Recovery injection | Synthetic message part | Hook can inject directives | ✅ More powerful hooks |
+
+**CC approach**: Implement as a CC hook that monitors tool calls and injects recovery directive when patterns detected. CC's hooks have more context (full session state) than Glitch's plugins.
+
+**Migration effort**: 1-2 days to implement as CC hook.
+
+#### 3.3 Blast Radius → GitNexus MCP
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Backend | GitNexus CLI | GitNexus MCP (native) | ✅ Native integration |
+| Trigger | `tool.execute.before` hook | MCP tools available directly | ✅ No custom plugin needed |
+| Injection | Synthetic message part | Direct tool output | ✅ Simpler |
+
+**CC approach**: GitNexus MCP is natively available — `impact`, `context`, `detect_changes` tools work directly. No custom plugin needed.
+
+**Migration effort**: 0 days — already works.
+
+#### 3.4 Dispatch Reflex → CC Quality Gates
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Quality gate | Custom plugin (dispatch-reflex.js) | Built-in reviewer agent + `/review` | ✅ Simpler |
+| Review trigger | After every @coder dispatch | Automatic after code changes | ✅ No custom plugin |
+| Verdict handling | BLOCKER/MAJOR/MINOR logic | Built-in severity ratings | ✅ Already implemented |
+
+**CC approach**: The `/review` command runs automatically after code changes. Severity ratings (BLOCKER/MAJOR/MINOR) are built-in.
+
+**Migration effort**: 0 days — already works.
+
+#### 3.5 Plan Reflex → CC Planning
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Complexity detection | Keyword matching, file count | Built-in planner agent | ✅ More sophisticated |
+| Plan enforcement | Custom plugin (plan-reflex.js) | `/plan` command | ✅ Simpler |
+| Plan storage | `data/plans/current-plan.md` | Session state | ✅ No file management |
+
+**CC approach**: The `planner` agent handles task decomposition and dependency tracking. No custom plugin needed.
+
+**Migration effort**: 0 days — already works.
+
+#### 3.6 Compaction → CC Context Management
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Compaction trigger | Custom plugin (compaction.js) | Built-in tiered auto-compaction | ✅ Automatic |
+| Compaction tiers | Single threshold | 60%, 75%, 85%, 90% | ✅ More granular |
+| Context trimming | Manual | Model-switch pre-trim | ✅ Automatic |
+| Token accounting | None | `/context` real-time view | ✅ Better visibility |
+| Skill preservation | Manual | Skills exempt from trim | ✅ Automatic |
+
+**CC approach**: Tiered auto-compaction (60%, 75%, 85%, 90%), model-switch pre-trim, `/context` token accounting. Skills are exempt from trim. No custom plugin needed.
+
+**Migration effort**: 0 days — already works and is superior.
+
+#### 3.7 Recall → CC Memory Search
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Search engine | SQLite FTS5 with BM25 | AGENTS.md + grep | ⚠️ Needs FTS5 skill |
+| Hybrid search | BM25 + cosine similarity | Not built-in | ⚠️ Needs implementation |
+| Search tool | Custom plugin (recall.js) | Not built-in | ⚠️ Needs skill |
+
+**CC approach**: For most cases, AGENTS.md + grep is sufficient. For large memory, implement FTS5 search as a CC skill.
+
+**Migration effort**: 1-2 days for FTS5 skill, or 0 days if grep is sufficient.
+
+#### 3.8 Verify Claim → CC Intellectual Honesty
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Tool | Custom tool (verify-claim.js) | Not built-in | ⚠️ Needs skill |
+| Verification | Grep/glob for existence | Not available | ⚠️ Needs implementation |
+| Output | VERIFIED/UNVERIFIED/CONTRADICTED | Not available | ⚠️ Needs skill |
+
+**CC approach**: Implement as a CC skill that verifies claims before assertion. CC's skill system is more powerful (dynamic context injection, arguments).
+
+**Migration effort**: 0.5 days to create skill.
+
+#### 3.9 Save Images → CC Vision
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Image handling | Plugin saves base64 to disk | `read` tool handles image files directly | ✅ Simpler |
+| Trigger | NEW_IMAGE_FLAG file | Not needed | ✅ No trigger file |
+| Vision agent | @vision sub-agent | `read` tool on image files | ✅ Direct access |
+
+**CC approach**: Just `read` the image file directly. No save-images plugin needed.
+
+**Migration effort**: 0 days — already works.
+
+#### 3.10 Agent Watchdog → CC Process Monitoring
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Monitoring | External background process | Not built-in | ⚠️ Needs implementation |
+| Detection | SQLite DB polling | Hook-accessible session state | ✅ More context |
+| Process kill | OS enumeration + taskkill | Not available | ⚠️ Needs implementation |
+
+**CC approach**: Implement as a CC hook or standalone process. CC's hooks have more context (full session state) than Glitch's plugins.
+
+**Migration effort**: 1-2 days to implement.
+
+### 4. 62+ Skills
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Skill format | SKILL.md with frontmatter | Same Agent Skills standard | ✅ 100% compatible |
+| Skill count | 62+ | Same (copy directories) | ✅ Same |
+| Skill creation | Manual or forge skill | `cmd skills add <owner/repo>` | ✅ Easier |
+| Skill management | Manual enable/disable | Enable/disable toggle per skill | ✅ Simpler |
+| Skill execution | `skill("name")` tool call | `/skill-name` command | ✅ Same pattern |
+| Dynamic context | Not supported | `` !`command` `` in skill body | ✅ More powerful |
+| Arguments | Not supported | `arguments` field for parameters | ✅ More flexible |
+
+**CC approach**: Skills are 100% compatible. Just copy `.agents/skills/` to `.commandcode/skills/`. CC adds: GitHub skill installation, enable/disable toggle, dynamic context injection, parameterized skills.
+
+**Migration effort**: 0 days — just copy directories.
+
+### 5. Memory System (20+ Files)
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| File count | 20+ structured files | AGENTS.md + multiple files | ✅ Simpler |
+| Format | YAML frontmatter + append-only | Markdown with conventions | ✅ Less rigid |
+| Categories | `_Category: NAME_` tags | Not required | ⚠️ Less structured |
+| Timestamps | Mandatory on every write | Not required | ⚠️ Less rigorous |
+| Dedup logic | Built into save-memory skill | Manual | ⚠️ Needs skill |
+| Promotion scan | Automatic (scratchpad → patterns) | Manual | ⚠️ Needs skill |
+
+**CC approach**: Use multiple memory files:
+- `~/.config/commandcode/memory/global.md` — personal preferences, directives
+- `AGENTS.md` — project conventions, rules
+- `memory/decisions.md` — decision log
+- `memory/patterns.md` — discovered patterns
+- `memory/forge-log.md` — self-improvement log
+
+**Migration effort**: 2-3 days to set up structure and migrate content.
+
+### 6. Launch Modes
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Mode count | 5 (normal, free, local, safe, server) | Similar modes via CLI | ✅ Simpler |
+| Mode switching | Custom launcher scripts | `cmd` CLI | ✅ No custom scripts |
+| Config generation | Template-based | Built-in | ✅ Automatic |
+
+**CC approach**: The `cmd` CLI handles mode switching. No custom launcher scripts needed.
+
+**Migration effort**: 0 days — already works.
+
+### 7. Remote Access
+
+| Aspect | Glitch | Command Code | Better in CC? |
+|--------|--------|--------------|---------------|
+| Remote access | Cloudflare Tunnel + auth proxy | Headless/RPC + Studio | ✅ More powerful API |
+| Mobile access | Basic auth proxy | Studio (TBD) | ⚠️ Needs implementation |
+| API access | Not available | Full headless API | ✅ Programmable |
+
+**CC approach**: Headless mode provides full API access for custom UIs. Studio (TBD) for mobile/desktop access.
+
+**Migration effort**: 1-3 days to set up.
+
+---
+
+## Summary: Feature Parity Assessment
+
+| Feature | CC Status | Effort | Notes |
+|---------|-----------|--------|-------|
+| Multi-user architecture | ✅ Built-in | 1 day | Global + project memory separation |
+| Multi-agent orchestration | ✅ Built-in | 0.5 days | Import agents, assign models |
+| Mulahazah → Taste | ✅ Built-in (better) | 0 days | Automatic, no manual triggers |
+| Stuck detector | ⚠️ Needs hook | 1-2 days | Implement as CC hook |
+| Blast radius | ✅ Built-in (better) | 0 days | GitNexus MCP native |
+| Dispatch reflex | ✅ Built-in (better) | 0 days | Quality gates built-in |
+| Plan reflex | ✅ Built-in (better) | 0 days | Planning built-in |
+| Compaction | ✅ Built-in (better) | 0 days | Tiered auto-compaction |
+| Recall (FTS5) | ⚠️ Needs skill | 1-2 days | Or use grep |
+| Verify claim | ⚠️ Needs skill | 0.5 days | Implement as CC skill |
+| Save images | ✅ Built-in (better) | 0 days | Direct read tool |
+| Agent watchdog | ⚠️ Needs hook | 1-2 days | Implement as CC hook |
+| Skills (62+) | ✅ 100% compatible | 0 days | Just copy directories |
+| Memory files (20+) | ⚠️ Needs migration | 2-3 days | Set up structure |
+| Launch modes | ✅ Built-in | 0 days | CLI handles it |
+| Remote access | ⚠️ Needs setup | 1-3 days | Headless + Studio |
+
+### Total Migration Effort
+
+| Category | Days |
+|----------|------|
+| Multi-user architecture | 1.0 |
+| Multi-agent orchestration | 0.5 |
+| Stuck detector hook | 1.5 |
+| Verify claim skill | 0.5 |
+| FTS5 search skill | 1.5 |
+| Agent watchdog hook | 1.5 |
+| Memory file migration | 2.5 |
+| Remote access setup | 2.0 |
+| **Total** | **11.0 days** |
+
+### Key Insight: CC is Better for Most Things
+
+Command Code is **simpler and more powerful** than Glitch for most features:
+
+- **Taste system** replaces mulahazah (automatic, not manual)
+- **Built-in quality gates** replace dispatch-reflex and plan-reflex
+- **Superior compaction** replaces compaction plugin
+- **Native MCP** replaces blast-radius plugin
+- **Agent Skills standard** is identical (just copy)
+- **Model access** is superior (GOAT, 150+ providers, keyless Ollama)
+
+**What CC lacks**: Process monitoring (watchdog), FTS5 search, verify-claim tool. These can be implemented as CC skills/hooks in 3-5 days.
+
+**The bottom line**: Glitch's complexity was necessary to work around opencode's limitations. CC's simpler architecture means most of that complexity isn't needed. The migration is more about **simplification** than porting.
+
+---
+
 ## 5. What We Get Free (That We Did Not Have)
 
 These are capabilities CC provides out-of-the-box that we would have had to build or live without under opencode.
