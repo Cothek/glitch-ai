@@ -1374,6 +1374,30 @@ Verify CC works with our infrastructure before committing. These tests can run i
 
 **Immediate action**: Run Phase 0 quality tests. If CC fails, abort migration and stay with opencode + Claude Code.
 
+### Alternative: Pi Migration Plan
+
+If Command Code fails quality tests or remains closed source, **Pi** is the recommended alternative:
+
+- **Open source (MIT License)** — no vendor lock-in
+- **Minimal, extensible architecture** — primitives, not features
+- **Tree-structured sessions** — branch anywhere, explore multiple approaches
+- **15+ providers, hundreds of models** — broad model support
+- **Active development** — regular releases, high-quality codebase
+
+See `data/research/pi-migration-plan.md` for the complete Pi migration plan.
+
+**Pi's advantages over Command Code:**
+- Open source today (no gate required)
+- No vendor lock-in
+- Self-modifying (can build extensions for itself)
+- Tree sessions (unique feature)
+
+**Pi's disadvantages vs Command Code:**
+- No built-in Taste learning system
+- No built-in sub-agents (extension required)
+- No built-in plan mode (extension required)
+- Smaller community and package ecosystem
+
 ---
 
 ## 10. Timeline + Success Criteria
