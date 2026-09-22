@@ -291,6 +291,8 @@ This means if you edit `user/decisions.md` at 2:00 PM, the next request at 2:01 
 
 **Effort:** ~1-2 days to set up and configure.
 
+**Detailed implementation plan:** See `data/research/pi-missing-features-plan.md` Section 2 for complete architecture, components, and timeline.
+
 ### 4.6 Plan Mode (Not Built-in)
 
 **Current system**: opencode has custom plan-reflex.js for complexity detection and planning.
@@ -305,6 +307,32 @@ This means if you edit `user/decisions.md` at 2:00 PM, the next request at 2:01 
 **Recommendation:** Use the plan-mode extension or manual file-based planning.
 
 **Effort:** ~0.5-1 day to set up.
+
+**Detailed implementation plan:** See `data/research/pi-missing-features-plan.md` Section 3 for complete architecture, components, and timeline.
+
+### 4.7 Taste Learning (Not Built-in)
+
+**Current system**: Command Code has built-in Taste learning that learns from every accept/reject/edit.
+
+**Pi replacement**: Not built-in, but can be implemented as an extension.
+
+**Architecture:**
+1. **Interaction tracker** — monitors tool calls and user responses
+2. **Pattern analyzer** — extracts coding preferences and style
+3. **Taste storage** — persists taste profile to disk
+4. **Context injection** — injects learned patterns into context
+
+**Implementation approach:**
+1. Build interaction tracker that monitors tool calls
+2. Implement pattern analyzer that extracts preferences
+3. Store taste profiles in `~/.pi/taste/` directory
+4. Inject relevant taste into context before each turn
+
+**Effort:** ~3-4 weeks part-time (see detailed plan).
+
+**Detailed implementation plan:** See `data/research/pi-missing-features-plan.md` Section 1 for complete architecture, components, and timeline.
+
+**Implementation order:** Plan Mode → Sub-agents → Taste Learning (aligned with migration phases).
 
 ---
 
