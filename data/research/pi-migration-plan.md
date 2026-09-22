@@ -209,30 +209,31 @@ This means if you edit `user/decisions.md` at 2:00 PM, the next request at 2:01 
 
 **Current system**: opencode web server mode → Cloudflare tunnel (`*.cothekdesigns.com` wildcard + Cloudflare Access) → browser from any device.
 
-**Pi situation**: Pi has **RPC mode** (JSON protocol over stdin/stdout) and **SDK mode** (TypeScript embedding). No built-in web UI.
+**Pi situation**: Pi has **no built-in web UI**, but **mature community solutions exist**.
 
-**Option A: Use Pi's RPC mode**
-- Build a thin web layer over Pi's RPC mode
-- RPC mode provides JSON protocol for controlling Pi programmatically
-- Wrap RPC in a minimal web UI (existing Next.js app or standalone)
-- Deploy behind existing Cloudflare tunnel + Access
+**Recommended Solution: pi-web-ui**
+- **Source**: `npm install -g pi-web-ui` by xingshuyin
+- **Downloads**: 22.7K/month (most popular Pi web UI)
+- **License**: MIT
+- **Features**: Streaming chat, thinking blocks, tool calls, built-in terminal, file management, Git panel, model management, mobile-friendly PWA
 
-**Option B: Use Pi's SDK mode**
-- Embed Pi in a TypeScript/Node.js application
-- Full programmatic control
-- Build custom web UI around SDK
-- Deploy behind existing Cloudflare tunnel + Access
+**How it works:**
+- pi-web-ui runs Pi SDK **in-process** (no subprocess, no JSON-RPC)
+- Streams events to browser over WebSocket (60ms throttled snapshots)
+- Credentials stay server-side (provider API keys never reach browser)
+- Deploy as systemd service on host
 
 **Existing infrastructure that transfers:**
 
 | Asset | Status | Notes |
-|---|---|---|
+|-------|--------|-------|
 | `*.cothekdesigns.com` wildcard DNS | Ready | Cloudflare DNS config, no changes needed |
 | Cloudflare Access policies | Ready | Authentication layer, applies to any subdomain |
 | Cloudflare tunnel daemon | Ready | `cloudflared` running, routes to local ports |
-| Next.js web app | Adaptable | May need route changes for Pi's RPC/SDK |
 
-**Effort:** ~2-3 days. The tunnel infrastructure already exists; the web layer needs to be built.
+**Detailed implementation plan:** See `data/research/pi-remote-access-plan.md` for complete architecture, installation, security, mobile optimization, and rollback plan.
+
+**Effort:** ~2.5 hours. Install pi-web-ui → configure systemd → add Cloudflare tunnel route → test.
 
 ### 4.3 Mulahazah Self-Improvement Triggers
 
