@@ -2,7 +2,7 @@
 
 > **Date:** September 19, 2026
 > **Author:** @coder (generated from Troy's specifications)
-> **Status:** Draft v1
+> **Status:** Draft v1 — **superseded on sequencing by [pi-migration-plan-2.md](./pi-migration-plan-2.md)** (Sep 22: three-layer mapping, awareness-loop-first build order, non-port list). Detail sections (memory mapping, skills compatibility, gap analysis) remain reference.
 > **Scope:** Full migration from opencode to Pi as primary agent harness
 > **Upstream:** [github.com/earendil-works/pi](https://github.com/earendil-works/pi)
 > **Website:** [pi.dev](https://pi.dev)
