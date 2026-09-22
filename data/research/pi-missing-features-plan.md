@@ -946,6 +946,21 @@ For teams that want control and customization, Pi is the better choice. For team
 
 ---
 
+## 11. Reference to Pi Migration Plan
+
+This plan is referenced in `pi-migration-plan.md` as the implementation strategy for Pi's three missing features:
+
+- **Taste Learning** → Section 4.7 in Pi migration plan
+- **Sub-agents** → Section 4.5 in Pi migration plan
+- **Plan Mode** → Section 4.6 in Pi migration plan
+
+The implementation order (Plan Mode → Sub-agents → Taste Learning) aligns with the migration phases:
+- **Phase 2**: Plan Mode (during memory system setup)
+- **Phase 3**: Sub-agents (during web/remote layer)
+- **Phase 4**: Taste Learning (during mulahazah/watchdog adaptation)
+
+---
+
 *This plan is based on Pi's extension system and examples. Update as implementation progresses.*
 
 *Next action: Start with Plan Mode extension (Week 1).*
