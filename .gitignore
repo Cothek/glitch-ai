@@ -98,6 +98,11 @@ data/
 # Personal user profile (created per-installation, NOT shared via git)
 user/
 
+# Generated skill runtime trees (synced from engine at launch — Plan 2 §12.3 Phase B)
+# Source of truth: glitch-memorycore/plugins/glitch-skills/skills/ (65 skills)
+.agents/skills/
+.pi/skills/
+
 # Handy voice input (downloaded third-party binary)
 handy-voice/
 
