@@ -267,6 +267,75 @@ Spawning options (from `pi-missing-features-plan.md` §2):
 
 ---
 
+## 12. Repo Strategy & Succession (added Sep 23, 2026)
+
+**Decision (Troy):** eventual end state is `glitch-pi` **replacing** `glitch-ai` — inherit everything worth keeping, strip the OpenCode organs, archive the old repo at cutover. Not two launcher repos forever.
+
+### Succession model
+
+```
+Now:     glitch-ai = agnostic infra + skills + research + OpenCode layer
+         glitch-pi = (doesn't exist yet)
+
+During:  glitch-ai = OpenCode daily driver (untouched, keeps working)
+         glitch-pi = fork of glitch-ai + Pi layer; ALL new work happens here
+
+End:     glitch-ai = archived (read-only history, README stub → glitch-pi)
+         glitch-pi = THE repo — three-layer architecture, layer 3 is Pi
+```
+
+### Mechanism: fork, don't re-copy
+
+**Fork `glitch-ai` → `Cothek/glitch-pi`** (GitHub fork or `git push --mirror` of develop), clone as sibling directory. Full history comes free, including force-added `data/research/` corpus, hooks, gitignore, scripts. Then over time: strip `opencode/` binary, `.opencode/`, `config/opencode-*.json`, 5-mode launch matrix; add Pi extension package + launcher. Hand-copying a fresh repo risks missing force-added/gitignored-but-tracked files (already proven: `data/` is gitignored yet holds the research corpus).
+
+What glitch-pi does **NOT** inherit: `opencode/` binary, `.opencode/` (13 plugins, 10 agents, instructions), `config/opencode-*.json`, 5-mode launch matrix. Those stay behind and die with the archive.
+
+### Gotchas (all must be handled)
+
+| # | Gotcha | Rule |
+|---|--------|------|
+| 1 | **`user/` memory single-writer** | During parallel run: ONE checkout only. Pi reads it via **absolute `@path` imports** in `~/.pi/agent/AGENTS.md`. Never clone `glitch-user-troy` twice (divergent diaries). `sync-user.ps1` writers must target the same checkout. At full cutover: move checkout once, update imports once. |
+| 2 | **Hardcoded absolute paths** | `pi-web-ui-launcher.cmd` hardcodes `cd /d "E:\Glitch AI\glitch-ai"`. Tunnel inner script, `data/logs/*.pid`, auth-proxy invocations — audit all when active workspace flips to `glitch-pi`. Failure mode: tunnel 404 (lived once already). |
+| 3 | **Host infra stays shared** | Tunnel, auth-proxy, cloudflared config serve BOTH hostnames right now. One repo owns host infra for the whole parallel period (glitch-ai, since it's already running). Move only when opencode is actually retired — avoids recurrence of the ingress-rules-dropped bug. |
+| 4 | **Skills must consolidate FIRST** | Canonical 62 skills live in glitch-ai's `.agents/skills/`. If the fork happens before consolidation, glitch-pi inherits a copy → two drifting trees (would be 4th fork counting engine legacy + `.commandcode/`). **Move canonical tree into `glitch-engine` before forking** — both repos consume via submodule. This is step one (§12.3). |
+| 5 | **Timing** | Since end state is replacement: build Phase 0–1 **directly in glitch-pi**, not a `pi/` subfolder of glitch-ai. No extract step later. glitch-ai stays frozen as working OpenCode driver. Fork can happen immediately after skills consolidation (skills can also move post-fork — path change in both — but pre-fork is cleaner). |
+
+### 12.3 Skills consolidation — step one (execution order)
+
+**Why first:** every week delayed is a week of drift across what becomes two repos.
+
+**Audit (Sep 23):**
+
+| Tree | Count | Role |
+|------|-------|------|
+| `.agents/skills/` | 62 | Canonical runtime (OpenCode auto-discovers) |
+| `glitch-memorycore/plugins/glitch-skills/skills/` | 27 | Legacy (24 overlap canonical, **3 exclusive**: `handoff`, `resolving-merge-conflicts`, `wayfinder`) |
+| `.commandcode/skills/` | fork | Separate harness export — out of scope |
+
+Overlaps diverge (verified: `code-review` differs, canonical larger/newer). **Canonical wins** per registry note (2026-08-02).
+
+**Target architecture:**
+
+```
+glitch-memorycore/plugins/glitch-skills/skills/   ← SOURCE OF TRUTH (62 + 3 = 65)
+        │
+        ├── scripts/sync-skills.mjs ──→ .agents/skills/      (OpenCode runtime, generated)
+        │                          └──→ .pi/skills/          (Pi runtime, generated — future)
+        └── skills-registry.md stays in engine (already home)
+```
+
+**Phases:**
+
+- **Phase A (now):** merge canonical into engine (overwrite 24 overlaps with canonical, add 38 non-overlaps, keep 3 exclusives → 65). Write `sync-skills.mjs`. Run engine → `.agents/skills` (propagates 3 exclusives into runtime). Update registry note: canonical = engine tree; `.agents/skills` = sync target. Keep `.agents/skills` git-tracked for now.
+- **Phase B (after sync verified across a restart):** gitignore + untrack `.agents/skills`; wire `sync-skills.mjs` into `launch.mjs`/`setup.ps1`. **Do not untrack mid-session** — skill loads break the moment files vanish.
+- **Phase C (Pi fork):** sync target `.pi/skills` activates; fork inherits engine submodule, zero skill migration.
+
+**Note:** ~20 AUTO-GENERATED skill headers reference `node scripts/sync-harnesses.mjs` — that script does **not exist on disk** (missing/deleted). Generation of ui-craft-derived skills (adapt, animate, clarify, …) is currently manual/orphaned. `sync-skills.mjs` covers tree sync only; ui-craft regeneration is a separate restore-if-needed item.
+
+**Done means:** 65 skills in engine, 65 in `.agents/skills` (sync-identical), registry points at engine as source, both repos consume the same submodule path when glitch-pi forks.
+
+---
+
 ## Appendix A — Verified facts (Sep 22, 2026)
 
 - Real Pi package: `@earendil-works/pi-coding-agent`, installed global `0.87.1` at `data\node\pi.ps1` (scope moved from `@mariozechner/*` May 2026, upstream `earendil-works/pi`).
