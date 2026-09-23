@@ -13,7 +13,7 @@
  * directly to `new Agent({ llm })`.
  */
 
-export async function createOpenAICompatibleLLM({ model, apiKey, baseUrl }) {
+export async function createOpenAICompatibleLLM({ model, apiKey, baseUrl, max_tokens = 1024 }) {
   const endpoint = `${(baseUrl || 'https://integrate.api.nvidia.com/v1').replace(/\/$/, '')}/chat/completions`;
 
   function serializeMessage(msg) {
@@ -58,7 +58,7 @@ export async function createOpenAICompatibleLLM({ model, apiKey, baseUrl }) {
       const body = {
         model,
         messages: messages.map(serializeMessage),
-        max_tokens: 4096,
+        max_tokens: options?.max_tokens ?? max_tokens,
         temperature: 0.2,
       };
 

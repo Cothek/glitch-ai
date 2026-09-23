@@ -151,7 +151,7 @@ glitch-ai/                    ← This repo (public)
 | `glitch-memorycore/` | Engine submodule — Glitch identity, rules, skills, plugins |
 | `user/` | Your personal memory, diary, projects (gitignored) |
 | `scripts/` | Launch, setup, validation, and utility scripts (.mjs cross-platform, .sh for Mac/Linux, .ps1 legacy for Windows) |
-| `config/` | Terminal UI config, Cloudflare Tunnel config |
+| `config/` | Terminal UI config, Cloudflare Tunnel config, providers.json |
 | `data/` | Auto-generated status files (gitignored) |
 | `launch-glitch.bat` / `.sh` | Unified launcher — all modes (normal, free, local, safe, server) |
 | `opencode.json` | Engine-only base config (user data added at runtime) |
@@ -159,6 +159,7 @@ glitch-ai/                    ← This repo (public)
 | `handy-voice/` | [Handy](https://handy-voice.org) — offline voice-to-text |
 | `opencode/` | [OpenCode](https://opencode.ai) — AI agent runtime |
 | `plugins/auth-proxy.mjs` | Basic auth proxy for mobile access |
+| `docs/` | Documentation (architecture, user guide, developer guide, configuration) |
 
 ## Modifying Config / Launch Scripts
 

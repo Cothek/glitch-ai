@@ -1,6 +1,6 @@
 ---
 name: vision
-model: nvidia/minimaxai/minimax-m3
+model: nvidia/moonshotai/kimi-k3
 mode: subagent
 temperature: 0.2
 

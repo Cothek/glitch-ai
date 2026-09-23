@@ -8,70 +8,120 @@ const COMFYUI_HOST = '127.0.0.1';
 const COMFYUI_PORT = 8188;
 
 // ─── Timeout configuration ──────────────────────────────────────────────────────
-// SDXL on 8GB VRAM: model load + warmup + generation = 60-120s+.
+// FLUX.2-klein-4B on 8GB VRAM: model load + warmup + generation = 30-60s (distilled, 4 steps).
 // Default 180s (3 min) accommodates first-generation cold start.
 // Override via env: IMAGE_GEN_TIMEOUT_MS=300000 (5 min) for very slow GPUs.
 const IMAGE_GEN_TIMEOUT_MS = parseInt(process.env.IMAGE_GEN_TIMEOUT_MS, 10) || 180_000;
 const POLL_INTERVAL_MS = 2000;
 const HTTP_REQUEST_TIMEOUT_MS = 30_000;
 
-// ─── Default SDXL txt2img workflow (ComfyUI API format) ───────────────────────
+// ─── Default FLUX.2-klein-4B txt2img workflow (ComfyUI API format) ─────────────
+// Distilled model: 4 steps, guidance_scale=1.0, BasicGuider (no CFG), no negative prompt.
 
 const DEFAULT_WORKFLOW = {
   "1": {
-    "inputs": { "ckpt_name": "sd_xl_base_1.0.safetensors" },
-    "class_type": "CheckpointLoaderSimple",
-    "_meta": { "title": "Load Checkpoint" }
+    "inputs": {
+      "unet_name": "flux-2-klein-4b-nvfp4.safetensors",
+      "weight_dtype": "default"
+    },
+    "class_type": "UNETLoader",
+    "_meta": { "title": "Load Diffusion Model" }
   },
   "2": {
     "inputs": {
-      "text": "beautiful scenery nature glass bottle landscape, purple galaxy bottle",
-      "clip": ["1", 1]
+      "clip_name": "qwen_3_4b.safetensors",
+      "type": "flux2",
+      "device": "default"
     },
-    "class_type": "CLIPTextEncode",
-    "_meta": { "title": "CLIP Text Encode (Prompt)" }
+    "class_type": "CLIPLoader",
+    "_meta": { "title": "Load CLIP" }
   },
   "3": {
     "inputs": {
-      "text": "text, watermark",
-      "clip": ["1", 1]
+      "vae_name": "flux2-vae.safetensors"
+    },
+    "class_type": "VAELoader",
+    "_meta": { "title": "Load VAE" }
+  },
+  "4": {
+    "inputs": {
+      "text": "",
+      "clip": ["2", 0]
     },
     "class_type": "CLIPTextEncode",
     "_meta": { "title": "CLIP Text Encode (Prompt)" }
   },
-  "4": {
-    "inputs": { "width": 1024, "height": 1024, "batch_size": 1 },
-    "class_type": "EmptyLatentImage",
-    "_meta": { "title": "Empty Latent Image" }
-  },
   "5": {
     "inputs": {
-      "seed": 123456789,
-      "steps": 20,
-      "cfg": 7.0,
-      "sampler_name": "euler",
-      "scheduler": "normal",
-      "denoise": 1.0,
-      "model": ["1", 0],
-      "positive": ["2", 0],
-      "negative": ["3", 0],
-      "latent_image": ["4", 0]
+      "conditioning": ["4", 0],
+      "guidance": 1.0
     },
-    "class_type": "KSampler",
-    "_meta": { "title": "KSampler" }
+    "class_type": "FluxGuidance",
+    "_meta": { "title": "Flux Guidance" }
   },
   "6": {
     "inputs": {
-      "samples": ["5", 0],
-      "vae": ["1", 2]
+      "model": ["1", 0],
+      "conditioning": ["5", 0]
+    },
+    "class_type": "BasicGuider",
+    "_meta": { "title": "Basic Guider" }
+  },
+  "7": {
+    "inputs": {
+      "sampler_name": "euler"
+    },
+    "class_type": "KSamplerSelect",
+    "_meta": { "title": "Sampler Select" }
+  },
+  "8": {
+    "inputs": {
+      "steps": 4,
+      "width": 1024,
+      "height": 1024
+    },
+    "class_type": "Flux2Scheduler",
+    "_meta": { "title": "Flux2 Scheduler" }
+  },
+  "9": {
+    "inputs": {
+      "noise_seed": 0
+    },
+    "class_type": "RandomNoise",
+    "_meta": { "title": "Random Noise" }
+  },
+  "10": {
+    "inputs": {
+      "width": 1024,
+      "height": 1024,
+      "batch_size": 1
+    },
+    "class_type": "EmptyFlux2LatentImage",
+    "_meta": { "title": "Empty Flux2 Latent Image" }
+  },
+  "11": {
+    "inputs": {
+      "noise": ["9", 0],
+      "guider": ["6", 0],
+      "sampler": ["7", 0],
+      "sigmas": ["8", 0],
+      "latent_image": ["10", 0]
+    },
+    "class_type": "SamplerCustomAdvanced",
+    "_meta": { "title": "SamplerCustomAdvanced" }
+  },
+  "12": {
+    "inputs": {
+      "samples": ["11", 0],
+      "vae": ["3", 0]
     },
     "class_type": "VAEDecode",
     "_meta": { "title": "VAE Decode" }
   },
-  "7": {
+  "13": {
     "inputs": {
       "filename_prefix": "ComfyUI",
-      "images": ["6", 0]
+      "images": ["12", 0]
     },
     "class_type": "SaveImage",
     "_meta": { "title": "Save Image" }
@@ -165,7 +215,7 @@ function ensureDir(dirPath) {
 // ─── Workflow manipulation ─────────────────────────────────────────────────────
 
 function loadWorkflow(projectRoot) {
-  const workflowPath = path.join(projectRoot, 'data', 'comfyui', 'workflows', 'sdxl-default.json');
+  const workflowPath = path.join(projectRoot, 'data', 'comfyui', 'workflows', 'flux2-klein-4b.json');
   if (fs.existsSync(workflowPath)) {
     try {
       const raw = fs.readFileSync(workflowPath, 'utf-8');
@@ -182,7 +232,7 @@ function loadWorkflow(projectRoot) {
 function modifyWorkflow(workflow, args) {
   const w = JSON.parse(JSON.stringify(workflow));
 
-  // Find CLIPTextEncode nodes — first one is positive, second is negative
+  // FLUX.2 distilled: only one CLIPTextEncode node (no negative prompt).
   const clipNodes = Object.entries(w)
     .filter(([, node]) => node.class_type === 'CLIPTextEncode')
     .sort((a, b) => parseInt(a[0]) - parseInt(b[0]));
@@ -190,27 +240,29 @@ function modifyWorkflow(workflow, args) {
   if (clipNodes.length >= 1) {
     clipNodes[0][1].inputs.text = args.prompt || '';
   }
-  if (clipNodes.length >= 2) {
-    clipNodes[1][1].inputs.text = args.negative_prompt || 'blurry, low quality, distorted';
-  }
 
-  // Find EmptyLatentImage
+  // EmptyFlux2LatentImage — set dimensions.
   for (const [, node] of Object.entries(w)) {
-    if (node.class_type === 'EmptyLatentImage') {
+    if (node.class_type === 'EmptyFlux2LatentImage') {
       node.inputs.width = args.width ?? 1024;
       node.inputs.height = args.height ?? 1024;
     }
   }
 
-  // Find KSampler
+  // Flux2Scheduler — set step count.
   for (const [, node] of Object.entries(w)) {
-    if (node.class_type === 'KSampler') {
-      node.inputs.steps = args.steps ?? 20;
-      node.inputs.cfg = args.cfg ?? 7.0;
+    if (node.class_type === 'Flux2Scheduler') {
+      node.inputs.steps = args.steps ?? 4;
+    }
+  }
+
+  // RandomNoise — set seed.
+  for (const [, node] of Object.entries(w)) {
+    if (node.class_type === 'RandomNoise') {
       if (args.seed !== undefined && args.seed !== null) {
-        node.inputs.seed = args.seed;
+        node.inputs.noise_seed = args.seed;
       } else {
-        node.inputs.seed = Math.floor(Math.random() * 9999999999);
+        node.inputs.noise_seed = Math.floor(Math.random() * 9999999999);
       }
     }
   }
@@ -422,18 +474,18 @@ async function handleRequest(req) {
       tools: [
         {
           name: 'generate_image',
-          description: 'Generate an image using a local ComfyUI instance with SDXL. Requires ComfyUI to be running at http://127.0.0.1:8188/.',
+          description: 'Generate an image using a local ComfyUI instance with FLUX.2-klein-4B (distilled, NVFP4). Requires ComfyUI to be running at http://127.0.0.1:8188/. Uses natural language prompts (not Danbooru tags). Distilled model: 4 steps, guidance=1.0, no negative prompt.',
           inputSchema: {
             type: 'object',
             properties: {
               prompt: {
                 type: 'string',
-                description: 'Main positive prompt describing the desired image'
+                description: 'Natural language prompt describing the desired image. 75-150 tokens recommended for best results. No negative prompt needed for this distilled model.'
               },
               negative_prompt: {
                 type: 'string',
-                description: 'Negative prompt for things to avoid',
-                default: 'blurry, low quality, distorted'
+                description: 'DEPRECATED: FLUX.2-klein-4B is a guidance-distilled model and does not use a negative prompt. This parameter is ignored.',
+                default: ''
               },
               width: {
                 type: 'integer',
@@ -447,13 +499,13 @@ async function handleRequest(req) {
               },
               steps: {
                 type: 'integer',
-                description: 'Number of sampling steps',
-                default: 20
+                description: 'Number of sampling steps (distilled model uses 4; higher values do not improve quality)',
+                default: 4
               },
               cfg: {
                 type: 'number',
-                description: 'CFG scale (classifier-free guidance)',
-                default: 7.0
+                description: 'DEPRECATED: FLUX.2-klein-4B uses guidance-distilled sampling via FluxGuidance (guidance=1.0). This parameter is ignored by the BasicGuider pipeline.',
+                default: 1.0
               },
               seed: {
                 type: 'integer',
@@ -526,5 +578,5 @@ rl.on('line', (line) => {
   }
 });
 
-console.error('[glitch-image-gen] MCP server started. Waiting for JSON-RPC messages on stdin...');
+console.error('[glitch-image-gen] MCP server started (FLUX.2-klein-4B). Waiting for JSON-RPC messages on stdin...');
 console.error(`[glitch-image-gen] Timeouts: generation=${IMAGE_GEN_TIMEOUT_MS}ms, http=${HTTP_REQUEST_TIMEOUT_MS}ms, poll=${POLL_INTERVAL_MS}ms`);
