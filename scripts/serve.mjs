@@ -705,6 +705,35 @@ async function main() {
     return allFree;
   };
 
+  // ---- Start GitNexus index sync (background re-index) ----
+  // Keeps the GitNexus code graph fresh so the blast-radius hook (and the
+  // impact/context/query MCP tools) return real dependents instead of stale
+  // "index is N commits behind" warnings. Incremental — fast when the index is
+  // already fresh, full rebuild only on schema changes. Detached so it never
+  // blocks startup.
+  try {
+    const gitnexusSyncScript = join(SCRIPT_DIR, 'gitnexus-sync.mjs');
+    if (existsSync(gitnexusSyncScript)) {
+      const syncProc = spawn(
+        isWin ? join(BundledNodeDir, 'node.exe') : 'node',
+        [gitnexusSyncScript],
+        {
+          cwd: ROOT_DIR,
+          stdio: 'ignore',
+          detached: true,
+          windowsHide: true,
+        }
+      );
+      syncProc.unref();
+      syncProc.on('error', (err) => {
+        log(YELLOW, `  GitNexus sync failed to start: ${err.message}`);
+      });
+      log(DARK_GREEN, `  GitNexus index sync started (PID ${syncProc.pid})`);
+    }
+  } catch (e) {
+    log(YELLOW, `  GitNexus index sync failed to start: ${e.message}`);
+  }
+
   // ---- Launch Server with restart loop ----
   const { launchServer } = await import('./lib/server-mode.mjs');
 

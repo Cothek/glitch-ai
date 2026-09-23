@@ -111,6 +111,58 @@ export async function injectProviders(config) {
       // Continue with existing config
     }
 
+    // Auto-detect context sizes for local models that have auto_detect enabled.
+    // This runs after discovery so the provider sections and model entries exist.
+    // Uses the lmstudio-context-detector module's three-tier strategy:
+    //   metadata → config file → binary search (fallback to 32768).
+    for (const [providerKey, providerCfg] of Object.entries(providers)) {
+      if (!providerCfg.options?.baseURL) continue;
+      if (!providerCfg.models || Object.keys(providerCfg.models).length === 0) continue;
+
+      // Only auto-detect for providers explicitly flagged or for known local backends
+      const shouldDetect = providerCfg.auto_detect === true
+        || providerKey === 'lmstudio'
+        || providerKey === 'freetoken-wsl';
+
+      if (!shouldDetect) continue;
+
+      try {
+        const { detectContextSizes } = await import('./lmstudio-context-detector.mjs');
+        const endpoint = providerCfg.options.baseURL.replace(/\/v1\/?$/, '') || 'http://127.0.0.1:1234';
+        const contextSizes = await detectContextSizes(endpoint);
+
+        let detectedCount = 0;
+        for (const [modelId, sizeInfo] of Object.entries(contextSizes)) {
+          const modelCfg = providerCfg.models[modelId];
+          if (!modelCfg) continue;
+
+          // Only update if we found a real value (not default_fallback) or model has no limit yet
+          const hasExistingLimit = modelCfg.limit?.context && modelCfg.limit.context > 0;
+          const isReliableSource = sizeInfo.source !== 'default_fallback';
+
+          if (isReliableSource || !hasExistingLimit) {
+            const newContext = sizeInfo.context;
+            const newOutput = Math.min(Math.floor(newContext / 4), 8192);
+
+            modelCfg.limit = {
+              context: newContext,
+              output: newOutput,
+            };
+            modelCfg.auto_detect = true;
+            modelCfg.last_detected = new Date().toISOString();
+            detectedCount++;
+          }
+        }
+
+        if (detectedCount > 0) {
+          console.log(`  [DETECT] ${providerKey}: updated context for ${detectedCount} model(s)`);
+        }
+      } catch (error) {
+        // Context detection is best-effort — never block provider injection
+        console.warn(`  [DETECT] ${providerKey}: context detection failed (${error.message})`);
+      }
+    }
+
     // Read registry once — used by the CULL freshness check.
     let registryModels = null;
     let isFresh = false;

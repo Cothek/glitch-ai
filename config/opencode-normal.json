@@ -9,7 +9,8 @@
     ".opencode/plugins/stuck-detector.js",
     ".opencode/plugins/mulahazah.js",
     ".opencode/plugins/plan-reflex.js",
-    ".opencode/plugins/agent-watchdog.mjs"
+    ".opencode/plugins/agent-watchdog.mjs",
+    ".opencode/plugins/blast-radius.js"
   ],
   "instructions": [
     ".opencode/instructions/shared-agent-rules.md"
@@ -541,6 +542,7 @@
           "name": "Nvidia Nemotron 3 Ultra 550b A55b",
           "context_length": 262144
         },
+
         "openai/gpt-oss-20b": {
           "name": "Openai Gpt Oss 20b",
           "context_length": 131072

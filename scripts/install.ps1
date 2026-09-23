@@ -788,6 +788,67 @@ if ($gitnexusOk) {
     Write-Warn "GitNexus install failed (non-fatal). Manual install: cd $InstallDir; .\data\node\npm.cmd install -g gitnexus"
 }
 
+# 4.6. GitNexus FTS/OpenSSL fix (semantic search)
+# The gitnexus FTS extension needs OpenSSL 3 DLLs (libssl-3-x64.dll / libcrypto-3-x64.dll)
+# which ship with Git for Windows at <GitRoot>\mingw64\bin. Without them on PATH,
+# the FTS extension fails to load (Windows error 126) and `gitnexus query` returns empty.
+Write-Header "Configuring GitNexus FTS (semantic search)..."
+$gitnexusCmd = $null
+if (Test-Path (Join-Path $bundledNodeBin "gitnexus.cmd")) {
+    $gitnexusCmd = Join-Path $bundledNodeBin "gitnexus.cmd"
+} elseif (Test-Path (Join-Path $bundledNodeBin "gitnexus.exe")) {
+    $gitnexusCmd = Join-Path $bundledNodeBin "gitnexus.exe"
+} elseif (Get-Command gitnexus -ErrorAction SilentlyContinue) {
+    $gitnexusCmd = (Get-Command gitnexus).Source
+}
+
+if ($gitnexusCmd) {
+    # Find Git's mingw64\bin (ships OpenSSL 3 DLLs the FTS extension needs)
+    $gitMingw64Bin = $null
+    $gitExe = Get-Command git -ErrorAction SilentlyContinue
+    if ($gitExe) {
+        $gitPath = $gitExe.Source
+        $idx = $gitPath.ToLower().IndexOf('\cmd\git')
+        if ($idx -ge 0) {
+            $candidate = Join-Path (Join-Path $gitPath.Substring(0, $idx) 'mingw64') 'bin'
+            if (Test-Path (Join-Path $candidate 'libssl-3-x64.dll')) {
+                $gitMingw64Bin = $candidate
+            }
+        }
+    }
+    if (-not $gitMingw64Bin) {
+        # Fallback: scan common Git install roots
+        $roots = @('C:\Program Files\Git', 'D:\Program Files\Git', 'E:\Program Files\Git', 'C:\Program Files (x86)\Git')
+        foreach ($root in $roots) {
+            $candidate = Join-Path (Join-Path $root 'mingw64') 'bin'
+            if (Test-Path (Join-Path $candidate 'libssl-3-x64.dll')) {
+                $gitMingw64Bin = $candidate
+                break
+            }
+        }
+    }
+
+    if ($gitMingw64Bin) {
+        Write-Step "Found Git mingw64 bin at $gitMingw64Bin - prepending to PATH for FTS/OpenSSL"
+        $env:PATH = $gitMingw64Bin + ';' + $env:PATH
+    } else {
+        Write-Warn "Git mingw64 bin not found - FTS extension may fail to load (OpenSSL 3 DLLs missing). Semantic search will degrade."
+    }
+
+    # Repair FTS indexes (one-time; subsequent analyzes maintain them incrementally)
+    Write-Step "Repairing GitNexus FTS indexes..."
+    $env:GITNEXUS_LBUG_BUFFER_POOL_SIZE = '4294967296'  # 4 GiB - required when FTS is enabled
+    try {
+        & $gitnexusCmd analyze --repair-fts 2>&1 | ForEach-Object { Write-Host "  $_" }
+        Write-Success "GitNexus FTS indexes repaired successfully"
+    } catch {
+        Write-Warn "FTS repair failed (non-fatal): $_"
+        Write-Host "  You can run manually later: gitnexus analyze --repair-fts"
+    }
+} else {
+    Write-Warn "gitnexus command not found after install - skipping FTS repair"
+}
+
 # 5. User profile setup
 Write-Header "User Profile Setup"
 

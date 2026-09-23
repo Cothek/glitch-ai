@@ -647,6 +647,53 @@ localModel = normalizeModelId(localModel);
     process.exit(1);
   }
 
+  // ---- Detect LM Studio context lengths (non-blocking) ----
+  try {
+    const detectScript = join(SCRIPT_DIR, 'detect-lmstudio-context.mjs');
+    if (existsSync(detectScript)) {
+      const detectProc = spawn(
+        isWin ? join(BundledNodeDir, 'node.exe') : 'node',
+        [detectScript, '--apply-if-changes'],
+        {
+          cwd: ROOT_DIR,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          timeout: 15000,
+        }
+      );
+      let detectOutput = '';
+      detectProc.stdout?.on('data', d => { detectOutput += d.toString(); });
+      detectProc.stderr?.on('data', d => { detectOutput += d.toString(); });
+      detectProc.on('close', () => {
+        try {
+          const result = JSON.parse(detectOutput.trim());
+          if (result.status === 'no_changes') {
+            log(DARK_GREEN, '  LM Studio context lengths OK');
+          } else if (result.status === 'applied') {
+            log(CYAN, `  LM Studio context lengths auto-detected and applied (${result.changeCount} model(s))`);
+          } else if (result.status === 'skipped_no_config') {
+            log(DARK_GRAY, '  LM Studio context detection: config file not found, skipped');
+          } else if (result.status === 'error') {
+            log(DARK_GRAY, '  LM Studio context detection: ' + (result.error || 'unknown error'));
+          }
+        } catch {
+          // Fallback: non-JSON output from older script version
+          if (detectOutput.includes('No changes needed')) {
+            log(DARK_GREEN, '  LM Studio context lengths OK');
+          } else if (detectOutput.includes('Updated')) {
+            log(CYAN, '  LM Studio context lengths auto-detected and applied');
+          } else {
+            log(DARK_GRAY, '  LM Studio context detection: ' + detectOutput.split('\n')[0]);
+          }
+        }
+      });
+      detectProc.on('error', () => {
+        // LM Studio not running or script error — non-critical
+      });
+    }
+  } catch {
+    // non-critical — context detection is optional
+  }
+
   // ---- Write mode marker ----
   const modeInfo = JSON.stringify({
     mode: 'local',
