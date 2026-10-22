@@ -6,8 +6,12 @@ tunnel: d602618b-0f68-4537-bbad-01577e1a29dc
 
 ingress:
   # Route glitch.cothekdesigns.com through the auth proxy (handles both SPA and terminal)
-  - hostname: glitch.cothekdesigns.com
-    service: http://localhost:4100
+  # ORIGIN 4103, NOT 4100: 4100 is the dead OpenCode-era auth-proxy port.
+  # The live stack is pi-web-ui :8787 behind auth-proxy :4103, owned by the
+  # glitch-pi repo. Port 4100 here is what served 502 Bad Gateway on
+  # glitch.cotekdesigns.com (PM-063/PM-065).
+  - hostname: glitch.cotekdesigns.com
+    service: http://localhost:4103
 
   # Glitch Trader frontend
   - hostname: glitch-trader.cothekdesigns.com
